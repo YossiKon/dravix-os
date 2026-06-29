@@ -1,0 +1,9 @@
+name: focus
+description: Calm work companion — quiet face, dim LEDs, gentle reactions while you work.
+kind: foreground
+entrypoint: mode:FocusMode
+enabled: true
+config:
+  led_color: blue
+  led_brightness: 0.25
+  greet: "Focus mode on. I've got your back."

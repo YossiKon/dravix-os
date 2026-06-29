@@ -1,0 +1,23 @@
+services:
+  dravix-os:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    image: dravix-os:latest
+    container_name: dravix-os
+    restart: unless-stopped
+    env_file:
+      - ../.env
+    ports:
+      - "8800:8800"
+    volumes:
+      # Live-edit plugins without rebuilding the image.
+      - ../plugins:/app/plugins:ro
+      # Persist the generated capability report and any runtime data.
+      - ../docs:/app/docs
+      - dravix-data:/app/core/data
+    # On the Proxmox LXC, the container reaches HA + the robot over the LAN, so the
+    # default bridge network is fine. Switch to network_mode: host if you prefer.
+
+volumes:
+  dravix-data:

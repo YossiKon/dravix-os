@@ -1,0 +1,9 @@
+name: dnd
+description: Do Not Disturb / meeting mode — calm "busy" face, dim LEDs, stays quiet.
+kind: foreground
+entrypoint: mode:DndMode
+enabled: true
+config:
+  color: red
+  brightness: 0.2
+  greet: "Do not disturb. I'll keep quiet."

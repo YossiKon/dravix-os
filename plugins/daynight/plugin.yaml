@@ -1,0 +1,8 @@
+name: daynight
+description: Day/night mood — sleepy face & warm dim LEDs at night, neutral by day. Ambient.
+kind: ambient
+entrypoint: mode:DayNightMode
+enabled: true
+config:
+  night_start: 22   # hour (0-23) night begins
+  night_end: 7      # hour night ends

@@ -1,0 +1,8 @@
+name: ambient_idle
+description: Subtle idle life — occasional glances and blinks so the robot never looks frozen.
+kind: ambient
+entrypoint: mode:AmbientIdleMode
+enabled: true
+config:
+  glance_every_ticks: 3
+  glance_yaw: 18

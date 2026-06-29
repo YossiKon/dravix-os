@@ -1,0 +1,7 @@
+name: dance
+description: A little dance — bobs the head through a sequence and cycles the LED colors.
+kind: foreground
+entrypoint: mode:DanceMode
+enabled: true
+config:
+  colors: [red, green, blue, magenta, cyan, amber]

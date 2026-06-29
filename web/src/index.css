@@ -1,0 +1,136 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    color-scheme: dark;
+  }
+
+  * {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    @apply bg-void text-ink font-body antialiased;
+    margin: 0;
+    /* Layered atmosphere: a faint grid + radial vignette over the void. */
+    background-color: #070809;
+    background-image:
+      radial-gradient(
+        1200px 800px at 78% -10%,
+        rgba(93, 255, 160, 0.06),
+        transparent 60%
+      ),
+      radial-gradient(
+        900px 700px at 8% 110%,
+        rgba(92, 200, 255, 0.05),
+        transparent 55%
+      ),
+      linear-gradient(rgba(255, 255, 255, 0.018) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255, 255, 255, 0.018) 1px, transparent 1px);
+    background-size:
+      100% 100%,
+      100% 100%,
+      44px 44px,
+      44px 44px;
+    background-attachment: fixed;
+  }
+
+  /* Subtle film grain overlay over everything. */
+  body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 1;
+    opacity: 0.035;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+
+  ::selection {
+    background: rgba(93, 255, 160, 0.28);
+    color: #fff;
+  }
+}
+
+@layer utilities {
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: #2b333c transparent;
+  }
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background: #2b333c;
+    border-radius: 99px;
+  }
+  .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+    background: #3a444f;
+  }
+  .scrollbar-thin::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .text-glow {
+    text-shadow: 0 0 18px rgba(93, 255, 160, 0.55);
+  }
+
+  /* Hairline label used across panels. */
+  .eyebrow {
+    @apply font-mono text-[10px] uppercase tracking-[0.22em] text-mute;
+  }
+
+  /* Range slider styling (instrument-grade). */
+  .slider {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100%;
+    height: 4px;
+    border-radius: 99px;
+    background: #1d2228;
+    outline: none;
+  }
+  .slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: #5dffa0;
+    border: 3px solid #0d0f11;
+    box-shadow: 0 0 0 1px #2e7d54, 0 0 14px -2px rgba(93, 255, 160, 0.7);
+    cursor: pointer;
+    transition: transform 0.12s ease;
+  }
+  .slider::-webkit-slider-thumb:active {
+    transform: scale(1.18);
+  }
+  .slider::-moz-range-thumb {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: #5dffa0;
+    border: 3px solid #0d0f11;
+    box-shadow: 0 0 0 1px #2e7d54, 0 0 14px -2px rgba(93, 255, 160, 0.7);
+    cursor: pointer;
+  }
+  .slider:disabled::-webkit-slider-thumb {
+    background: #3a444f;
+    box-shadow: none;
+    cursor: not-allowed;
+  }
+  .slider:disabled::-moz-range-thumb {
+    background: #3a444f;
+    box-shadow: none;
+    cursor: not-allowed;
+  }
+}

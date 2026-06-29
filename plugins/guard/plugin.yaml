@@ -1,0 +1,10 @@
+name: guard
+description: Desk sentry. Reacts to motion/presence events from Home Assistant with an alert.
+kind: foreground
+entrypoint: mode:GuardMode
+enabled: true
+config:
+  alert_color: red
+  alert_line: "Motion detected. I'm watching."
+  # Event types this mode treats as an alert (published onto the bus by the HA bridge).
+  triggers: ["ha.motion", "presence.detected", "ha.door"]

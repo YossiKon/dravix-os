@@ -1,0 +1,8 @@
+name: companion
+description: Chatty desk buddy. Greets you via the AI router and emotes from the reply's tone.
+kind: foreground
+entrypoint: mode:CompanionMode
+enabled: true
+config:
+  greeting_prompt: "Greet me warmly in one short sentence to start our chat."
+  fallback_greeting: "(happy) Hey! I'm right here if you need me."

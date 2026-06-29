@@ -1,0 +1,9 @@
+name: frigate_watch
+description: On a Frigate detection (person/motion/door from HA), show the camera on the robot's screen.
+kind: foreground
+entrypoint: mode:FrigateWatchMode
+enabled: true
+config:
+  camera: ""        # camera entity to show, e.g. camera.front_door (blank = do nothing)
+  frigate_url: ""   # optional direct Frigate base (else uses Home Assistant)
+  triggers: ["presence.detected", "ha.motion", "ha.door"]
