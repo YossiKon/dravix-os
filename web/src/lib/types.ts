@@ -181,6 +181,16 @@ export interface PersonaActiveResponse {
   error?: string | null;
 }
 
+/* ── Voice (TTS) ─────────────────────────────────────────────────────────── */
+export interface VoiceResponse {
+  /** Effective voice in use (override → active persona → default). */
+  voice: string | null;
+  /** Explicit global override, or null when following the persona/default. */
+  override: string | null;
+  /** Catalog of voice ids to pick from. */
+  voices: string[];
+}
+
 /* ── Fun & voice ─────────────────────────────────────────────────────────── */
 export interface FunResponse {
   games: string[];

@@ -28,6 +28,7 @@ import type {
   ScheduleResponse,
   StatusResponse,
   TimerResponse,
+  VoiceResponse,
 } from "./types";
 
 /** Error carrying the HTTP status + backend-provided `detail`. */
@@ -233,6 +234,21 @@ export const api = {
     request<PersonaActiveResponse>("/api/personas/active", {
       method: "POST",
       json: { name },
+    }),
+
+  /* ── Voice (TTS) ──────────────────────────────────────────────────────── */
+  voice: () => request<VoiceResponse>("/api/voice"),
+
+  setVoice: (voice: string | null) =>
+    request<{ voice: string | null }>("/api/voice", {
+      method: "PUT",
+      json: { voice },
+    }),
+
+  setVoices: (voices: string[]) =>
+    request<{ voices: string[] }>("/api/voices", {
+      method: "PUT",
+      json: { voices },
     }),
 
   /* ── Fun & voice ──────────────────────────────────────────────────────── */

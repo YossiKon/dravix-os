@@ -1,7 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../lib/api";
 import { humanize } from "../lib/format";
-import type { ConfigResponse, ModeInfo, Persona } from "../lib/types";
+import type {
+  ConfigResponse,
+  ModeInfo,
+  Persona,
+  VoiceResponse,
+} from "../lib/types";
 import { useToasts } from "../hooks/useToasts";
 import { Button, Panel, Toggle, cx, errMsg } from "./ui";
 import { EXPRESSION_META } from "./expressions";
@@ -174,6 +179,8 @@ export function SettingsPanel({
       <AnnounceBox />
 
       <PersonasBox />
+
+      <VoiceBox />
 
       <Panel eyebrow="behaviors" title="Mode Availability">
         {modes.length === 0 ? (
@@ -497,6 +504,14 @@ function PersonasBox() {
                             {p.default_expression}
                           </span>
                         )}
+                        {p.voice && (
+                          <span
+                            title="persona voice"
+                            className="rounded border border-cyan/40 bg-cyan/10 px-1.5 py-0.5 font-mono text-[10px] text-cyan"
+                          >
+                            ♪ {p.voice}
+                          </span>
+                        )}
                       </div>
                       <p className="mt-1 line-clamp-2 font-mono text-[11px] leading-relaxed text-soft">
                         {p.system_prompt || (
@@ -555,6 +570,14 @@ function PersonasBox() {
                   "focus:border-phosphor/50 focus:outline-none focus:ring-1 focus:ring-phosphor/30",
                 )}
               />
+              <input
+                className={inputCls}
+                value={draft.voice ?? ""}
+                placeholder="voice id (optional, e.g. en_US-amy-medium)"
+                onChange={(e) =>
+                  setDraft((d) => ({ ...d, voice: e.target.value }))
+                }
+              />
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <label className="flex items-center gap-2 font-mono text-[11px] text-mute">
                   default face
@@ -593,6 +616,216 @@ function PersonasBox() {
                 </div>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+    </Panel>
+  );
+}
+
+/* ── Voice (TTS override + catalog) ──────────────────────────────────────── */
+const VOICE_HINT =
+  "Voice ids depend on your TTS engine (Piper e.g. en_US-amy-medium, VOICEVOX, or the robot's firmware).";
+
+function VoiceBox() {
+  const toasts = useToasts();
+  const [data, setData] = useState<VoiceResponse | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [newVoice, setNewVoice] = useState("");
+
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
+
+  const refresh = useCallback(async () => {
+    setLoading(true);
+    try {
+      const r = await api.voice();
+      if (mounted.current) setData(r);
+    } catch (err) {
+      if (mounted.current) toasts.error(errMsg(err));
+    } finally {
+      if (mounted.current) setLoading(false);
+    }
+  }, [toasts]);
+
+  useEffect(() => {
+    refresh();
+  }, [refresh]);
+
+  const voices = data?.voices ?? [];
+  const override = data?.override ?? null;
+  const effective = data?.voice ?? null;
+
+  // PUT the override voice (null = follow active persona / default).
+  async function pickVoice(voice: string | null) {
+    setBusy(true);
+    try {
+      await api.setVoice(voice);
+      toasts.ok(voice ? `Voice → ${voice}` : "Voice → Default (persona)");
+      await refresh();
+    } catch (err) {
+      toasts.error(errMsg(err));
+      refresh();
+    } finally {
+      if (mounted.current) setBusy(false);
+    }
+  }
+
+  // PUT the whole catalog (the API replaces the set).
+  async function saveVoices(next: string[]) {
+    setBusy(true);
+    try {
+      const res = await api.setVoices(next);
+      if (mounted.current)
+        setData((d) => (d ? { ...d, voices: res.voices ?? next } : d));
+      toasts.ok("Voice catalog saved");
+      return true;
+    } catch (err) {
+      toasts.error(errMsg(err));
+      refresh();
+      return false;
+    } finally {
+      if (mounted.current) setBusy(false);
+    }
+  }
+
+  async function addVoice() {
+    const v = newVoice.trim();
+    if (!v || busy) return;
+    if (voices.includes(v)) {
+      toasts.error(`"${v}" is already in the catalog`);
+      return;
+    }
+    const ok = await saveVoices([...voices, v]);
+    if (ok) setNewVoice("");
+  }
+
+  function removeVoice(v: string) {
+    saveVoices(voices.filter((x) => x !== v));
+  }
+
+  const inputCls = cx(
+    "w-full rounded-lg border border-line bg-void/60 px-3 py-2",
+    "font-mono text-sm text-ink placeholder:text-mute/70",
+    "focus:border-phosphor/50 focus:outline-none focus:ring-1 focus:ring-phosphor/30",
+  );
+
+  return (
+    <Panel
+      eyebrow="speech"
+      title="Voice"
+      right={
+        <label className="flex items-center gap-2 font-mono text-[11px] text-mute">
+          override
+          <select
+            value={override ?? ""}
+            disabled={busy || loading}
+            onChange={(e) => pickVoice(e.target.value || null)}
+            className="rounded-lg border border-line bg-panel-2 px-2.5 py-1.5 font-mono text-[11px] text-ink focus:border-phosphor/50 focus:outline-none disabled:opacity-50"
+          >
+            <option value="">Default (persona)</option>
+            {voices.map((v) => (
+              <option key={v} value={v}>
+                {v}
+              </option>
+            ))}
+          </select>
+        </label>
+      }
+    >
+      {loading && !data ? (
+        <div className="space-y-2">
+          {Array.from({ length: 2 }).map((_, i) => (
+            <div key={i} className="h-9 animate-pulse rounded-lg bg-line/60" />
+          ))}
+        </div>
+      ) : (
+        <div className="space-y-4">
+          <div className="flex items-center gap-2 font-mono text-[11px] text-mute">
+            <span
+              className={cx(
+                "inline-block h-2 w-2 rounded-full",
+                effective ? "bg-phosphor" : "bg-mute",
+              )}
+            />
+            {effective ? (
+              <>
+                effective voice ·{" "}
+                <span className="text-ink">{effective}</span>
+                {!override && (
+                  <span className="text-mute"> (from persona/default)</span>
+                )}
+              </>
+            ) : (
+              "no voice set — engine default"
+            )}
+          </div>
+
+          <div className="rounded-xl border border-line bg-panel-2/30 p-4">
+            <div className="eyebrow mb-3 flex items-center gap-2">
+              voice catalog
+              <span className="h-px flex-1 bg-line/70" />
+            </div>
+            <div className="space-y-2">
+              {voices.length === 0 ? (
+                <p className="font-mono text-[11px] text-mute">
+                  No voices yet. Add a voice id below.
+                </p>
+              ) : (
+                voices.map((v) => (
+                  <div
+                    key={v}
+                    className="flex items-center gap-3 rounded-lg border border-line bg-panel-2/40 px-3 py-2"
+                  >
+                    <span className="min-w-0 flex-1 truncate font-mono text-[13px] text-ink">
+                      {v}
+                    </span>
+                    {override === v && (
+                      <span className="rounded border border-phosphor/40 bg-phosphor/10 px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wider text-phosphor">
+                        override
+                      </span>
+                    )}
+                    <Button
+                      variant="danger"
+                      className="px-2.5 py-1.5"
+                      disabled={busy}
+                      onClick={() => removeVoice(v)}
+                      title={`Remove ${v}`}
+                    >
+                      ✕
+                    </Button>
+                  </div>
+                ))
+              )}
+            </div>
+            <div className="mt-3 flex items-center gap-2">
+              <input
+                className={inputCls}
+                value={newVoice}
+                placeholder="add voice id…"
+                onChange={(e) => setNewVoice(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") addVoice();
+                }}
+              />
+              <Button
+                variant="primary"
+                loading={busy}
+                disabled={!newVoice.trim()}
+                onClick={addVoice}
+              >
+                + Add
+              </Button>
+            </div>
+            <p className="mt-2 font-mono text-[10px] leading-relaxed text-mute">
+              {VOICE_HINT}
+            </p>
           </div>
         </div>
       )}
