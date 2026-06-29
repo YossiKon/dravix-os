@@ -72,6 +72,13 @@ def test_config_api(tmp_path, monkeypatch):
             # Generic event ingest (e.g. the robot's head-touch sensor → the bus).
             assert client.post("/api/event", json={"type": "touch.pet"}).status_code == 200
 
+            # Mood self-report; export/import of the whole config.
+            assert client.post("/api/say/mood").status_code == 200
+            exported = client.get("/api/export").json()
+            assert "personas" in exported and "schedule" in exported
+            assert client.post("/api/import", json={"store": {"voices": ["imported-voice"]}}).status_code == 200
+            assert client.get("/api/voice").json()["voices"] == ["imported-voice"]
+
             # Frigate cameras with no HA configured → empty list.
             assert client.get("/api/frigate/cameras").json()["cameras"] == []
             # Robot camera relay: mock yields no real frame → 503 (not a crash).

@@ -155,5 +155,8 @@ emotion tag like `(happy)` — dravix parses it to drive the face automatically.
 - **Next (needs hardware)** — point the `mcp` driver at the real robot: run discovery, then we
   finalize the mapping and prove face/head/speech on the physical StackChan.
 
+**Backup / restore** all your config (personas, routines, memories, schedule, reactions, voices):
+`GET /api/export` downloads it, `POST /api/import` restores it.
+
 Everything above is verified end-to-end on the mock driver. See
 [docs/architecture.md](docs/architecture.md) for the full roadmap.

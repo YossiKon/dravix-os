@@ -18,6 +18,7 @@ A small **persistent** affective state that makes the robot feel alive:
 ```bash
 curl localhost:8800/api/mood
 # {"valence":0.5,"arousal":0.6,"affection":0.7,"mood":"excited","expression":"happy"}
+curl -X POST localhost:8800/api/say/mood    # the robot says how it feels ("I'm feeling excited!")
 ```
 
 ### Interactions (petting the head sensor)

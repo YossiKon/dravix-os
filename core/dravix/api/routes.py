@@ -653,6 +653,52 @@ async def list_ai_fun():
     return {"kinds": ai_fun_kinds()}
 
 
+_MOOD_LINES = {
+    "excited": "I'm feeling excited!",
+    "happy": "I'm feeling happy!",
+    "content": "I'm doing alright.",
+    "bored": "I'm a little bored, honestly.",
+    "sad": "I'm feeling a bit down.",
+    "sleepy": "I'm getting sleepy.",
+    "down": "Eh, could be better.",
+}
+
+
+@router.post("/api/say/mood")
+async def say_mood(request: Request):
+    """The robot reports how it currently feels."""
+    mood = request.app.state.mood
+    label = mood.label()
+    text = _MOOD_LINES.get(label, f"I'm feeling {label}.")
+    robot = _robot(request)
+    if robot.supports(CAP_FACE):
+        try:
+            await robot.set_face(mood.expression())
+        except Exception:  # noqa: BLE001
+            pass
+    await _guard(robot.say(text))
+    return {"text": text, "mood": label}
+
+
+# ── backup / restore the whole config ─────────────────────────────────────────
+class ImportBody(BaseModel):
+    store: dict
+
+
+@router.get("/api/export")
+async def export_store(request: Request):
+    """The full runtime config (personas, routines, memories, schedule, reactions, ...)."""
+    return request.app.state.store.to_dict()
+
+
+@router.post("/api/import")
+async def import_store(body: ImportBody, request: Request):
+    request.app.state.store.update(body.store)  # only known keys are applied
+    _rebuild_ai(request)
+    _refresh_voice(request)
+    return {"ok": True}
+
+
 @router.post("/api/ai/fun/{kind}")
 async def ai_fun(kind: str, request: Request):
     prompt = AI_FUN_PROMPTS.get(kind)
