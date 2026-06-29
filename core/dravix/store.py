@@ -22,6 +22,8 @@ _DEFAULTS: dict[str, Any] = {
     "reactions": [],  # [{name, on, match?, throttle_s?, face?, leds?, say?, frigate_show?, ...}]
     "mood": {},  # {valence, arousal, affection} — personality carried across restarts
     "schedule": [],  # [{name, at:"HH:MM", days?:[0-6], enabled?, action:{say?,face?,emote?,...}}]
+    "personas": [],  # [{name, system_prompt, voice?, default_expression?}]
+    "active_persona": None,  # name of the active persona (None = built-in default)
 }
 
 
@@ -52,9 +54,27 @@ class Store:
         return json.loads(json.dumps(self._data))  # defensive copy
 
     def update(self, patch: dict[str, Any]) -> None:
-        for key in ("ai_provider", "mode_overrides", "disabled_modes", "reactions", "schedule"):
+        keys = (
+            "ai_provider", "mode_overrides", "disabled_modes", "reactions", "schedule",
+            "personas", "active_persona",
+        )
+        for key in keys:
             if key in patch:
                 self._data[key] = patch[key]
+        self.save()
+
+    def personas(self) -> list[dict[str, Any]]:
+        return list(self._data.get("personas", []))
+
+    def set_personas(self, personas: list[dict[str, Any]]) -> None:
+        self._data["personas"] = personas
+        self.save()
+
+    def active_persona(self) -> str | None:
+        return self._data.get("active_persona")
+
+    def set_active_persona(self, name: str | None) -> None:
+        self._data["active_persona"] = name
         self.save()
 
     def schedule(self) -> list[dict[str, Any]]:

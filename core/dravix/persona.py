@@ -41,3 +41,20 @@ class Persona:
     )
     voice: str | None = None
     default_expression: Expression = Expression.NEUTRAL
+
+
+def resolve_persona(store) -> Persona:
+    """Return the active persona from the store, or the built-in default."""
+    if store is None:
+        return Persona()
+    name = store.active_persona()
+    if name:
+        for p in store.personas():
+            if p.get("name") == name:
+                return Persona(
+                    name=p.get("name", "StackChan"),
+                    system_prompt=p.get("system_prompt") or Persona().system_prompt,
+                    voice=p.get("voice"),
+                    default_expression=Expression.coerce(p.get("default_expression", "neutral")),
+                )
+    return Persona()

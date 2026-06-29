@@ -10,11 +10,17 @@ import type {
   FrigateCamerasResponse,
   HealthResponse,
   InteractKind,
+  Job,
   ModesResponse,
   MoodResponse,
+  Persona,
+  PersonaActiveResponse,
+  PersonasResponse,
   ReactionRule,
   ReactionsResponse,
+  ScheduleResponse,
   StatusResponse,
+  TimerResponse,
 } from "./types";
 
 /** Error carrying the HTTP status + backend-provided `detail`. */
@@ -186,5 +192,39 @@ export const api = {
     request<ReactionsResponse>("/api/reactions", {
       method: "PUT",
       json: { reactions },
+    }),
+
+  /* ── Schedule (daily jobs + timers) ───────────────────────────────────── */
+  schedule: () => request<ScheduleResponse>("/api/schedule"),
+
+  setSchedule: (schedule: Job[]) =>
+    request<ScheduleResponse>("/api/schedule", {
+      method: "PUT",
+      json: { schedule },
+    }),
+
+  setTimer: (seconds: number, label?: string, say?: string) =>
+    request<TimerResponse>("/api/timer", {
+      method: "POST",
+      json: {
+        seconds,
+        ...(label ? { label } : {}),
+        ...(say ? { say } : {}),
+      },
+    }),
+
+  /* ── Personas ─────────────────────────────────────────────────────────── */
+  personas: () => request<PersonasResponse>("/api/personas"),
+
+  setPersonas: (personas: Persona[]) =>
+    request<PersonasResponse>("/api/personas", {
+      method: "PUT",
+      json: { personas },
+    }),
+
+  setActivePersona: (name: string | null) =>
+    request<PersonaActiveResponse>("/api/personas/active", {
+      method: "POST",
+      json: { name },
     }),
 };

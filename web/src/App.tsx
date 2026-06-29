@@ -7,6 +7,7 @@ import { ManualControl } from "./components/ManualControl";
 import { ModesPanel } from "./components/ModesPanel";
 import { PersonalityPanel } from "./components/PersonalityPanel";
 import { ReactionsPanel } from "./components/ReactionsPanel";
+import { SchedulePanel } from "./components/SchedulePanel";
 import { SettingsPanel } from "./components/SettingsPanel";
 import { StatusPanel } from "./components/StatusPanel";
 import { TalkPanel } from "./components/TalkPanel";
@@ -17,13 +18,20 @@ import { ToastProvider } from "./hooks/useToasts";
 import { useWebSocket } from "./hooks/useWebSocket";
 import type { BusEvent } from "./lib/types";
 
-type TabId = "console" | "personality" | "cameras" | "reactions" | "settings";
+type TabId =
+  | "console"
+  | "personality"
+  | "cameras"
+  | "reactions"
+  | "schedule"
+  | "settings";
 
 const TABS: TabDef[] = [
   { id: "console", label: "Console" },
   { id: "personality", label: "Personality" },
   { id: "cameras", label: "Cameras" },
   { id: "reactions", label: "Reactions" },
+  { id: "schedule", label: "Schedule" },
   { id: "settings", label: "Settings" },
 ];
 
@@ -124,6 +132,12 @@ function Console() {
         {tab === "reactions" && (
           <div className="mx-auto max-w-3xl">
             <ReactionsPanel />
+          </div>
+        )}
+
+        {tab === "schedule" && (
+          <div className="mx-auto max-w-3xl">
+            <SchedulePanel />
           </div>
         )}
 

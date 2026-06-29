@@ -8,7 +8,9 @@ from .base import AIProvider, AIReply
 __all__ = ["AIProvider", "AIReply", "build_provider"]
 
 
-def build_provider(settings: Settings, ha: HomeAssistant | None = None) -> AIProvider:
+def build_provider(
+    settings: Settings, ha: HomeAssistant | None = None, system: str | None = None
+) -> AIProvider:
     """Construct the AI provider selected by configuration.
 
     Only ``ha_assist`` ships in Phase 0. Claude / OpenAI / Ollama adapters slot in here in
@@ -35,6 +37,7 @@ def build_provider(settings: Settings, ha: HomeAssistant | None = None) -> AIPro
             api_key=settings.anthropic_api_key,
             model=settings.claude_model,
             max_tokens=settings.ai_max_tokens,
+            system=system,
         )
     if provider == "openai":
         from .openai_provider import OpenAIProvider
@@ -45,11 +48,15 @@ def build_provider(settings: Settings, ha: HomeAssistant | None = None) -> AIPro
             api_key=settings.openai_api_key,
             model=settings.openai_model,
             max_tokens=settings.ai_max_tokens,
+            system=system,
         )
     if provider == "ollama":
         from .ollama import OllamaProvider
 
         return OllamaProvider(
-            url=settings.ollama_url, model=settings.ollama_model, max_tokens=settings.ai_max_tokens
+            url=settings.ollama_url,
+            model=settings.ollama_model,
+            max_tokens=settings.ai_max_tokens,
+            system=system,
         )
     raise ValueError(f"unknown DRAVIX_AI_PROVIDER: {settings.ai_provider!r}")

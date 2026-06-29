@@ -135,3 +135,48 @@ export interface ReactionRule {
 export interface ReactionsResponse {
   reactions: ReactionRule[];
 }
+
+/* ── Schedule (daily jobs + timers) ──────────────────────────────────────── */
+export interface JobAction {
+  say?: string;
+  face?: string;
+  emote?: string;
+  activate_mode?: string;
+}
+
+export interface Job {
+  name: string;
+  at: string; // "HH:MM"
+  days?: number[]; // 0=Mon .. 6=Sun
+  enabled?: boolean;
+  action: JobAction;
+}
+
+export interface ScheduleResponse {
+  schedule: Job[];
+}
+
+export interface TimerResponse {
+  id: string;
+  seconds: number;
+  label?: string;
+}
+
+/* ── Personas ────────────────────────────────────────────────────────────── */
+export interface Persona {
+  name: string;
+  system_prompt: string;
+  voice?: string;
+  default_expression?: string;
+}
+
+export interface PersonasResponse {
+  personas: Persona[];
+  active: string | null;
+}
+
+export interface PersonaActiveResponse {
+  active: string | null;
+  ai_available: boolean;
+  error?: string | null;
+}

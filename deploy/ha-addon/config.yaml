@@ -1,0 +1,35 @@
+name: dravix-os
+version: "0.0.1"
+slug: dravix_os
+description: Companion OS for the M5Stack StackChan robot (local-first)
+url: https://github.com/your-user/dravix-os
+arch:
+  - amd64
+  - aarch64
+init: false
+# The web dashboard + API.
+ports:
+  8800/tcp: 8800
+ports_description:
+  8800/tcp: dravix-os dashboard + API
+# Add-on options → DRAVIX_* env (see run.sh). Persistent state lives in /data.
+options:
+  robot_mcp_url: ""
+  robot_mcp_transport: auto
+  ha_url: "http://homeassistant:8123"
+  ha_token: ""
+  ai_provider: ha_assist
+  local_only: true
+  frigate_url: ""
+  frigate_camera: ""
+  log_level: INFO
+schema:
+  robot_mcp_url: "str?"
+  robot_mcp_transport: "list(auto|streamable_http|sse)"
+  ha_url: str
+  ha_token: "str?"
+  ai_provider: "list(ha_assist|claude|openai|ollama)"
+  local_only: bool
+  frigate_url: "str?"
+  frigate_camera: "str?"
+  log_level: "list(DEBUG|INFO|WARNING|ERROR)"

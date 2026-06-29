@@ -31,10 +31,12 @@ log = get_logger("app")
 
 
 def build_ai(settings: Settings, store: Store, ha: HomeAssistant | None):
-    """Build the AI provider, honoring a runtime override from the store over the env default."""
+    """Build the AI provider, honoring store overrides (provider + active persona) over env."""
+    from .persona import resolve_persona
+
     provider = store.ai_provider() or settings.ai_provider
     merged = settings.model_copy(update={"ai_provider": provider})
-    return build_provider(merged, ha)
+    return build_provider(merged, ha, system=resolve_persona(store).system_prompt)
 
 
 @asynccontextmanager

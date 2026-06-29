@@ -70,6 +70,22 @@ curl -X POST localhost:8800/api/announce -d '{"text":"(happy) Dinner is ready!"}
 
 Wire it from Home Assistant with a `rest_command` pointing at `/api/announce`.
 
+## Personas (switchable personalities)
+
+Keep several personalities and switch between them — each sets the AI **system prompt** (and a
+voice / default expression). Switching the active persona rebuilds the AI provider live.
+
+```bash
+curl -X PUT localhost:8800/api/personas -d '{"personas":[
+  {"name":"Buddy","system_prompt":"You are a warm, upbeat desk buddy. Short, spoken replies. Start with an emotion tag like (happy).","default_expression":"happy"},
+  {"name":"Sarcastic","system_prompt":"You are a dry, witty robot. Keep it terse and a little sarcastic.","default_expression":"doubt"}
+]}'
+curl -X POST localhost:8800/api/personas/active -d '{"name":"Sarcastic"}'   # null = built-in default
+```
+
+The active persona is persisted; with `DRAVIX_AI_PROVIDER=ha_assist` the persona is the system
+prompt dravix sends — note HA Assist may also have its own configured persona.
+
 ## Schedule & timers
 
 Daily jobs (good-morning, reminders) and one-shot timers — the alarms a desk robot needs.

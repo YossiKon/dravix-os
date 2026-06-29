@@ -17,7 +17,13 @@ docker compose -f deploy/docker-compose.yml up -d --build
 
 Open `http://<lxc-ip>:8800`. Logs: `docker compose -f deploy/docker-compose.yml logs -f`.
 
-## Option B — bare service (systemd)
+## Option B — Home Assistant add-on
+
+For HAOS / supervised installs, dravix-os can run as a HA **add-on** (configured from the HA UI,
+state in `/data`). See [ha-addon/README.md](ha-addon/README.md). For HA-on-Proxmox (a VM), the
+LXC + Compose path above is recommended.
+
+## Option C — bare service (systemd)
 
 ```bash
 cd core

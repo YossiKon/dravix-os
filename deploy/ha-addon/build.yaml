@@ -1,0 +1,5 @@
+# Build args for the add-on Dockerfile. Point these at your dravix-os repo + branch;
+# the Dockerfile clones it (so plugins/ and the web build are included), no build context needed.
+args:
+  DRAVIX_REPO: "https://github.com/your-user/dravix-os"
+  DRAVIX_REF: "feat/companion-os"

@@ -444,3 +444,35 @@ async def set_timer(body: TimerBody, request: Request):
     action = {"say": body.say} if body.say else None
     tid = await request.app.state.scheduler.set_timer(body.seconds, body.label, action)
     return {"id": tid, "seconds": body.seconds, "label": body.label}
+
+
+# ── personas (switchable personalities) ───────────────────────────────────────
+class PersonasBody(BaseModel):
+    personas: list[dict]
+
+
+class ActivePersonaBody(BaseModel):
+    name: str | None = None  # None resets to the built-in default
+
+
+@router.get("/api/personas")
+async def get_personas(request: Request):
+    s = request.app.state.store
+    return {"personas": s.personas(), "active": s.active_persona()}
+
+
+@router.put("/api/personas")
+async def put_personas(body: PersonasBody, request: Request):
+    request.app.state.store.set_personas(body.personas)
+    return {"personas": request.app.state.store.personas()}
+
+
+@router.post("/api/personas/active")
+async def set_active_persona(body: ActivePersonaBody, request: Request):
+    request.app.state.store.set_active_persona(body.name)
+    error = _rebuild_ai(request)  # apply the persona's system prompt to the AI provider
+    return {
+        "active": request.app.state.store.active_persona(),
+        "ai_available": request.app.state.ai is not None,
+        "error": error,
+    }
