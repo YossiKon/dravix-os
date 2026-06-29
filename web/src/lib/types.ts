@@ -207,6 +207,16 @@ export interface SayResult {
   [key: string]: unknown;
 }
 
+/* ── AI party tricks ─────────────────────────────────────────────────────── */
+export interface AiFunResponse {
+  kinds: string[];
+}
+
+export interface AiFunResult {
+  text: string;
+  expression?: string;
+}
+
 /* ── Memory (facts) ──────────────────────────────────────────────────────── */
 export interface Memory {
   id: string;
@@ -235,4 +245,18 @@ export interface Routine {
 
 export interface RoutinesResponse {
   routines: Routine[];
+}
+
+/* ── Inbox (queued / spoken messages) ────────────────────────────────────── */
+export interface InboxMessage {
+  id: string;
+  text: string;
+}
+
+export interface InboxResponse {
+  messages: InboxMessage[];
+}
+
+export interface InboxPlayResponse {
+  spoken: number;
 }

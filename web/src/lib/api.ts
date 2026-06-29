@@ -2,6 +2,8 @@
 // Same-origin in production; Vite proxies /api to :8800 in dev.
 
 import type {
+  AiFunResponse,
+  AiFunResult,
   AiProviderResponse,
   ChatResponse,
   ConfigResponse,
@@ -11,6 +13,8 @@ import type {
   FunResponse,
   FunResult,
   HealthResponse,
+  InboxPlayResponse,
+  InboxResponse,
   InteractKind,
   Job,
   Memory,
@@ -263,6 +267,16 @@ export const api = {
 
   sayWeather: () => request<SayResult>("/api/say/weather", { method: "POST" }),
 
+  sayAgenda: () => request<SayResult>("/api/say/agenda", { method: "POST" }),
+
+  /* ── AI party tricks ──────────────────────────────────────────────────── */
+  aiFun: () => request<AiFunResponse>("/api/ai/fun"),
+
+  playAiFun: (kind: string) =>
+    request<AiFunResult>(`/api/ai/fun/${encodeURIComponent(kind)}`, {
+      method: "POST",
+    }),
+
   /* ── Memory (facts) ───────────────────────────────────────────────────── */
   memory: () => request<MemoryResponse>("/api/memory"),
 
@@ -288,4 +302,18 @@ export const api = {
       `/api/routines/${encodeURIComponent(name)}/run`,
       { method: "POST" },
     ),
+
+  /* ── Inbox (queued / spoken messages) ─────────────────────────────────── */
+  inbox: () => request<InboxResponse>("/api/inbox"),
+
+  notify: (text: string, speak = true) =>
+    request<{ ok: boolean }>("/api/notify", {
+      method: "POST",
+      json: { text, speak },
+    }),
+
+  playInbox: () =>
+    request<InboxPlayResponse>("/api/inbox/play", { method: "POST" }),
+
+  clearInbox: () => request<{ ok: boolean }>("/api/inbox", { method: "DELETE" }),
 };

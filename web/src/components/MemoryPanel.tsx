@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../lib/api";
-import type { Memory, Routine } from "../lib/types";
+import type { InboxMessage, Memory, Routine } from "../lib/types";
 import { useToasts } from "../hooks/useToasts";
 import { Button, Panel, cx, errMsg } from "./ui";
 
@@ -15,6 +15,7 @@ export function MemoryPanel() {
     <div className="space-y-5">
       <FactsPanel />
       <RoutinesPanel />
+      <InboxPanel />
     </div>
   );
 }
@@ -419,5 +420,195 @@ function AddRoutineForm({
         </div>
       </div>
     </div>
+  );
+}
+
+/* ── Inbox ──────────────────────────────────────────────────────────────── */
+function InboxPanel() {
+  const toasts = useToasts();
+  const [messages, setMessages] = useState<InboxMessage[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [text, setText] = useState("");
+
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
+
+  const refresh = useCallback(async () => {
+    setLoading(true);
+    try {
+      const r = await api.inbox();
+      if (mounted.current) setMessages(r.messages ?? []);
+    } catch (err) {
+      if (mounted.current) {
+        setMessages([]);
+        toasts.error(errMsg(err));
+      }
+    } finally {
+      if (mounted.current) setLoading(false);
+    }
+  }, [toasts]);
+
+  useEffect(() => {
+    refresh();
+  }, [refresh]);
+
+  // Queue (speak:false) or speak now (speak:true), then refetch the list.
+  async function send(speak: boolean) {
+    const value = text.trim();
+    if (!value || busy) return;
+    const key = speak ? "say" : "queue";
+    setBusy(key);
+    try {
+      await api.notify(value, speak);
+      if (mounted.current) setText("");
+      toasts.ok(speak ? "Speaking now" : "Queued");
+      await refresh();
+    } catch (err) {
+      toasts.error(errMsg(err));
+    } finally {
+      if (mounted.current) setBusy(null);
+    }
+  }
+
+  async function playAll() {
+    if (busy) return;
+    setBusy("play");
+    try {
+      const res = await api.playInbox();
+      toasts.ok(
+        res?.spoken ? `Spoke ${res.spoken} message${res.spoken === 1 ? "" : "s"}` : "Inbox empty",
+      );
+      await refresh();
+    } catch (err) {
+      toasts.error(errMsg(err));
+    } finally {
+      if (mounted.current) setBusy(null);
+    }
+  }
+
+  async function clearAll() {
+    if (busy) return;
+    setBusy("clear");
+    try {
+      await api.clearInbox();
+      if (mounted.current) setMessages([]);
+      toasts.ok("Inbox cleared");
+      await refresh();
+    } catch (err) {
+      toasts.error(errMsg(err));
+      refresh();
+    } finally {
+      if (mounted.current) setBusy(null);
+    }
+  }
+
+  const list = messages ?? [];
+
+  return (
+    <Panel
+      eyebrow="messages"
+      title="Inbox"
+      right={
+        <div className="flex items-center gap-2">
+          <Button
+            variant="primary"
+            className="px-2.5 py-1.5"
+            loading={busy === "play"}
+            disabled={busy !== null && busy !== "play"}
+            onClick={playAll}
+            title="Speak all queued messages, then clear"
+          >
+            ▸ Play all
+          </Button>
+          <Button
+            variant="danger"
+            className="px-2.5 py-1.5"
+            loading={busy === "clear"}
+            disabled={busy !== null && busy !== "clear"}
+            onClick={clearAll}
+            title="Clear all queued messages"
+          >
+            Clear
+          </Button>
+        </div>
+      }
+    >
+      {loading && list.length === 0 ? (
+        <div className="space-y-2">
+          {Array.from({ length: 2 }).map((_, i) => (
+            <div key={i} className="h-11 animate-pulse rounded-xl bg-line/60" />
+          ))}
+        </div>
+      ) : (
+        <div className="space-y-4">
+          <div className="space-y-2">
+            {list.length === 0 ? (
+              <p className="font-mono text-[11px] text-mute">
+                No queued messages. Add one below.
+              </p>
+            ) : (
+              list.map((m) => (
+                <div
+                  key={m.id}
+                  className="flex items-start gap-3 rounded-xl border border-line bg-panel-2/40 px-3.5 py-2.5"
+                >
+                  <span className="mt-0.5 select-none font-mono text-[11px] text-mute">
+                    ✉
+                  </span>
+                  <p className="min-w-0 flex-1 break-words font-body text-sm text-ink">
+                    {m.text}
+                  </p>
+                </div>
+              ))
+            )}
+          </div>
+
+          <div className="rounded-xl border border-line bg-panel-2/30 p-4">
+            <div className="eyebrow mb-3 flex items-center gap-2">
+              add message
+              <span className="h-px flex-1 bg-line/70" />
+            </div>
+            <div className="flex flex-wrap items-center gap-2.5">
+              <input
+                className={cx(inputCls, "min-w-[12rem] flex-1")}
+                value={text}
+                placeholder="e.g. dinner is ready"
+                onChange={(e) => setText(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") send(true);
+                }}
+              />
+              <Button
+                variant="subtle"
+                loading={busy === "queue"}
+                disabled={text.trim() === "" || (busy !== null && busy !== "queue")}
+                onClick={() => send(false)}
+                title="Queue silently"
+              >
+                Queue
+              </Button>
+              <Button
+                variant="primary"
+                loading={busy === "say"}
+                disabled={text.trim() === "" || (busy !== null && busy !== "say")}
+                onClick={() => send(true)}
+                title="Speak immediately"
+              >
+                Say now
+              </Button>
+            </div>
+            <p className="mt-2 font-mono text-[10px] tracking-wide text-mute">
+              Queue messages to play later, or say one right now.
+            </p>
+          </div>
+        </div>
+      )}
+    </Panel>
   );
 }

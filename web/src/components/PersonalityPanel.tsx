@@ -38,6 +38,16 @@ const FUN_GLYPH: Record<string, string> = {
   fortune: "🔮",
 };
 
+// A friendly glyph per known AI party-trick kind; falls back to a sparkle.
+const AI_FUN_GLYPH: Record<string, string> = {
+  joke: "😂",
+  fact: "🧠",
+  riddle: "❓",
+  compliment: "💗",
+  would_you_rather: "🤔",
+  story: "📖",
+};
+
 export function PersonalityPanel({
   initialMood,
   /** Bumps whenever a `mood.changed` WS event arrives → triggers a refetch. */
@@ -50,6 +60,7 @@ export function PersonalityPanel({
   const [mood, setMood] = useState<Mood | null>(initialMood ?? null);
   const [emotes, setEmotes] = useState<string[]>([]);
   const [games, setGames] = useState<string[]>([]);
+  const [aiKinds, setAiKinds] = useState<string[]>([]);
   const [busy, setBusy] = useState<string | null>(null);
 
   const mounted = useRef(true);
@@ -78,6 +89,10 @@ export function PersonalityPanel({
     api
       .fun()
       .then((f) => mounted.current && setGames(f.games ?? []))
+      .catch(() => {});
+    api
+      .aiFun()
+      .then((f) => mounted.current && setAiKinds(f.kinds ?? []))
       .catch(() => {});
     refreshMood();
   }, [refreshMood]);
@@ -281,7 +296,35 @@ export function PersonalityPanel({
               </Button>
             ))}
           </div>
-          <div className="mt-2 grid grid-cols-2 gap-2">
+          {aiKinds.length > 0 && (
+            <div className="mt-4">
+              <div className="eyebrow mb-2 flex items-center gap-2">
+                ai
+                <span className="h-px flex-1 bg-line/70" />
+              </div>
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                {aiKinds.map((kind) => (
+                  <Button
+                    key={kind}
+                    variant="subtle"
+                    loading={busy === `ai:${kind}`}
+                    disabled={busy !== null && busy !== `ai:${kind}`}
+                    onClick={() =>
+                      speak(`ai:${kind}`, () => api.playAiFun(kind))
+                    }
+                    className="flex-col gap-1 py-3"
+                    title={`AI ${humanize(kind)}`}
+                  >
+                    <span aria-hidden className="text-base leading-none">
+                      {AI_FUN_GLYPH[kind] ?? "✨"}
+                    </span>
+                    {humanize(kind)}
+                  </Button>
+                ))}
+              </div>
+            </div>
+          )}
+          <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3">
             <Button
               variant="primary"
               loading={busy === "say:time"}
@@ -305,6 +348,18 @@ export function PersonalityPanel({
                 🌤️
               </span>
               Say weather
+            </Button>
+            <Button
+              variant="primary"
+              loading={busy === "say:agenda"}
+              disabled={busy !== null && busy !== "say:agenda"}
+              onClick={() => speak("say:agenda", () => api.sayAgenda())}
+              className="flex-col gap-1 py-3"
+            >
+              <span aria-hidden className="text-base leading-none">
+                🗓️
+              </span>
+              Say agenda
             </Button>
           </div>
         </div>
