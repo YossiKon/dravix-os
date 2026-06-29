@@ -8,9 +8,13 @@ import type {
   EmotesResponse,
   Expression,
   FrigateCamerasResponse,
+  FunResponse,
+  FunResult,
   HealthResponse,
   InteractKind,
   Job,
+  Memory,
+  MemoryResponse,
   ModesResponse,
   MoodResponse,
   Persona,
@@ -18,6 +22,9 @@ import type {
   PersonasResponse,
   ReactionRule,
   ReactionsResponse,
+  Routine,
+  RoutinesResponse,
+  SayResult,
   ScheduleResponse,
   StatusResponse,
   TimerResponse,
@@ -227,4 +234,42 @@ export const api = {
       method: "POST",
       json: { name },
     }),
+
+  /* ── Fun & voice ──────────────────────────────────────────────────────── */
+  fun: () => request<FunResponse>("/api/fun"),
+
+  playFun: (name: string) =>
+    request<FunResult>(`/api/fun/${encodeURIComponent(name)}`, {
+      method: "POST",
+    }),
+
+  sayTime: () => request<SayResult>("/api/say/time", { method: "POST" }),
+
+  sayWeather: () => request<SayResult>("/api/say/weather", { method: "POST" }),
+
+  /* ── Memory (facts) ───────────────────────────────────────────────────── */
+  memory: () => request<MemoryResponse>("/api/memory"),
+
+  addMemory: (text: string) =>
+    request<Memory>("/api/memory", { method: "POST", json: { text } }),
+
+  deleteMemory: (id: string) =>
+    request<{ ok: boolean }>(`/api/memory/${encodeURIComponent(id)}`, {
+      method: "DELETE",
+    }),
+
+  /* ── Routines (named action macros) ───────────────────────────────────── */
+  routines: () => request<RoutinesResponse>("/api/routines"),
+
+  setRoutines: (routines: Routine[]) =>
+    request<RoutinesResponse>("/api/routines", {
+      method: "PUT",
+      json: { routines },
+    }),
+
+  runRoutine: (name: string) =>
+    request<{ ok: boolean }>(
+      `/api/routines/${encodeURIComponent(name)}/run`,
+      { method: "POST" },
+    ),
 };

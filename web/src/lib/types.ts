@@ -180,3 +180,49 @@ export interface PersonaActiveResponse {
   ai_available: boolean;
   error?: string | null;
 }
+
+/* ── Fun & voice ─────────────────────────────────────────────────────────── */
+export interface FunResponse {
+  games: string[];
+}
+
+export interface FunResult {
+  text: string;
+  emote?: string;
+  value?: unknown;
+}
+
+export interface SayResult {
+  text: string;
+  [key: string]: unknown;
+}
+
+/* ── Memory (facts) ──────────────────────────────────────────────────────── */
+export interface Memory {
+  id: string;
+  text: string;
+}
+
+export interface MemoryResponse {
+  memories: Memory[];
+}
+
+/* ── Routines (named action macros) ──────────────────────────────────────── */
+export interface RoutineStep {
+  face?: string;
+  leds?: { color: string; brightness: number };
+  head?: [number, number];
+  emote?: string;
+  say?: string;
+  wait?: number;
+  activate_mode?: string;
+}
+
+export interface Routine {
+  name: string;
+  steps: RoutineStep[];
+}
+
+export interface RoutinesResponse {
+  routines: Routine[];
+}

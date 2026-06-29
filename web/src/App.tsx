@@ -4,6 +4,7 @@ import { CapabilitiesPanel } from "./components/CapabilitiesPanel";
 import { EventsLog } from "./components/EventsLog";
 import { Header } from "./components/Header";
 import { ManualControl } from "./components/ManualControl";
+import { MemoryPanel } from "./components/MemoryPanel";
 import { ModesPanel } from "./components/ModesPanel";
 import { PersonalityPanel } from "./components/PersonalityPanel";
 import { ReactionsPanel } from "./components/ReactionsPanel";
@@ -24,6 +25,7 @@ type TabId =
   | "cameras"
   | "reactions"
   | "schedule"
+  | "memory"
   | "settings";
 
 const TABS: TabDef[] = [
@@ -32,6 +34,7 @@ const TABS: TabDef[] = [
   { id: "cameras", label: "Cameras" },
   { id: "reactions", label: "Reactions" },
   { id: "schedule", label: "Schedule" },
+  { id: "memory", label: "Memory" },
   { id: "settings", label: "Settings" },
 ];
 
@@ -138,6 +141,12 @@ function Console() {
         {tab === "schedule" && (
           <div className="mx-auto max-w-3xl">
             <SchedulePanel />
+          </div>
+        )}
+
+        {tab === "memory" && (
+          <div className="mx-auto max-w-3xl">
+            <MemoryPanel />
           </div>
         )}
 

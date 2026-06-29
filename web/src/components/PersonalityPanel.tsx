@@ -29,6 +29,15 @@ const EMOTE_GLYPH: Record<string, string> = {
   sad: "😢",
 };
 
+// A friendly glyph + label per known fun game; falls back to a die.
+const FUN_GLYPH: Record<string, string> = {
+  dice: "🎲",
+  coin: "🪙",
+  "8ball": "🎱",
+  joke: "😂",
+  fortune: "🔮",
+};
+
 export function PersonalityPanel({
   initialMood,
   /** Bumps whenever a `mood.changed` WS event arrives → triggers a refetch. */
@@ -40,6 +49,7 @@ export function PersonalityPanel({
   const toasts = useToasts();
   const [mood, setMood] = useState<Mood | null>(initialMood ?? null);
   const [emotes, setEmotes] = useState<string[]>([]);
+  const [games, setGames] = useState<string[]>([]);
   const [busy, setBusy] = useState<string | null>(null);
 
   const mounted = useRef(true);
@@ -59,11 +69,15 @@ export function PersonalityPanel({
     }
   }, []);
 
-  // Initial load of emotes + mood.
+  // Initial load of emotes + games + mood.
   useEffect(() => {
     api
       .emotes()
       .then((e) => mounted.current && setEmotes(e.emotes ?? []))
+      .catch(() => {});
+    api
+      .fun()
+      .then((f) => mounted.current && setGames(f.games ?? []))
       .catch(() => {});
     refreshMood();
   }, [refreshMood]);
@@ -83,6 +97,20 @@ export function PersonalityPanel({
       await fn();
       toasts.ok(ok);
       // Mood likely shifted — pull the fresh values.
+      refreshMood();
+    } catch (err) {
+      toasts.error(errMsg(err));
+    } finally {
+      if (mounted.current) setBusy(null);
+    }
+  }
+
+  // Fun & voice: surface the robot's spoken `text` directly in the toast.
+  async function speak(key: string, fn: () => Promise<{ text?: string }>) {
+    setBusy(key);
+    try {
+      const res = await fn();
+      toasts.ok(res?.text || "Done");
       refreshMood();
     } catch (err) {
       toasts.error(errMsg(err));
@@ -225,6 +253,60 @@ export function PersonalityPanel({
               ))}
             </div>
           )}
+        </div>
+
+        {/* Fun & voice */}
+        <div>
+          <div className="eyebrow mb-2 flex items-center gap-2">
+            fun &amp; voice
+            <span className="h-px flex-1 bg-line/70" />
+          </div>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+            {(games ?? []).map((name) => (
+              <Button
+                key={name}
+                variant="subtle"
+                loading={busy === `fun:${name}`}
+                disabled={busy !== null && busy !== `fun:${name}`}
+                onClick={() =>
+                  speak(`fun:${name}`, () => api.playFun(name))
+                }
+                className="flex-col gap-1 py-3"
+                title={`Play ${name}`}
+              >
+                <span aria-hidden className="text-base leading-none">
+                  {FUN_GLYPH[name] ?? "🎲"}
+                </span>
+                {humanize(name)}
+              </Button>
+            ))}
+          </div>
+          <div className="mt-2 grid grid-cols-2 gap-2">
+            <Button
+              variant="primary"
+              loading={busy === "say:time"}
+              disabled={busy !== null && busy !== "say:time"}
+              onClick={() => speak("say:time", () => api.sayTime())}
+              className="flex-col gap-1 py-3"
+            >
+              <span aria-hidden className="text-base leading-none">
+                🕒
+              </span>
+              Say time
+            </Button>
+            <Button
+              variant="primary"
+              loading={busy === "say:weather"}
+              disabled={busy !== null && busy !== "say:weather"}
+              onClick={() => speak("say:weather", () => api.sayWeather())}
+              className="flex-col gap-1 py-3"
+            >
+              <span aria-hidden className="text-base leading-none">
+                🌤️
+              </span>
+              Say weather
+            </Button>
+          </div>
         </div>
       </div>
     </Panel>
