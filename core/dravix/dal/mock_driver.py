@@ -15,6 +15,7 @@ class MockDriver(RobotDriver):
 
     def __init__(self) -> None:
         self._connected = False
+        self.last_voice: str | None = None
 
     async def connect(self) -> None:
         self._connected = True
@@ -33,6 +34,7 @@ class MockDriver(RobotDriver):
         log.info("[mock] move_head(yaw=%.1f, pitch=%.1f, speed=%.2f)", yaw, pitch, speed)
 
     async def say(self, text: str, voice: str | None = None) -> None:
+        self.last_voice = voice
         log.info("[mock] say(%r, voice=%s)", text, voice)
 
     async def set_leds(self, color: str, brightness: float = 1.0) -> None:

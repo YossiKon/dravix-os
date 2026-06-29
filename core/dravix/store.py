@@ -27,6 +27,8 @@ _DEFAULTS: dict[str, Any] = {
     "active_persona": None,  # name of the active persona (None = built-in default)
     "memories": [],  # [{id, text}] — facts the robot remembers (fed to the AI)
     "routines": [],  # [{name, steps:[{face?,leds?,head?,emote?,say?,wait?,activate_mode?}]}]
+    "voice": None,  # active TTS voice override applied to all speech (None = persona/default)
+    "voices": [],  # user catalog of voice ids to pick from (depends on your TTS engine)
 }
 
 
@@ -59,7 +61,7 @@ class Store:
     def update(self, patch: dict[str, Any]) -> None:
         keys = (
             "ai_provider", "mode_overrides", "disabled_modes", "reactions", "schedule",
-            "personas", "active_persona", "memories", "routines",
+            "personas", "active_persona", "memories", "routines", "voice", "voices",
         )
         for key in keys:
             if key in patch:
@@ -103,6 +105,20 @@ class Store:
 
     def set_routines(self, routines: list[dict[str, Any]]) -> None:
         self._data["routines"] = routines
+        self.save()
+
+    def voice(self) -> str | None:
+        return self._data.get("voice")
+
+    def set_voice(self, voice: str | None) -> None:
+        self._data["voice"] = voice
+        self.save()
+
+    def voices(self) -> list[str]:
+        return list(self._data.get("voices", []))
+
+    def set_voices(self, voices: list[str]) -> None:
+        self._data["voices"] = voices
         self.save()
 
     def schedule(self) -> list[dict[str, Any]]:

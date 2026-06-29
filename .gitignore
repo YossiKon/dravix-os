@@ -25,6 +25,7 @@ node_modules/
 dist/
 build/
 .vite/
+*.tsbuildinfo
 *.log
 npm-debug.log*
 pnpm-debug.log*

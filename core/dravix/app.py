@@ -22,6 +22,7 @@ from .integrations.homeassistant import HomeAssistant
 from .logging import get_logger, setup_logging
 from .modes import ModeContext, ModeEngine
 from .mood import MoodEngine
+from .persona import resolve_voice
 from .reactions import ReactionEngine
 from .scheduler import Scheduler
 from .state import RuntimeState
@@ -59,6 +60,7 @@ async def lifespan(app: FastAPI):
     # Robot driver + controller.
     driver = build_driver(settings, ha)
     controller = RobotController(driver, bus, runtime.robot)
+    controller.default_voice = resolve_voice(store)  # active persona/override TTS voice
     try:
         await controller.connect()
     except Exception as exc:  # noqa: BLE001 — degrade gracefully, surface in status

@@ -110,6 +110,7 @@ class RobotController:
         self._bus = bus
         self.state = state
         self._caps: set[str] = set()
+        self.default_voice: str | None = None  # applied to say() when no explicit voice given
 
     async def connect(self) -> None:
         await self._driver.connect()
@@ -152,7 +153,7 @@ class RobotController:
 
     async def say(self, text: str, voice: str | None = None) -> None:
         self._require(CAP_SAY)
-        await self._driver.say(text, voice)
+        await self._driver.say(text, voice or self.default_voice)
         self.state.last_said = text
         self.state.touch()
         await self._bus.publish("robot.say", text=text)

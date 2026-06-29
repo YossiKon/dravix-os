@@ -16,7 +16,7 @@ from ..dal.base import CAP_FACE, CAP_PHOTO, CAP_SAY, CapabilityError
 from ..emotes import emote_names, play_emote
 from ..fun import GAMES, game_names
 from ..memory import build_memory_context
-from ..persona import parse_expression, resolve_persona
+from ..persona import parse_expression, resolve_persona, resolve_voice
 from ..routines import run_routine
 
 router = APIRouter()
@@ -498,9 +498,14 @@ async def get_personas(request: Request):
     return {"personas": s.personas(), "active": s.active_persona()}
 
 
+def _refresh_voice(request: Request) -> None:
+    request.app.state.robot.default_voice = resolve_voice(request.app.state.store)
+
+
 @router.put("/api/personas")
 async def put_personas(body: PersonasBody, request: Request):
     request.app.state.store.set_personas(body.personas)
+    _refresh_voice(request)  # a persona may carry a voice
     return {"personas": request.app.state.store.personas()}
 
 
@@ -508,11 +513,44 @@ async def put_personas(body: PersonasBody, request: Request):
 async def set_active_persona(body: ActivePersonaBody, request: Request):
     request.app.state.store.set_active_persona(body.name)
     error = _rebuild_ai(request)  # apply the persona's system prompt to the AI provider
+    _refresh_voice(request)  # and its voice
     return {
         "active": request.app.state.store.active_persona(),
         "ai_available": request.app.state.ai is not None,
         "error": error,
     }
+
+
+# ── voice (TTS) ───────────────────────────────────────────────────────────────
+class VoiceBody(BaseModel):
+    voice: str | None = None  # None = use the active persona's voice / default
+
+
+class VoicesBody(BaseModel):
+    voices: list[str]
+
+
+@router.get("/api/voice")
+async def get_voice(request: Request):
+    s = request.app.state
+    return {
+        "voice": resolve_voice(s.store),  # effective
+        "override": s.store.voice(),
+        "voices": s.store.voices(),
+    }
+
+
+@router.put("/api/voice")
+async def put_voice(body: VoiceBody, request: Request):
+    request.app.state.store.set_voice(body.voice)
+    _refresh_voice(request)
+    return {"voice": resolve_voice(request.app.state.store)}
+
+
+@router.put("/api/voices")
+async def put_voices(body: VoicesBody, request: Request):
+    request.app.state.store.set_voices(body.voices)
+    return {"voices": request.app.state.store.voices()}
 
 
 # ── fun / games + time + weather ──────────────────────────────────────────────

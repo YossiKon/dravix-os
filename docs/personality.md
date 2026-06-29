@@ -101,6 +101,21 @@ curl -X POST localhost:8800/api/personas/active -d '{"name":"Sarcastic"}'   # nu
 The active persona is persisted; with `DRAVIX_AI_PROVIDER=ha_assist` the persona is the system
 prompt dravix sends — note HA Assist may also have its own configured persona.
 
+## Voice (TTS)
+
+Choose the voice the robot speaks with — globally, or a different voice per persona. The voice
+is applied to every `say` (the robot/HA TTS engine resolves the actual voice id).
+
+```bash
+curl localhost:8800/api/voice                          # {voice (effective), override, voices}
+curl -X PUT localhost:8800/api/voice  -d '{"voice":"en_US-amy-medium"}'   # null = use persona/default
+curl -X PUT localhost:8800/api/voices -d '{"voices":["en_US-amy-medium","en_GB-alan-low"]}'  # your picker catalog
+```
+
+Voice ids depend on your TTS engine (Piper, VOICEVOX, the robot's firmware, …). A persona can
+carry its own `voice`, so switching persona switches voice; a global override (`/api/voice`)
+beats the persona. With `ha_assist`, set voices in HA's TTS engine.
+
 ## Memory (it remembers things)
 
 Tell the robot facts and it keeps them — and feeds them to the AI as context (for cloud/Ollama

@@ -43,6 +43,13 @@ class Persona:
     default_expression: Expression = Expression.NEUTRAL
 
 
+def resolve_voice(store) -> str | None:
+    """Effective TTS voice: the store override, else the active persona's voice, else none."""
+    if store is None:
+        return None
+    return store.voice() or resolve_persona(store).voice
+
+
 def resolve_persona(store) -> Persona:
     """Return the active persona from the store, or the built-in default."""
     if store is None:

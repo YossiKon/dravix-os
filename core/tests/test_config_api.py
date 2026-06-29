@@ -53,6 +53,10 @@ def test_config_api(tmp_path, monkeypatch):
             assert client.post("/api/routines/hi/run").status_code == 200
             assert client.post("/api/routines/none/run").status_code == 404
 
+            # Voice override applies live.
+            assert client.put("/api/voice", json={"voice": "piper-amy"}).json()["voice"] == "piper-amy"
+            assert client.get("/api/voice").json()["voice"] == "piper-amy"
+
             # Frigate cameras with no HA configured → empty list.
             assert client.get("/api/frigate/cameras").json()["cameras"] == []
             # Robot camera relay: mock yields no real frame → 503 (not a crash).
