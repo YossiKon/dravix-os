@@ -64,6 +64,9 @@ def map_state_changed(
         event_type = _DEVICE_CLASS_EVENT.get(device_class or "")
         if event_type:
             return event_type, {"entity_id": eid, "device_class": device_class}
+        # The robot's head/touch zone → treat as a pet (the mood engine loves it).
+        if "head" in eid or "touch" in eid:
+            return "touch.pet", {"entity_id": eid}
     return None
 
 

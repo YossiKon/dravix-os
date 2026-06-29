@@ -69,6 +69,9 @@ def test_config_api(tmp_path, monkeypatch):
             assert "joke" in client.get("/api/ai/fun").json()["kinds"]
             assert client.post("/api/ai/fun/joke").status_code in (502, 503)
 
+            # Generic event ingest (e.g. the robot's head-touch sensor → the bus).
+            assert client.post("/api/event", json={"type": "touch.pet"}).status_code == 200
+
             # Frigate cameras with no HA configured → empty list.
             assert client.get("/api/frigate/cameras").json()["cameras"] == []
             # Robot camera relay: mock yields no real frame → 503 (not a crash).

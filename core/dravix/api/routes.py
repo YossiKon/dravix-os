@@ -456,6 +456,22 @@ async def robot_interact(body: InteractBody, request: Request):
     return {"ok": True, "event": etype}
 
 
+class EventBody(BaseModel):
+    type: str
+    data: dict = Field(default_factory=dict)
+
+
+@router.post("/api/event")
+async def ingest_event(body: EventBody, request: Request):
+    """Inject a bus event from an external source (robot firmware/MCP, HA webhook, ...).
+
+    e.g. the robot's head-touch sensor can POST ``{"type":"touch.pet"}`` so the robot 'feels' it
+    and the mood engine + reactions respond.
+    """
+    await request.app.state.bus.publish(body.type, **(body.data or {}))
+    return {"ok": True, "type": body.type}
+
+
 # ── schedule + timers ─────────────────────────────────────────────────────────
 class ScheduleBody(BaseModel):
     schedule: list[dict]

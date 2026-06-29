@@ -25,6 +25,11 @@ def test_no_fire_when_already_active():
     assert map_state_changed(_changed("binary_sensor.office", "on", "on", "motion")) is None
 
 
+def test_head_touch_maps_to_pet():
+    out = map_state_changed(_changed("binary_sensor.stackchan_head_touch", "off", "on"))
+    assert out == ("touch.pet", {"entity_id": "binary_sensor.stackchan_head_touch"})
+
+
 def test_explicit_map_wins():
     out = map_state_changed(
         _changed("sensor.custom", "idle", "on"), {"sensor.custom": "presence.detected"}

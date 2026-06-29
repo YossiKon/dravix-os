@@ -20,16 +20,26 @@ curl localhost:8800/api/mood
 # {"valence":0.5,"arousal":0.6,"affection":0.7,"mood":"excited","expression":"happy"}
 ```
 
-### Interactions (petting)
+### Interactions (petting the head sensor)
 
-The robot's hardware touch zones surface as `touch.pet` / `touch.tap` / `robot.touched` events
-once that channel is wired (discovery). Until then — and from the dashboard — drive them:
+The robot has a **head touch sensor** — touching it should make it *feel* petted. That reaches
+the mood engine as a `touch.pet` event, three ways:
+
+1. **Via Home Assistant** (the official robot exposes its touch zones to HA): the event bridge
+   **auto-detects** any `binary_sensor` whose name contains `head` or `touch` and maps it to
+   `touch.pet`. Nothing to configure (or pin it explicitly in `DRAVIX_HA_EVENT_MAP`).
+2. **Via the robot's MCP / firmware**: have it `POST /api/event {"type":"touch.pet"}` whenever
+   the head is touched. The generic event-ingest endpoint publishes it onto the bus.
+3. **From the dashboard / API** (test it now): `POST /api/robot/interact {"kind":"pet"}`.
 
 ```bash
-curl -X POST localhost:8800/api/robot/interact -d '{"kind":"pet"}'   # pet | tap | touched | spoke
+curl -X POST localhost:8800/api/event          -d '{"type":"touch.pet"}'   # from the robot
+curl -X POST localhost:8800/api/robot/interact -d '{"kind":"pet"}'         # pet | tap | touched | spoke
 ```
 
-A pet raises valence/affection and triggers a `love` emote; tap → `curious`; etc.
+A pet raises valence/affection and triggers a `love` emote; `touch.tap` → `curious`;
+`robot.touched` → `happy`. Wire your head sensor to `touch.pet` and the robot lights up when you
+pet it.
 
 ## Emotes
 
