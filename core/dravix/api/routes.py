@@ -15,7 +15,9 @@ from ..app import build_ai
 from ..dal.base import CAP_FACE, CAP_PHOTO, CAP_SAY, CapabilityError
 from ..emotes import emote_names, play_emote
 from ..fun import GAMES, game_names
-from ..persona import parse_expression
+from ..memory import build_memory_context
+from ..persona import parse_expression, resolve_persona
+from ..routines import run_routine
 
 router = APIRouter()
 
@@ -131,14 +133,46 @@ async def robot_leds(body: LedsBody, request: Request):
 
 @router.post("/api/ai/chat")
 async def ai_chat(body: ChatBody, request: Request):
+    robot = _robot(request)
+    store = request.app.state.store
+    text = body.text.strip()
+
+    # "remember ..." → store a fact (no LLM needed).
+    if text.lower().startswith("remember "):
+        fact = text[len("remember "):].strip()
+        if fact.lower().startswith("that "):
+            fact = fact[len("that "):].strip()
+        if fact:
+            store.add_memory(fact)
+            confirm = "Got it — I'll remember that."
+            if body.speak and robot.supports(CAP_FACE):
+                try:
+                    await robot.set_face("happy")
+                except Exception:  # noqa: BLE001
+                    pass
+            if body.speak and robot.supports(CAP_SAY):
+                try:
+                    await robot.say(confirm)
+                except Exception:  # noqa: BLE001
+                    pass
+            return {
+                "text": confirm,
+                "expression": "happy",
+                "remembered": fact,
+                "conversation_id": body.conversation_id,
+            }
+
     ai = request.app.state.ai
     if ai is None:
         raise HTTPException(status_code=503, detail="AI provider not configured")
-    reply = await _guard(ai.converse(body.text, conversation_id=body.conversation_id))
-    # Pull a leading emotion tag (e.g. "(happy)") out of the reply to drive the face.
+    # System prompt = active persona + remembered facts.
+    system = resolve_persona(store).system_prompt
+    mem = build_memory_context(store)
+    if mem:
+        system = f"{system}\n\n{mem}"
+    reply = await _guard(ai.converse(body.text, system=system, conversation_id=body.conversation_id))
     expression, clean = parse_expression(reply.text)
     if body.speak:
-        robot = _robot(request)
         if robot.supports(CAP_FACE):
             try:
                 await robot.set_face(expression)
@@ -531,3 +565,52 @@ async def say_weather(request: Request):
     text = f"It's {condition}" + (f", {temp} degrees." if temp is not None else ".")
     await _guard(_robot(request).say(text))
     return {"text": text, "state": condition, "temperature": temp}
+
+
+# ── memory (facts the robot remembers) ────────────────────────────────────────
+class MemoryBody(BaseModel):
+    text: str
+
+
+@router.get("/api/memory")
+async def get_memory(request: Request):
+    return {"memories": request.app.state.store.memories()}
+
+
+@router.post("/api/memory")
+async def add_memory(body: MemoryBody, request: Request):
+    if not body.text.strip():
+        raise HTTPException(status_code=400, detail="empty memory")
+    return request.app.state.store.add_memory(body.text.strip())
+
+
+@router.delete("/api/memory/{mem_id}")
+async def delete_memory(mem_id: str, request: Request):
+    if not request.app.state.store.remove_memory(mem_id):
+        raise HTTPException(status_code=404, detail=f"no memory {mem_id!r}")
+    return {"ok": True}
+
+
+# ── routines (named action macros) ────────────────────────────────────────────
+class RoutinesBody(BaseModel):
+    routines: list[dict]
+
+
+@router.get("/api/routines")
+async def get_routines(request: Request):
+    return {"routines": request.app.state.store.routines()}
+
+
+@router.put("/api/routines")
+async def put_routines(body: RoutinesBody, request: Request):
+    request.app.state.store.set_routines(body.routines)
+    return {"routines": request.app.state.store.routines()}
+
+
+@router.post("/api/routines/{name}/run")
+async def run_routine_endpoint(name: str, request: Request):
+    match = next((r for r in request.app.state.store.routines() if r.get("name") == name), None)
+    if match is None:
+        raise HTTPException(status_code=404, detail=f"unknown routine {name!r}")
+    await run_routine(_robot(request), match.get("steps", []), request.app.state.engine)
+    return {"ok": True, "name": name}

@@ -101,6 +101,36 @@ curl -X POST localhost:8800/api/personas/active -d '{"name":"Sarcastic"}'   # nu
 The active persona is persisted; with `DRAVIX_AI_PROVIDER=ha_assist` the persona is the system
 prompt dravix sends — note HA Assist may also have its own configured persona.
 
+## Memory (it remembers things)
+
+Tell the robot facts and it keeps them — and feeds them to the AI as context (for cloud/Ollama
+providers; HA Assist owns its own pipeline).
+
+```bash
+# natural: just say it in chat
+curl -X POST localhost:8800/api/ai/chat -d '{"text":"remember that I like tea","speak":false}'
+# or manage directly
+curl localhost:8800/api/memory
+curl -X POST   localhost:8800/api/memory -d '{"text":"My standup is at 9:30"}'
+curl -X DELETE localhost:8800/api/memory/<id>
+```
+
+## Routines (named macros)
+
+A routine is a named sequence of action steps (face / leds / head / emote / say / wait /
+activate_mode) — run it on demand, from a schedule, or a reaction.
+
+```bash
+curl -X PUT localhost:8800/api/routines -d '{"routines":[
+  {"name":"good-morning","steps":[
+    {"emote":"wake"},
+    {"say":"Good morning!"},
+    {"activate_mode":"companion"}
+  ]}
+]}'
+curl -X POST localhost:8800/api/routines/good-morning/run
+```
+
 ## Schedule & timers
 
 Daily jobs (good-morning, reminders) and one-shot timers — the alarms a desk robot needs.

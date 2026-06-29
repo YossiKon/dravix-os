@@ -43,6 +43,16 @@ def test_config_api(tmp_path, monkeypatch):
             assert client.post("/api/say/time").status_code == 200
             assert client.post("/api/say/weather").status_code == 400
 
+            # Memory: "remember ..." stores a fact (no AI needed).
+            r = client.post("/api/ai/chat", json={"text": "remember that I like tea", "speak": False})
+            assert r.status_code == 200 and r.json().get("remembered") == "I like tea"
+            assert any(m["text"] == "I like tea" for m in client.get("/api/memory").json()["memories"])
+
+            # Routines: define + run; unknown → 404.
+            client.put("/api/routines", json={"routines": [{"name": "hi", "steps": [{"say": "hello", "emote": "yes"}]}]})
+            assert client.post("/api/routines/hi/run").status_code == 200
+            assert client.post("/api/routines/none/run").status_code == 404
+
             # Frigate cameras with no HA configured → empty list.
             assert client.get("/api/frigate/cameras").json()["cameras"] == []
             # Robot camera relay: mock yields no real frame → 503 (not a crash).

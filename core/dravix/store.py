@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import os
 import pathlib
+import uuid
 from typing import Any
 
 from .logging import get_logger
@@ -24,6 +25,8 @@ _DEFAULTS: dict[str, Any] = {
     "schedule": [],  # [{name, at:"HH:MM", days?:[0-6], enabled?, action:{say?,face?,emote?,...}}]
     "personas": [],  # [{name, system_prompt, voice?, default_expression?}]
     "active_persona": None,  # name of the active persona (None = built-in default)
+    "memories": [],  # [{id, text}] — facts the robot remembers (fed to the AI)
+    "routines": [],  # [{name, steps:[{face?,leds?,head?,emote?,say?,wait?,activate_mode?}]}]
 }
 
 
@@ -56,7 +59,7 @@ class Store:
     def update(self, patch: dict[str, Any]) -> None:
         keys = (
             "ai_provider", "mode_overrides", "disabled_modes", "reactions", "schedule",
-            "personas", "active_persona",
+            "personas", "active_persona", "memories", "routines",
         )
         for key in keys:
             if key in patch:
@@ -75,6 +78,31 @@ class Store:
 
     def set_active_persona(self, name: str | None) -> None:
         self._data["active_persona"] = name
+        self.save()
+
+    def memories(self) -> list[dict[str, Any]]:
+        return list(self._data.get("memories", []))
+
+    def add_memory(self, text: str) -> dict[str, Any]:
+        item = {"id": uuid.uuid4().hex[:8], "text": text}
+        self._data.setdefault("memories", []).append(item)
+        self.save()
+        return item
+
+    def remove_memory(self, mem_id: str) -> bool:
+        before = self._data.get("memories", [])
+        after = [m for m in before if m.get("id") != mem_id]
+        if len(after) == len(before):
+            return False
+        self._data["memories"] = after
+        self.save()
+        return True
+
+    def routines(self) -> list[dict[str, Any]]:
+        return list(self._data.get("routines", []))
+
+    def set_routines(self, routines: list[dict[str, Any]]) -> None:
+        self._data["routines"] = routines
         self.save()
 
     def schedule(self) -> list[dict[str, Any]]:
