@@ -8,10 +8,13 @@ from fastapi import APIRouter, HTTPException, Request, WebSocket, WebSocketDisco
 from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel, Field
 
+import datetime
+
 from .. import __version__
 from ..app import build_ai
-from ..dal.base import CAP_FACE, CAP_PHOTO, CapabilityError
+from ..dal.base import CAP_FACE, CAP_PHOTO, CAP_SAY, CapabilityError
 from ..emotes import emote_names, play_emote
+from ..fun import GAMES, game_names
 from ..persona import parse_expression
 
 router = APIRouter()
@@ -476,3 +479,55 @@ async def set_active_persona(body: ActivePersonaBody, request: Request):
         "ai_available": request.app.state.ai is not None,
         "error": error,
     }
+
+
+# ── fun / games + time + weather ──────────────────────────────────────────────
+@router.get("/api/fun")
+async def list_fun():
+    return {"games": game_names()}
+
+
+@router.post("/api/fun/{name}")
+async def play_fun(name: str, request: Request):
+    fn = GAMES.get(name)
+    if fn is None:
+        raise HTTPException(status_code=404, detail=f"unknown game {name!r}")
+    result = fn()
+    robot = _robot(request)
+    if result.get("emote"):
+        try:
+            await play_emote(robot, result["emote"])
+        except Exception:  # noqa: BLE001
+            pass
+    if result.get("text") and robot.supports(CAP_SAY):
+        try:
+            await robot.say(result["text"])
+        except Exception:  # noqa: BLE001
+            pass
+    return result
+
+
+@router.post("/api/say/time")
+async def say_time(request: Request):
+    text = "It's " + datetime.datetime.now().strftime("%H:%M") + "."
+    await _guard(_robot(request).say(text))
+    return {"text": text}
+
+
+@router.post("/api/say/weather")
+async def say_weather(request: Request):
+    s = request.app.state
+    entity = s.settings.weather_entity
+    if not entity:
+        raise HTTPException(status_code=400, detail="DRAVIX_WEATHER_ENTITY is not set")
+    if s.ha is None:
+        raise HTTPException(status_code=503, detail="Home Assistant not configured")
+    try:
+        st = await s.ha.get_state(entity)
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=502, detail=f"weather fetch failed: {exc}") from exc
+    condition = st.get("state", "unknown")
+    temp = (st.get("attributes") or {}).get("temperature")
+    text = f"It's {condition}" + (f", {temp} degrees." if temp is not None else ".")
+    await _guard(_robot(request).say(text))
+    return {"text": text, "state": condition, "temperature": temp}

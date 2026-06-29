@@ -43,6 +43,21 @@ curl -X POST localhost:8800/api/robot/emote -d '{"name":"fistbump"}'
 
 Add your own in [`core/dravix/emotes.py`](../core/dravix/emotes.py) — each is a list of steps.
 
+## Fun, time & weather
+
+Little party tricks (it speaks the result + plays an emote), plus time/weather read-outs:
+
+```bash
+curl localhost:8800/api/fun                 # dice, coin, 8ball, joke, fortune
+curl -X POST localhost:8800/api/fun/dice    # "I rolled a 4!" + emote
+curl -X POST localhost:8800/api/fun/joke
+curl -X POST localhost:8800/api/say/time    # "It's 14:30."
+curl -X POST localhost:8800/api/say/weather # from DRAVIX_WEATHER_ENTITY (a HA weather.* entity)
+```
+
+And the robot does small things **on its own** when it's been ignored a while — an occasional
+glance + quip (the mood engine's idle behavior), so it never feels dead on the desk.
+
 ## Reactions (event → action rules, no code)
 
 Wire "when X happens, do Y" from config (persisted, editable live), without writing a plugin:

@@ -69,6 +69,9 @@ class Settings(BaseSettings):
     frigate_url: str = ""  # optional direct Frigate base, e.g. http://frigate:5000
     frigate_camera: str = ""  # default camera entity, e.g. camera.front_door
 
+    # Weather (for /api/say/weather) — a Home Assistant weather entity
+    weather_entity: str = ""  # e.g. weather.home
+
     # Provider keys (read without the DRAVIX_ prefix too, for convenience)
     anthropic_api_key: str = Field(
         "", validation_alias=AliasChoices("ANTHROPIC_API_KEY", "DRAVIX_ANTHROPIC_API_KEY")

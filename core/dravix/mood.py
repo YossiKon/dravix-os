@@ -11,10 +11,11 @@ the robot once its touch channel is wired; until then drive them with ``POST /ap
 from __future__ import annotations
 
 import asyncio
+import random
 import time
 from typing import TYPE_CHECKING, Any
 
-from .dal.base import CAP_FACE, Expression, RobotController
+from .dal.base import CAP_FACE, CAP_SAY, Expression, RobotController
 from .emotes import play_emote
 from .events import Event, EventBus
 from .logging import get_logger
@@ -38,6 +39,15 @@ _NUDGES: dict[str, tuple[float, float, float, str | None]] = {
     "frigate.shown": (-0.02, 0.20, 0.00, None),
 }
 _INTERACTIONS = {"user.spoke", "touch.pet", "touch.tap", "robot.touched"}
+
+# Little things it does on its own when bored (the "alive" idle behavior).
+_IDLE_QUIPS = [
+    "Hmm, quiet in here.",
+    "I'm here whenever you need me.",
+    "Just thinking.",
+    "*hums quietly*",
+    "Anyone around?",
+]
 
 
 def _clamp(x: float, lo: float, hi: float) -> float:
@@ -157,6 +167,8 @@ class MoodEngine:
                 if time.monotonic() - self._last_interaction > self._idle_bored_s:
                     self.valence = _clamp(self.valence - 0.03, -1, 1)
                     self.arousal = _clamp(self.arousal - 0.02, 0, 1)
+                    if not self._night and random.random() < 0.2:
+                        await self.idle_behavior()  # do something cute on its own
                 if self._night:
                     self.arousal = _clamp(self.arousal - 0.03, 0, 1)
                 await self._express()
@@ -180,6 +192,18 @@ class MoodEngine:
                 await self._robot.set_face(expr)
             except Exception:  # noqa: BLE001
                 pass
+
+    async def idle_behavior(self) -> None:
+        """A small spontaneous behavior when bored (skipped if a mode owns the face)."""
+        if self._locked():
+            return
+        try:
+            await play_emote(self._robot, "curious")
+            if self._robot.supports(CAP_SAY):
+                await self._robot.say(random.choice(_IDLE_QUIPS))
+        except Exception:  # noqa: BLE001
+            pass
+        await self._bus.publish("mood.idle")
 
     async def handle(self, event: Event) -> None:
         if event.type == "daynight.changed":

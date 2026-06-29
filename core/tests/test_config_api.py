@@ -37,6 +37,12 @@ def test_config_api(tmp_path, monkeypatch):
             # Unknown mode → 404.
             assert client.post("/api/config/modes/nope/disabled", json={"disabled": True}).status_code == 404
 
+            # Fun games + time speak work; weather without a configured entity → 400.
+            assert "dice" in client.get("/api/fun").json()["games"]
+            assert client.post("/api/fun/dice").status_code == 200
+            assert client.post("/api/say/time").status_code == 200
+            assert client.post("/api/say/weather").status_code == 400
+
             # Frigate cameras with no HA configured → empty list.
             assert client.get("/api/frigate/cameras").json()["cameras"] == []
             # Robot camera relay: mock yields no real frame → 503 (not a crash).
