@@ -57,6 +57,18 @@ def test_config_api(tmp_path, monkeypatch):
             assert client.put("/api/voice", json={"voice": "piper-amy"}).json()["voice"] == "piper-amy"
             assert client.get("/api/voice").json()["voice"] == "piper-amy"
 
+            # Agenda needs HA → 503 here.
+            assert client.post("/api/say/agenda").status_code == 503
+            # Notify queues, inbox lists, play clears.
+            assert client.post("/api/notify", json={"text": "dinner ready", "speak": False}).json()["queued"] is True
+            assert len(client.get("/api/inbox").json()["messages"]) == 1
+            assert client.post("/api/inbox/play").json()["spoken"] == 1
+            assert client.get("/api/inbox").json()["messages"] == []
+            # AI games list works; running one fails cleanly here (provider set to ollama but
+            # not running → 502, or 503 if no provider) — never a crash.
+            assert "joke" in client.get("/api/ai/fun").json()["kinds"]
+            assert client.post("/api/ai/fun/joke").status_code in (502, 503)
+
             # Frigate cameras with no HA configured → empty list.
             assert client.get("/api/frigate/cameras").json()["cameras"] == []
             # Robot camera relay: mock yields no real frame → 503 (not a crash).

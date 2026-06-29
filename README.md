@@ -129,6 +129,10 @@ It also integrates with **Frigate** both ways — show a Frigate camera on the r
 re-serve the robot's own camera as an HTTP camera Frigate can detect on. See
 [docs/frigate.md](docs/frigate.md).
 
+**Easy Home Assistant integration** — copy-paste `rest_command`s + automations (announce, notify,
+agenda, run a routine, show a camera) and the built-in HA event bridge. See
+[docs/home-assistant.md](docs/home-assistant.md).
+
 ## Switch the AI brain
 
 The AI router is pluggable. Default is **Home Assistant Assist** (your host already runs it).

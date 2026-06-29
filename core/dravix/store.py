@@ -29,6 +29,7 @@ _DEFAULTS: dict[str, Any] = {
     "routines": [],  # [{name, steps:[{face?,leds?,head?,emote?,say?,wait?,activate_mode?}]}]
     "voice": None,  # active TTS voice override applied to all speech (None = persona/default)
     "voices": [],  # user catalog of voice ids to pick from (depends on your TTS engine)
+    "inbox": [],  # [{id, text}] — queued notifications for the robot to read out
 }
 
 
@@ -61,7 +62,7 @@ class Store:
     def update(self, patch: dict[str, Any]) -> None:
         keys = (
             "ai_provider", "mode_overrides", "disabled_modes", "reactions", "schedule",
-            "personas", "active_persona", "memories", "routines", "voice", "voices",
+            "personas", "active_persona", "memories", "routines", "voice", "voices", "inbox",
         )
         for key in keys:
             if key in patch:
@@ -119,6 +120,19 @@ class Store:
 
     def set_voices(self, voices: list[str]) -> None:
         self._data["voices"] = voices
+        self.save()
+
+    def inbox(self) -> list[dict[str, Any]]:
+        return list(self._data.get("inbox", []))
+
+    def add_inbox(self, text: str) -> dict[str, Any]:
+        item = {"id": uuid.uuid4().hex[:8], "text": text}
+        self._data.setdefault("inbox", []).append(item)
+        self.save()
+        return item
+
+    def clear_inbox(self) -> None:
+        self._data["inbox"] = []
         self.save()
 
     def schedule(self) -> list[dict[str, Any]]:

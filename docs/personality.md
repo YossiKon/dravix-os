@@ -58,6 +58,25 @@ curl -X POST localhost:8800/api/say/weather # from DRAVIX_WEATHER_ENTITY (a HA w
 And the robot does small things **on its own** when it's been ignored a while — an occasional
 glance + quip (the mood engine's idle behavior), so it never feels dead on the desk.
 
+**AI party tricks** (uses the AI provider) and a few assistant read-outs:
+
+```bash
+curl localhost:8800/api/ai/fun                  # joke, fact, riddle, compliment, would_you_rather, story
+curl -X POST localhost:8800/api/ai/fun/riddle
+curl -X POST localhost:8800/api/say/agenda      # reads your HA calendars: "On your calendar: ..."
+```
+
+**Notifications inbox** — let Home Assistant (or anything) make the robot speak; queue or speak now:
+
+```bash
+curl -X POST localhost:8800/api/notify -d '{"text":"Dinner is ready!"}'              # speaks now
+curl -X POST localhost:8800/api/notify -d '{"text":"Package arrived","speak":false}' # queue it
+curl localhost:8800/api/inbox                    # pending
+curl -X POST localhost:8800/api/inbox/play       # read out everything queued, then clear
+```
+
+See [home-assistant.md](home-assistant.md) for copy-paste HA `rest_command`s + automations.
+
 ## Reactions (event → action rules, no code)
 
 Wire "when X happens, do Y" from config (persisted, editable live), without writing a plugin:

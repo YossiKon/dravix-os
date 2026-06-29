@@ -11,6 +11,8 @@ from pydantic import BaseModel, Field
 import datetime
 
 from .. import __version__
+from ..aifun import PROMPTS as AI_FUN_PROMPTS
+from ..aifun import kinds as ai_fun_kinds
 from ..app import build_ai
 from ..dal.base import CAP_FACE, CAP_PHOTO, CAP_SAY, CapabilityError
 from ..emotes import emote_names, play_emote
@@ -551,6 +553,113 @@ async def put_voice(body: VoiceBody, request: Request):
 async def put_voices(body: VoicesBody, request: Request):
     request.app.state.store.set_voices(body.voices)
     return {"voices": request.app.state.store.voices()}
+
+
+# ── agenda (Home Assistant calendars) ─────────────────────────────────────────
+@router.post("/api/say/agenda")
+async def say_agenda(request: Request):
+    s = request.app.state
+    if s.ha is None:
+        raise HTTPException(status_code=503, detail="Home Assistant not configured")
+    try:
+        states = await s.ha.states()
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=502, detail=f"agenda fetch failed: {exc}") from exc
+    items: list[str] = []
+    for st in states:
+        if not st.get("entity_id", "").startswith("calendar."):
+            continue
+        attrs = st.get("attributes") or {}
+        msg = attrs.get("message")
+        if not msg:
+            continue
+        start = str(attrs.get("start_time", ""))
+        when = start[11:16] if len(start) >= 16 else start  # HH:MM
+        items.append(f"{msg}" + (f" at {when}" if when else ""))
+    text = ("On your calendar: " + "; ".join(items[:5]) + ".") if items else "Nothing on your calendar."
+    await _guard(_robot(request).say(text))
+    return {"text": text, "events": items}
+
+
+# ── notifications inbox (HA → robot speaks) ───────────────────────────────────
+class NotifyBody(BaseModel):
+    text: str
+    speak: bool = True  # speak now, or just queue for later
+
+
+@router.post("/api/notify")
+async def notify(body: NotifyBody, request: Request):
+    item = request.app.state.store.add_inbox(body.text)
+    if body.speak:
+        robot = _robot(request)
+        if robot.supports(CAP_FACE):
+            try:
+                await robot.set_face("happy")
+            except Exception:  # noqa: BLE001
+                pass
+        if robot.supports(CAP_SAY):
+            try:
+                await robot.say(body.text)
+            except Exception:  # noqa: BLE001
+                pass
+    return {"id": item["id"], "queued": not body.speak}
+
+
+@router.get("/api/inbox")
+async def get_inbox(request: Request):
+    return {"messages": request.app.state.store.inbox()}
+
+
+@router.post("/api/inbox/play")
+async def play_inbox(request: Request):
+    store = request.app.state.store
+    robot = _robot(request)
+    msgs = store.inbox()
+    for m in msgs:
+        try:
+            if robot.supports(CAP_SAY):
+                await robot.say(m.get("text", ""))
+        except Exception:  # noqa: BLE001
+            pass
+    store.clear_inbox()
+    return {"spoken": len(msgs)}
+
+
+@router.delete("/api/inbox")
+async def clear_inbox(request: Request):
+    request.app.state.store.clear_inbox()
+    return {"ok": True}
+
+
+# ── AI party tricks (joke / fact / riddle / ...) ──────────────────────────────
+@router.get("/api/ai/fun")
+async def list_ai_fun():
+    return {"kinds": ai_fun_kinds()}
+
+
+@router.post("/api/ai/fun/{kind}")
+async def ai_fun(kind: str, request: Request):
+    prompt = AI_FUN_PROMPTS.get(kind)
+    if prompt is None:
+        raise HTTPException(status_code=404, detail=f"unknown kind {kind!r}")
+    ai = request.app.state.ai
+    if ai is None:
+        raise HTTPException(status_code=503, detail="AI provider not configured")
+    system = resolve_persona(request.app.state.store).system_prompt
+    reply = await _guard(ai.converse(prompt, system=system))
+    expression, clean = parse_expression(reply.text)
+    robot = _robot(request)
+    if robot.supports(CAP_FACE):
+        try:
+            await robot.set_face(expression)
+        except Exception:  # noqa: BLE001
+            pass
+    if clean and robot.supports(CAP_SAY):
+        try:
+            await robot.say(clean)
+        except Exception:  # noqa: BLE001
+            pass
+    return {"text": clean or reply.text, "expression": expression.value}
 
 
 # ── fun / games + time + weather ──────────────────────────────────────────────
