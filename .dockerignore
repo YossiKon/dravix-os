@@ -1,0 +1,16 @@
+# Keep the build context small + avoid copying local envs/builds into the image.
+**/node_modules
+**/.venv
+venv
+**/__pycache__
+**/*.pyc
+**/*.pyo
+**/*.tsbuildinfo
+**/dist
+.git
+.github
+.claude
+.playwright-mcp
+core/data
+data
+*.log

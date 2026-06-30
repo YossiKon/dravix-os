@@ -23,7 +23,8 @@ ENV PYTHONUNBUFFERED=1 DRAVIX_DATA_DIR=/data
 RUN apt-get update && apt-get install -y --no-install-recommends git \
     && rm -rf /var/lib/apt/lists/*
 RUN git clone --depth 1 --branch "$DRAVIX_REF" "$DRAVIX_REPO" /app
-RUN pip install --no-cache-dir /app/core
+# Editable so REPO_ROOT-relative paths (plugins/, web/dist) resolve under /app.
+RUN pip install --no-cache-dir -e /app/core
 COPY --from=web /src/web/dist /app/web/dist
 COPY run.sh /run.sh
 RUN chmod +x /run.sh

@@ -15,7 +15,7 @@ services:
       - ../plugins:/app/plugins:ro
       # Persist the generated capability report and any runtime data.
       - ../docs:/app/docs
-      - dravix-data:/app/core/data
+      - dravix-data:/app/data
     # On the Proxmox LXC, the container reaches HA + the robot over the LAN, so the
     # default bridge network is fine. Switch to network_mode: host if you prefer.
 

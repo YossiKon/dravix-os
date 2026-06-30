@@ -13,19 +13,19 @@ FROM python:3.12-slim
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
-    PIP_NO_CACHE_DIR=1
+    PIP_NO_CACHE_DIR=1 \
+    DRAVIX_DATA_DIR=/app/data
 
 WORKDIR /app
 
-# Install the core package first (better layer caching).
-COPY core/pyproject.toml /app/core/pyproject.toml
-COPY core/dravix /app/core/dravix
-RUN pip install /app/core
-
-# App assets used at runtime.
+# Editable install keeps the package at /app/core so REPO_ROOT-relative paths
+# (plugins/, web/dist, data/) resolve under /app. README is referenced by pyproject.
+COPY README.md /app/README.md
+COPY core /app/core
 COPY plugins /app/plugins
 COPY docs /app/docs
-COPY core/scripts /app/core/scripts
+RUN pip install -e /app/core
+
 # The built dashboard from stage 1 (served by FastAPI at /).
 COPY --from=web /web/dist /app/web/dist
 
