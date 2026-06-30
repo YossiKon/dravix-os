@@ -1,5 +1,5 @@
 name: dravix-os
-version: "0.0.2"
+version: "0.0.3"
 slug: dravix_os
 description: Companion OS for the M5Stack StackChan robot (local-first)
 url: https://github.com/YossiKon/dravix-os
@@ -26,7 +26,7 @@ options:
   log_level: INFO
 schema:
   robot_mcp_url: "str?"
-  robot_mcp_transport: "list(auto|streamable_http|sse)"
+  robot_mcp_transport: "list(auto|streamable_http|sse|websocket)"
   ha_url: str
   ha_token: "str?"
   ai_provider: "list(ha_assist|claude|openai|ollama)"

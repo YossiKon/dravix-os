@@ -45,8 +45,12 @@ class MCPClient:
         return {"Authorization": f"Bearer {self.token}"} if self.token else None
 
     def _transport_order(self) -> list[str]:
-        if self.transport in ("streamable_http", "sse"):
+        if self.transport in ("websocket", "streamable_http", "sse"):
             return [self.transport]
+        # auto: pick by URL scheme — ws(s):// is MCP-over-WebSocket (e.g. xiaozhi),
+        # http(s):// is Streamable HTTP with an SSE fallback.
+        if self.url.startswith(("ws://", "wss://")):
+            return ["websocket"]
         return ["streamable_http", "sse"]
 
     async def connect(self) -> None:
@@ -58,7 +62,14 @@ class MCPClient:
         for transport in self._transport_order():
             stack = AsyncExitStack()
             try:
-                if transport == "streamable_http":
+                if transport == "websocket":
+                    from mcp.client.websocket import websocket_client
+
+                    # ws(s):// carries auth in the URL query (e.g. ?token=...), so no headers.
+                    read, write = await stack.enter_async_context(
+                        websocket_client(self.url)
+                    )
+                elif transport == "streamable_http":
                     from mcp.client.streamable_http import streamablehttp_client
 
                     read, write, _ = await stack.enter_async_context(
