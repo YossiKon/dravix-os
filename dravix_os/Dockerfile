@@ -9,7 +9,7 @@ ARG DRAVIX_REF="main"
 FROM node:20-slim AS web
 ARG DRAVIX_REPO
 ARG DRAVIX_REF
-RUN apt-get update && apt-get install -y --no-install-recommends git \
+RUN apt-get update && apt-get install -y --no-install-recommends git ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 RUN git clone --depth 1 --branch "$DRAVIX_REF" "$DRAVIX_REPO" /src
 WORKDIR /src/web
@@ -20,7 +20,7 @@ FROM python:3.12-slim
 ARG DRAVIX_REPO
 ARG DRAVIX_REF
 ENV PYTHONUNBUFFERED=1 DRAVIX_DATA_DIR=/data
-RUN apt-get update && apt-get install -y --no-install-recommends git \
+RUN apt-get update && apt-get install -y --no-install-recommends git ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 RUN git clone --depth 1 --branch "$DRAVIX_REF" "$DRAVIX_REPO" /app
 # Editable so REPO_ROOT-relative paths (plugins/, web/dist) resolve under /app.
