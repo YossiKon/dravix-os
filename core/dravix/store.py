@@ -115,6 +115,13 @@ class Store:
         self._data["voice"] = voice
         self.save()
 
+    def idle_motion(self) -> bool:
+        return bool(self._data.get("idle_motion", True))
+
+    def set_idle_motion(self, enabled: bool) -> None:
+        self._data["idle_motion"] = bool(enabled)
+        self.save()
+
     def voices(self) -> list[str]:
         return list(self._data.get("voices", []))
 

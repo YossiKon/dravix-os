@@ -45,6 +45,10 @@ class LedsBody(BaseModel):
     brightness: float = Field(1.0, ge=0.0, le=1.0)
 
 
+class IdleMotionBody(BaseModel):
+    enabled: bool
+
+
 class ChatBody(BaseModel):
     text: str
     conversation_id: str | None = None
@@ -84,6 +88,7 @@ async def status(request: Request):
     data["ambient_modes"] = engine.ambient_active
     data["ai_available"] = request.app.state.ai is not None
     data["mood"] = request.app.state.mood.snapshot()
+    data["idle_motion"] = getattr(request.app.state.robot, "idle_motion", True)
     xz = getattr(request.app.state, "xiaozhi", None)
     data["xiaozhi"] = {
         "configured": xz is not None,
@@ -138,6 +143,14 @@ async def robot_head(body: HeadBody, request: Request):
 async def robot_leds(body: LedsBody, request: Request):
     await _guard(_robot(request).set_leds(body.color, body.brightness))
     return {"ok": True}
+
+
+@router.put("/api/robot/idle-motion")
+async def set_idle_motion(body: IdleMotionBody, request: Request):
+    """Enable/disable the robot's automatic idle head movement (manual control is unaffected)."""
+    request.app.state.robot.idle_motion = body.enabled
+    request.app.state.store.set_idle_motion(body.enabled)
+    return {"idle_motion": body.enabled}
 
 
 @router.post("/api/ai/chat")

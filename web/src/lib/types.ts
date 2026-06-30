@@ -61,6 +61,8 @@ export interface StatusResponse {
   ai_available: boolean;
   mood?: Mood;
   xiaozhi?: XiaoZhiStatus;
+  /** Automatic idle head movement (ambient glances) is enabled. */
+  idle_motion?: boolean;
 }
 
 export interface HealthResponse {

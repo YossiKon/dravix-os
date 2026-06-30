@@ -4,7 +4,7 @@ import { clamp } from "../lib/format";
 import { CAP, EXPRESSIONS, type Expression, type StatusResponse } from "../lib/types";
 import { useToasts } from "../hooks/useToasts";
 import { exprMeta } from "./expressions";
-import { Button, Panel, cx } from "./ui";
+import { Button, Panel, Toggle, cx } from "./ui";
 
 const LED_PRESETS: { name: string; hex: string }[] = [
   { name: "white", hex: "#ffffff" },
@@ -18,16 +18,37 @@ const LED_PRESETS: { name: string; hex: string }[] = [
   { name: "pink", hex: "#ff6ec7" },
 ];
 
-export function ManualControl({ status }: { status: StatusResponse | null }) {
+export function ManualControl({
+  status,
+  onRefresh,
+}: {
+  status: StatusResponse | null;
+  onRefresh?: () => void;
+}) {
   const toasts = useToasts();
+  const [idleBusy, setIdleBusy] = useState(false);
   const caps = new Set(status?.robot.capabilities ?? []);
   const canFace = caps.has(CAP.setFace);
   const canHead = caps.has(CAP.moveHead);
   const canLeds = caps.has(CAP.setLeds);
   const ready = status !== null;
+  const idleMotion = status?.idle_motion ?? false;
 
   function onError(err: unknown) {
     toasts.error(err instanceof ApiError ? err.detail : String(err));
+  }
+
+  async function toggleIdleMotion(next: boolean) {
+    setIdleBusy(true);
+    try {
+      const res = await api.setIdleMotion(next);
+      toasts.ok(`Idle motion ${res.idle_motion ? "on" : "off"}`);
+      onRefresh?.();
+    } catch (err) {
+      onError(err);
+    } finally {
+      setIdleBusy(false);
+    }
   }
 
   return (
@@ -59,6 +80,9 @@ export function ManualControl({ status }: { status: StatusResponse | null }) {
               onError(err);
             }
           }}
+          idleMotion={idleMotion}
+          idleMotionDisabled={!ready || idleBusy}
+          onToggleIdleMotion={toggleIdleMotion}
         />
 
         <LedControl
@@ -140,12 +164,18 @@ function HeadControl({
   disabled,
   reason,
   onMove,
+  idleMotion,
+  idleMotionDisabled,
+  onToggleIdleMotion,
 }: {
   yaw: number;
   pitch: number;
   disabled: boolean;
   reason?: string;
   onMove: (yaw: number, pitch: number, speed: number) => void;
+  idleMotion: boolean;
+  idleMotionDisabled: boolean;
+  onToggleIdleMotion: (next: boolean) => void;
 }) {
   const [y, setY] = useState(yaw);
   const [p, setP] = useState(pitch);
@@ -231,6 +261,24 @@ function HeadControl({
             onChange={setSpeed}
           />
         </div>
+      </div>
+
+      {/* Idle motion: ambient automatic head glances */}
+      <div className="flex items-center justify-between gap-3 rounded-xl border border-line bg-panel-2/40 px-3.5 py-2.5">
+        <div className="min-w-0">
+          <div className="font-mono text-[11px] uppercase tracking-wide text-soft">
+            Idle motion
+          </div>
+          <p className="truncate font-mono text-[10px] text-mute">
+            occasional head glances
+          </p>
+        </div>
+        <Toggle
+          on={idleMotion}
+          disabled={idleMotionDisabled}
+          label="Idle motion"
+          onChange={onToggleIdleMotion}
+        />
       </div>
     </ControlBlock>
   );

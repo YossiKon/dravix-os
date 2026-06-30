@@ -62,6 +62,7 @@ async def lifespan(app: FastAPI):
     driver = build_driver(settings, ha)
     controller = RobotController(driver, bus, runtime.robot)
     controller.default_voice = resolve_voice(store)  # active persona/override TTS voice
+    controller.idle_motion = store.idle_motion()  # ambient head-glance toggle (persisted)
     try:
         await controller.connect()
     except Exception as exc:  # noqa: BLE001 — degrade gracefully, surface in status

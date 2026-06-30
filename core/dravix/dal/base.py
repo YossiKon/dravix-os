@@ -111,6 +111,8 @@ class RobotController:
         self.state = state
         self._caps: set[str] = set()
         self.default_voice: str | None = None  # applied to say() when no explicit voice given
+        # When False, ambient/idle behaviors skip moving the head (manual control still works).
+        self.idle_motion: bool = True
 
     async def connect(self) -> None:
         await self._driver.connect()

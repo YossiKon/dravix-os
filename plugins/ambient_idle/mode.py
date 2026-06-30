@@ -25,7 +25,7 @@ class AmbientIdleMode(Mode):
         if self._n % self._every != 0:
             return
         robot = self.ctx.robot
-        if robot.supports(CAP_HEAD):
+        if robot.supports(CAP_HEAD) and getattr(robot, "idle_motion", True):
             yaw = random.uniform(-self._span, self._span)
             pitch = random.uniform(-self._span / 3, self._span / 3)
             await robot.move_head(round(yaw, 1), round(pitch, 1), speed=0.3)

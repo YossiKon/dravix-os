@@ -129,6 +129,12 @@ export const api = {
       json: { color, brightness },
     }),
 
+  setIdleMotion: (enabled: boolean) =>
+    request<{ idle_motion: boolean }>("/api/robot/idle-motion", {
+      method: "PUT",
+      json: { enabled },
+    }),
+
   chat: (text: string, conversationId?: string, speak = false) =>
     request<ChatResponse>("/api/ai/chat", {
       method: "POST",

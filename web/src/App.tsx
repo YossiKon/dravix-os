@@ -102,7 +102,7 @@ function Console() {
                 loading={loadingModes}
                 onChanged={refreshAll}
               />
-              <ManualControl status={status} />
+              <ManualControl status={status} onRefresh={refreshStatus} />
               <TalkPanel status={status} />
               <XiaoZhiPanel xiaozhi={status?.xiaozhi} />
             </div>
