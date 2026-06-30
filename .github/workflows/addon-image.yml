@@ -49,6 +49,8 @@ jobs:
           file: deploy/addon.Dockerfile
           platforms: linux/amd64
           push: true
+          build-args: |
+            DRAVIX_VERSION=${{ steps.ver.outputs.version }}
           tags: |
             ghcr.io/yossikon/dravix-os-amd64:${{ steps.ver.outputs.version }}
             ghcr.io/yossikon/dravix-os-amd64:latest

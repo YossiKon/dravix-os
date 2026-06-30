@@ -19,6 +19,7 @@ from .events import EventBus
 from .integrations.frigate import Frigate
 from .integrations.ha_events import HAEventBridge, ha_ws_url
 from .integrations.homeassistant import HomeAssistant
+from .integrations.xiaozhi_bridge import XiaoZhiBridge
 from .logging import get_logger, setup_logging
 from .modes import ModeContext, ModeEngine
 from .mood import MoodEngine
@@ -104,6 +105,18 @@ async def lifespan(app: FastAPI):
         )
         ha_bridge.start()
 
+    # xiaozhi bridge: expose dravix's MCP tools to the robot's AI (the robot can control
+    # HA / run dravix features by voice). dravix is the MCP *server* on this connection.
+    xiaozhi: XiaoZhiBridge | None = None
+    if settings.xiaozhi_mcp_url:
+        from .mcpserver.server import build_server
+
+        xiaozhi = XiaoZhiBridge(
+            settings.xiaozhi_mcp_url,
+            lambda: build_server(controller, engine, ai, ha=ha),
+        )
+        await xiaozhi.start()
+
     app.state.settings = settings
     app.state.bus = bus
     app.state.store = store
@@ -117,11 +130,14 @@ async def lifespan(app: FastAPI):
     app.state.reactions = reactions
     app.state.mood = mood
     app.state.scheduler = scheduler
+    app.state.xiaozhi = xiaozhi
 
     try:
         yield
     finally:
         log.info("shutting down dravix-os")
+        if xiaozhi is not None:
+            await xiaozhi.stop()
         if ha_bridge is not None:
             await ha_bridge.stop()
         await scheduler.stop()

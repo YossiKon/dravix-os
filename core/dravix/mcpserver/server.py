@@ -14,7 +14,12 @@ from ..dal.base import CapabilityError, RobotController
 from ..modes import ModeEngine
 
 
-def build_server(controller: RobotController, engine: ModeEngine, ai: Any | None = None):
+def build_server(
+    controller: RobotController,
+    engine: ModeEngine,
+    ai: Any | None = None,
+    ha: Any | None = None,
+):
     from mcp.server.fastmcp import FastMCP  # lazy import
 
     mcp = FastMCP("dravix-os")
@@ -85,5 +90,60 @@ def build_server(controller: RobotController, engine: ModeEngine, ai: Any | None
                 except Exception:  # noqa: BLE001
                     pass
             return reply.text or "(no reply)"
+
+    # Home Assistant tools — let the robot's voice control the smart home.
+    if ha is not None and getattr(ha, "configured", False):
+
+        @mcp.tool()
+        async def home_assistant_list_entities(domain: str = "") -> str:
+            """List Home Assistant entities (id, name, state) as JSON. Optionally filter by
+            domain, e.g. 'light', 'switch', 'climate', 'cover', 'sensor'."""
+            try:
+                states = await ha.states()
+            except Exception as exc:  # noqa: BLE001
+                return f"error: {exc}"
+            out = []
+            for s in states:
+                eid = s.get("entity_id", "")
+                if domain and not eid.startswith(f"{domain}."):
+                    continue
+                out.append(
+                    {
+                        "entity_id": eid,
+                        "name": s.get("attributes", {}).get("friendly_name"),
+                        "state": s.get("state"),
+                    }
+                )
+            return json.dumps(out[:200])
+
+        @mcp.tool()
+        async def home_assistant_get_state(entity_id: str) -> str:
+            """Get one Home Assistant entity's state + attributes (JSON), e.g. light.kitchen."""
+            try:
+                return json.dumps(await ha.get_state(entity_id))
+            except Exception as exc:  # noqa: BLE001
+                return f"error: {exc}"
+
+        @mcp.tool()
+        async def home_assistant_call_service(
+            domain: str, service: str, entity_id: str = "", data_json: str = ""
+        ) -> str:
+            """Call a Home Assistant service to control devices. Examples:
+            domain=light service=turn_on entity_id=light.kitchen;
+            domain=cover service=close_cover entity_id=cover.garage.
+            data_json is optional extra JSON service data (e.g. {"brightness_pct": 50})."""
+            data: dict[str, Any] = {}
+            if entity_id:
+                data["entity_id"] = entity_id
+            if data_json:
+                try:
+                    data.update(json.loads(data_json))
+                except Exception:  # noqa: BLE001 — ignore bad extra data
+                    pass
+            try:
+                await ha.call_service(domain, service, data)
+                return "ok"
+            except Exception as exc:  # noqa: BLE001
+                return f"error: {exc}"
 
     return mcp

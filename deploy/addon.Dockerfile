@@ -13,10 +13,12 @@ RUN npm run build
 
 # ── Stage 2: the Python service ──────────────────────────────────────────────
 FROM python:3.12-slim
+ARG DRAVIX_VERSION=dev
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PIP_NO_CACHE_DIR=1 \
-    DRAVIX_DATA_DIR=/data
+    DRAVIX_DATA_DIR=/data \
+    DRAVIX_VERSION=${DRAVIX_VERSION}
 WORKDIR /app
 COPY README.md /app/README.md
 COPY core /app/core

@@ -84,6 +84,12 @@ async def status(request: Request):
     data["ambient_modes"] = engine.ambient_active
     data["ai_available"] = request.app.state.ai is not None
     data["mood"] = request.app.state.mood.snapshot()
+    xz = getattr(request.app.state, "xiaozhi", None)
+    data["xiaozhi"] = {
+        "configured": xz is not None,
+        "connected": bool(xz and xz.connected),
+        "last_error": (xz.last_error if xz else ""),
+    }
     return data
 
 

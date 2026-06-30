@@ -25,8 +25,10 @@ export DRAVIX_FRIGATE_URL="$(opt frigate_url)"
 export DRAVIX_FRIGATE_CAMERA="$(opt frigate_camera)"
 export DRAVIX_ROBOT_MCP_URL="$(opt robot_mcp_url)"
 export DRAVIX_ROBOT_MCP_TRANSPORT="$(opt robot_mcp_transport)"
+export DRAVIX_XIAOZHI_MCP_URL="$(opt xiaozhi_mcp_url)"
 
-# Use the real robot driver when a MCP URL is configured, else the mock.
+# Use the real robot driver when a robot MCP URL is configured, else the mock.
+# (The xiaozhi access point is NOT a robot-control URL — it goes in xiaozhi_mcp_url.)
 if [ -n "$DRAVIX_ROBOT_MCP_URL" ]; then
   export DRAVIX_ROBOT_DRIVER="mcp"
 else

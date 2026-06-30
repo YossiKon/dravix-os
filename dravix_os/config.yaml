@@ -1,5 +1,5 @@
 name: dravix-os
-version: "0.0.6"
+version: "0.0.7"
 slug: dravix_os
 description: Companion OS for the M5Stack StackChan robot (local-first)
 url: https://github.com/YossiKon/dravix-os
@@ -17,6 +17,7 @@ ports_description:
 webui: "http://[HOST]:[PORT:8800]"
 # Add-on options → DRAVIX_* env (see run.sh). Persistent state lives in /data.
 options:
+  xiaozhi_mcp_url: ""
   robot_mcp_url: ""
   robot_mcp_transport: auto
   ha_url: "http://homeassistant:8123"
@@ -27,6 +28,8 @@ options:
   frigate_camera: ""
   log_level: INFO
 schema:
+  # The xiaozhi MCP接入点 (gives the robot's AI dravix + HA tools by voice).
+  xiaozhi_mcp_url: "str?"
   robot_mcp_url: "str?"
   robot_mcp_transport: "list(auto|streamable_http|sse|websocket)"
   ha_url: str

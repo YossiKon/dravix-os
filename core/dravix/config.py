@@ -40,8 +40,13 @@ class Settings(BaseSettings):
     # Robot (StackChan)
     robot_driver: str = "mock"  # mcp | ha | mock
     robot_mcp_url: str = ""
-    robot_mcp_transport: str = "auto"  # auto | streamable_http | sse
+    robot_mcp_transport: str = "auto"  # auto | streamable_http | sse | websocket
     robot_mcp_token: str = ""
+
+    # xiaozhi MCP接入点 (access point): dravix connects here as an MCP *server* and exposes
+    # its tools to the robot's AI (the robot can then control HA / run dravix features by
+    # voice). This is the reverse of robot_mcp_url. Usually a wss://api.xiaozhi.me/mcp/?token=
+    xiaozhi_mcp_url: str = ""
 
     # Home Assistant
     ha_url: str = "http://homeassistant.local:8123"
