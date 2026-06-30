@@ -271,6 +271,59 @@ def build_server(
             except Exception as exc:  # noqa: BLE001
                 return f"error: {exc}"
 
+        async def _svc(domain: str, service: str, entity_id: str) -> str:
+            try:
+                await ha.call_service(domain, service, {"entity_id": entity_id})
+                return "ok"
+            except Exception as exc:  # noqa: BLE001
+                return f"error: {exc}"
+
+        @mcp.tool()
+        async def home_assistant_lock(entity_id: str, action: str = "lock") -> str:
+            """Lock or unlock a door. action = lock | unlock. entity_id like lock.front_door."""
+            if action not in ("lock", "unlock"):
+                return "unknown action (use lock|unlock)"
+            return await _svc("lock", action, entity_id)
+
+        @mcp.tool()
+        async def home_assistant_cover(entity_id: str, action: str) -> str:
+            """Control a cover/blind/garage. action = open | close | stop.
+            entity_id like cover.garage_door."""
+            svc = {"open": "open_cover", "close": "close_cover", "stop": "stop_cover"}.get(action)
+            if not svc:
+                return "unknown action (use open|close|stop)"
+            return await _svc("cover", svc, entity_id)
+
+        @mcp.tool()
+        async def home_assistant_fan(entity_id: str, action: str) -> str:
+            """Turn a fan on or off. action = on | off. entity_id like fan.bedroom."""
+            svc = {"on": "turn_on", "off": "turn_off"}.get(action)
+            if not svc:
+                return "unknown action (use on|off)"
+            return await _svc("fan", svc, entity_id)
+
+        @mcp.tool()
+        async def home_assistant_alarm(entity_id: str, action: str) -> str:
+            """Arm or disarm a security alarm. action = arm_home | arm_away | disarm.
+            entity_id like alarm_control_panel.home."""
+            svc = {
+                "arm_home": "alarm_arm_home", "arm_away": "alarm_arm_away", "disarm": "alarm_disarm",
+            }.get(action)
+            if not svc:
+                return "unknown action (use arm_home|arm_away|disarm)"
+            return await _svc("alarm_control_panel", svc, entity_id)
+
+        @mcp.tool()
+        async def home_assistant_vacuum(entity_id: str, action: str) -> str:
+            """Control a robot vacuum. action = start | stop | return | pause.
+            entity_id like vacuum.roborock."""
+            svc = {
+                "start": "start", "stop": "stop", "return": "return_to_base", "pause": "pause",
+            }.get(action)
+            if not svc:
+                return "unknown action (use start|stop|return|pause)"
+            return await _svc("vacuum", svc, entity_id)
+
         @mcp.tool()
         async def get_weather() -> str:
             """Get the current weather (from the configured Home Assistant weather entity)."""
