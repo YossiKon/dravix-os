@@ -31,6 +31,9 @@ class HARobotDriver(RobotDriver):
     def __init__(self, ha: HomeAssistant, entities: dict[str, str] | None = None) -> None:
         self._ha = ha
         self._entities = entities or {}
+        # Cache each number entity's (min, max, step) so we clamp + snap values to the
+        # device's real range — ESPHome rejects out-of-range / off-step values with a 500.
+        self._num_meta: dict[str, tuple[float | None, float | None, float | None]] = {}
 
     async def connect(self) -> None:
         if not await self._ha.ping():
@@ -66,12 +69,35 @@ class HARobotDriver(RobotDriver):
             "select", "select_option", {"entity_id": sel, "option": value}
         )
 
+    async def _set_number(self, entity_id: str, value: float) -> None:
+        """Set a number entity, clamped to its min/max and snapped to its step.
+
+        The StackChan servos are e.g. yaw -164..164, pitch 0..90, step 5 — sending an
+        out-of-range or off-step value makes ESPHome/HA return a 500. Clamp + snap first.
+        """
+        meta = self._num_meta.get(entity_id)
+        if meta is None:
+            try:
+                attrs = (await self._ha.get_state(entity_id)).get("attributes", {})
+                meta = (attrs.get("min"), attrs.get("max"), attrs.get("step"))
+            except Exception:  # noqa: BLE001 — best effort; use the raw value
+                meta = (None, None, None)
+            self._num_meta[entity_id] = meta
+        lo, hi, step = meta
+        if lo is not None:
+            value = max(float(lo), value)
+        if hi is not None:
+            value = min(float(hi), value)
+        if step:
+            value = round(value / float(step)) * float(step)
+        await self._ha.call_service("number", "set_value", {"entity_id": entity_id, "value": value})
+
     async def move_head(self, yaw: float, pitch: float, speed: float = 1.0) -> None:
         yaw_e, pitch_e = self._entities.get("head_yaw"), self._entities.get("head_pitch")
         if not (yaw_e and pitch_e):
             raise NotImplementedError("no head servo entities configured")
-        await self._ha.call_service("number", "set_value", {"entity_id": yaw_e, "value": yaw})
-        await self._ha.call_service("number", "set_value", {"entity_id": pitch_e, "value": pitch})
+        await self._set_number(yaw_e, yaw)
+        await self._set_number(pitch_e, pitch)
 
     async def say(self, text: str, voice: str | None = None) -> None:
         target = self._entities.get("media_player")
