@@ -12,6 +12,28 @@ to **ESPHome firmware** (reversible), appears in HA as entities, and dravix driv
 >
 > **Reversible:** re-flash the stock/xiaozhi firmware anytime via M5Burner.
 
+## Step 0 — Back up the original firmware (your safety net) 🛡️
+
+This makes a perfect, byte-for-byte snapshot of the robot **exactly as it is now** (xiaozhi and
+all). Keep the file and you can always return to today's state.
+
+On a computer with a USB-C cable to the robot:
+
+```bash
+pip install esptool                              # needs Python
+# Put the StackChan in download mode: hold reset until the green LED, then release.
+esptool read_flash 0 0x1000000 stackchan-original-backup.bin   # reads the full 16MB flash
+```
+
+Save `stackchan-original-backup.bin` somewhere safe. **To restore the original anytime:**
+
+```bash
+esptool write_flash 0 stackchan-original-backup.bin            # robot is back to exactly now
+```
+
+(esptool auto-detects the port; if needed add `--port COM3` / `--port /dev/ttyACM0`. M5Stack's
+**M5Burner** also keeps the official StackChan firmwares if you ever prefer that route.)
+
 ## Step 1 — Flash the ESPHome firmware
 
 You already run the **ESPHome Device Builder** add-on.
