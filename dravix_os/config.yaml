@@ -1,11 +1,13 @@
 name: dravix-os
-version: "0.0.5"
+version: "0.0.6"
 slug: dravix_os
 description: Companion OS for the M5Stack StackChan robot (local-first)
 url: https://github.com/YossiKon/dravix-os
+# Pull a prebuilt image from GHCR (built by GitHub Actions) instead of building on
+# the user's box. HA replaces {arch}; CI publishes dravix-os-amd64:<version>.
+image: ghcr.io/yossikon/dravix-os-{arch}
 arch:
   - amd64
-  - aarch64
 init: false
 # The web dashboard + API, plus an "Open Web UI" button on the add-on page.
 ports:
