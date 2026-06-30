@@ -117,7 +117,7 @@ async def lifespan(app: FastAPI):
         xiaozhi = XiaoZhiBridge(
             settings.xiaozhi_mcp_url,
             lambda: build_server(
-                controller, engine, ai, ha=ha, store=store,
+                controller, engine, ai, ha=ha, store=store, mood=mood,
                 weather_entity=settings.weather_entity,
                 include_robot_control=_include_robot,
             ),

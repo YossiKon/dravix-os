@@ -20,6 +20,7 @@ def build_server(
     ai: Any | None = None,
     ha: Any | None = None,
     store: Any | None = None,
+    mood: Any | None = None,
     weather_entity: str = "",
     include_robot_control: bool = True,
 ):
@@ -101,6 +102,18 @@ def build_server(
                     await controller.say(reply.text)
                 except Exception:  # noqa: BLE001
                     pass
+            return reply.text or "(no reply)"
+
+        @mcp.tool()
+        async def ai_fun(kind: str) -> str:
+            """A short AI-generated bit. kind = joke | fact | riddle | compliment |
+            would_you_rather | story."""
+            from .. import aifun
+
+            prompt = aifun.PROMPTS.get(kind)
+            if not prompt:
+                return f"unknown kind; try: {', '.join(aifun.kinds())}"
+            reply = await ai.converse(prompt)
             return reply.text or "(no reply)"
 
     # Home Assistant tools — let the robot's voice control the smart home.
@@ -204,6 +217,61 @@ def build_server(
                 return f"error: {exc}"
 
         @mcp.tool()
+        async def home_assistant_toggle(entity_id: str) -> str:
+            """Toggle any Home Assistant entity on/off, e.g. light.kitchen, switch.fan."""
+            try:
+                await ha.call_service("homeassistant", "toggle", {"entity_id": entity_id})
+                return "ok"
+            except Exception as exc:  # noqa: BLE001
+                return f"error: {exc}"
+
+        @mcp.tool()
+        async def home_assistant_set_light(
+            entity_id: str, brightness_pct: int = -1, color: str = ""
+        ) -> str:
+            """Turn on a light with optional brightness (0-100) and color name
+            (e.g. 'warm white', 'red', 'blue'). entity_id like light.kitchen."""
+            data: dict[str, Any] = {"entity_id": entity_id}
+            if brightness_pct is not None and brightness_pct >= 0:
+                data["brightness_pct"] = max(0, min(100, brightness_pct))
+            if color:
+                data["color_name"] = color
+            try:
+                await ha.call_service("light", "turn_on", data)
+                return "ok"
+            except Exception as exc:  # noqa: BLE001
+                return f"error: {exc}"
+
+        @mcp.tool()
+        async def home_assistant_set_temperature(entity_id: str, temperature: float) -> str:
+            """Set a thermostat's target temperature, e.g. climate.living_room."""
+            try:
+                await ha.call_service(
+                    "climate", "set_temperature",
+                    {"entity_id": entity_id, "temperature": temperature},
+                )
+                return "ok"
+            except Exception as exc:  # noqa: BLE001
+                return f"error: {exc}"
+
+        @mcp.tool()
+        async def home_assistant_media(entity_id: str, action: str) -> str:
+            """Control a media player. action = play | pause | stop | next | previous |
+            volume_up | volume_down. entity_id like media_player.living_room."""
+            svc = {
+                "play": "media_play", "pause": "media_pause", "stop": "media_stop",
+                "next": "media_next_track", "previous": "media_previous_track",
+                "volume_up": "volume_up", "volume_down": "volume_down",
+            }.get(action)
+            if not svc:
+                return "unknown action (use play|pause|stop|next|previous|volume_up|volume_down)"
+            try:
+                await ha.call_service("media_player", svc, {"entity_id": entity_id})
+                return "ok"
+            except Exception as exc:  # noqa: BLE001
+                return f"error: {exc}"
+
+        @mcp.tool()
         async def get_weather() -> str:
             """Get the current weather (from the configured Home Assistant weather entity)."""
             if not weather_entity:
@@ -280,5 +348,12 @@ def build_server(
         from datetime import datetime
 
         return datetime.now().strftime("It's %A %H:%M, %B %d.")
+
+    if mood is not None:
+
+        @mcp.tool()
+        async def get_mood() -> str:
+            """Get the robot's current mood / how it's feeling (JSON)."""
+            return json.dumps(mood.snapshot())
 
     return mcp
