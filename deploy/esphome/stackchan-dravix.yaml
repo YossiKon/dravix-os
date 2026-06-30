@@ -1,0 +1,107 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# dravix-os — StackChan ESPHome firmware (local control + face + HA Assist)
+#
+# Flash this with the "ESPHome Device Builder" add-on (you already have it).
+# It builds ON TOP of M5Stack's official StackChan BSP package — so all the hardware
+# (servos, camera, touch, LEDs, mic, speaker, sensors) is configured correctly by M5Stack —
+# and ADDS: Home Assistant Assist (voice), and a face-expression `select` the robot's face
+# follows. dravix's `ha` driver then controls head / face / LEDs / speech / camera locally.
+#
+# SOLID (works once flashed): the BSP hardware → HA entities, the api/wifi, the face `select`.
+# NEEDS A LITTLE ON-DEVICE TUNING (normal for custom firmware): the face DRAWING lambda and
+# the voice_assistant component ids — after the first flash, open the device's logs/config to
+# confirm the BSP's display / microphone / speaker ids and adjust the two TODO spots below.
+# ─────────────────────────────────────────────────────────────────────────────
+
+substitutions:
+  name: stackchan
+  friendly_name: StackChan
+
+esphome:
+  name: ${name}
+  friendly_name: ${friendly_name}
+
+# M5Stack's official StackChan board-support package — defines ALL the hardware.
+packages:
+  m5stack_stackchan:
+    url: https://github.com/m5stack/esphome-yaml
+    files: [examples/kit/stackchan-bsp.factory.yaml]
+    refresh: 1d
+
+# Connect to Home Assistant. (Encryption key: generate one, keep it; HA asks for it on add.)
+api:
+  encryption:
+    key: !secret stackchan_api_key
+
+ota:
+  - platform: esphome
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+  ap: {}          # fallback hotspot for first setup
+
+captive_portal:
+
+# ── Voice: Home Assistant Assist (uses the BSP mic + speaker; local Whisper/Piper/wakeword) ──
+# TODO after first flash: set `microphone:` / `speaker:` to the ids the BSP defines (check the
+# device config). Many M5Stack BSPs expose `id: mic` and `id: spkr` (or similar).
+voice_assistant:
+  microphone: mic
+  speaker: spkr
+  use_wake_word: true        # pair with the openWakeWord add-on you already run
+  on_listening:
+    - select.set: { id: robot_face, option: "doubt" }
+  on_stt_end:
+    - select.set: { id: robot_face, option: "neutral" }
+  on_tts_start:
+    - select.set: { id: robot_face, option: "happy" }
+  on_end:
+    - select.set: { id: robot_face, option: "neutral" }
+
+# ── Face expression (dravix sets this via select.select_option) ───────────────
+globals:
+  - id: face_expr
+    type: int
+    restore_value: false
+    initial_value: "0"   # 0 neutral 1 happy 2 sad 3 angry 4 sleepy 5 doubt
+
+select:
+  - platform: template
+    name: "Face"
+    id: robot_face
+    optimistic: true
+    options: [neutral, happy, sad, angry, sleepy, doubt]
+    initial_option: neutral
+    set_action:
+      - lambda: |-
+          static const char* names[] = {"neutral","happy","sad","angry","sleepy","doubt"};
+          for (int i = 0; i < 6; i++) if (x == names[i]) { id(face_expr) = i; break; }
+      # Redraw the face. TODO: set the id to the BSP display's id after the first flash.
+      - component.update: m5core_display
+
+# ── Face drawing ──────────────────────────────────────────────────────────────
+# Draws two eyes + a mouth that change with `face_expr`. This is the part to tweak on-device:
+# confirm the BSP display id (replace `m5core_display`) and adjust coordinates to taste.
+display:
+  - id: m5core_display      # TODO: match the BSP's display id
+    lambda: |-
+      it.fill(Color::BLACK);
+      auto cyan = Color(0x33, 0xff, 0xcc);
+      int ex = 110, ey = 95, er = 26, gap = 100;   // eyes
+      int e = id(face_expr);
+      if (e == 4) {                                  // sleepy → lines
+        it.line(ex - er, ey, ex + er, ey, cyan);
+        it.line(ex + gap - er, ey, ex + gap + er, ey, cyan);
+      } else {
+        it.filled_circle(ex, ey, er, cyan);
+        it.filled_circle(ex + gap, ey, er, cyan);
+        if (e == 3) {                                // angry → brows
+          it.line(ex - er, ey - er - 6, ex + er, ey - 4, cyan);
+          it.line(ex + gap - er, ey - 4, ex + gap + er, ey - er - 6, cyan);
+        }
+      }
+      int mx = 160, my = 165;                        // mouth
+      if (e == 1) { for (int i=-40;i<=40;i++) it.draw_pixel_at(mx+i, my + (i*i)/90, cyan); }       // smile
+      else if (e == 2) { for (int i=-40;i<=40;i++) it.draw_pixel_at(mx+i, my - (i*i)/90 + 18, cyan); } // frown
+      else { it.line(mx - 30, my, mx + 30, my, cyan); }                                              // neutral

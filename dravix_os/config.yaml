@@ -1,5 +1,5 @@
 name: dravix-os
-version: "0.0.11"
+version: "0.0.12"
 slug: dravix_os
 description: Companion OS for the M5Stack StackChan robot (local-first)
 url: https://github.com/YossiKon/dravix-os
@@ -17,6 +17,17 @@ ports_description:
 webui: "http://[HOST]:[PORT:8800]"
 # Add-on options → DRAVIX_* env (see run.sh). Persistent state lives in /data.
 options:
+  # How dravix controls the robot:
+  #   mock = test (no robot)   ha = local control via HA/ESPHome entities   mcp = robot MCP URL
+  robot_driver: mock
+  # When robot_driver=ha, the StackChan ESPHome entity ids (leave blank what you don't have):
+  robot_entity_face: ""          # select.* — expression (neutral|happy|sad|angry|sleepy|doubt)
+  robot_entity_head_yaw: ""      # number.* — head left/right
+  robot_entity_head_pitch: ""    # number.* — head up/down
+  robot_entity_media_player: ""  # media_player.* — TTS / speech
+  robot_entity_light: ""         # light.* — the LED bar
+  robot_entity_camera: ""        # camera.* — the robot camera
+  # The xiaozhi access point (cloud): gives the robot's AI dravix + HA tools by voice.
   xiaozhi_mcp_url: ""
   robot_mcp_url: ""
   robot_mcp_transport: auto
@@ -30,6 +41,13 @@ options:
 schema:
   # The xiaozhi MCP接入点 (gives the robot's AI dravix + HA tools by voice).
   xiaozhi_mcp_url: "str?"
+  robot_driver: "list(mock|ha|mcp)"
+  robot_entity_face: "str?"
+  robot_entity_head_yaw: "str?"
+  robot_entity_head_pitch: "str?"
+  robot_entity_media_player: "str?"
+  robot_entity_light: "str?"
+  robot_entity_camera: "str?"
   robot_mcp_url: "str?"
   robot_mcp_transport: "list(auto|streamable_http|sse|websocket)"
   ha_url: str

@@ -11,7 +11,15 @@ from typing import Any
 
 from ..integrations.homeassistant import HomeAssistant
 from ..logging import get_logger
-from .base import CAP_HEAD, CAP_LEDS, CAP_SAY, Expression, RobotDriver
+from .base import (
+    CAP_FACE,
+    CAP_HEAD,
+    CAP_LEDS,
+    CAP_PHOTO,
+    CAP_SAY,
+    Expression,
+    RobotDriver,
+)
 
 log = get_logger("dal.ha")
 
@@ -41,10 +49,22 @@ class HARobotDriver(RobotDriver):
             caps.add(CAP_LEDS)
         if self._entities.get("head_yaw") and self._entities.get("head_pitch"):
             caps.add(CAP_HEAD)
+        if self._entities.get("face_select"):
+            caps.add(CAP_FACE)
+        if self._entities.get("camera"):
+            caps.add(CAP_PHOTO)
         return caps
 
     async def set_face(self, expression: Expression) -> None:
-        raise NotImplementedError("face control over HA depends on a custom entity (Phase 1)")
+        # The ESPHome firmware exposes a `select` entity whose options are the expression
+        # names (neutral|happy|sad|angry|sleepy|doubt). Setting it redraws the face.
+        sel = self._entities.get("face_select")
+        if not sel:
+            raise NotImplementedError("no face_select entity configured")
+        value = expression.value if isinstance(expression, Expression) else str(expression)
+        await self._ha.call_service(
+            "select", "select_option", {"entity_id": sel, "option": value}
+        )
 
     async def move_head(self, yaw: float, pitch: float, speed: float = 1.0) -> None:
         yaw_e, pitch_e = self._entities.get("head_yaw"), self._entities.get("head_pitch")
@@ -72,7 +92,10 @@ class HARobotDriver(RobotDriver):
         )
 
     async def take_photo(self) -> bytes | None:
-        raise NotImplementedError("photo over HA depends on a camera entity (Phase 1)")
+        cam = self._entities.get("camera")
+        if not cam:
+            raise NotImplementedError("no camera entity configured")
+        return await self._ha.camera_snapshot(cam)
 
     async def listen(self, timeout: float = 7.0) -> str | None:
         raise NotImplementedError("listen over HA uses the Assist pipeline (Phase 4)")

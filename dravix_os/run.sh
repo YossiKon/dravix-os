@@ -27,13 +27,30 @@ export DRAVIX_ROBOT_MCP_URL="$(opt robot_mcp_url)"
 export DRAVIX_ROBOT_MCP_TRANSPORT="$(opt robot_mcp_transport)"
 export DRAVIX_XIAOZHI_MCP_URL="$(opt xiaozhi_mcp_url)"
 
-# Use the real robot driver when a robot MCP URL is configured, else the mock.
-# (The xiaozhi access point is NOT a robot-control URL — it goes in xiaozhi_mcp_url.)
-if [ -n "$DRAVIX_ROBOT_MCP_URL" ]; then
-  export DRAVIX_ROBOT_DRIVER="mcp"
-else
-  export DRAVIX_ROBOT_DRIVER="mock"
-fi
+# Robot driver: explicit option (mock|ha|mcp).
+export DRAVIX_ROBOT_DRIVER="$(opt robot_driver)"
+[ -z "$DRAVIX_ROBOT_DRIVER" ] && export DRAVIX_ROBOT_DRIVER="mock"
+
+# For the `ha` driver, assemble the entity map (StackChan ESPHome entities) as JSON.
+export DRAVIX_HA_ROBOT_ENTITIES="$(
+  python3 - <<'PY'
+import json
+o = {}
+try:
+    o = json.load(open("/data/options.json"))
+except Exception:
+    pass
+m = {
+    "face_select": o.get("robot_entity_face", ""),
+    "head_yaw": o.get("robot_entity_head_yaw", ""),
+    "head_pitch": o.get("robot_entity_head_pitch", ""),
+    "media_player": o.get("robot_entity_media_player", ""),
+    "led_light": o.get("robot_entity_light", ""),
+    "camera": o.get("robot_entity_camera", ""),
+}
+print(json.dumps({k: v for k, v in m.items() if v}))
+PY
+)"
 
 cd /app/core
 exec python3 -m dravix
