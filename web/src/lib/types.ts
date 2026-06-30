@@ -207,6 +207,19 @@ export interface SayResult {
   [key: string]: unknown;
 }
 
+/* ── Mood speech ─────────────────────────────────────────────────────────── */
+export interface SayMoodResult {
+  text: string;
+  mood: string;
+}
+
+/* ── Backup & restore (config export/import) ─────────────────────────────── */
+export type ExportStore = Record<string, unknown>;
+
+export interface ImportResult {
+  ok: boolean;
+}
+
 /* ── AI party tricks ─────────────────────────────────────────────────────── */
 export interface AiFunResponse {
   kinds: string[];

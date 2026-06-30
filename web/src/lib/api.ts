@@ -8,11 +8,13 @@ import type {
   ChatResponse,
   ConfigResponse,
   EmotesResponse,
+  ExportStore,
   Expression,
   FrigateCamerasResponse,
   FunResponse,
   FunResult,
   HealthResponse,
+  ImportResult,
   InboxPlayResponse,
   InboxResponse,
   InteractKind,
@@ -28,6 +30,7 @@ import type {
   ReactionsResponse,
   Routine,
   RoutinesResponse,
+  SayMoodResult,
   SayResult,
   ScheduleResponse,
   StatusResponse,
@@ -269,6 +272,8 @@ export const api = {
 
   sayAgenda: () => request<SayResult>("/api/say/agenda", { method: "POST" }),
 
+  sayMood: () => request<SayMoodResult>("/api/say/mood", { method: "POST" }),
+
   /* ── AI party tricks ──────────────────────────────────────────────────── */
   aiFun: () => request<AiFunResponse>("/api/ai/fun"),
 
@@ -316,4 +321,10 @@ export const api = {
     request<InboxPlayResponse>("/api/inbox/play", { method: "POST" }),
 
   clearInbox: () => request<{ ok: boolean }>("/api/inbox", { method: "DELETE" }),
+
+  /* ── Backup & restore (full config export/import) ─────────────────────── */
+  exportStore: () => request<ExportStore>("/api/export"),
+
+  importStore: (store: ExportStore) =>
+    request<ImportResult>("/api/import", { method: "POST", json: { store } }),
 };

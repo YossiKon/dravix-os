@@ -361,6 +361,19 @@ export function PersonalityPanel({
               </span>
               Say agenda
             </Button>
+            <Button
+              variant="primary"
+              loading={busy === "say:mood"}
+              disabled={busy !== null && busy !== "say:mood"}
+              onClick={() => speak("say:mood", () => api.sayMood())}
+              className="flex-col gap-1 py-3"
+              title="How do you feel?"
+            >
+              <span aria-hidden className="text-base leading-none">
+                😶
+              </span>
+              How do you feel?
+            </Button>
           </div>
         </div>
       </div>

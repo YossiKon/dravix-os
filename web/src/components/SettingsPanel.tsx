@@ -234,7 +234,158 @@ export function SettingsPanel({
           </pre>
         )}
       </Panel>
+
+      <BackupBox />
     </div>
+  );
+}
+
+/* ── Backup & Restore (full config export / import) ─────────────────────── */
+function BackupBox() {
+  const toasts = useToasts();
+  const [paste, setPaste] = useState("");
+  const [busy, setBusy] = useState<"export" | "import" | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
+
+  async function download() {
+    setBusy("export");
+    try {
+      const store = await api.exportStore();
+      const blob = new Blob([JSON.stringify(store, null, 2)], {
+        type: "application/json",
+      });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "dravix-backup.json";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      toasts.ok("Backup downloaded");
+    } catch (err) {
+      toasts.error(errMsg(err));
+    } finally {
+      if (mounted.current) setBusy(null);
+    }
+  }
+
+  function loadFile(file: File) {
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (mounted.current) setPaste(String(reader.result ?? ""));
+    };
+    reader.onerror = () => toasts.error("Could not read file");
+    reader.readAsText(file);
+  }
+
+  async function restore() {
+    const raw = paste.trim();
+    if (!raw || busy) return;
+    let parsed: Record<string, unknown>;
+    try {
+      const value = JSON.parse(raw);
+      if (typeof value !== "object" || value === null || Array.isArray(value)) {
+        throw new Error("expected a JSON object");
+      }
+      parsed = value as Record<string, unknown>;
+    } catch (err) {
+      toasts.error(
+        `Invalid backup JSON: ${err instanceof Error ? err.message : String(err)}`,
+      );
+      return;
+    }
+    setBusy("import");
+    try {
+      await api.importStore(parsed);
+      toasts.ok("Restored — reloading…");
+      // Give the toast a beat, then reload so all panels refetch.
+      setTimeout(() => location.reload(), 600);
+    } catch (err) {
+      toasts.error(errMsg(err));
+      if (mounted.current) setBusy(null);
+    }
+  }
+
+  return (
+    <Panel eyebrow="maintenance" title="Backup & Restore">
+      <div className="space-y-4">
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            variant="primary"
+            loading={busy === "export"}
+            disabled={busy !== null}
+            onClick={download}
+          >
+            ↓ Download backup
+          </Button>
+          <span className="font-mono text-[11px] text-mute">
+            exports the full config as{" "}
+            <span className="text-soft">dravix-backup.json</span>
+          </span>
+        </div>
+
+        <div className="rounded-xl border border-line bg-panel-2/30 p-4">
+          <div className="eyebrow mb-3 flex items-center gap-2">
+            restore from backup
+            <span className="h-px flex-1 bg-line/70" />
+          </div>
+          <div className="space-y-2.5">
+            <textarea
+              value={paste}
+              rows={6}
+              placeholder="Paste backup JSON here, or load a .json file below…"
+              onChange={(e) => setPaste(e.target.value)}
+              className={cx(
+                "scrollbar-thin w-full resize-y rounded-xl border border-line bg-void/60 px-3.5 py-3",
+                "font-mono text-[12px] leading-relaxed text-ink placeholder:text-mute/70",
+                "focus:border-phosphor/50 focus:outline-none focus:ring-1 focus:ring-phosphor/30",
+              )}
+            />
+            <input
+              ref={fileRef}
+              type="file"
+              accept="application/json,.json"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) loadFile(file);
+                // Allow re-selecting the same file later.
+                e.target.value = "";
+              }}
+            />
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <Button
+                variant="ghost"
+                disabled={busy !== null}
+                onClick={() => fileRef.current?.click()}
+              >
+                Load .json file…
+              </Button>
+              <Button
+                variant="danger"
+                loading={busy === "import"}
+                disabled={busy !== null || !paste.trim()}
+                onClick={restore}
+              >
+                ⟳ Restore
+              </Button>
+            </div>
+            <p className="font-mono text-[10px] leading-relaxed text-amber">
+              ⚠ Restore overwrites your current config.
+            </p>
+          </div>
+        </div>
+      </div>
+    </Panel>
   );
 }
 
