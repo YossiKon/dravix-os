@@ -24,6 +24,9 @@ log = get_logger("ha.events")
 # States that count as "activated" for a sensor/binary_sensor.
 ACTIVE_STATES = {"on", "open", "home", "detected", "True", "true"}
 
+# "Not touched" states for the StackChan capacitive touch text-sensors.
+_NO_TOUCH = {"No touch", "none", "off", "0", "unknown", "unavailable", ""}
+
 # device_class -> event type for binary_sensors (when not explicitly mapped).
 _DEVICE_CLASS_EVENT = {
     "motion": "ha.motion",
@@ -67,6 +70,12 @@ def map_state_changed(
         # The robot's head/touch zone → treat as a pet (the mood engine loves it).
         if "head" in eid or "touch" in eid:
             return "touch.pet", {"entity_id": eid}
+
+    # StackChan capacitive touch zones are *text* sensors: "No touch" -> "LOW"/"MEDIUM"/"HIGH".
+    # Fire a pet when one transitions from no-touch to touched.
+    if domain == "sensor" and "touch" in eid:
+        if state not in _NO_TOUCH and (old.get("state") in _NO_TOUCH):
+            return "touch.pet", {"entity_id": eid, "state": state}
     return None
 
 

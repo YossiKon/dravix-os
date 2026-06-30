@@ -45,6 +45,7 @@ m = {
     "head_yaw": o.get("robot_entity_head_yaw", ""),
     "head_pitch": o.get("robot_entity_head_pitch", ""),
     "media_player": o.get("robot_entity_media_player", ""),
+    "tts_engine": o.get("robot_entity_tts", ""),
     "led_light": o.get("robot_entity_light", ""),
     "camera": o.get("robot_entity_camera", ""),
 }

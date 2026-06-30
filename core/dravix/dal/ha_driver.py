@@ -46,7 +46,7 @@ class HARobotDriver(RobotDriver):
 
     async def capabilities(self) -> set[str]:
         caps: set[str] = set()
-        if self._entities.get("tts_target") or self._entities.get("media_player"):
+        if self._entities.get("media_player") and self._entities.get("tts_engine"):
             caps.add(CAP_SAY)
         if self._entities.get("led_light"):
             caps.add(CAP_LEDS)
@@ -100,11 +100,19 @@ class HARobotDriver(RobotDriver):
         await self._set_number(pitch_e, pitch)
 
     async def say(self, text: str, voice: str | None = None) -> None:
-        target = self._entities.get("media_player")
-        if not target:
+        media = self._entities.get("media_player")
+        if not media:
             raise NotImplementedError("no media_player entity configured for TTS")
+        engine = self._entities.get("tts_engine")
+        if not engine:
+            raise NotImplementedError(
+                "set robot_entity_tts to your HA TTS engine (e.g. tts.piper) to enable speech"
+            )
+        # tts.speak: entity_id = the TTS engine, media_player_entity_id = the speaker.
         await self._ha.call_service(
-            "tts", "speak", {"entity_id": target, "message": text}
+            "tts",
+            "speak",
+            {"entity_id": engine, "media_player_entity_id": media, "message": text},
         )
 
     async def set_leds(self, color: str, brightness: float = 1.0) -> None:

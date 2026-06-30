@@ -30,6 +30,17 @@ def test_head_touch_maps_to_pet():
     assert out == ("touch.pet", {"entity_id": "binary_sensor.stackchan_head_touch"})
 
 
+def test_stackchan_text_touch_sensor_maps_to_pet():
+    # The StackChan touch zones are text sensors: "No touch" -> "MEDIUM" means a pet.
+    out = map_state_changed(_changed("sensor.dravix_touch_sensor_1", "No touch", "MEDIUM"))
+    assert out == ("touch.pet", {"entity_id": "sensor.dravix_touch_sensor_1", "state": "MEDIUM"})
+
+
+def test_text_touch_sensor_no_fire_when_still_touched():
+    assert map_state_changed(_changed("sensor.dravix_touch_sensor_1", "LOW", "HIGH")) is None
+    assert map_state_changed(_changed("sensor.dravix_touch_sensor_1", "HIGH", "No touch")) is None
+
+
 def test_explicit_map_wins():
     out = map_state_changed(
         _changed("sensor.custom", "idle", "on"), {"sensor.custom": "presence.detected"}

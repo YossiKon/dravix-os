@@ -1,5 +1,5 @@
 name: dravix-os
-version: "0.0.13"
+version: "0.0.14"
 slug: dravix_os
 description: Companion OS for the M5Stack StackChan robot (local-first)
 url: https://github.com/YossiKon/dravix-os
@@ -24,7 +24,8 @@ options:
   robot_entity_face: ""          # select.* — expression (neutral|happy|sad|angry|sleepy|doubt)
   robot_entity_head_yaw: ""      # number.* — head left/right
   robot_entity_head_pitch: ""    # number.* — head up/down
-  robot_entity_media_player: ""  # media_player.* — TTS / speech
+  robot_entity_media_player: ""  # media_player.* — the speaker TTS plays on
+  robot_entity_tts: ""           # tts.* — your HA TTS engine (e.g. tts.piper) for speech
   robot_entity_light: ""         # light.* — the LED bar
   robot_entity_camera: ""        # camera.* — the robot camera
   # The xiaozhi access point (cloud): gives the robot's AI dravix + HA tools by voice.
@@ -46,6 +47,7 @@ schema:
   robot_entity_head_yaw: "str?"
   robot_entity_head_pitch: "str?"
   robot_entity_media_player: "str?"
+  robot_entity_tts: "str?"
   robot_entity_light: "str?"
   robot_entity_camera: "str?"
   robot_mcp_url: "str?"
