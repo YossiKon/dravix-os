@@ -51,6 +51,9 @@ class Settings(BaseSettings):
     # HA event bridge (motion/presence/door -> event bus)
     ha_events_enabled: bool = True
     ha_event_map: dict[str, str] = Field(default_factory=dict)
+    # When DRAVIX_ROBOT_DRIVER=ha, which HA entities drive the robot. JSON, keys:
+    # head_yaw, head_pitch (number.*), media_player (for TTS), led_light (light.*)
+    ha_robot_entities: dict[str, str] = Field(default_factory=dict)
 
     # AI router
     ai_provider: str = "ha_assist"  # ha_assist | claude | openai | ollama

@@ -37,7 +37,7 @@ def build_driver(settings: Settings, ha: HomeAssistant | None = None) -> RobotDr
 
         if ha is None:
             raise ValueError("ha driver requires a configured HomeAssistant client")
-        return HARobotDriver(ha=ha)
+        return HARobotDriver(ha=ha, entities=settings.ha_robot_entities)
     if driver == "mock":
         from .mock_driver import MockDriver
 

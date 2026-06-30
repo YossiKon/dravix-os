@@ -49,6 +49,15 @@ async def test_reaction_no_match_and_wrong_type():
     await c.close()
 
 
+async def test_reaction_emote_action():
+    c = await _controller()
+    rules = [{"name": "e", "on": "x", "emote": "yes"}]
+    eng = ReactionEngine(c, c._bus, store=_StoreStub(rules))
+    await eng.handle(Event(type="x", data={}))
+    assert c.state.expression == "happy"  # the 'yes' emote ends on a happy face
+    await c.close()
+
+
 async def test_reaction_throttle():
     c = await _controller()
     rules = [{"name": "r", "on": "tick", "say": "{n}", "throttle_s": 60}]

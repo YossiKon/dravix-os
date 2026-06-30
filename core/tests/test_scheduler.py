@@ -47,6 +47,15 @@ async def test_daily_job_fires_once_per_day():
     await c.close()
 
 
+async def test_scheduler_action_leds_and_head():
+    c = await _controller()
+    sched = Scheduler(c._bus, c, store=_Store([]))
+    await sched.run_action({"leds": {"color": "red", "brightness": 0.5}, "head": [12, 3], "say": "hi"}, {})
+    assert c.state.head_yaw == 12  # head action applied
+    assert c.state.last_said == "hi"
+    await c.close()
+
+
 async def test_timer_fires():
     c = await _controller()
     sched = Scheduler(c._bus, c)

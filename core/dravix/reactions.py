@@ -26,6 +26,7 @@ import time
 from typing import TYPE_CHECKING, Any
 
 from .dal.base import CAP_DISPLAY, CAP_FACE, CAP_LEDS, CAP_SAY, RobotController
+from .emotes import play_emote
 from .events import Event, EventBus
 from .logging import get_logger
 
@@ -119,6 +120,8 @@ class ReactionEngine:
             leds = rule.get("leds")
             if leds and robot.supports(CAP_LEDS):
                 await robot.set_leds(leds.get("color", "white"), float(leds.get("brightness", 1.0)))
+            if rule.get("emote"):
+                await play_emote(robot, rule["emote"])
             if rule.get("frigate_show") and self._frigate is not None and robot.supports(CAP_DISPLAY):
                 img = await self._frigate.snapshot(rule["frigate_show"])
                 await robot.show_image(img)

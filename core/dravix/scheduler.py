@@ -14,7 +14,7 @@ import datetime
 import uuid
 from typing import TYPE_CHECKING, Any, Callable
 
-from .dal.base import CAP_FACE, CAP_SAY, RobotController
+from .dal.base import CAP_FACE, CAP_HEAD, CAP_LEDS, CAP_SAY, RobotController
 from .emotes import play_emote
 from .events import EventBus
 from .logging import get_logger
@@ -132,6 +132,12 @@ class Scheduler:
         try:
             if action.get("face") and robot.supports(CAP_FACE):
                 await robot.set_face(action["face"])
+            if action.get("leds") and robot.supports(CAP_LEDS):
+                leds = action["leds"]
+                await robot.set_leds(leds.get("color", "white"), float(leds.get("brightness", 1.0)))
+            if action.get("head") and robot.supports(CAP_HEAD):
+                yaw, pitch = action["head"]
+                await robot.move_head(float(yaw), float(pitch))
             if action.get("emote"):
                 await play_emote(robot, action["emote"])
             if action.get("say") and robot.supports(CAP_SAY):

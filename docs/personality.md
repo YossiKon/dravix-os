@@ -102,8 +102,9 @@ curl -X PUT localhost:8800/api/reactions -d '{"reactions":[
 ```
 
 A rule's `on` is any bus event (`ha.motion`, `presence.detected`, `ha.door`, `guard.alert`,
-`mood.changed`, …). Actions: `face`, `leds`, `say` (templated over the event data), `frigate_show`,
-`activate_mode`. `match` filters by event fields; `throttle_s` rate-limits.
+`mood.changed`, `touch.pet`, …). Actions: `face`, `leds`, `emote`, `say` (templated over the
+event data), `frigate_show`, `activate_mode`. `match` filters by event fields; `throttle_s`
+rate-limits. (The scheduler's daily-job `action` and routine steps share the same vocabulary.)
 
 ## Announce
 
