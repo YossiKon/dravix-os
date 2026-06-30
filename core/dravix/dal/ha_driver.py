@@ -70,10 +70,12 @@ class HARobotDriver(RobotDriver):
         )
 
     async def _set_number(self, entity_id: str, value: float) -> None:
-        """Set a number entity, clamped to its min/max and snapped to its step.
+        """Set a head servo number, treating dravix's value as RELATIVE to the servo's center.
 
-        The StackChan servos are e.g. yaw -164..164, pitch 0..90, step 5 — sending an
-        out-of-range or off-step value makes ESPHome/HA return a 500. Clamp + snap first.
+        dravix sends head angles centered on 0 (0 = look straight ahead). A servo whose range
+        isn't symmetric (e.g. pitch 0..90) centers at (min+max)/2, so we offset by that center —
+        otherwise pitch 0 would drive the servo to one extreme (always looking down, never up).
+        Then clamp to min/max and snap to step (off-range / off-step values make HA return a 500).
         """
         meta = self._num_meta.get(entity_id)
         if meta is None:
@@ -84,10 +86,9 @@ class HARobotDriver(RobotDriver):
                 meta = (None, None, None)
             self._num_meta[entity_id] = meta
         lo, hi, step = meta
-        if lo is not None:
-            value = max(float(lo), value)
-        if hi is not None:
-            value = min(float(hi), value)
+        if lo is not None and hi is not None:
+            value = (float(lo) + float(hi)) / 2.0 + value  # offset to the servo's center
+            value = max(float(lo), min(float(hi), value))
         if step:
             value = round(value / float(step)) * float(step)
         await self._ha.call_service("number", "set_value", {"entity_id": entity_id, "value": value})

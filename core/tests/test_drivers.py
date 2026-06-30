@@ -37,8 +37,29 @@ class _FakeHA:
     async def call_service(self, domain, service, data=None):
         self.calls.append((domain, service, data))
 
+    async def get_state(self, entity_id):
+        # yaw centered (±164); pitch asymmetric (0..90, center 45), step 5
+        if "servo_x" in entity_id:
+            return {"attributes": {"min": -164, "max": 164, "step": 5}}
+        return {"attributes": {"min": 0, "max": 90, "step": 5}}
+
     async def camera_snapshot(self, entity_id):
         return b"JPEG-bytes"
+
+
+async def test_ha_driver_move_head_offsets_to_servo_center():
+    """dravix sends head angles relative to 0; pitch (0..90) must offset to its center (45)."""
+    ha = _FakeHA()
+    d = HARobotDriver(
+        ha=ha, entities={"head_yaw": "number.servo_x", "head_pitch": "number.servo_y"}
+    )
+    await d.move_head(0, 0)  # "look center"
+    assert ha.calls[-2][2]["value"] == 0.0    # yaw center stays 0
+    assert ha.calls[-1][2]["value"] == 45.0   # pitch center = (0+90)/2 = 45 (not 0/down)
+
+    await d.move_head(20, -20)
+    assert ha.calls[-2][2]["value"] == 20.0   # yaw 0+20
+    assert ha.calls[-1][2]["value"] == 25.0   # pitch 45-20 = 25
 
 
 async def test_ha_driver_stackchan_esphome_entities():
