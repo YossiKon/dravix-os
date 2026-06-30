@@ -48,6 +48,10 @@ class Settings(BaseSettings):
     # voice). This is the reverse of robot_mcp_url. Usually a wss://api.xiaozhi.me/mcp/?token=
     xiaozhi_mcp_url: str = ""
 
+    # When False, the robot stops its automatic idle head movement (the ambient glances).
+    # Manual control + commanded movements still work. Toggle live from the dashboard too.
+    idle_motion: bool = True
+
     # Home Assistant
     ha_url: str = "http://homeassistant.local:8123"
     ha_token: str = ""

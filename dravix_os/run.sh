@@ -7,9 +7,11 @@ opt() {
   python3 - "$1" <<'PY'
 import json, sys
 try:
-    print(json.load(open("/data/options.json")).get(sys.argv[1], "") or "")
+    v = json.load(open("/data/options.json")).get(sys.argv[1])
 except Exception:
-    print("")
+    v = None
+# Render bools as true/false (not "" — which would break a bool env var).
+print("" if v is None else ("true" if v is True else ("false" if v is False else v)))
 PY
 }
 
@@ -20,6 +22,7 @@ export DRAVIX_LOG_LEVEL="$(opt log_level)"
 export DRAVIX_HA_URL="$(opt ha_url)"
 export DRAVIX_HA_TOKEN="$(opt ha_token)"
 export DRAVIX_AI_PROVIDER="$(opt ai_provider)"
+export DRAVIX_IDLE_MOTION="$(opt idle_motion)"
 export DRAVIX_LOCAL_ONLY="$(opt local_only)"
 export DRAVIX_FRIGATE_URL="$(opt frigate_url)"
 export DRAVIX_FRIGATE_CAMERA="$(opt frigate_camera)"

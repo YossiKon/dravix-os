@@ -1,5 +1,5 @@
 name: dravix-os
-version: "0.0.16"
+version: "0.0.17"
 slug: dravix_os
 description: Companion OS for the M5Stack StackChan robot (local-first)
 url: https://github.com/YossiKon/dravix-os
@@ -35,6 +35,7 @@ options:
   ha_url: "http://homeassistant:8123"
   ha_token: ""
   ai_provider: ha_assist
+  idle_motion: true              # false = robot's head stops moving on its own
   local_only: true
   frigate_url: ""
   frigate_camera: ""
@@ -55,6 +56,7 @@ schema:
   ha_url: str
   ha_token: "str?"
   ai_provider: "list(ha_assist|claude|openai|ollama)"
+  idle_motion: bool
   local_only: bool
   frigate_url: "str?"
   frigate_camera: "str?"
