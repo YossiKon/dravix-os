@@ -2,8 +2,8 @@
 # Self-contained: clones the repo (so plugins/ + web are present), builds the dashboard,
 # installs the core package, and runs via run.sh (which reads HA add-on options from /data).
 
-ARG DRAVIX_REPO="https://github.com/your-user/dravix-os"
-ARG DRAVIX_REF="feat/companion-os"
+ARG DRAVIX_REPO="https://github.com/YossiKon/dravix-os"
+ARG DRAVIX_REF="main"
 
 # ── stage 1: build the React dashboard ───────────────────────────────────────
 FROM node:20-slim AS web

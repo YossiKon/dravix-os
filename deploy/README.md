@@ -17,11 +17,12 @@ docker compose -f deploy/docker-compose.yml up -d --build
 
 Open `http://<lxc-ip>:8800`. Logs: `docker compose -f deploy/docker-compose.yml logs -f`.
 
-## Option B — Home Assistant add-on
+## Option B — Home Assistant add-on (HAOS / Supervised)
 
-For HAOS / supervised installs, dravix-os can run as a HA **add-on** (configured from the HA UI,
-state in `/data`). See [ha-addon/README.md](ha-addon/README.md). For HA-on-Proxmox (a VM), the
-LXC + Compose path above is recommended.
+If your HA is **Home Assistant OS** or **Supervised** (you have an Add-on store), dravix-os can run
+as a HA **add-on** — one-click install via custom repository, configured from the HA UI, state in
+`/data`, no separate container. Add `https://github.com/YossiKon/dravix-os` under
+**Settings → Add-ons → Add-on Store → ⋮ → Repositories**. Full steps: [../dravix_os/README.md](../dravix_os/README.md).
 
 ## Option C — bare service (systemd)
 

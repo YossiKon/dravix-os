@@ -2,16 +2,21 @@ name: dravix-os
 version: "0.0.1"
 slug: dravix_os
 description: Companion OS for the M5Stack StackChan robot (local-first)
-url: https://github.com/your-user/dravix-os
+url: https://github.com/YossiKon/dravix-os
 arch:
   - amd64
   - aarch64
 init: false
-# The web dashboard + API.
+# Reach Home Assistant's API from inside the add-on over the supervisor network
+# (ha_url defaults to http://homeassistant:8123).
+hassio_api: true
+homeassistant_api: true
+# The web dashboard + API, plus an "Open Web UI" button on the add-on page.
 ports:
   8800/tcp: 8800
 ports_description:
   8800/tcp: dravix-os dashboard + API
+webui: "http://[HOST]:[PORT:8800]"
 # Add-on options → DRAVIX_* env (see run.sh). Persistent state lives in /data.
 options:
   robot_mcp_url: ""
