@@ -13,6 +13,7 @@ import { SettingsPanel } from "./components/SettingsPanel";
 import { StatusPanel } from "./components/StatusPanel";
 import { TalkPanel } from "./components/TalkPanel";
 import { Toaster } from "./components/Toaster";
+import { XiaoZhiPanel } from "./components/XiaoZhiPanel";
 import { Tabs, type TabDef } from "./components/ui";
 import { useDravix } from "./hooks/useDravix";
 import { ToastProvider } from "./hooks/useToasts";
@@ -103,6 +104,7 @@ function Console() {
               />
               <ManualControl status={status} />
               <TalkPanel status={status} />
+              <XiaoZhiPanel xiaozhi={status?.xiaozhi} />
             </div>
 
             {/* Right rail: live events (sticky on desktop) */}

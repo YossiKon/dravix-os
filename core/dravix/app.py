@@ -111,9 +111,16 @@ async def lifespan(app: FastAPI):
     if settings.xiaozhi_mcp_url:
         from .mcpserver.server import build_server
 
+        # The robot body tools only work with a real driver; over the cloud the driver is
+        # mock, so omit them and serve the useful set (HA / weather / agenda / memory / fun).
+        _include_robot = settings.robot_driver != "mock"
         xiaozhi = XiaoZhiBridge(
             settings.xiaozhi_mcp_url,
-            lambda: build_server(controller, engine, ai, ha=ha),
+            lambda: build_server(
+                controller, engine, ai, ha=ha, store=store,
+                weather_entity=settings.weather_entity,
+                include_robot_control=_include_robot,
+            ),
         )
         await xiaozhi.start()
 

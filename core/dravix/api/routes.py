@@ -89,6 +89,7 @@ async def status(request: Request):
         "configured": xz is not None,
         "connected": bool(xz and xz.connected),
         "last_error": (xz.last_error if xz else ""),
+        "tools": (xz.tools if xz else []),
     }
     return data
 

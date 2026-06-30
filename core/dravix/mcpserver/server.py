@@ -19,7 +19,17 @@ def build_server(
     engine: ModeEngine,
     ai: Any | None = None,
     ha: Any | None = None,
+    store: Any | None = None,
+    weather_entity: str = "",
+    include_robot_control: bool = True,
 ):
+    """Build the dravix MCP server.
+
+    ``include_robot_control`` gates the robot body tools (say/face/head/leds): set it False
+    when the robot driver is ``mock`` (e.g. the cloud/xiaozhi bridge) so the robot's AI isn't
+    offered tools that can't actually move the hardware. The HA / weather / agenda / memory /
+    fun tools below work regardless and are the useful set over the cloud.
+    """
     from mcp.server.fastmcp import FastMCP  # lazy import
 
     mcp = FastMCP("dravix-os")
@@ -33,25 +43,27 @@ def build_server(
         except Exception as exc:  # noqa: BLE001
             return f"error: {exc}"
 
-    @mcp.tool()
-    async def robot_say(text: str) -> str:
-        """Make the robot speak the given text aloud."""
-        return await _guard(controller.say(text))
+    if include_robot_control:
 
-    @mcp.tool()
-    async def robot_set_face(expression: str) -> str:
-        """Set the robot's facial expression: neutral|happy|sad|angry|sleepy|doubt."""
-        return await _guard(controller.set_face(expression))
+        @mcp.tool()
+        async def robot_say(text: str) -> str:
+            """Make the robot speak the given text aloud."""
+            return await _guard(controller.say(text))
 
-    @mcp.tool()
-    async def robot_move_head(yaw: float, pitch: float, speed: float = 1.0) -> str:
-        """Aim the robot's head. yaw -180..180, pitch -90..90, speed 0..1."""
-        return await _guard(controller.move_head(yaw, pitch, speed))
+        @mcp.tool()
+        async def robot_set_face(expression: str) -> str:
+            """Set the robot's facial expression: neutral|happy|sad|angry|sleepy|doubt."""
+            return await _guard(controller.set_face(expression))
 
-    @mcp.tool()
-    async def robot_set_leds(color: str, brightness: float = 1.0) -> str:
-        """Set the robot's LED color (name) and brightness 0..1."""
-        return await _guard(controller.set_leds(color, brightness))
+        @mcp.tool()
+        async def robot_move_head(yaw: float, pitch: float, speed: float = 1.0) -> str:
+            """Aim the robot's head. yaw -180..180, pitch -90..90, speed 0..1."""
+            return await _guard(controller.move_head(yaw, pitch, speed))
+
+        @mcp.tool()
+        async def robot_set_leds(color: str, brightness: float = 1.0) -> str:
+            """Set the robot's LED color (name) and brightness 0..1."""
+            return await _guard(controller.set_leds(color, brightness))
 
     @mcp.tool()
     async def list_modes() -> str:
@@ -145,5 +157,76 @@ def build_server(
                 return "ok"
             except Exception as exc:  # noqa: BLE001
                 return f"error: {exc}"
+
+        @mcp.tool()
+        async def get_weather() -> str:
+            """Get the current weather (from the configured Home Assistant weather entity)."""
+            if not weather_entity:
+                return "weather entity not configured"
+            try:
+                st = await ha.get_state(weather_entity)
+            except Exception as exc:  # noqa: BLE001
+                return f"error: {exc}"
+            cond = st.get("state", "unknown")
+            temp = (st.get("attributes") or {}).get("temperature")
+            return f"It's {cond}" + (f", {temp} degrees." if temp is not None else ".")
+
+        @mcp.tool()
+        async def get_agenda() -> str:
+            """Read upcoming events from the user's Home Assistant calendars."""
+            try:
+                states = await ha.states()
+            except Exception as exc:  # noqa: BLE001
+                return f"error: {exc}"
+            items: list[str] = []
+            for st in states:
+                if not st.get("entity_id", "").startswith("calendar."):
+                    continue
+                attrs = st.get("attributes") or {}
+                msg = attrs.get("message")
+                if not msg:
+                    continue
+                start = str(attrs.get("start_time", ""))
+                when = start[11:16] if len(start) >= 16 else start
+                items.append(f"{msg}" + (f" at {when}" if when else ""))
+            return ("On your calendar: " + "; ".join(items[:5]) + ".") if items else \
+                "Nothing on your calendar."
+
+    # Memory — let the robot remember + recall facts (persisted in dravix's store).
+    if store is not None:
+
+        @mcp.tool()
+        async def remember_fact(text: str) -> str:
+            """Remember a fact the user tells you (persisted), e.g. 'I like tea'."""
+            store.add_memory(text)
+            return "ok, I'll remember that"
+
+        @mcp.tool()
+        async def list_memories() -> str:
+            """List the facts the robot has remembered (JSON)."""
+            return json.dumps([m.get("text") for m in store.memories()])
+
+    # Fun / party tricks — return a line for the robot's voice to say.
+    from .. import fun as _fun
+
+    @mcp.tool()
+    async def roll_dice() -> str:
+        """Roll a six-sided die and return the result."""
+        return _fun.play_dice()["text"]
+
+    @mcp.tool()
+    async def flip_coin() -> str:
+        """Flip a coin (heads or tails)."""
+        return _fun.play_coin()["text"]
+
+    @mcp.tool()
+    async def magic_8ball(question: str = "") -> str:
+        """Ask the magic 8-ball a yes/no question."""
+        return _fun.play_eightball()["text"]
+
+    @mcp.tool()
+    async def fortune() -> str:
+        """Get a short fortune / good-luck line."""
+        return _fun.play_fortune()["text"]
 
     return mcp

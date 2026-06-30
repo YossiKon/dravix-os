@@ -30,6 +30,9 @@ class XiaoZhiBridge:
         self._task: asyncio.Task | None = None
         self.connected = False
         self.last_error = ""
+        # The tools dravix serves to the robot — populated on start so the dashboard can
+        # show "what the robot can do over the cloud" even before the bridge connects.
+        self.tools: list[dict[str, str]] = []
 
     async def _serve_once(self) -> None:
         from mcp.client.websocket import websocket_client  # lazy import
@@ -63,8 +66,16 @@ class XiaoZhiBridge:
 
     async def start(self) -> None:
         if self.url and self._task is None:
+            try:
+                server = self._server_factory()
+                self.tools = [
+                    {"name": t.name, "description": (t.description or "").strip()}
+                    for t in await server.list_tools()
+                ]
+            except Exception as exc:  # noqa: BLE001 — non-fatal; just no catalog
+                log.debug("could not list xiaozhi tools: %s", exc)
             self._task = asyncio.create_task(self._loop())
-            log.info("xiaozhi bridge starting -> %s", self.url)
+            log.info("xiaozhi bridge starting -> %s (%d tools)", self.url, len(self.tools))
 
     async def stop(self) -> None:
         if self._task is not None:

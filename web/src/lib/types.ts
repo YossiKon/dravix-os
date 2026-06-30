@@ -38,6 +38,21 @@ export interface Mood {
   expression: string;
 }
 
+export interface XiaoZhiTool {
+  name: string;
+  description: string;
+}
+
+export interface XiaoZhiStatus {
+  /** A xiaozhi_mcp_url is set (the cloud bridge is enabled). */
+  configured: boolean;
+  /** The bridge is currently connected to the xiaozhi access point. */
+  connected: boolean;
+  last_error: string;
+  /** Tools the robot's AI can call over the cloud (the "what can be done from the cloud" list). */
+  tools: XiaoZhiTool[];
+}
+
 export interface StatusResponse {
   robot: RobotState;
   active_mode: string | null;
@@ -45,6 +60,7 @@ export interface StatusResponse {
   ai_provider: string | null;
   ai_available: boolean;
   mood?: Mood;
+  xiaozhi?: XiaoZhiStatus;
 }
 
 export interface HealthResponse {
