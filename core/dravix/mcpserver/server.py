@@ -159,6 +159,51 @@ def build_server(
                 return f"error: {exc}"
 
         @mcp.tool()
+        async def home_assistant_assist(command: str) -> str:
+            """Run a NATURAL-LANGUAGE command through Home Assistant's Assist pipeline — it
+            handles lights, climate, covers, timers, scenes, and any custom HA intents/scripts.
+            Use this for anything not covered by the specific tools, e.g.
+            'turn off all the lights downstairs', 'set a 10 minute timer', 'arm the alarm'."""
+            try:
+                res = await ha.conversation(command)
+            except Exception as exc:  # noqa: BLE001
+                return f"error: {exc}"
+            try:
+                return res["response"]["speech"]["plain"]["speech"] or "ok"
+            except Exception:  # noqa: BLE001
+                return "ok"
+
+        @mcp.tool()
+        async def home_assistant_notify(message: str, title: str = "") -> str:
+            """Send a notification into Home Assistant (shows in the HA UI / mobile app)."""
+            data: dict[str, Any] = {"message": message}
+            if title:
+                data["title"] = title
+            try:
+                await ha.call_service("persistent_notification", "create", data)
+                return "ok"
+            except Exception as exc:  # noqa: BLE001
+                return f"error: {exc}"
+
+        @mcp.tool()
+        async def home_assistant_run_scene(scene: str) -> str:
+            """Activate a Home Assistant scene, e.g. scene.movie_night."""
+            try:
+                await ha.call_service("scene", "turn_on", {"entity_id": scene})
+                return "ok"
+            except Exception as exc:  # noqa: BLE001
+                return f"error: {exc}"
+
+        @mcp.tool()
+        async def home_assistant_run_script(script: str) -> str:
+            """Run a Home Assistant script, e.g. script.goodnight."""
+            try:
+                await ha.call_service("script", "turn_on", {"entity_id": script})
+                return "ok"
+            except Exception as exc:  # noqa: BLE001
+                return f"error: {exc}"
+
+        @mcp.tool()
         async def get_weather() -> str:
             """Get the current weather (from the configured Home Assistant weather entity)."""
             if not weather_entity:
@@ -228,5 +273,12 @@ def build_server(
     async def fortune() -> str:
         """Get a short fortune / good-luck line."""
         return _fun.play_fortune()["text"]
+
+    @mcp.tool()
+    async def get_time() -> str:
+        """Get the current local date and time."""
+        from datetime import datetime
+
+        return datetime.now().strftime("It's %A %H:%M, %B %d.")
 
     return mcp
