@@ -61,7 +61,7 @@ font:
   - file: "gfonts://Roboto Mono"
     id: face_font
     size: 96
-    glyphs: "-_^Tu><oOz "
+    glyphs: "-_^Tu><oOz •"
   - file: "gfonts://Roboto"
     id: text_font
     size: 28
@@ -76,6 +76,7 @@ globals:
   - { id: g_listen, type: bool, restore_value: false, initial_value: "false" }
   - { id: g_talk,   type: bool, restore_value: false, initial_value: "false" }
   - { id: g_sleep,  type: bool, restore_value: false, initial_value: "false" }
+  - { id: g_saver,  type: bool, restore_value: false, initial_value: "false" }
   - { id: g_busy,   type: bool, restore_value: false, initial_value: "false" }
   - { id: g_anim,   type: int,  restore_value: false, initial_value: "0" }
   # swipe tracking + which "home screen" (0 = face, 1 = card1, 2 = card2)
@@ -85,6 +86,12 @@ globals:
   - { id: sw_y1,    type: int,  restore_value: false, initial_value: "0" }
   - { id: sw_sleep, type: bool, restore_value: false, initial_value: "false" }
   - { id: g_card,   type: int,  restore_value: false, initial_value: "0" }
+  # saved LED state, so a voice interaction can restore it afterwards
+  - { id: led_on,  type: bool,  restore_value: false, initial_value: "false" }
+  - { id: led_bri, type: float, restore_value: false, initial_value: "0" }
+  - { id: led_r,   type: float, restore_value: false, initial_value: "0" }
+  - { id: led_g,   type: float, restore_value: false, initial_value: "0" }
+  - { id: led_b,   type: float, restore_value: false, initial_value: "0" }
 
 # If Validate says homeassistant time already exists (from the BSP), delete this block.
 time:
@@ -162,9 +169,12 @@ lvgl:
   displays:
     - m5cores3_lcd
   on_idle:
+    # Screensaver: dim + stop the random drift, but keep the face + blinking.
     - timeout: !lambda 'return (uint32_t) id(n_screensaver).state * 60000;'
       then:
+        - globals.set: { id: g_saver, value: "true" }
         - light.turn_on: { id: lcd_backlight, brightness: 25% }
+    # Sleep: freeze (no movement) and go black.
     - timeout: !lambda 'return (uint32_t) id(n_sleep).state * 60000;'
       then:
         - globals.set: { id: g_sleep, value: "true" }
@@ -225,18 +235,19 @@ script:
   # Redraw the animated face.
   - id: render_face
     then:
+      # Awake (open) → WHITE background, dark face. Screensaver / sleep → black + teal.
       - lvgl.widget.update:
           id: bg_rect
-          bg_color: !lambda 'return (id(g_listen) || id(g_talk)) ? lv_color_hex(0xFFFFFF) : lv_color_hex(0x000000);'
+          bg_color: !lambda 'return (!id(g_sleep) && !id(g_saver)) ? lv_color_hex(0xFFFFFF) : lv_color_hex(0x000000);'
       - lvgl.label.update:
           id: face_label
-          text_color: !lambda 'return (id(g_listen) || id(g_talk)) ? lv_color_hex(0x000000) : lv_color_hex(0x33E6C8);'
+          text_color: !lambda 'return (!id(g_sleep) && !id(g_saver)) ? lv_color_hex(0x000000) : lv_color_hex(0x33E6C8);'
           text: !lambda |-
             if (id(g_sleep)) {
               const char* z[] = {"u_u", "u_u z", "u_u zz", "u_u zzz"};
               return std::string(z[id(g_anim) % 4]);
             }
-            if (id(g_listen)) return std::string("O_O");
+            if (id(g_listen)) return std::string("•_•");   // concentrating / listening
             if (id(g_talk))   return std::string((id(g_anim) % 2) ? "o o" : "o_o");
             if (id(g_blink))  return std::string("-_-");
             const char* faces[] = {"o_o", "^_^", "T_T", ">_<", "u_u", "o_O"};
@@ -303,11 +314,11 @@ interval:
       - if:
           condition: { lambda: 'return id(g_sleep) || id(g_talk);' }
           then: [ { script.execute: render_face } ]
-  # Occasional "alive" drift of the face (not in sleep / busy).
+  # Occasional "alive" drift of the face — only when fully awake (not screensaver/sleep/busy).
   - interval: 7s
     then:
       - if:
-          condition: { lambda: 'return !id(g_sleep) && !id(g_busy);' }
+          condition: { lambda: 'return !id(g_sleep) && !id(g_saver) && !id(g_busy);' }
           then:
             - lvgl.widget.update:
                 id: face_label
@@ -377,6 +388,12 @@ touchscreen:
       # and reset the swipe deltas so a plain tap doesn't replay a stale swipe.
       - globals.set: { id: sw_sleep, value: !lambda 'return id(g_sleep);' }
       - lambda: 'id(sw_x0) = 0; id(sw_y0) = 0; id(sw_x1) = 0; id(sw_y1) = 0;'
+      # Any touch exits the screensaver (restore full brightness).
+      - if:
+          condition: { lambda: 'return id(g_saver) && !id(g_sleep);' }
+          then:
+            - light.turn_on: { id: lcd_backlight, brightness: !lambda 'return id(n_brightness).state / 100.0;' }
+            - globals.set: { id: g_saver, value: "false" }
     on_update:
       # Track the gesture: start = original press point, end = current point.
       - lambda: |-
@@ -391,6 +408,7 @@ touchscreen:
           then:
             - light.turn_on: { id: lcd_backlight, brightness: !lambda 'return id(n_brightness).state / 100.0;' }
             - globals.set: { id: g_sleep, value: "false" }
+            - globals.set: { id: g_saver, value: "false" }
             - script.execute: render_face
       # swipe DOWN → status
       - if:
@@ -449,9 +467,24 @@ voice_assistant:
         id: lcd_backlight
         brightness: !lambda 'return id(n_brightness).state / 100.0;'
     - globals.set: { id: g_sleep, value: "false" }
+    - globals.set: { id: g_saver, value: "false" }
     - globals.set: { id: g_listen, value: "true" }
     - lvgl.page.show: page_face      # come back to the face to talk
     - globals.set: { id: g_card, value: "0" }
+    # remember the current LEDs, then go YELLOW while concentrating
+    - lambda: |-
+        auto v = id(stackchan_light_bar).current_values;
+        id(led_on)  = v.is_on();
+        id(led_bri) = v.get_brightness();
+        id(led_r)   = v.get_red();
+        id(led_g)   = v.get_green();
+        id(led_b)   = v.get_blue();
+    - light.turn_on:
+        id: stackchan_light_bar
+        brightness: 80%
+        red: 100%
+        green: 80%
+        blue: 0%
     - script.execute: render_face
   on_tts_start:
     - globals.set: { id: g_listen, value: "false" }
@@ -460,5 +493,17 @@ voice_assistant:
   on_end:
     - globals.set: { id: g_listen, value: "false" }
     - globals.set: { id: g_talk, value: "false" }
-    - script.execute: render_face
+    - script.execute: render_face   # face returns to the previous expression on its own
+    # restore the LEDs to exactly what they were before (or off if they were off)
+    - if:
+        condition: { lambda: 'return id(led_on);' }
+        then:
+          - light.turn_on:
+              id: stackchan_light_bar
+              brightness: !lambda 'return id(led_bri);'
+              red: !lambda 'return id(led_r);'
+              green: !lambda 'return id(led_g);'
+              blue: !lambda 'return id(led_b);'
+        else:
+          - light.turn_off: stackchan_light_bar
     - micro_wake_word.start        # resume listening for "Okay, Nabu"
