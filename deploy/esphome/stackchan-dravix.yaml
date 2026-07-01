@@ -5,7 +5,7 @@
 #    • Animated kaomoji FACE — blink, drift, talk/listen, sleep "zzz"
 #    • VOICE assistant (mic + speaker) — white screen while listening/talking
 #    • SLEEP + SCREENSAVER — dim then black, wake on touch or "ok nabu"
-#    • STATUS page — time · date · WiFi · IP · uptime
+#    • STATUS page — time · battery · date · WiFi · IP · uptime
 #    • HOME card — live Home Assistant values (temp · humidity)
 #    • Screen BRIGHTNESS control  ·  TAP cycles pages
 #  Head servos + head calibration + petting are handled by dravix-os (the add-on),
@@ -81,6 +81,11 @@ sensor:
     update_interval: 30s
   - platform: uptime
     id: up_sec
+  # Robot battery %, imported from HA (the BSP exposes the CoreS3 battery). If your
+  # battery entity has a different name, change it here — shows "--" until it resolves.
+  - platform: homeassistant
+    id: ha_batt
+    entity_id: sensor.dravix_battery_level
   # ── Live values pulled FROM Home Assistant for the "home card" page ──────────
   # Point these at any HA sensors you like (change the entity_id's below).
   - platform: homeassistant
@@ -178,35 +183,42 @@ lvgl:
             text_font: text_font
             text_color: 0x33E6C8
             align: CENTER
-            y: -80
+            y: -88
+        - label:
+            id: lbl_batt
+            text: "Batt --"
+            text_font: small_font
+            text_color: 0x5dffa0
+            align: CENTER
+            y: -50
         - label:
             id: lbl_date
             text: ""
             text_font: small_font
             text_color: 0x8892A0
             align: CENTER
-            y: -42
+            y: -16
         - label:
             id: lbl_wifi
             text: "WiFi"
             text_font: small_font
             text_color: 0x8892A0
             align: CENTER
-            y: -6
+            y: 16
         - label:
             id: lbl_ip
             text: "IP"
             text_font: small_font
             text_color: 0x8892A0
             align: CENTER
-            y: 30
+            y: 48
         - label:
             id: lbl_up
             text: "Up"
             text_font: small_font
             text_color: 0x8892A0
             align: CENTER
-            y: 66
+            y: 80
     # ── Page 3: home card (live Home Assistant values) ──────────────────────────
     - id: page_home
       bg_color: 0x000000
@@ -348,6 +360,12 @@ interval:
             char b[24]; snprintf(b, sizeof(b), "Up %dh %dm", s / 3600, (s % 3600) / 60);
             return std::string(b);
       - lvgl.label.update:
+          id: lbl_batt
+          text: !lambda |-
+            if (!id(ha_batt).has_state()) return std::string("Batt --");
+            char b[16]; snprintf(b, sizeof(b), "Batt %.0f%%", id(ha_batt).state);
+            return std::string(b);
+      - lvgl.label.update:
           id: lbl_temp
           text: !lambda |-
             if (!id(ha_temp).has_state()) return std::string("Temp --");
@@ -396,9 +414,8 @@ voice_assistant:
     - globals.set: { id: g_talk, value: "false" }
     - script.execute: render_face
 
-# ── OPTIONAL: robot battery % on the status page ────────────────────────────────
-# The CoreS3 battery is read by the M5Stack BSP's power-management chip. If the BSP
-# already exposes a battery sensor (likely), it shows up in Home Assistant on its own —
-# in that case just add it to the "home card" via a `sensor: platform: homeassistant`
-# entry pointing at that battery entity (like ha_temp above). Don't hand-add an AXP2101
-# block here — it would clash with the BSP and fail Validate.
+# ── NOTE: battery % is already on the status page (lbl_batt / ha_batt above) ─────
+# It reads sensor.dravix_battery_level from HA — the M5Stack BSP exposes the CoreS3
+# battery on its own. If your battery entity is named differently, just fix the
+# entity_id on `ha_batt`. Don't hand-add an AXP2101 block — it would clash with the
+# BSP and fail Validate.
