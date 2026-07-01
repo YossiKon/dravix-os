@@ -3,6 +3,7 @@
 #  Sits ON TOP of the M5Stack BSP (servos, mic, speaker, LEDs, touch come from it).
 #  Features:
 #    • Animated kaomoji FACE (home) — blink, drift, talk/listen, sleep "zzz"
+#    • WAKE WORD "Okay, Nabu" (on-device) → VOICE assistant (HA Assist pipeline)
 #    • VOICE assistant — white screen while listening/talking
 #    • SLEEP + SCREENSAVER — dim then black, wake on touch or "ok nabu"
 #    • SWIPE navigation:
@@ -19,6 +20,10 @@
 esphome:
   name: stackchan
   friendly_name: stackchan
+  on_boot:
+    priority: -100
+    then:
+      - micro_wake_word.start      # start listening for "Okay, Nabu" on boot
 
 esp32:
   variant: esp32s3
@@ -426,6 +431,16 @@ touchscreen:
             - globals.set: { id: g_card, value: !lambda 'return (id(g_card) + 2) % 3;' }
             - script.execute: show_card
 
+# ── Wake word "Okay, Nabu" (on-device) ──────────────────────────────────────────
+# Heavy TensorFlow compile — flash from a LOCAL ESPHome (not Nabu Casa remote), be
+# patient (~10-15 min), and don't refresh the browser mid-build.
+micro_wake_word:
+  microphone: i2s_mic
+  models:
+    - model: okay_nabu           # say "Okay, Nabu" to wake it
+  on_wake_word_detected:
+    - voice_assistant.start
+
 voice_assistant:
   microphone: i2s_mic
   media_player: va_media_player
@@ -446,3 +461,4 @@ voice_assistant:
     - globals.set: { id: g_listen, value: "false" }
     - globals.set: { id: g_talk, value: "false" }
     - script.execute: render_face
+    - micro_wake_word.start        # resume listening for "Okay, Nabu"
