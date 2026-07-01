@@ -348,6 +348,16 @@ export interface HaEntitiesResponse {
   ha_configured: boolean;
 }
 
+/* ── Screens (HA entities shown on the robot's 3 display cards) ───────────── */
+export interface ScreenCard {
+  title: string;
+  entities: string[];
+}
+
+export interface ScreensResponse {
+  screens: ScreenCard[];
+}
+
 /** OLED burn-in protection settings (GET /api/robot/screen). */
 export interface ScreenState {
   supported: boolean;

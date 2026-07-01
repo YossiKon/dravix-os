@@ -597,6 +597,32 @@ async def put_reactions(body: ReactionsBody, request: Request):
     return {"reactions": request.app.state.store.reactions()}
 
 
+# ── screens (HA entities shown on the robot's 3 display cards) ─────────────────
+class ScreensBody(BaseModel):
+    screens: list[dict]
+
+
+@router.get("/api/screens")
+async def get_screens(request: Request):
+    return {"screens": request.app.state.store.screens()}
+
+
+@router.put("/api/screens")
+async def put_screens(body: ScreensBody, request: Request):
+    if len(body.screens) > 3:
+        raise HTTPException(status_code=400, detail="at most 3 screen cards are allowed")
+    clean: list[dict] = []
+    for card in body.screens:
+        if not isinstance(card, dict):
+            raise HTTPException(status_code=400, detail="each card must be an object")
+        entities = card.get("entities", [])
+        if not isinstance(entities, list) or any(not isinstance(e, str) for e in entities):
+            raise HTTPException(status_code=400, detail="card 'entities' must be a list of ids")
+        clean.append({"title": str(card.get("title", "")), "entities": entities})
+    request.app.state.store.set_screens(clean)  # the pusher reads these live
+    return {"screens": request.app.state.store.screens()}
+
+
 # ── personality: mood + emotes ────────────────────────────────────────────────
 class EmoteBody(BaseModel):
     name: str

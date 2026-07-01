@@ -30,6 +30,7 @@ _DEFAULTS: dict[str, Any] = {
     "voice": None,  # active TTS voice override applied to all speech (None = persona/default)
     "voices": [],  # user catalog of voice ids to pick from (depends on your TTS engine)
     "inbox": [],  # [{id, text}] — queued notifications for the robot to read out
+    "screens": [],  # up to 3 display cards: [{title, entities:[entity_id, ...]}] pushed to the robot
     # Robot wiring picked from the dashboard (overrides the add-on/env defaults):
     "robot_driver": None,  # None = env default (mock|ha|mcp)
     "robot_entities": {},  # {face_select, head_yaw, head_pitch, media_player, tts_engine,
@@ -68,7 +69,7 @@ class Store:
         keys = (
             "ai_provider", "mode_overrides", "disabled_modes", "reactions", "schedule",
             "personas", "active_persona", "memories", "routines", "voice", "voices", "inbox",
-            "robot_driver", "robot_entities", "head_calibration",
+            "screens", "robot_driver", "robot_entities", "head_calibration",
         )
         for key in keys:
             if key in patch:
@@ -183,6 +184,13 @@ class Store:
 
     def set_reactions(self, rules: list[dict[str, Any]]) -> None:
         self._data["reactions"] = rules
+        self.save()
+
+    def screens(self) -> list[dict[str, Any]]:
+        return list(self._data.get("screens", []))
+
+    def set_screens(self, screens: list[dict[str, Any]]) -> None:
+        self._data["screens"] = screens
         self.save()
 
     def mood(self) -> dict[str, Any]:

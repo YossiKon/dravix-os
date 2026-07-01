@@ -13,6 +13,7 @@ import { useWebSocket } from "./hooks/useWebSocket";
 import { CAP, type BusEvent } from "./lib/types";
 import { AgentPage } from "./pages/AgentPage";
 import { AutomationsPage } from "./pages/AutomationsPage";
+import { ScreensPage } from "./pages/ScreensPage";
 import { SetupPage } from "./pages/SetupPage";
 
 type PageId =
@@ -22,6 +23,7 @@ type PageId =
   | "automations"
   | "memory"
   | "cloud"
+  | "screens"
   | "setup"
   | "settings";
 
@@ -77,6 +79,8 @@ function Shell() {
       { id: "automations", label: "Automations", icon: "⇄", visible: true },
       { id: "memory", label: "Memory", icon: "❏", visible: true },
       { id: "cloud", label: "Cloud", icon: "☁", visible: cloudConfigured },
+      // Screens: pick which HA entities show on the robot's 3 display cards.
+      { id: "screens", label: "Screens", icon: "▦", visible: true },
       // Setup is always visible — it's how the robot gets configured.
       { id: "setup", label: "Setup", icon: "⛭", visible: true },
       { id: "settings", label: "Settings", icon: "⚙", visible: true },
@@ -148,6 +152,12 @@ function Shell() {
         {page === "cloud" && (
           <div className="mx-auto max-w-3xl">
             <XiaoZhiPanel xiaozhi={status?.xiaozhi} />
+          </div>
+        )}
+
+        {page === "screens" && (
+          <div className="mx-auto max-w-3xl">
+            <ScreensPage />
           </div>
         )}
 

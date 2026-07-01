@@ -36,6 +36,8 @@ import type {
   SayMoodResult,
   SayResult,
   ScheduleResponse,
+  ScreenCard,
+  ScreensResponse,
   ScreenState,
   ScreenUpdate,
   SetHomeResponse,
@@ -215,6 +217,15 @@ export const api = {
 
   putScreen: (body: ScreenUpdate) =>
     request<{ ok: boolean }>("/api/robot/screen", { method: "PUT", json: body }),
+
+  /* ── Screens: HA entities shown on the robot's 3 display cards ─────────── */
+  getScreens: () => request<ScreensResponse>("/api/screens"),
+
+  putScreens: (screens: ScreenCard[]) =>
+    request<ScreensResponse>("/api/screens", {
+      method: "PUT",
+      json: { screens },
+    }),
 
   /* ── Cameras / Frigate ────────────────────────────────────────────────── */
   frigateCameras: () =>

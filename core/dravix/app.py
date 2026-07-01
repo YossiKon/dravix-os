@@ -27,6 +27,7 @@ from .persona import resolve_voice
 from .pethead import PetHeadBehavior
 from .reactions import ReactionEngine
 from .scheduler import Scheduler
+from .screens import ScreenPusher
 from .state import RuntimeState
 from .store import Store
 
@@ -122,6 +123,11 @@ async def lifespan(app: FastAPI):
     scheduler = Scheduler(bus, controller, store=store, engine=engine)
     await scheduler.start()
 
+    # Screens: push chosen HA entities onto the robot's 3 display cards (needs HA to read states).
+    screen_pusher = ScreenPusher(ha, store)
+    if ha is not None:
+        await screen_pusher.start()
+
     # Home Assistant event bridge (motion/presence/door -> bus -> modes like guard).
     ha_bridge: HAEventBridge | None = None
     if ha is not None and settings.ha_events_enabled:
@@ -163,6 +169,7 @@ async def lifespan(app: FastAPI):
     app.state.mood = mood
     app.state.pet_head = pet_head
     app.state.scheduler = scheduler
+    app.state.screen_pusher = screen_pusher
     app.state.xiaozhi = xiaozhi
 
     try:
@@ -173,6 +180,7 @@ async def lifespan(app: FastAPI):
             await xiaozhi.stop()
         if ha_bridge is not None:
             await ha_bridge.stop()
+        await screen_pusher.stop()
         await scheduler.stop()
         await pet_head.stop()
         await mood.stop()
