@@ -250,6 +250,22 @@ number:
       - light.turn_on:
           id: lcd_backlight
           brightness: !lambda 'return x / 100.0;'
+  # Head PITCH in YOUR units (158..260). The BSP's servo_y_angle is locked to 0..90 and can't
+  # be re-ranged, so this number maps 158..260 → the real 0..90 servo. In dravix-os Setup,
+  # map "Head — up/down" to THIS entity: number.dravix_head_pitch  (instead of servo_y_angle).
+  - platform: template
+    name: "Head pitch"
+    id: n_head_pitch
+    optimistic: true
+    min_value: 158
+    max_value: 260
+    step: 1
+    initial_value: 165
+    restore_value: true
+    set_action:
+      - number.set:
+          id: servo_y_angle
+          value: !lambda 'return (x - 158.0f) * 90.0f / 102.0f;'   # 158..260 → 0..90
 
 # ── Behaviour toggles — flip these from Home Assistant / the dravix dashboard ────
 switch:
