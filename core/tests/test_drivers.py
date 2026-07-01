@@ -79,6 +79,46 @@ async def test_ha_driver_head_calibration_center_and_invert():
     assert ha.calls[-1][2]["value"] == 90.0
 
 
+class _FlakyHA(_FakeHA):
+    """Fails the first `fail_times` number.set_value calls (simulates a serial-bus NAK)."""
+
+    def __init__(self, fail_times: int = 2) -> None:
+        super().__init__()
+        self._fail_times = fail_times
+        self._attempts = 0
+
+    async def call_service(self, domain, service, data=None):
+        if domain == "number" and service == "set_value":
+            self._attempts += 1
+            if self._attempts <= self._fail_times:
+                raise RuntimeError("500 Internal Server Error (serial bus NAK)")
+        await super().call_service(domain, service, data)
+
+
+async def test_ha_driver_head_retries_transient_500():
+    """A servo write that NAKs (HA 500) is retried and succeeds — control stays reliable."""
+    ha = _FlakyHA(fail_times=2)  # first two writes fail, third succeeds
+    d = HARobotDriver(
+        ha=ha, entities={"head_yaw": "number.servo_x", "head_pitch": "number.servo_y"}
+    )
+    d._SET_RETRY_DELAY = 0  # don't sleep in the test
+    await d.move_head(0, 0)  # yaw retries twice then lands; pitch lands first try
+    writes = [c for c in ha.calls if c[1] == "set_value"]
+    assert len(writes) == 2  # both axes ultimately written
+
+
+async def test_ha_driver_head_raises_after_exhausting_retries():
+    ha = _FlakyHA(fail_times=99)  # never recovers
+    d = HARobotDriver(
+        ha=ha, entities={"head_yaw": "number.servo_x", "head_pitch": "number.servo_y"}
+    )
+    d._SET_RETRY_DELAY = 0
+    import pytest
+
+    with pytest.raises(RuntimeError):
+        await d.move_head(0, 0)
+
+
 async def test_ha_driver_say_via_assist_satellite():
     """An assist_satellite.* TTS entity speaks via announce (no media_player needed)."""
     ha = _FakeHA()

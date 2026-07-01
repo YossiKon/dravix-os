@@ -7,6 +7,7 @@ exact service calls are finalized in Phase 1 once discovery reports your entitie
 """
 from __future__ import annotations
 
+import asyncio
 from typing import Any
 
 from ..integrations.homeassistant import HomeAssistant
@@ -103,6 +104,27 @@ class HARobotDriver(RobotDriver):
             self._num_meta[entity_id] = meta
         return meta
 
+    # The head servos are on a serial servo bus (SCS9009); the bus occasionally NAKs a write
+    # and HA returns a 500. A quick retry almost always succeeds, so writes are resilient.
+    _SET_ATTEMPTS = 3
+    _SET_RETRY_DELAY = 0.25
+
+    async def _set_number_value(self, entity_id: str, value: float) -> None:
+        last_exc: Exception | None = None
+        for attempt in range(self._SET_ATTEMPTS):
+            try:
+                await self._ha.call_service(
+                    "number", "set_value", {"entity_id": entity_id, "value": value}
+                )
+                return
+            except Exception as exc:  # noqa: BLE001 — transient serial-bus NAK, retry
+                last_exc = exc
+                if attempt < self._SET_ATTEMPTS - 1:
+                    log.debug("number.set_value %s=%s failed (%s), retrying", entity_id, value, exc)
+                    await asyncio.sleep(self._SET_RETRY_DELAY)
+        assert last_exc is not None
+        raise last_exc
+
     async def _set_head_axis(self, axis: str, entity_id: str, value: float) -> None:
         """Map a dravix head command (degrees, 0 = look straight) to a calibrated servo value.
 
@@ -129,15 +151,15 @@ class HARobotDriver(RobotDriver):
             out = max(float(lo), min(float(hi), out))
         if step:
             out = round(out / float(step)) * float(step)
-        await self._ha.call_service(
-            "number", "set_value", {"entity_id": entity_id, "value": out}
-        )
+        await self._set_number_value(entity_id, out)
 
     async def move_head(self, yaw: float, pitch: float, speed: float = 1.0) -> None:
         yaw_e, pitch_e = self._entities.get("head_yaw"), self._entities.get("head_pitch")
         if not (yaw_e and pitch_e):
             raise NotImplementedError("no head servo entities configured")
         await self._set_head_axis("yaw", yaw_e, yaw)
+        # Small gap so the second write doesn't collide with the first on the serial servo bus.
+        await asyncio.sleep(0.08)
         await self._set_head_axis("pitch", pitch_e, pitch)
 
     async def get_number(self, role: str) -> float | None:
@@ -161,7 +183,7 @@ class HARobotDriver(RobotDriver):
             value = max(float(lo), min(float(hi), float(value)))
         if step:
             value = round(value / float(step)) * float(step)
-        await self._ha.call_service("number", "set_value", {"entity_id": ent, "value": value})
+        await self._set_number_value(ent, value)
 
     async def say(self, text: str, voice: str | None = None) -> None:
         engine = self._entities.get("tts_engine", "")
