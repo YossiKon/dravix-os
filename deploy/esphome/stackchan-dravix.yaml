@@ -258,6 +258,7 @@ switch:
   - { platform: template, name: "Speaking LEDs",     id: sw_speak_led, optimistic: true, restore_mode: RESTORE_DEFAULT_ON }
   - { platform: template, name: "Random blink",      id: sw_blink,     optimistic: true, restore_mode: RESTORE_DEFAULT_ON }
   - { platform: template, name: "Idle head drift",   id: sw_drift,     optimistic: true, restore_mode: RESTORE_DEFAULT_ON }
+  - { platform: template, name: "Tap face to talk",  id: sw_tap_talk,  optimistic: true, restore_mode: RESTORE_DEFAULT_ON }
 
 lvgl:
   displays:
@@ -540,6 +541,18 @@ touchscreen:
             - globals.set: { id: g_sleep, value: "false" }
             - globals.set: { id: g_saver, value: "false" }
             - script.execute: render_face
+      # TAP (not a swipe) on the FACE → talk to it, like "ok nabu" (toggle: sw_tap_talk).
+      - if:
+          condition:
+            and:
+              - switch.is_on: sw_tap_talk
+              - lvgl.page.is_showing: page_face
+              - lambda: |-
+                  int dx = id(sw_x1) - id(sw_x0), dy = id(sw_y1) - id(sw_y0);
+                  int adx = dx < 0 ? -dx : dx, ady = dy < 0 ? -dy : dy;
+                  return !id(sw_sleep) && adx < 40 && ady < 40;
+          then:
+            - voice_assistant.start
       # swipe DOWN → status
       - if:
           condition:
