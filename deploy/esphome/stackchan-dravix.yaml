@@ -1,20 +1,17 @@
 # ════════════════════════════════════════════════════════════════════════════════
 #  dravix-os · StackChan ESPHome firmware (M5Stack CoreS3)
 #  Sits ON TOP of the M5Stack BSP (servos, mic, speaker, LEDs, touch come from it).
-#  Features:
-#    • Animated kaomoji FACE (home) — blink, drift, talk/listen, sleep "zzz"
-#    • WAKE WORD "Okay, Nabu" (on-device) → VOICE assistant (HA Assist pipeline)
-#    • VOICE assistant — white screen while listening/talking
-#    • SLEEP + SCREENSAVER — dim then black, wake on touch or "ok nabu"
-#    • SWIPE navigation:
-#        swipe DOWN  → status (time · battery · date · WiFi · IP · uptime)
-#        swipe UP    → back to the face (home)
-#        swipe LEFT / RIGHT → cycle Mushroom-style HA entity cards
-#    • Screen BRIGHTNESS control
+#  States:  awake = WHITE bg + dark face  ·  listening = "•_•" + YELLOW LEDs
+#           screensaver = dim, face+blink, NO drift  ·  sleep = black, frozen
+#  Wake word "Okay, Nabu" (on-device) · brightness control.
+#  SWIPE:  down → status · up → face · left/right → cycle the 3 cards.
+#  The 3 CARDS are DYNAMIC — you pick which HA entities appear on each one from the
+#  dravix-os dashboard (Screens page); dravix pushes title+body into the text slots
+#  below (text.dravix_card1_title / _body … card3). No need to edit entity_ids here.
 #  Head servos + calibration + petting are handled by dravix-os (the add-on).
-#  Validate-first. Swipe is done manually via the touchscreen (no built-in gesture in
-#  ESPHome LVGL); if on_update/on_release misbehave on your build, tell me the log.
-#  If `time:` clashes with the BSP, delete that block.
+#  VALIDATE first. If `time:` clashes with the BSP, delete that block. Swipe is manual
+#  (no built-in gesture) — if it misbehaves send me the log. LED save/restore uses
+#  light id `stackchan_light_bar`; if that id is wrong, Validate will say so — tell me.
 # ════════════════════════════════════════════════════════════════════════════════
 
 esphome:
@@ -63,11 +60,17 @@ font:
     size: 96
     glyphs: "-_^Tu><oOz •"
   - file: "gfonts://Roboto"
+    id: title_font
+    size: 30
+  - file: "gfonts://Roboto"
     id: text_font
-    size: 28
+    size: 24
   - file: "gfonts://Roboto"
     id: small_font
-    size: 20
+    size: 19
+  - file: "gfonts://Roboto"
+    id: big_font
+    size: 52
 
 globals:
   # face state
@@ -79,7 +82,7 @@ globals:
   - { id: g_saver,  type: bool, restore_value: false, initial_value: "false" }
   - { id: g_busy,   type: bool, restore_value: false, initial_value: "false" }
   - { id: g_anim,   type: int,  restore_value: false, initial_value: "0" }
-  # swipe tracking + which "home screen" (0 = face, 1 = card1, 2 = card2)
+  # swipe tracking + which "home screen" (0 = face, 1..3 = cards)
   - { id: sw_x0,    type: int,  restore_value: false, initial_value: "0" }
   - { id: sw_y0,    type: int,  restore_value: false, initial_value: "0" }
   - { id: sw_x1,    type: int,  restore_value: false, initial_value: "0" }
@@ -108,13 +111,6 @@ sensor:
   - platform: homeassistant
     id: ha_batt
     entity_id: sensor.dravix_battery_level
-  # ── CARD 1 (climate) values — change these entity_ids to your sensors ─────────
-  - platform: homeassistant
-    id: ha_temp
-    entity_id: sensor.living_room_temperature
-  - platform: homeassistant
-    id: ha_hum
-    entity_id: sensor.living_room_humidity
 
 text_sensor:
   - platform: wifi_info
@@ -122,14 +118,51 @@ text_sensor:
       id: ip_txt
     ssid:
       id: ssid_txt
-  # ── CARD 2 (home) entities — pick ANY HA entities you want to show here ───────
-  # Each imports the entity's STATE as text (on/off/open/…). Rename freely.
-  - platform: homeassistant
-    id: ha_e1
-    entity_id: light.living_room
-  - platform: homeassistant
-    id: ha_e2
-    entity_id: binary_sensor.front_door
+
+# ── Dynamic card slots — dravix-os writes these (you choose the entities in the UI) ──
+text:
+  - platform: template
+    name: "Card1 title"
+    id: t_c1_title
+    optimistic: true
+    mode: text
+    max_length: 30
+    initial_value: "CARD 1"
+  - platform: template
+    name: "Card1 body"
+    id: t_c1_body
+    optimistic: true
+    mode: text
+    max_length: 160
+    initial_value: ""
+  - platform: template
+    name: "Card2 title"
+    id: t_c2_title
+    optimistic: true
+    mode: text
+    max_length: 30
+    initial_value: "CARD 2"
+  - platform: template
+    name: "Card2 body"
+    id: t_c2_body
+    optimistic: true
+    mode: text
+    max_length: 160
+    initial_value: ""
+  - platform: template
+    name: "Card3 title"
+    id: t_c3_title
+    optimistic: true
+    mode: text
+    max_length: 30
+    initial_value: "CARD 3"
+  - platform: template
+    name: "Card3 body"
+    id: t_c3_body
+    optimistic: true
+    mode: text
+    max_length: 160
+    initial_value: ""
 
 number:
   - platform: template
@@ -168,6 +201,19 @@ number:
 lvgl:
   displays:
     - m5cores3_lcd
+  # A tasteful default style for every "card" container.
+  style_definitions:
+    - id: card_box
+      radius: 18
+      bg_color: 0x121821
+      bg_opa: COVER
+      border_color: 0x2b3644
+      border_width: 2
+      pad_all: 16
+    - id: accent_txt
+      text_color: 0x33E6C8
+    - id: muted_txt
+      text_color: 0x8b96a4
   on_idle:
     # Screensaver: dim + stop the random drift, but keep the face + blinking.
     - timeout: !lambda 'return (uint32_t) id(n_screensaver).state * 60000;'
@@ -205,31 +251,62 @@ lvgl:
             align: CENTER
     # ── Page 1: STATUS (swipe down) ──────────────────────────────────────────────
     - id: page_status
-      bg_color: 0x000000
+      bg_color: 0x05080b
       bg_opa: COVER
       widgets:
-        - label: { id: lbl_time, text: "--:--", text_font: text_font,  text_color: 0x33E6C8, align: CENTER, y: -88 }
-        - label: { id: lbl_batt, text: "Batt --", text_font: small_font, text_color: 0x5dffa0, align: CENTER, y: -50 }
-        - label: { id: lbl_date, text: "",        text_font: small_font, text_color: 0x8892A0, align: CENTER, y: -16 }
-        - label: { id: lbl_wifi, text: "WiFi",    text_font: small_font, text_color: 0x8892A0, align: CENTER, y:  16 }
-        - label: { id: lbl_ip,   text: "IP",      text_font: small_font, text_color: 0x8892A0, align: CENTER, y:  48 }
-        - label: { id: lbl_up,   text: "Up",      text_font: small_font, text_color: 0x8892A0, align: CENTER, y:  80 }
-    # ── Page 2: CARD 1 — climate (swipe left/right) ──────────────────────────────
+        - obj:
+            styles: card_box
+            align: CENTER
+            width: 300
+            height: 222
+            scrollbar_mode: "OFF"
+            widgets:
+              - label: { id: lbl_time, text: "--:--", text_font: big_font,   text_color: 0xFFFFFF, align: TOP_MID,  y: 4 }
+              - label: { id: lbl_date, text: "",       text_font: small_font, styles: muted_txt,   align: TOP_MID,  y: 58 }
+              - label: { id: lbl_batt, text: "Batt --", text_font: text_font, text_color: 0x5dffa0, align: TOP_LEFT, x: 8, y: 96 }
+              - label: { id: lbl_wifi, text: "WiFi",   text_font: small_font, styles: muted_txt,   align: TOP_LEFT, x: 8, y: 130 }
+              - label: { id: lbl_ip,   text: "IP",     text_font: small_font, styles: muted_txt,   align: TOP_LEFT, x: 8, y: 158 }
+              - label: { id: lbl_up,   text: "Up",     text_font: small_font, styles: muted_txt,   align: TOP_LEFT, x: 8, y: 186 }
+    # ── Pages 2-4: the 3 dynamic cards (swipe left/right) ────────────────────────
     - id: page_card1
-      bg_color: 0x000000
+      bg_color: 0x05080b
       bg_opa: COVER
       widgets:
-        - label: { id: lbl_c1_title, text: "CLIMATE", text_font: small_font, text_color: 0x33E6C8, align: CENTER, y: -70 }
-        - label: { id: lbl_temp, text: "Temp --", text_font: text_font, text_color: 0xFFFFFF, align: CENTER, y: -15 }
-        - label: { id: lbl_hum,  text: "Hum --",  text_font: text_font, text_color: 0xFFFFFF, align: CENTER, y:  35 }
-    # ── Page 3: CARD 2 — home entities (swipe left/right) ────────────────────────
+        - obj:
+            styles: card_box
+            align: CENTER
+            width: 300
+            height: 222
+            scrollbar_mode: "OFF"
+            widgets:
+              - label: { id: lbl_c1_title, text: "CARD 1", text_font: title_font, styles: accent_txt, align: TOP_MID, y: 2 }
+              - label: { id: lbl_c1_body, text: "", text_font: text_font, text_color: 0xFFFFFF, align: TOP_LEFT, x: 4, y: 52 }
     - id: page_card2
-      bg_color: 0x000000
+      bg_color: 0x05080b
       bg_opa: COVER
       widgets:
-        - label: { id: lbl_c2_title, text: "HOME",    text_font: small_font, text_color: 0x33E6C8, align: CENTER, y: -70 }
-        - label: { id: lbl_e1, text: "Light  --",     text_font: text_font, text_color: 0xFFFFFF, align: CENTER, y: -15 }
-        - label: { id: lbl_e2, text: "Door  --",      text_font: text_font, text_color: 0xFFFFFF, align: CENTER, y:  35 }
+        - obj:
+            styles: card_box
+            align: CENTER
+            width: 300
+            height: 222
+            scrollbar_mode: "OFF"
+            widgets:
+              - label: { id: lbl_c2_title, text: "CARD 2", text_font: title_font, styles: accent_txt, align: TOP_MID, y: 2 }
+              - label: { id: lbl_c2_body, text: "", text_font: text_font, text_color: 0xFFFFFF, align: TOP_LEFT, x: 4, y: 52 }
+    - id: page_card3
+      bg_color: 0x05080b
+      bg_opa: COVER
+      widgets:
+        - obj:
+            styles: card_box
+            align: CENTER
+            width: 300
+            height: 222
+            scrollbar_mode: "OFF"
+            widgets:
+              - label: { id: lbl_c3_title, text: "CARD 3", text_font: title_font, styles: accent_txt, align: TOP_MID, y: 2 }
+              - label: { id: lbl_c3_body, text: "", text_font: text_font, text_color: 0xFFFFFF, align: TOP_LEFT, x: 4, y: 52 }
 
 script:
   # Redraw the animated face.
@@ -252,18 +329,13 @@ script:
             if (id(g_blink))  return std::string("-_-");
             const char* faces[] = {"o_o", "^_^", "T_T", ">_<", "u_u", "o_O"};
             return std::string(faces[id(g_expr) % 6]);
-  # Show the current "home screen" card (0 = face, 1 = card1, 2 = card2).
+  # Show the current "home screen" (0 = face, 1..3 = cards).
   - id: show_card
     then:
-      - if:
-          condition: { lambda: 'return id(g_card) == 1;' }
-          then: [ { lvgl.page.show: page_card1 } ]
-      - if:
-          condition: { lambda: 'return id(g_card) == 2;' }
-          then: [ { lvgl.page.show: page_card2 } ]
-      - if:
-          condition: { lambda: 'return id(g_card) <= 0 || id(g_card) > 2;' }
-          then: [ { lvgl.page.show: page_face } ]
+      - if: { condition: { lambda: 'return id(g_card) == 1;' }, then: [ { lvgl.page.show: page_card1 } ] }
+      - if: { condition: { lambda: 'return id(g_card) == 2;' }, then: [ { lvgl.page.show: page_card2 } ] }
+      - if: { condition: { lambda: 'return id(g_card) == 3;' }, then: [ { lvgl.page.show: page_card3 } ] }
+      - if: { condition: { lambda: 'return id(g_card) <= 0 || id(g_card) > 3;' }, then: [ { lvgl.page.show: page_face } ] }
 
 select:
   - platform: template
@@ -324,7 +396,7 @@ interval:
                 id: face_label
                 x: !lambda 'return (int)(random_float() * 24 - 12);'
                 y: !lambda 'return (int)(random_float() * 18 - 9);'
-  # Refresh the status + card labels.
+  # Refresh the status labels + the dynamic card labels (from the text slots dravix writes).
   - interval: 5s
     then:
       - lvgl.label.update:
@@ -361,31 +433,17 @@ interval:
             if (!id(ha_batt).has_state()) return std::string("Batt --");
             char b[16]; snprintf(b, sizeof(b), "Batt %.0f%%", id(ha_batt).state);
             return std::string(b);
-      - lvgl.label.update:
-          id: lbl_temp
-          text: !lambda |-
-            if (!id(ha_temp).has_state()) return std::string("Temp --");
-            char b[24]; snprintf(b, sizeof(b), "Temp %.1f C", id(ha_temp).state);
-            return std::string(b);
-      - lvgl.label.update:
-          id: lbl_hum
-          text: !lambda |-
-            if (!id(ha_hum).has_state()) return std::string("Hum --");
-            char b[24]; snprintf(b, sizeof(b), "Hum %.0f %%", id(ha_hum).state);
-            return std::string(b);
-      - lvgl.label.update:
-          id: lbl_e1
-          text: !lambda 'return "Light  " + (id(ha_e1).has_state() ? id(ha_e1).state : std::string("--"));'
-      - lvgl.label.update:
-          id: lbl_e2
-          text: !lambda 'return "Door  " + (id(ha_e2).has_state() ? id(ha_e2).state : std::string("--"));'
+      - lvgl.label.update: { id: lbl_c1_title, text: !lambda 'return id(t_c1_title).state;' }
+      - lvgl.label.update: { id: lbl_c1_body,  text: !lambda 'return id(t_c1_body).state;' }
+      - lvgl.label.update: { id: lbl_c2_title, text: !lambda 'return id(t_c2_title).state;' }
+      - lvgl.label.update: { id: lbl_c2_body,  text: !lambda 'return id(t_c2_body).state;' }
+      - lvgl.label.update: { id: lbl_c3_title, text: !lambda 'return id(t_c3_title).state;' }
+      - lvgl.label.update: { id: lbl_c3_body,  text: !lambda 'return id(t_c3_body).state;' }
 
 # ── Manual SWIPE detection (ESPHome LVGL has no built-in gesture) ────────────────
 touchscreen:
   - id: !extend touch
     on_touch:
-      # Remember whether we were asleep at the moment of touch (so a wake isn't a swipe),
-      # and reset the swipe deltas so a plain tap doesn't replay a stale swipe.
       - globals.set: { id: sw_sleep, value: !lambda 'return id(g_sleep);' }
       - lambda: 'id(sw_x0) = 0; id(sw_y0) = 0; id(sw_x1) = 0; id(sw_y1) = 0;'
       # Any touch exits the screensaver (restore full brightness).
@@ -395,7 +453,6 @@ touchscreen:
             - light.turn_on: { id: lcd_backlight, brightness: !lambda 'return id(n_brightness).state / 100.0;' }
             - globals.set: { id: g_saver, value: "false" }
     on_update:
-      # Track the gesture: start = original press point, end = current point.
       - lambda: |-
           for (auto t : touches) {
             id(sw_x0) = t.x_org; id(sw_y0) = t.y_org;
@@ -428,7 +485,7 @@ touchscreen:
           then:
             - globals.set: { id: g_card, value: "0" }
             - lvgl.page.show: page_face
-      # swipe LEFT → next card
+      # swipe LEFT → next card (face → c1 → c2 → c3 → face)
       - if:
           condition:
             lambda: |-
@@ -436,7 +493,7 @@ touchscreen:
               int adx = dx < 0 ? -dx : dx, ady = dy < 0 ? -dy : dy;
               return !id(sw_sleep) && adx >= ady && dx < -40;
           then:
-            - globals.set: { id: g_card, value: !lambda 'return (id(g_card) + 1) % 3;' }
+            - globals.set: { id: g_card, value: !lambda 'return (id(g_card) + 1) % 4;' }
             - script.execute: show_card
       # swipe RIGHT → previous card
       - if:
@@ -446,7 +503,7 @@ touchscreen:
               int adx = dx < 0 ? -dx : dx, ady = dy < 0 ? -dy : dy;
               return !id(sw_sleep) && adx >= ady && dx > 40;
           then:
-            - globals.set: { id: g_card, value: !lambda 'return (id(g_card) + 2) % 3;' }
+            - globals.set: { id: g_card, value: !lambda 'return (id(g_card) + 3) % 4;' }
             - script.execute: show_card
 
 # ── Wake word "Okay, Nabu" (on-device) ──────────────────────────────────────────
@@ -469,7 +526,7 @@ voice_assistant:
     - globals.set: { id: g_sleep, value: "false" }
     - globals.set: { id: g_saver, value: "false" }
     - globals.set: { id: g_listen, value: "true" }
-    - lvgl.page.show: page_face      # come back to the face to talk
+    - lvgl.page.show: page_face
     - globals.set: { id: g_card, value: "0" }
     # remember the current LEDs, then go YELLOW while concentrating
     - lambda: |-
@@ -493,8 +550,7 @@ voice_assistant:
   on_end:
     - globals.set: { id: g_listen, value: "false" }
     - globals.set: { id: g_talk, value: "false" }
-    - script.execute: render_face   # face returns to the previous expression on its own
-    # restore the LEDs to exactly what they were before (or off if they were off)
+    - script.execute: render_face
     - if:
         condition: { lambda: 'return id(led_on);' }
         then:
@@ -506,4 +562,4 @@ voice_assistant:
               blue: !lambda 'return id(led_b);'
         else:
           - light.turn_off: stackchan_light_bar
-    - micro_wake_word.start        # resume listening for "Okay, Nabu"
+    - micro_wake_word.start
