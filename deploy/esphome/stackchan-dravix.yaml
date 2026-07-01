@@ -78,6 +78,7 @@ globals:
   - { id: g_blink,  type: bool, restore_value: false, initial_value: "false" }
   - { id: g_listen, type: bool, restore_value: false, initial_value: "false" }
   - { id: g_talk,   type: bool, restore_value: false, initial_value: "false" }
+  - { id: g_voice,  type: bool, restore_value: false, initial_value: "false" }  # voice pipeline active
   - { id: g_sleep,  type: bool, restore_value: false, initial_value: "false" }
   - { id: g_saver,  type: bool, restore_value: false, initial_value: "false" }
   - { id: g_busy,   type: bool, restore_value: false, initial_value: "false" }
@@ -541,7 +542,8 @@ touchscreen:
             - globals.set: { id: g_sleep, value: "false" }
             - globals.set: { id: g_saver, value: "false" }
             - script.execute: render_face
-      # TAP (not a swipe) on the FACE → talk to it, like "ok nabu" (toggle: sw_tap_talk).
+      # TAP (not a swipe) on the FACE → toggle the voice assistant: 1st tap starts it
+      # (like "ok nabu"), a 2nd tap stops it. Enable/disable via the sw_tap_talk switch.
       - if:
           condition:
             and:
@@ -552,7 +554,12 @@ touchscreen:
                   int adx = dx < 0 ? -dx : dx, ady = dy < 0 ? -dy : dy;
                   return !id(sw_sleep) && adx < 40 && ady < 40;
           then:
-            - voice_assistant.start
+            - if:
+                condition: { lambda: 'return id(g_voice);' }
+                then:
+                  - voice_assistant.stop     # already talking → a 2nd tap cancels
+                else:
+                  - voice_assistant.start    # start listening
       # swipe DOWN → status
       - if:
           condition:
@@ -612,6 +619,7 @@ voice_assistant:
     - globals.set: { id: g_sleep, value: "false" }
     - globals.set: { id: g_saver, value: "false" }
     - globals.set: { id: g_listen, value: "true" }
+    - globals.set: { id: g_voice, value: "true" }
     - lvgl.page.show: page_face
     - globals.set: { id: g_card, value: "0" }
     # remember the current LEDs, then go YELLOW while concentrating
@@ -645,6 +653,7 @@ voice_assistant:
   on_end:
     - globals.set: { id: g_listen, value: "false" }
     - globals.set: { id: g_talk, value: "false" }
+    - globals.set: { id: g_voice, value: "false" }
     - script.execute: render_face
     - if:
         condition: { lambda: 'return id(led_on);' }
