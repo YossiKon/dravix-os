@@ -670,32 +670,16 @@ voice_assistant:
     - script.execute: leds_yellow
     - script.execute: render_face
   on_tts_start:
-    # AI is about to speak → "talking" mouth face, still YELLOW.
+    # AI is speaking → "talking" mouth face, stays YELLOW the whole turn (listen + speak).
     - globals.set: { id: g_listen, value: "false" }
     - globals.set: { id: g_talk, value: "true" }
     - script.execute: leds_yellow
     - script.execute: render_face
-  on_tts_stream_start:
-    # The speaker actually STARTED playing → keep talking + yellow.
+  on_end:
+    # AI finished the turn → back to the previous face + the previous LEDs (or off).
     - globals.set: { id: g_listen, value: "false" }
-    - globals.set: { id: g_talk, value: "true" }
-    - script.execute: leds_yellow
-    - script.execute: render_face
-  on_tts_stream_end:
-    # The AI truly FINISHED talking → back to the previous face + previous LEDs (or off).
     - globals.set: { id: g_talk, value: "false" }
     - globals.set: { id: g_voice, value: "false" }
     - script.execute: render_face
     - script.execute: restore_leds
     - micro_wake_word.start
-  on_end:
-    # Pipeline finished. If the AI is STILL speaking audio, do nothing — on_tts_stream_end
-    # will restore. Only clean up here for the no-speech path (error / empty reply).
-    - globals.set: { id: g_listen, value: "false" }
-    - if:
-        condition: { lambda: 'return !id(g_talk);' }
-        then:
-          - globals.set: { id: g_voice, value: "false" }
-          - script.execute: render_face
-          - script.execute: restore_leds
-          - micro_wake_word.start
