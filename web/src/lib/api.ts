@@ -38,6 +38,7 @@ import type {
   ScheduleResponse,
   ScreenState,
   ScreenUpdate,
+  SetHomeResponse,
   StatusResponse,
   TimerResponse,
   VoiceResponse,
@@ -127,6 +128,10 @@ export const api = {
       method: "POST",
       json: { yaw, pitch, speed },
     }),
+
+  // Capture the servos' CURRENT angles as the calibrated centre ("set home").
+  setHeadHome: () =>
+    request<SetHomeResponse>("/api/robot/head/home", { method: "POST" }),
 
   leds: (color: string, brightness: number) =>
     request<{ ok: boolean }>("/api/robot/leds", {

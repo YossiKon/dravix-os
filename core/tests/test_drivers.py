@@ -40,8 +40,8 @@ class _FakeHA:
     async def get_state(self, entity_id):
         # yaw centered (±164); pitch asymmetric (0..90, center 45), step 5
         if "servo_x" in entity_id:
-            return {"attributes": {"min": -164, "max": 164, "step": 5}}
-        return {"attributes": {"min": 0, "max": 90, "step": 5}}
+            return {"state": "12", "attributes": {"min": -164, "max": 164, "step": 5}}
+        return {"state": "45", "attributes": {"min": 0, "max": 90, "step": 5}}
 
     async def camera_snapshot(self, entity_id):
         return b"JPEG-bytes"
@@ -119,6 +119,15 @@ async def test_ha_driver_head_raises_after_exhausting_retries():
 
     with pytest.raises(RuntimeError):
         await d.move_head(0, 0)
+
+
+async def test_ha_driver_read_head_raw():
+    """'Set current as home' reads the servos' live raw angles."""
+    ha = _FakeHA()
+    d = HARobotDriver(
+        ha=ha, entities={"head_yaw": "number.servo_x", "head_pitch": "number.servo_y"}
+    )
+    assert await d.read_head_raw() == {"yaw": 12.0, "pitch": 45.0}
 
 
 async def test_ha_driver_say_via_assist_satellite():

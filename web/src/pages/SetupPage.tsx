@@ -425,6 +425,7 @@ function CalibrationSection({
   onAxis: (axis: "yaw" | "pitch", patch: Partial<CalibrationAxis>) => void;
 }) {
   const toasts = useToasts();
+  const [homing, setHoming] = useState(false);
 
   // Live nudge: head values are DEGREES centered on 0 (backend applies center/invert).
   const test = useCallback(
@@ -437,6 +438,33 @@ function CalibrationSection({
     },
     [toasts],
   );
+
+  // "Set current as home": capture the servos' present angles as the neutral
+  // centre, then reflect the returned centres in the draft's Center fields.
+  const setHome = useCallback(async () => {
+    setHoming(true);
+    try {
+      const res = await api.setHeadHome();
+      if (res.error) {
+        toasts.error(res.error);
+        return;
+      }
+      const yawCenter = res.calibration.yaw?.center;
+      const pitchCenter = res.calibration.pitch?.center;
+      if (yawCenter !== undefined) onAxis("yaw", { center: yawCenter });
+      if (pitchCenter !== undefined) onAxis("pitch", { center: pitchCenter });
+      const parts: string[] = [];
+      if (res.captured.yaw !== null) parts.push(`yaw ${res.captured.yaw}°`);
+      if (res.captured.pitch !== null) parts.push(`pitch ${res.captured.pitch}°`);
+      toasts.ok(
+        `Home set${parts.length ? ` · ${parts.join(" · ")}` : ""} — save to keep`,
+      );
+    } catch (err) {
+      toasts.error(errMsg(err));
+    } finally {
+      setHoming(false);
+    }
+  }, [onAxis, toasts]);
 
   return (
     <Panel eyebrow="servos" title="Head Calibration">
@@ -466,6 +494,18 @@ function CalibrationSection({
           <Button variant="primary" onClick={() => test(0, 0)}>
             ⌖ Center
           </Button>
+        </div>
+
+        {/* Set current head position as the neutral home/centre */}
+        <div className="rounded-xl border border-phosphor/30 bg-phosphor/[0.04] px-3.5 py-3">
+          <Button variant="primary" loading={homing} onClick={setHome}>
+            ⌖ Set current as HOME
+          </Button>
+          <p className="mt-2 font-mono text-[10px] leading-relaxed text-mute">
+            Position the head so it looks straight ahead (move it in Home
+            Assistant or with the test buttons), then click — dravix saves the
+            current angle as the neutral centre.
+          </p>
         </div>
 
         {yawSet && (

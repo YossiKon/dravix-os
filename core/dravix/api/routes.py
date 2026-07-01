@@ -268,6 +268,27 @@ async def put_robot_config(body: RobotConfigBody, request: Request):
     return payload
 
 
+@router.post("/api/robot/head/home")
+async def set_head_home(request: Request):
+    """StackChan-style 'set current position as home': capture the servos' current angles as
+    the calibrated centre (= look straight ahead). Position the head straight, then call this."""
+    drv = request.app.state.robot.driver
+    reader = getattr(drv, "read_head_raw", None)
+    if reader is None:
+        raise HTTPException(status_code=409, detail="active backend can't read head position")
+    try:
+        raw = await reader()
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    calib = request.app.state.store.head_calibration()
+    for axis in ("yaw", "pitch"):
+        if raw.get(axis) is not None:
+            calib.setdefault(axis, {})["center"] = raw[axis]
+    request.app.state.store.set_head_calibration(calib)
+    error = await _apply_robot_config(request)
+    return {"calibration": request.app.state.store.head_calibration(), "captured": raw, "error": error}
+
+
 @router.get("/api/robot/screen")
 async def get_screen(request: Request):
     """Read the on-device screensaver/sleep timeouts (the ESPHome number entities)."""

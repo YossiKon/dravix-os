@@ -177,6 +177,20 @@ class HARobotDriver(RobotDriver):
         await self._set_head_axis("yaw", yaw_e, yaw)
         await self._set_head_axis("pitch", pitch_e, pitch)
 
+    async def read_head_raw(self) -> dict[str, float | None]:
+        """Read the servos' current raw angle values (for 'set current position as home')."""
+        out: dict[str, float | None] = {}
+        for axis, role in (("yaw", "head_yaw"), ("pitch", "head_pitch")):
+            ent = self._entities.get(role)
+            val: float | None = None
+            if ent:
+                try:
+                    val = float((await self._ha.get_state(ent)).get("state"))
+                except Exception:  # noqa: BLE001
+                    val = None
+            out[axis] = val
+        return out
+
     async def get_number(self, role: str) -> float | None:
         """Read a mapped number entity's current value (e.g. screensaver_number)."""
         ent = self._entities.get(role)

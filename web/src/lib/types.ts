@@ -330,6 +330,19 @@ export interface RobotConfigUpdate {
   calibration?: Calibration;
 }
 
+/**
+ * Response of POST /api/robot/head/home — captures the servos' current angles
+ * as the calibrated centre ("set current as home").
+ */
+export interface SetHomeResponse {
+  /** Updated calibration (with the captured angles applied as centre). */
+  calibration: Calibration;
+  /** The raw angles read back from each axis at capture time. */
+  captured: { yaw: number | null; pitch: number | null };
+  /** null on success, message on failure. */
+  error: string | null;
+}
+
 export interface HaEntitiesResponse {
   entities: HaEntity[];
   ha_configured: boolean;
