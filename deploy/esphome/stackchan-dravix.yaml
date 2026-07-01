@@ -5,6 +5,10 @@
 #           screensaver = dim, face+blink, NO drift  ·  sleep = black, frozen
 #  Wake word "Okay, Nabu" (on-device) · brightness control.
 #  SWIPE:  down → status · up → face · left/right → cycle the 3 cards.
+#  TAP face = talk (toggle) · LONG-PRESS face (1.2s) = instant sleep.
+#  Publishes live state to HA:  sensor State (awake/listening/speaking/screensaver/sleep),
+#  Last heard (STT), Last reply (TTS) — the dravix dashboard shows these in real time.
+#  Buttons: Identify (find the robot — cyan flashes) · Reboot.
 #  The 3 CARDS are DYNAMIC — you pick which HA entities appear on each one from the
 #  dravix-os dashboard (Screens page); dravix pushes title+body into the text slots
 #  below (text.dravix_card1_title / _body … card3). No need to edit entity_ids here.
@@ -92,6 +96,7 @@ globals:
   - { id: sw_y1,    type: int,  restore_value: false, initial_value: "0" }
   - { id: sw_sleep, type: bool, restore_value: false, initial_value: "false" }
   - { id: g_card,   type: int,  restore_value: false, initial_value: "0" }
+  - { id: g_tms,    type: long, restore_value: false, initial_value: "0" }   # touch-press start (ms)
   # saved LED state, so a voice interaction can restore it afterwards
   - { id: led_on,  type: bool,  restore_value: false, initial_value: "false" }
   - { id: led_bri, type: float, restore_value: false, initial_value: "0" }
@@ -138,17 +143,11 @@ sensor:
       - if:
           condition: { lambda: 'return x < 5 && !id(g_sleep) && id(sw_dark).state;' }   # dark → sleep
           then:
-            - globals.set: { id: g_sleep, value: "true" }
-            - globals.set: { id: g_saver, value: "false" }
-            - script.execute: render_face
-            - delay: 3s
-            - light.turn_off: lcd_backlight
+            - select.set: { id: robot_mode, option: sleep }
       - if:
           condition: { lambda: 'return x > 30 && id(g_sleep) && id(sw_dark).state;' }    # light → wake
           then:
-            - light.turn_on: { id: lcd_backlight, brightness: !lambda 'return id(n_brightness).state / 100.0;' }
-            - globals.set: { id: g_sleep, value: "false" }
-            - script.execute: render_face
+            - select.set: { id: robot_mode, option: awake }
   # Touch — petting the head wakes it + a happy face, instantly on the device (dravix also
   # lifts the head). si12t exposes "Touch Sensor 1". Add sensors 2/3 the same way if you like.
   - platform: homeassistant
@@ -171,6 +170,17 @@ text_sensor:
       id: ip_txt
     ssid:
       id: ssid_txt
+  # Live robot state for HA + the dravix dashboard: awake/listening/speaking/screensaver/sleep.
+  - platform: template
+    name: "State"
+    id: st_state
+  # What the robot heard (STT) and what it answered (TTS) — shown live on the dashboard.
+  - platform: template
+    name: "Last heard"
+    id: st_heard
+  - platform: template
+    name: "Last reply"
+    id: st_reply
 
 # ── Dynamic card slots — dravix-os writes these (you choose the entities in the UI) ──
 text:
@@ -267,6 +277,17 @@ number:
           id: servo_y_angle
           value: !lambda 'return (x - 158.0f) * 90.0f / 102.0f;'   # 158..260 → 0..90
 
+# ── Utility buttons ───────────────────────────────────────────────────────────
+button:
+  - platform: template
+    name: "Identify"
+    id: btn_identify
+    on_press:
+      - script.execute: identify
+  - platform: restart
+    name: "Reboot"
+    id: btn_reboot
+
 # ── Behaviour toggles — flip these from Home Assistant / the dravix dashboard ────
 switch:
   - { platform: template, name: "Greet on approach", id: sw_greet,     optimistic: true, restore_mode: RESTORE_DEFAULT_ON }
@@ -297,15 +318,19 @@ lvgl:
     # Screensaver: dim + stop the random drift, but keep the face + blinking.
     - timeout: !lambda 'return (uint32_t) id(n_screensaver).state * 60000;'
       then:
-        - globals.set: { id: g_saver, value: "true" }
-        - light.turn_on: { id: lcd_backlight, brightness: 25% }
-    # Sleep: freeze (no movement) and go black.
+        - if:
+            condition: { lambda: 'return !id(g_voice) && !id(g_sleep);' }   # never mid-conversation
+            then:
+              - globals.set: { id: g_saver, value: "true" }
+              - script.execute: render_face
+              - light.turn_on: { id: lcd_backlight, brightness: 25% }
+    # Sleep: freeze (no movement) and go black — via the mode select so HA stays in sync.
     - timeout: !lambda 'return (uint32_t) id(n_sleep).state * 60000;'
       then:
-        - globals.set: { id: g_sleep, value: "true" }
-        - script.execute: render_face
-        - delay: 3s
-        - light.turn_off: lcd_backlight
+        - if:
+            condition: { lambda: 'return !id(g_voice);' }
+            then:
+              - select.set: { id: robot_mode, option: sleep }
   pages:
     # ── Page 0: the face (HOME) ──────────────────────────────────────────────────
     - id: page_face
@@ -328,6 +353,15 @@ lvgl:
             text_color: 0x33E6C8
             text_font: face_font
             align: CENTER
+        # Low-battery warning — appears (red) on the face only when battery < 20%.
+        - label:
+            id: lbl_face_batt
+            text: ""
+            text_font: small_font
+            text_color: 0xE05555
+            align: TOP_RIGHT
+            x: -6
+            y: 4
     # ── Page 1: STATUS (swipe down) ──────────────────────────────────────────────
     - id: page_status
       bg_color: 0x05080b
@@ -408,6 +442,14 @@ script:
             if (id(g_blink))  return std::string("-_-");
             const char* faces[] = {"o_o", "^_^", "T_T", ">_<", "u_u", "o_O"};
             return std::string(faces[id(g_expr) % 6]);
+      # Publish the live state to HA (only when it actually changed).
+      - lambda: |-
+          std::string s = id(g_sleep)  ? "sleep"
+                        : id(g_listen) ? "listening"
+                        : id(g_talk)   ? "speaking"
+                        : id(g_saver)  ? "screensaver"
+                        : id(g_busy)   ? "busy" : "awake";
+          if (!id(st_state).has_state() || id(st_state).state != s) id(st_state).publish_state(s);
   # Show the current "home screen" (0 = face, 1..3 = cards).
   - id: show_card
     then:
@@ -418,15 +460,37 @@ script:
   # Greet: someone approached → wake up + a happy face on the home screen.
   - id: greet
     then:
-      - light.turn_on:
-          id: lcd_backlight
-          brightness: !lambda 'return id(n_brightness).state / 100.0;'
-      - globals.set: { id: g_sleep, value: "false" }
-      - globals.set: { id: g_saver, value: "false" }
+      - lambda: 'lv_disp_trig_activity(NULL);'       # reset the screensaver/sleep idle timer
       - globals.set: { id: g_card,  value: "0" }
       - globals.set: { id: g_expr,  value: "1" }     # happy
       - lvgl.page.show: page_face
+      - select.set: { id: robot_mode, option: awake }
+  # Identify: flash the LEDs cyan 3× + a happy face, so you can find/confirm the robot.
+  - id: identify
+    then:
+      - if:
+          condition: { lambda: 'return !id(g_voice);' }
+          then:
+            - lambda: |-
+                auto v = id(stackchan_light_bar).current_values;
+                id(led_on)  = v.is_on();
+                id(led_bri) = v.get_brightness();
+                id(led_r)   = v.get_red();
+                id(led_g)   = v.get_green();
+                id(led_b)   = v.get_blue();
+      - globals.set: { id: g_expr, value: "1" }
       - script.execute: render_face
+      - repeat:
+          count: 3
+          then:
+            - light.turn_on: { id: stackchan_light_bar, brightness: 100%, red: 0%, green: 90%, blue: 100% }
+            - delay: 250ms
+            - light.turn_off: stackchan_light_bar
+            - delay: 200ms
+      - if:
+          condition: { lambda: 'return !id(g_voice);' }
+          then:
+            - script.execute: restore_leds
   # AI-mode LEDs: go YELLOW (gated by the "Speaking LEDs" switch).
   - id: leds_yellow
     then:
@@ -467,6 +531,8 @@ select:
             else if (x == "doubt") return 5;
             return 0;
       - script.execute: render_face
+  # The ONE place awake/busy/sleep is applied — every wake/sleep path goes through this
+  # select, so Home Assistant + the dravix dashboard always show the true mode.
   - platform: template
     name: "Mode"
     id: robot_mode
@@ -476,7 +542,18 @@ select:
     set_action:
       - globals.set: { id: g_sleep, value: !lambda 'return x == std::string("sleep");' }
       - globals.set: { id: g_busy,  value: !lambda 'return x == std::string("busy");' }
+      - globals.set: { id: g_saver, value: "false" }
       - script.execute: render_face
+      - if:
+          condition: { lambda: 'return x == std::string("sleep");' }
+          then:
+            # show the zzz face for a moment, then screen fully off
+            - delay: 2s
+            - if:
+                condition: { lambda: 'return id(g_sleep);' }   # unless it was woken meanwhile
+                then: [ { light.turn_off: lcd_backlight } ]
+          else:
+            - light.turn_on: { id: lcd_backlight, brightness: !lambda 'return id(n_brightness).state / 100.0;' }
 
 interval:
   # Random blink (never while sleeping / listening / talking).
@@ -541,10 +618,22 @@ interval:
             return std::string(b);
       - lvgl.label.update:
           id: lbl_batt
+          text_color: !lambda |-
+            return (id(ha_batt).has_state() && id(ha_batt).state < 20)
+                ? lv_color_hex(0xFF5555) : lv_color_hex(0x5dffa0);
           text: !lambda |-
             if (!id(ha_batt).has_state()) return std::string("Batt --");
             char b[16]; snprintf(b, sizeof(b), "Batt %.0f%%", id(ha_batt).state);
             return std::string(b);
+      # Low-battery badge on the face page (empty = hidden).
+      - lvgl.label.update:
+          id: lbl_face_batt
+          text: !lambda |-
+            if (id(ha_batt).has_state() && id(ha_batt).state < 20) {
+              char b[12]; snprintf(b, sizeof(b), "%.0f%%", id(ha_batt).state);
+              return std::string(b);
+            }
+            return std::string("");
       - lvgl.label.update: { id: lbl_c1_title, text: !lambda 'return id(t_c1_title).state;' }
       - lvgl.label.update: { id: lbl_c1_body,  text: !lambda 'return id(t_c1_body).state;' }
       - lvgl.label.update: { id: lbl_c2_title, text: !lambda 'return id(t_c2_title).state;' }
@@ -557,7 +646,7 @@ touchscreen:
   - id: !extend touch
     on_touch:
       - globals.set: { id: sw_sleep, value: !lambda 'return id(g_sleep);' }
-      - lambda: 'id(sw_x0) = 0; id(sw_y0) = 0; id(sw_x1) = 0; id(sw_y1) = 0;'
+      - lambda: 'id(sw_x0) = 0; id(sw_y0) = 0; id(sw_x1) = 0; id(sw_y1) = 0; id(g_tms) = (long) millis();'
       # Any touch exits the screensaver (restore full brightness).
       - if:
           condition: { lambda: 'return id(g_saver) && !id(g_sleep);' }
@@ -575,12 +664,21 @@ touchscreen:
       - if:
           condition: { lambda: 'return id(sw_sleep);' }
           then:
-            - light.turn_on: { id: lcd_backlight, brightness: !lambda 'return id(n_brightness).state / 100.0;' }
-            - globals.set: { id: g_sleep, value: "false" }
-            - globals.set: { id: g_saver, value: "false" }
-            - script.execute: render_face
-      # TAP (not a swipe) on the FACE → toggle the voice assistant: 1st tap starts it
-      # (like "ok nabu"), a 2nd tap stops it. Enable/disable via the sw_tap_talk switch.
+            - select.set: { id: robot_mode, option: awake }
+      # LONG-PRESS (1.2s+) on the FACE → instant sleep.
+      - if:
+          condition:
+            and:
+              - lvgl.page.is_showing: page_face
+              - lambda: |-
+                  int dx = id(sw_x1) - id(sw_x0), dy = id(sw_y1) - id(sw_y0);
+                  int adx = dx < 0 ? -dx : dx, ady = dy < 0 ? -dy : dy;
+                  long dur = (long) millis() - id(g_tms);
+                  return !id(sw_sleep) && !id(g_voice) && adx < 40 && ady < 40 && dur > 1200;
+          then:
+            - select.set: { id: robot_mode, option: sleep }
+      # Quick TAP (not a swipe / long-press) on the FACE → toggle the voice assistant:
+      # 1st tap starts it (like "ok nabu"), a 2nd tap stops it. Toggle via sw_tap_talk.
       - if:
           condition:
             and:
@@ -589,7 +687,8 @@ touchscreen:
               - lambda: |-
                   int dx = id(sw_x1) - id(sw_x0), dy = id(sw_y1) - id(sw_y0);
                   int adx = dx < 0 ? -dx : dx, ady = dy < 0 ? -dy : dy;
-                  return !id(sw_sleep) && adx < 40 && ady < 40;
+                  long dur = (long) millis() - id(g_tms);
+                  return !id(sw_sleep) && adx < 40 && ady < 40 && dur < 700;
           then:
             - if:
                 condition: { lambda: 'return id(g_voice);' }
@@ -650,33 +749,47 @@ voice_assistant:
   microphone: i2s_mic
   media_player: va_media_player
   on_listening:
-    - light.turn_on:
-        id: lcd_backlight
-        brightness: !lambda 'return id(n_brightness).state / 100.0;'
-    - globals.set: { id: g_sleep, value: "false" }
-    - globals.set: { id: g_saver, value: "false" }
+    - lambda: 'lv_disp_trig_activity(NULL);'   # a conversation is activity — no screensaver
+    # remember the current LEDs — but only at the START of a conversation, so a
+    # follow-up question doesn't overwrite the saved colour with our own yellow.
+    - if:
+        condition: { lambda: 'return !id(g_voice);' }
+        then:
+          - lambda: |-
+              auto v = id(stackchan_light_bar).current_values;
+              id(led_on)  = v.is_on();
+              id(led_bri) = v.get_brightness();
+              id(led_r)   = v.get_red();
+              id(led_g)   = v.get_green();
+              id(led_b)   = v.get_blue();
+    - select.set: { id: robot_mode, option: awake }
     - globals.set: { id: g_listen, value: "true" }
     - globals.set: { id: g_voice, value: "true" }
     - lvgl.page.show: page_face
     - globals.set: { id: g_card, value: "0" }
-    # remember the current LEDs, then go YELLOW (stays yellow the WHOLE AI turn)
-    - lambda: |-
-        auto v = id(stackchan_light_bar).current_values;
-        id(led_on)  = v.is_on();
-        id(led_bri) = v.get_brightness();
-        id(led_r)   = v.get_red();
-        id(led_g)   = v.get_green();
-        id(led_b)   = v.get_blue();
     - script.execute: leds_yellow
     - script.execute: render_face
+  on_stt_end:
+    # Publish what the robot HEARD (shows live on the dashboard + HA).
+    - text_sensor.template.publish: { id: st_heard, state: !lambda 'return x;' }
   on_tts_start:
     # AI is speaking → "talking" mouth face, stays YELLOW the whole turn (listen + speak).
+    - lambda: 'lv_disp_trig_activity(NULL);'
+    - text_sensor.template.publish: { id: st_reply, state: !lambda 'return x;' }
     - globals.set: { id: g_listen, value: "false" }
     - globals.set: { id: g_talk, value: "true" }
     - script.execute: leds_yellow
     - script.execute: render_face
   on_end:
     # AI finished the turn → back to the previous face + the previous LEDs (or off).
+    - globals.set: { id: g_listen, value: "false" }
+    - globals.set: { id: g_talk, value: "false" }
+    - globals.set: { id: g_voice, value: "false" }
+    - script.execute: render_face
+    - script.execute: restore_leds
+    - micro_wake_word.start
+  on_error:
+    # Pipeline error → NEVER stay stuck on yellow/listening; clean up and re-arm the wake word.
     - globals.set: { id: g_listen, value: "false" }
     - globals.set: { id: g_talk, value: "false" }
     - globals.set: { id: g_voice, value: "false" }
