@@ -22,7 +22,6 @@ const LED_PRESETS: { name: string; hex: string }[] = [
 const YAW_RANGE = 90; // ± left/right
 const PITCH_RANGE = 45; // ± down/up
 const HEAD_SPEED = 0.5; // fixed, sensible default
-const SEND_INTERVAL_MS = 100; // ~10 sends/sec while dragging
 
 export function ManualControl({
   status,
@@ -197,7 +196,6 @@ function HeadControl({
   // where +y on screen is DOWN. Yaw/pitch derive from this.
   const [pos, setPos] = useState({ x: 0, y: 0 });
   const padRef = useRef<HTMLDivElement>(null);
-  const lastSend = useRef(0);
 
   const yaw = Math.round(pos.x * YAW_RANGE);
   // Screen up (negative y) → look up (positive pitch).
@@ -220,33 +218,32 @@ function HeadControl({
     return { x, y };
   }, []);
 
+  // Dragging only moves the knob locally — we send ONE command on release, so the serial
+  // servo bus isn't flooded with ~10 requests/sec (which was overwhelming it).
   function handlePointerDown(e: React.PointerEvent<HTMLDivElement>) {
     e.preventDefault();
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
     const pt = pointFromEvent(e.clientX, e.clientY);
-    if (!pt) return;
-    setPos(pt);
-    lastSend.current = Date.now();
-    send(Math.round(pt.x * YAW_RANGE), Math.round(-pt.y * PITCH_RANGE));
+    if (pt) setPos(pt);
   }
 
   function handlePointerMove(e: React.PointerEvent<HTMLDivElement>) {
     if (!(e.currentTarget as HTMLElement).hasPointerCapture(e.pointerId)) return;
     const pt = pointFromEvent(e.clientX, e.clientY);
-    if (!pt) return;
-    setPos(pt);
-    const now = Date.now();
-    if (now - lastSend.current >= SEND_INTERVAL_MS) {
-      lastSend.current = now;
-      send(Math.round(pt.x * YAW_RANGE), Math.round(-pt.y * PITCH_RANGE));
-    }
+    if (pt) setPos(pt); // visual only — no request while dragging
   }
 
   function handlePointerUp(e: React.PointerEvent<HTMLDivElement>) {
     if (!(e.currentTarget as HTMLElement).hasPointerCapture(e.pointerId)) return;
     (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
-    // Final send at the resting position (knob stays put).
-    send(yaw, pitch);
+    // Send exactly once, at the resting position.
+    const pt = pointFromEvent(e.clientX, e.clientY);
+    if (pt) {
+      setPos(pt);
+      send(Math.round(pt.x * YAW_RANGE), Math.round(-pt.y * PITCH_RANGE));
+    } else {
+      send(yaw, pitch);
+    }
   }
 
   function center() {
@@ -305,7 +302,7 @@ function HeadControl({
               pitch <span className="text-phosphor">{pitch}°</span>
             </div>
             <p className="mt-1 font-mono text-[10px] text-mute">
-              drag the knob to aim the head
+              drag the knob, release to aim the head
             </p>
           </div>
 
