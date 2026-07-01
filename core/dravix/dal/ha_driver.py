@@ -43,6 +43,10 @@ class HARobotDriver(RobotDriver):
         # Cache each number entity's (min, max, step) so we clamp + snap values to the
         # device's real range — ESPHome rejects out-of-range / off-step values with a 500.
         self._num_meta: dict[str, tuple[float | None, float | None, float | None]] = {}
+        # The head servos share ONE serial bus (SCS9009). Two writes too close together get
+        # dropped (HA 500) — so every number write is serialized behind a lock and spaced out.
+        self._bus_lock = asyncio.Lock()
+        self._last_bus_write = 0.0
 
     def set_entities(self, entities: dict[str, str]) -> None:
         """Live-swap the HA entity map (from the dashboard). Clears cached number ranges."""
@@ -104,26 +108,38 @@ class HARobotDriver(RobotDriver):
             self._num_meta[entity_id] = meta
         return meta
 
-    # The head servos are on a serial servo bus (SCS9009); the bus occasionally NAKs a write
-    # and HA returns a 500. A quick retry almost always succeeds, so writes are resilient.
+    # The head servos are on a serial servo bus (SCS9009). A write that arrives too soon after
+    # another is dropped and HA returns a 500 — so writes are serialized behind a lock, spaced
+    # by at least _MIN_BUS_SPACING, and retried. Spacing BEFORE the first attempt (not just
+    # retrying after a failure) is what fixes two-writes-per-move_head reliably.
     _SET_ATTEMPTS = 3
-    _SET_RETRY_DELAY = 0.25
+    _SET_RETRY_DELAY = 0.3
+    _MIN_BUS_SPACING = 0.3
 
     async def _set_number_value(self, entity_id: str, value: float) -> None:
-        last_exc: Exception | None = None
-        for attempt in range(self._SET_ATTEMPTS):
-            try:
-                await self._ha.call_service(
-                    "number", "set_value", {"entity_id": entity_id, "value": value}
-                )
-                return
-            except Exception as exc:  # noqa: BLE001 — transient serial-bus NAK, retry
-                last_exc = exc
-                if attempt < self._SET_ATTEMPTS - 1:
-                    log.debug("number.set_value %s=%s failed (%s), retrying", entity_id, value, exc)
-                    await asyncio.sleep(self._SET_RETRY_DELAY)
-        assert last_exc is not None
-        raise last_exc
+        async with self._bus_lock:
+            loop = asyncio.get_running_loop()
+            gap = self._MIN_BUS_SPACING - (loop.time() - self._last_bus_write)
+            if gap > 0:
+                await asyncio.sleep(gap)
+            last_exc: Exception | None = None
+            for attempt in range(self._SET_ATTEMPTS):
+                try:
+                    await self._ha.call_service(
+                        "number", "set_value", {"entity_id": entity_id, "value": value}
+                    )
+                    self._last_bus_write = loop.time()
+                    return
+                except Exception as exc:  # noqa: BLE001 — transient serial-bus NAK, retry
+                    last_exc = exc
+                    if attempt < self._SET_ATTEMPTS - 1:
+                        log.debug(
+                            "number.set_value %s=%s failed (%s), retrying", entity_id, value, exc
+                        )
+                        await asyncio.sleep(self._SET_RETRY_DELAY)
+            self._last_bus_write = loop.time()
+            assert last_exc is not None
+            raise last_exc
 
     async def _set_head_axis(self, axis: str, entity_id: str, value: float) -> None:
         """Map a dravix head command (degrees, 0 = look straight) to a calibrated servo value.
@@ -157,9 +173,8 @@ class HARobotDriver(RobotDriver):
         yaw_e, pitch_e = self._entities.get("head_yaw"), self._entities.get("head_pitch")
         if not (yaw_e and pitch_e):
             raise NotImplementedError("no head servo entities configured")
+        # Both writes go through _set_number_value, which serializes + spaces them on the bus.
         await self._set_head_axis("yaw", yaw_e, yaw)
-        # Small gap so the second write doesn't collide with the first on the serial servo bus.
-        await asyncio.sleep(0.08)
         await self._set_head_axis("pitch", pitch_e, pitch)
 
     async def get_number(self, role: str) -> float | None:

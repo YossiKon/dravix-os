@@ -102,6 +102,7 @@ async def test_ha_driver_head_retries_transient_500():
         ha=ha, entities={"head_yaw": "number.servo_x", "head_pitch": "number.servo_y"}
     )
     d._SET_RETRY_DELAY = 0  # don't sleep in the test
+    d._MIN_BUS_SPACING = 0
     await d.move_head(0, 0)  # yaw retries twice then lands; pitch lands first try
     writes = [c for c in ha.calls if c[1] == "set_value"]
     assert len(writes) == 2  # both axes ultimately written
@@ -113,6 +114,7 @@ async def test_ha_driver_head_raises_after_exhausting_retries():
         ha=ha, entities={"head_yaw": "number.servo_x", "head_pitch": "number.servo_y"}
     )
     d._SET_RETRY_DELAY = 0
+    d._MIN_BUS_SPACING = 0
     import pytest
 
     with pytest.raises(RuntimeError):
