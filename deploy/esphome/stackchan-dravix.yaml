@@ -83,6 +83,7 @@ globals:
   - { id: g_busy,   type: bool, restore_value: false, initial_value: "false" }
   - { id: g_anim,   type: int,  restore_value: false, initial_value: "0" }
   - { id: g_near,   type: bool, restore_value: false, initial_value: "false" }  # someone is close
+  - { id: g_pet,    type: bool, restore_value: false, initial_value: "false" }  # being touched
   # swipe tracking + which "home screen" (0 = face, 1..3 = cards)
   - { id: sw_x0,    type: int,  restore_value: false, initial_value: "0" }
   - { id: sw_y0,    type: int,  restore_value: false, initial_value: "0" }
@@ -147,6 +148,21 @@ sensor:
             - light.turn_on: { id: lcd_backlight, brightness: !lambda 'return id(n_brightness).state / 100.0;' }
             - globals.set: { id: g_sleep, value: "false" }
             - script.execute: render_face
+  # Touch — petting the head wakes it + a happy face, instantly on the device (dravix also
+  # lifts the head). si12t exposes "Touch Sensor 1". Add sensors 2/3 the same way if you like.
+  - platform: homeassistant
+    id: ha_touch1
+    entity_id: sensor.dravix_touch_sensor_1
+    on_value:
+      - if:
+          condition: { lambda: 'return x > 30 && !id(g_pet);' }       # touched
+          then:
+            - globals.set: { id: g_pet, value: "true" }
+            - script.execute: greet
+      - if:
+          condition: { lambda: 'return x < 10;' }                     # released
+          then:
+            - globals.set: { id: g_pet, value: "false" }
 
 text_sensor:
   - platform: wifi_info
@@ -595,6 +611,12 @@ voice_assistant:
     - globals.set: { id: g_listen, value: "false" }
     - globals.set: { id: g_talk, value: "true" }
     - script.execute: render_face
+    - light.turn_on:              # CYAN while speaking (yellow was "listening")
+        id: stackchan_light_bar
+        brightness: 80%
+        red: 0%
+        green: 90%
+        blue: 100%
   on_end:
     - globals.set: { id: g_listen, value: "false" }
     - globals.set: { id: g_talk, value: "false" }
