@@ -29,18 +29,19 @@ packages:
     files: [examples/kit/stackchan-bsp.factory.yaml]
     refresh: 1d
 
-# Own the screen with LVGL. invert_colors:false so black draws black (flip to
-# true if the colours come out inverted on your panel).
 display:
   - id: !extend m5cores3_lcd
     show_test_card: false
-    invert_colors: false
+    invert_colors: false          # flip to true if colours come out inverted
 
 font:
   - file: "gfonts://Roboto Mono"
     id: face_font
     size: 96
     glyphs: "-_^Tu><oOz "
+  - file: "gfonts://Roboto"
+    id: text_font
+    size: 28
 
 globals:
   - { id: g_expr,   type: int,  restore_value: false, initial_value: "0" }
@@ -51,7 +52,17 @@ globals:
   - { id: g_busy,   type: bool, restore_value: false, initial_value: "false" }
   - { id: g_anim,   type: int,  restore_value: false, initial_value: "0" }
 
-# Screensaver + sleep timers (you pick the minutes from HA).
+# If Validate says homeassistant time already exists (from the BSP), delete this
+# `time:` block and tell me — we'll reference the existing one.
+time:
+  - platform: homeassistant
+    id: dravix_time
+
+sensor:
+  - platform: wifi_signal
+    id: wifi_db
+    update_interval: 30s
+
 number:
   - platform: template
     name: "Screensaver after (min)"
@@ -75,6 +86,7 @@ number:
 lvgl:
   displays:
     - m5cores3_lcd
+  page_wrap: true
   on_idle:
     - timeout: !lambda 'return (uint32_t) id(n_screensaver).state * 60000;'
       then:
@@ -90,7 +102,7 @@ lvgl:
       bg_color: 0x000000
       bg_opa: COVER
       widgets:
-        - obj:            # full-screen background (black; white when the AI is active)
+        - obj:
             id: bg_rect
             x: 0
             y: 0
@@ -100,21 +112,37 @@ lvgl:
             border_width: 0
             bg_color: 0x000000
             bg_opa: COVER
-        - label:          # the face
+        - label:
             id: face_label
             text: "o_o"
             text_color: 0x33E6C8
             text_font: face_font
             align: CENTER
+    - id: page_status
+      bg_color: 0x000000
+      bg_opa: COVER
+      widgets:
+        - label:
+            id: lbl_time
+            text: "--:--"
+            text_font: text_font
+            text_color: 0x33E6C8
+            align: CENTER
+            y: -30
+        - label:
+            id: lbl_wifi
+            text: "WiFi"
+            text_font: text_font
+            text_color: 0x33E6C8
+            align: CENTER
+            y: 30
 
 script:
   - id: render_face
     then:
-      # Background: white while listening/talking, else black.
       - lvgl.widget.update:
           id: bg_rect
           bg_color: !lambda 'return (id(g_listen) || id(g_talk)) ? lv_color_hex(0xFFFFFF) : lv_color_hex(0x000000);'
-      # Face: black on the white "active" background, else phosphor.
       - lvgl.label.update:
           id: face_label
           text_color: !lambda 'return (id(g_listen) || id(g_talk)) ? lv_color_hex(0x000000) : lv_color_hex(0x33E6C8);'
@@ -188,16 +216,34 @@ interval:
                 id: face_label
                 x: !lambda 'return (int)(random_float() * 24 - 12);'
                 y: !lambda 'return (int)(random_float() * 18 - 9);'
+  - interval: 5s
+    then:
+      - lvgl.label.update:
+          id: lbl_time
+          text: !lambda |-
+            auto t = id(dravix_time).now();
+            if (!t.is_valid()) return std::string("--:--");
+            char b[8]; snprintf(b, sizeof(b), "%02d:%02d", t.hour, t.minute);
+            return std::string(b);
+      - lvgl.label.update:
+          id: lbl_wifi
+          text: !lambda |-
+            char b[16]; snprintf(b, sizeof(b), "WiFi %ddB", (int) id(wifi_db).state);
+            return std::string(b);
 
-# Touch → wake up.
 touchscreen:
   - id: !extend touch
     on_touch:
-      - light.turn_on: { id: lcd_backlight, brightness: 100% }
-      - globals.set: { id: g_sleep, value: "false" }
-      - script.execute: render_face
+      - if:
+          condition:
+            lambda: 'return id(g_sleep);'
+          then:
+            - light.turn_on: { id: lcd_backlight, brightness: 100% }
+            - globals.set: { id: g_sleep, value: "false" }
+            - script.execute: render_face
+          else:
+            - lvgl.page.next     # tap toggles face <-> status
 
-# Voice: HA Assist (wake word via HA openWakeWord). Also wakes the screen.
 voice_assistant:
   microphone: i2s_mic
   media_player: va_media_player
