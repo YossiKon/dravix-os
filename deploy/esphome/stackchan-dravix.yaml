@@ -427,6 +427,27 @@ script:
       - globals.set: { id: g_expr,  value: "1" }     # happy
       - lvgl.page.show: page_face
       - script.execute: render_face
+  # AI-mode LEDs: go YELLOW (gated by the "Speaking LEDs" switch).
+  - id: leds_yellow
+    then:
+      - if:
+          condition: { lambda: 'return id(sw_speak_led).state;' }
+          then:
+            - light.turn_on: { id: stackchan_light_bar, brightness: 80%, red: 100%, green: 80%, blue: 0% }
+  # Put the LEDs back to whatever they were before the voice interaction (or off).
+  - id: restore_leds
+    then:
+      - if:
+          condition: { lambda: 'return id(led_on);' }
+          then:
+            - light.turn_on:
+                id: stackchan_light_bar
+                brightness: !lambda 'return id(led_bri);'
+                red: !lambda 'return id(led_r);'
+                green: !lambda 'return id(led_g);'
+                blue: !lambda 'return id(led_b);'
+          else:
+            - light.turn_off: stackchan_light_bar
 
 select:
   - platform: template
@@ -638,7 +659,7 @@ voice_assistant:
     - globals.set: { id: g_voice, value: "true" }
     - lvgl.page.show: page_face
     - globals.set: { id: g_card, value: "0" }
-    # remember the current LEDs, then go YELLOW while concentrating
+    # remember the current LEDs, then go YELLOW (stays yellow the WHOLE AI turn)
     - lambda: |-
         auto v = id(stackchan_light_bar).current_values;
         id(led_on)  = v.is_on();
@@ -646,41 +667,35 @@ voice_assistant:
         id(led_r)   = v.get_red();
         id(led_g)   = v.get_green();
         id(led_b)   = v.get_blue();
-    - light.turn_on:
-        id: stackchan_light_bar
-        brightness: 80%
-        red: 100%
-        green: 80%
-        blue: 0%
+    - script.execute: leds_yellow
     - script.execute: render_face
   on_tts_start:
+    # AI is about to speak → "talking" mouth face, still YELLOW.
     - globals.set: { id: g_listen, value: "false" }
     - globals.set: { id: g_talk, value: "true" }
+    - script.execute: leds_yellow
     - script.execute: render_face
-    # Stay in AI mode — keep the LED YELLOW the whole time the AI is speaking (not cyan).
-    - if:
-        condition: { lambda: 'return id(sw_speak_led).state;' }
-        then:
-          - light.turn_on:
-              id: stackchan_light_bar
-              brightness: 80%
-              red: 100%
-              green: 80%
-              blue: 0%
-  on_end:
+  on_tts_stream_start:
+    # The speaker actually STARTED playing → keep talking + yellow.
     - globals.set: { id: g_listen, value: "false" }
+    - globals.set: { id: g_talk, value: "true" }
+    - script.execute: leds_yellow
+    - script.execute: render_face
+  on_tts_stream_end:
+    # The AI truly FINISHED talking → back to the previous face + previous LEDs (or off).
     - globals.set: { id: g_talk, value: "false" }
     - globals.set: { id: g_voice, value: "false" }
     - script.execute: render_face
-    - if:
-        condition: { lambda: 'return id(led_on);' }
-        then:
-          - light.turn_on:
-              id: stackchan_light_bar
-              brightness: !lambda 'return id(led_bri);'
-              red: !lambda 'return id(led_r);'
-              green: !lambda 'return id(led_g);'
-              blue: !lambda 'return id(led_b);'
-        else:
-          - light.turn_off: stackchan_light_bar
+    - script.execute: restore_leds
     - micro_wake_word.start
+  on_end:
+    # Pipeline finished. If the AI is STILL speaking audio, do nothing — on_tts_stream_end
+    # will restore. Only clean up here for the no-speech path (error / empty reply).
+    - globals.set: { id: g_listen, value: "false" }
+    - if:
+        condition: { lambda: 'return !id(g_talk);' }
+        then:
+          - globals.set: { id: g_voice, value: "false" }
+          - script.execute: render_face
+          - script.execute: restore_leds
+          - micro_wake_word.start
