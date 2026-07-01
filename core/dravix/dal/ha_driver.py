@@ -209,6 +209,20 @@ class HARobotDriver(RobotDriver):
         except Exception:  # noqa: BLE001
             return None
 
+    async def get_text(self, role: str) -> str | None:
+        """Read a mapped entity's state as text (e.g. the live state / last-heard sensors)."""
+        ent = self._entities.get(role)
+        if not ent:
+            return None
+        try:
+            st = await self._ha.get_state(ent)
+            value = st.get("state")
+        except Exception:  # noqa: BLE001
+            return None
+        if value in (None, "unknown", "unavailable"):
+            return None
+        return str(value)
+
     async def set_number(self, role: str, value: float) -> None:
         """Set a mapped number entity (clamped/snapped to its range)."""
         ent = self._entities.get(role)
@@ -248,6 +262,9 @@ class HARobotDriver(RobotDriver):
         light = self._entities.get("led_light")
         if not light:
             raise NotImplementedError("no led_light entity configured")
+        if color in ("off", "none", "") or brightness <= 0:
+            await self._ha.call_service("light", "turn_off", {"entity_id": light})
+            return
         await self._ha.call_service(
             "light",
             "turn_on",

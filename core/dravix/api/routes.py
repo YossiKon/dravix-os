@@ -195,6 +195,10 @@ ROBOT_ENTITY_ROLES = [
     {"key": "screensaver_number", "label": "Screensaver-after (min)", "domains": ["number"]},
     {"key": "sleep_number", "label": "Sleep-after (min)", "domains": ["number"]},
     {"key": "mode_select", "label": "Mode (awake / busy / sleep)", "domains": ["select"]},
+    # Live-state sensors published by the dravix ESPHome firmware (all optional):
+    {"key": "state_sensor", "label": "Live state (State sensor)", "domains": ["sensor"]},
+    {"key": "heard_sensor", "label": "Last heard (STT sensor)", "domains": ["sensor"]},
+    {"key": "reply_sensor", "label": "Last reply (TTS sensor)", "domains": ["sensor"]},
 ]
 _ROLE_KEYS = {r["key"] for r in ROBOT_ENTITY_ROLES}
 
@@ -314,6 +318,23 @@ async def set_head_home(request: Request):
     request.app.state.store.set_head_calibration(calib)
     error = await _apply_robot_config(request)
     return {"calibration": request.app.state.store.head_calibration(), "captured": raw, "error": error}
+
+
+@router.get("/api/robot/live")
+async def robot_live(request: Request):
+    """The robot's live state as published by the firmware: state / last heard / last reply.
+
+    Everything is optional — roles that aren't mapped (or a backend without ``get_text``)
+    simply come back as None, so the dashboard can render whatever is available.
+    """
+    drv = request.app.state.robot.driver
+    reader = getattr(drv, "get_text", None)
+    if reader is None:
+        return {"supported": False, "state": None, "heard": None, "reply": None}
+    state, heard, reply = await asyncio.gather(
+        reader("state_sensor"), reader("heard_sensor"), reader("reply_sensor")
+    )
+    return {"supported": True, "state": state, "heard": heard, "reply": reply}
 
 
 @router.get("/api/robot/screen")

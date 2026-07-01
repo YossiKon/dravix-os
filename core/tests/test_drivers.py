@@ -169,6 +169,35 @@ async def test_ha_driver_screen_number_get_set():
     assert ha.calls[-1] == ("number", "set_value", {"entity_id": "number.servo_y", "value": 5.0})
 
 
+async def test_ha_driver_get_text_live_sensors():
+    """Live-state sensors (state/heard/reply) read as plain text; unmapped/unavailable → None."""
+    class _TextHA(_FakeHA):
+        async def get_state(self, entity_id):
+            if entity_id == "sensor.state":
+                return {"state": "listening", "attributes": {}}
+            return {"state": "unavailable", "attributes": {}}
+
+    d = HARobotDriver(
+        ha=_TextHA(),
+        entities={"state_sensor": "sensor.state", "heard_sensor": "sensor.heard"},
+    )
+    assert await d.get_text("state_sensor") == "listening"
+    assert await d.get_text("heard_sensor") is None   # unavailable → None
+    assert await d.get_text("reply_sensor") is None   # not mapped → None
+
+
+async def test_ha_driver_leds_off():
+    """color='off' (or zero brightness) turns the light off instead of turn_on."""
+    ha = _FakeHA()
+    d = HARobotDriver(ha=ha, entities={"led_light": "light.bar"})
+    await d.set_leds("off")
+    assert ha.calls[-1] == ("light", "turn_off", {"entity_id": "light.bar"})
+    await d.set_leds("red", 0)
+    assert ha.calls[-1] == ("light", "turn_off", {"entity_id": "light.bar"})
+    await d.set_leds("red", 0.5)
+    assert ha.calls[-1][1] == "turn_on"
+
+
 async def test_ha_driver_set_mode_via_select():
     """Sleep/wake maps to select.select_option on the mode_select entity."""
     ha = _FakeHA()
