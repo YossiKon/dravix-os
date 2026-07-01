@@ -120,7 +120,7 @@ sensor:
     entity_id: sensor.dravix_proximity_counts
     on_value:
       - if:
-          condition: { lambda: 'return x > 150 && !id(g_near);' }   # someone approached
+          condition: { lambda: 'return x > 150 && !id(g_near) && id(sw_greet).state;' }
           then:
             - globals.set: { id: g_near, value: "true" }
             - script.execute: greet
@@ -135,7 +135,7 @@ sensor:
     entity_id: sensor.dravix_ambient_light
     on_value:
       - if:
-          condition: { lambda: 'return x < 5 && !id(g_sleep);' }      # dark → go to sleep
+          condition: { lambda: 'return x < 5 && !id(g_sleep) && id(sw_dark).state;' }   # dark → sleep
           then:
             - globals.set: { id: g_sleep, value: "true" }
             - globals.set: { id: g_saver, value: "false" }
@@ -143,7 +143,7 @@ sensor:
             - delay: 3s
             - light.turn_off: lcd_backlight
       - if:
-          condition: { lambda: 'return x > 30 && id(g_sleep);' }      # light → wake up
+          condition: { lambda: 'return x > 30 && id(g_sleep) && id(sw_dark).state;' }    # light → wake
           then:
             - light.turn_on: { id: lcd_backlight, brightness: !lambda 'return id(n_brightness).state / 100.0;' }
             - globals.set: { id: g_sleep, value: "false" }
@@ -155,7 +155,7 @@ sensor:
     entity_id: sensor.dravix_touch_sensor_1
     on_value:
       - if:
-          condition: { lambda: 'return x > 30 && !id(g_pet);' }       # touched
+          condition: { lambda: 'return x > 30 && !id(g_pet) && id(sw_touch).state;' }    # touched
           then:
             - globals.set: { id: g_pet, value: "true" }
             - script.execute: greet
@@ -249,6 +249,15 @@ number:
       - light.turn_on:
           id: lcd_backlight
           brightness: !lambda 'return x / 100.0;'
+
+# ── Behaviour toggles — flip these from Home Assistant / the dravix dashboard ────
+switch:
+  - { platform: template, name: "Greet on approach", id: sw_greet,     optimistic: true, restore_mode: RESTORE_DEFAULT_ON }
+  - { platform: template, name: "Sleep when dark",   id: sw_dark,      optimistic: true, restore_mode: RESTORE_DEFAULT_ON }
+  - { platform: template, name: "Touch reaction",    id: sw_touch,     optimistic: true, restore_mode: RESTORE_DEFAULT_ON }
+  - { platform: template, name: "Speaking LEDs",     id: sw_speak_led, optimistic: true, restore_mode: RESTORE_DEFAULT_ON }
+  - { platform: template, name: "Random blink",      id: sw_blink,     optimistic: true, restore_mode: RESTORE_DEFAULT_ON }
+  - { platform: template, name: "Idle head drift",   id: sw_drift,     optimistic: true, restore_mode: RESTORE_DEFAULT_ON }
 
 lvgl:
   displays:
@@ -436,7 +445,7 @@ interval:
     then:
       - if:
           condition:
-            lambda: 'return !id(g_sleep) && !id(g_talk) && !id(g_listen) && random_float() < 0.22;'
+            lambda: 'return id(sw_blink).state && !id(g_sleep) && !id(g_talk) && !id(g_listen) && random_float() < 0.22;'
           then:
             - globals.set: { id: g_blink, value: "true" }
             - script.execute: render_face
@@ -454,7 +463,7 @@ interval:
   - interval: 7s
     then:
       - if:
-          condition: { lambda: 'return !id(g_sleep) && !id(g_saver) && !id(g_busy);' }
+          condition: { lambda: 'return id(sw_drift).state && !id(g_sleep) && !id(g_saver) && !id(g_busy);' }
           then:
             - lvgl.widget.update:
                 id: face_label
@@ -611,12 +620,15 @@ voice_assistant:
     - globals.set: { id: g_listen, value: "false" }
     - globals.set: { id: g_talk, value: "true" }
     - script.execute: render_face
-    - light.turn_on:              # CYAN while speaking (yellow was "listening")
-        id: stackchan_light_bar
-        brightness: 80%
-        red: 0%
-        green: 90%
-        blue: 100%
+    - if:
+        condition: { lambda: 'return id(sw_speak_led).state;' }
+        then:
+          - light.turn_on:            # CYAN while speaking (yellow was "listening")
+              id: stackchan_light_bar
+              brightness: 80%
+              red: 0%
+              green: 90%
+              blue: 100%
   on_end:
     - globals.set: { id: g_listen, value: "false" }
     - globals.set: { id: g_talk, value: "false" }
