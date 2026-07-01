@@ -82,6 +82,7 @@ globals:
   - { id: g_saver,  type: bool, restore_value: false, initial_value: "false" }
   - { id: g_busy,   type: bool, restore_value: false, initial_value: "false" }
   - { id: g_anim,   type: int,  restore_value: false, initial_value: "0" }
+  - { id: g_near,   type: bool, restore_value: false, initial_value: "false" }  # someone is close
   # swipe tracking + which "home screen" (0 = face, 1..3 = cards)
   - { id: sw_x0,    type: int,  restore_value: false, initial_value: "0" }
   - { id: sw_y0,    type: int,  restore_value: false, initial_value: "0" }
@@ -111,6 +112,21 @@ sensor:
   - platform: homeassistant
     id: ha_batt
     entity_id: sensor.dravix_battery_level
+  # Proximity — the robot notices you approach and perks up (greets). The BSP exposes the
+  # ltr_als_ps proximity as "Proximity counts". Tune the 150/80 thresholds to taste.
+  - platform: homeassistant
+    id: ha_prox
+    entity_id: sensor.dravix_proximity_counts
+    on_value:
+      - if:
+          condition: { lambda: 'return x > 150 && !id(g_near);' }   # someone approached
+          then:
+            - globals.set: { id: g_near, value: "true" }
+            - script.execute: greet
+      - if:
+          condition: { lambda: 'return x < 80;' }                    # they moved away
+          then:
+            - globals.set: { id: g_near, value: "false" }
 
 text_sensor:
   - platform: wifi_info
@@ -336,6 +352,18 @@ script:
       - if: { condition: { lambda: 'return id(g_card) == 2;' }, then: [ { lvgl.page.show: page_card2 } ] }
       - if: { condition: { lambda: 'return id(g_card) == 3;' }, then: [ { lvgl.page.show: page_card3 } ] }
       - if: { condition: { lambda: 'return id(g_card) <= 0 || id(g_card) > 3;' }, then: [ { lvgl.page.show: page_face } ] }
+  # Greet: someone approached → wake up + a happy face on the home screen.
+  - id: greet
+    then:
+      - light.turn_on:
+          id: lcd_backlight
+          brightness: !lambda 'return id(n_brightness).state / 100.0;'
+      - globals.set: { id: g_sleep, value: "false" }
+      - globals.set: { id: g_saver, value: "false" }
+      - globals.set: { id: g_card,  value: "0" }
+      - globals.set: { id: g_expr,  value: "1" }     # happy
+      - lvgl.page.show: page_face
+      - script.execute: render_face
 
 select:
   - platform: template
