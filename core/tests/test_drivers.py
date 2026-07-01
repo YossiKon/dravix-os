@@ -130,6 +130,20 @@ async def test_ha_driver_read_head_raw():
     assert await d.read_head_raw() == {"yaw": 12.0, "pitch": 45.0}
 
 
+async def test_ha_driver_head_clamps_to_real_range_over_wide_calibration():
+    """A too-wide calibration must never emit a value outside the servo's real range (→ 500)."""
+    ha = _FakeHA()  # servo_y real range is 0..90, step 5
+    d = HARobotDriver(
+        ha=ha,
+        entities={"head_yaw": "number.servo_x", "head_pitch": "number.servo_y"},
+        calibration={"pitch": {"center": 45, "min": -100, "max": 500}},  # absurdly wide
+    )
+    await d.move_head(0, 100)   # would be 145 → clamp to the real max 90
+    assert ha.calls[-1][2]["value"] == 90.0
+    await d.move_head(0, -100)  # would be -55 → clamp to the real min 0
+    assert ha.calls[-1][2]["value"] == 0.0
+
+
 async def test_ha_driver_say_via_assist_satellite():
     """An assist_satellite.* TTS entity speaks via announce (no media_player needed)."""
     ha = _FakeHA()

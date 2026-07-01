@@ -164,9 +164,20 @@ class HARobotDriver(RobotDriver):
         cmd = -float(value) if cal.get("invert") else float(value)
         out = center + cmd
         if have_range:
-            out = max(float(lo), min(float(hi), out))
+            out = max(float(lo), min(float(hi), out))  # user's calibration travel limit
+        # ALWAYS clamp to the servo's REAL hardware range too — a too-wide calibration must
+        # never emit an out-of-range value (HA rejects it with a 500). This is what made
+        # move_head fail while single writes (clamped to the real range) succeeded.
+        if lo_e is not None:
+            out = max(float(lo_e), out)
+        if hi_e is not None:
+            out = min(float(hi_e), out)
         if step:
             out = round(out / float(step)) * float(step)
+            if lo_e is not None:  # snapping can nudge past the edge — keep it inside
+                out = max(float(lo_e), out)
+            if hi_e is not None:
+                out = min(float(hi_e), out)
         await self._set_number_value(entity_id, out)
 
     async def move_head(self, yaw: float, pitch: float, speed: float = 1.0) -> None:
