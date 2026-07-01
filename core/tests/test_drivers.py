@@ -62,6 +62,48 @@ async def test_ha_driver_move_head_offsets_to_servo_center():
     assert ha.calls[-1][2]["value"] == 25.0   # pitch 45-20 = 25
 
 
+async def test_ha_driver_head_calibration_center_and_invert():
+    """Dashboard calibration: a custom center fixes a head that 'falls', invert flips direction."""
+    ha = _FakeHA()
+    d = HARobotDriver(
+        ha=ha,
+        entities={"head_yaw": "number.servo_x", "head_pitch": "number.servo_y"},
+        # pitch neutral is really 20 (not the 45 midpoint), and its direction is flipped.
+        calibration={"pitch": {"center": 20, "invert": True}},
+    )
+    await d.move_head(0, 0)  # look straight
+    assert ha.calls[-1][2]["value"] == 20.0   # pitch sits at the calibrated neutral, not 45
+    await d.move_head(0, 10)  # command "up" 10°
+    assert ha.calls[-1][2]["value"] == 10.0   # inverted: 20 - 10 = 10 (snapped to step 5)
+    await d.move_head(0, -100)  # over-drive down → clamps to the servo max (90)
+    assert ha.calls[-1][2]["value"] == 90.0
+
+
+async def test_ha_driver_say_via_assist_satellite():
+    """An assist_satellite.* TTS entity speaks via announce (no media_player needed)."""
+    ha = _FakeHA()
+    d = HARobotDriver(
+        ha=ha, entities={"tts_engine": "assist_satellite.dravix_assist_satellite"}
+    )
+    assert await d.capabilities() == {CAP_SAY}  # satellite alone enables speech
+    await d.say("hi there")
+    assert ha.calls[-1] == (
+        "assist_satellite", "announce",
+        {"entity_id": "assist_satellite.dravix_assist_satellite", "message": "hi there"},
+    )
+
+
+async def test_ha_driver_screen_number_get_set():
+    """Screensaver/sleep timers map to number entities dravix can read + write."""
+    ha = _FakeHA()
+    d = HARobotDriver(
+        ha=ha,
+        entities={"screensaver_number": "number.servo_y", "sleep_number": "number.servo_x"},
+    )
+    await d.set_number("screensaver_number", 7)  # range 0..90 step 5 → 5
+    assert ha.calls[-1] == ("number", "set_value", {"entity_id": "number.servo_y", "value": 5.0})
+
+
 async def test_ha_driver_stackchan_esphome_entities():
     """The full StackChan ESPHome entity set: face (select) + camera add CAP_FACE/CAP_PHOTO."""
     ha = _FakeHA()

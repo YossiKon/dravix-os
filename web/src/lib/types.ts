@@ -278,6 +278,75 @@ export interface RoutinesResponse {
   routines: Routine[];
 }
 
+/* ── Setup: robot config / entities / calibration ────────────────────────── */
+export type RobotDriver = "mock" | "ha" | "mcp";
+
+/** One configurable robot function (face, head yaw, speaker, …). */
+export interface RoleDef {
+  key: string;
+  label: string;
+  /** HA entity domains valid for this role (e.g. ["number"], ["select"]). */
+  domains: string[];
+}
+
+/** A Home Assistant entity as returned by GET /api/ha/entities. */
+export interface HaEntity {
+  entity_id: string;
+  name: string;
+  domain: string;
+}
+
+/** Per-axis servo calibration. Blank min/max fall back to the servo range. */
+export interface CalibrationAxis {
+  center?: number;
+  min?: number;
+  max?: number;
+  invert?: boolean;
+}
+
+export interface Calibration {
+  yaw?: CalibrationAxis;
+  pitch?: CalibrationAxis;
+}
+
+export interface RobotConfig {
+  driver: RobotDriver;
+  drivers: string[];
+  roles: RoleDef[];
+  /** role.key → selected entity_id ("" / missing = unset). */
+  entities: Record<string, string>;
+  calibration: Calibration;
+  capabilities: string[];
+  online: boolean;
+  last_error: string;
+  ha_configured: boolean;
+  /** Present on the PUT response: null on success, message on failure. */
+  error?: string | null;
+}
+
+export interface RobotConfigUpdate {
+  driver?: RobotDriver;
+  entities?: Record<string, string>;
+  calibration?: Calibration;
+}
+
+export interface HaEntitiesResponse {
+  entities: HaEntity[];
+  ha_configured: boolean;
+}
+
+/** OLED burn-in protection settings (GET /api/robot/screen). */
+export interface ScreenState {
+  supported: boolean;
+  screensaver_min: number | null;
+  sleep_min: number | null;
+}
+
+export interface ScreenUpdate {
+  screensaver_min?: number;
+  sleep_min?: number;
+}
+
 /* ── Inbox (queued / spoken messages) ────────────────────────────────────── */
 export interface InboxMessage {
   id: string;

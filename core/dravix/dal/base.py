@@ -131,6 +131,23 @@ class RobotController:
         self.state.touch()
         await self._bus.publish("robot.disconnected")
 
+    @property
+    def driver(self) -> RobotDriver:
+        return self._driver
+
+    async def reconnect_with(self, driver: RobotDriver) -> None:
+        """Swap in a freshly-built driver (e.g. after the dashboard changes the wiring) and
+        reconnect. Raises on connect failure — the caller records it in state.last_error."""
+        try:
+            await self._driver.close()
+        except Exception:  # noqa: BLE001 — old driver may already be dead
+            pass
+        self._driver = driver
+        self._caps = set()
+        self.state.online = False
+        self.state.last_error = ""
+        await self.connect()
+
     def supports(self, cap: str) -> bool:
         return cap in self._caps
 

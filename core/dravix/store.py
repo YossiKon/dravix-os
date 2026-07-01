@@ -30,6 +30,11 @@ _DEFAULTS: dict[str, Any] = {
     "voice": None,  # active TTS voice override applied to all speech (None = persona/default)
     "voices": [],  # user catalog of voice ids to pick from (depends on your TTS engine)
     "inbox": [],  # [{id, text}] — queued notifications for the robot to read out
+    # Robot wiring picked from the dashboard (overrides the add-on/env defaults):
+    "robot_driver": None,  # None = env default (mock|ha|mcp)
+    "robot_entities": {},  # {face_select, head_yaw, head_pitch, media_player, tts_engine,
+    #                         led_light, camera, screensaver_number, sleep_number, mode_select}
+    "head_calibration": {},  # {yaw:{center,min,max,invert}, pitch:{center,min,max,invert}}
 }
 
 
@@ -63,6 +68,7 @@ class Store:
         keys = (
             "ai_provider", "mode_overrides", "disabled_modes", "reactions", "schedule",
             "personas", "active_persona", "memories", "routines", "voice", "voices", "inbox",
+            "robot_driver", "robot_entities", "head_calibration",
         )
         for key in keys:
             if key in patch:
@@ -120,6 +126,29 @@ class Store:
 
     def set_idle_motion(self, enabled: bool) -> None:
         self._data["idle_motion"] = bool(enabled)
+        self.save()
+
+    # ── robot wiring (driver + HA entities + head calibration) ──────────────────
+    def robot_driver(self) -> str | None:
+        return self._data.get("robot_driver")
+
+    def set_robot_driver(self, driver: str | None) -> None:
+        self._data["robot_driver"] = driver or None
+        self.save()
+
+    def robot_entities(self) -> dict[str, str]:
+        return dict(self._data.get("robot_entities", {}))
+
+    def set_robot_entities(self, entities: dict[str, str]) -> None:
+        # Keep only non-empty ids so an empty picker falls back to the env default.
+        self._data["robot_entities"] = {k: v for k, v in (entities or {}).items() if v}
+        self.save()
+
+    def head_calibration(self) -> dict[str, Any]:
+        return dict(self._data.get("head_calibration", {}))
+
+    def set_head_calibration(self, calibration: dict[str, Any]) -> None:
+        self._data["head_calibration"] = calibration or {}
         self.save()
 
     def voices(self) -> list[str]:

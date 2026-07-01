@@ -13,7 +13,7 @@ import datetime
 from .. import __version__
 from ..aifun import PROMPTS as AI_FUN_PROMPTS
 from ..aifun import kinds as ai_fun_kinds
-from ..app import build_ai
+from ..app import build_ai, build_robot_driver
 from ..dal.base import CAP_FACE, CAP_PHOTO, CAP_SAY, CapabilityError
 from ..emotes import emote_names, play_emote
 from ..fun import GAMES, game_names
@@ -151,6 +151,154 @@ async def set_idle_motion(body: IdleMotionBody, request: Request):
     request.app.state.robot.idle_motion = body.enabled
     request.app.state.store.set_idle_motion(body.enabled)
     return {"idle_motion": body.enabled}
+
+
+# ── robot wiring: pick the driver + HA entities + head calibration from the UI ──
+# Each role → which HA domains are valid for its picker. The dashboard renders one
+# dropdown per role, filtered to these domains.
+ROBOT_ENTITY_ROLES = [
+    {"key": "face_select", "label": "Face (expression)", "domains": ["select"]},
+    {"key": "head_yaw", "label": "Head — left / right", "domains": ["number"]},
+    {"key": "head_pitch", "label": "Head — up / down", "domains": ["number"]},
+    {"key": "media_player", "label": "Speaker (for TTS)", "domains": ["media_player"]},
+    {"key": "tts_engine", "label": "Voice — TTS engine or satellite",
+     "domains": ["tts", "assist_satellite"]},
+    {"key": "led_light", "label": "LED bar", "domains": ["light"]},
+    {"key": "camera", "label": "Camera", "domains": ["camera"]},
+    {"key": "screensaver_number", "label": "Screensaver-after (min)", "domains": ["number"]},
+    {"key": "sleep_number", "label": "Sleep-after (min)", "domains": ["number"]},
+    {"key": "mode_select", "label": "Mode (awake / busy / sleep)", "domains": ["select"]},
+]
+_ROLE_KEYS = {r["key"] for r in ROBOT_ENTITY_ROLES}
+
+
+class RobotConfigBody(BaseModel):
+    driver: str | None = None  # mock | ha | mcp
+    entities: dict[str, str] | None = None  # {role: entity_id}
+    calibration: dict | None = None  # {yaw:{center,min,max,invert}, pitch:{...}}
+
+
+class ScreenBody(BaseModel):
+    screensaver_min: float | None = Field(None, ge=0, le=1440)
+    sleep_min: float | None = Field(None, ge=0, le=1440)
+
+
+def _effective_entities(request: Request) -> dict[str, str]:
+    s = request.app.state
+    return {**s.settings.ha_robot_entities, **s.store.robot_entities()}
+
+
+def _robot_config_payload(request: Request) -> dict:
+    s = request.app.state
+    st = s.robot.state
+    return {
+        "driver": (s.store.robot_driver() or s.settings.robot_driver),
+        "drivers": ["mock", "ha", "mcp"],
+        "roles": ROBOT_ENTITY_ROLES,
+        "entities": _effective_entities(request),
+        "calibration": s.store.head_calibration(),
+        "capabilities": list(st.capabilities),
+        "online": st.online,
+        "last_error": getattr(st, "last_error", "") or "",
+        "ha_configured": s.ha is not None,
+    }
+
+
+async def _apply_robot_config(request: Request) -> str | None:
+    """Rebuild the driver from the merged config and reconnect. Returns an error string or None."""
+    s = request.app.state
+    try:
+        driver = build_robot_driver(s.settings, s.store, s.ha)
+        await s.robot.reconnect_with(driver)
+    except Exception as exc:  # noqa: BLE001 — surface as a field, don't 500
+        s.robot.state.online = False
+        s.robot.state.last_error = str(exc)
+        return str(exc)
+    return None
+
+
+@router.get("/api/ha/entities")
+async def ha_entities(request: Request, domains: str = ""):
+    """List Home Assistant entities (optionally filtered by comma-separated domains) for the
+    dashboard's entity pickers. Returns [] if HA isn't configured."""
+    ha = request.app.state.ha
+    if ha is None:
+        return {"entities": [], "ha_configured": False}
+    want = {d.strip() for d in domains.split(",") if d.strip()}
+    try:
+        states = await ha.states()
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=502, detail=f"HA states fetch failed: {exc}") from exc
+    out = []
+    for stt in states:
+        eid = stt.get("entity_id", "")
+        dom = eid.split(".", 1)[0] if "." in eid else ""
+        if want and dom not in want:
+            continue
+        attrs = stt.get("attributes") or {}
+        out.append({
+            "entity_id": eid,
+            "name": attrs.get("friendly_name") or eid,
+            "domain": dom,
+        })
+    out.sort(key=lambda e: (e["domain"], e["name"].lower()))
+    return {"entities": out, "ha_configured": True}
+
+
+@router.get("/api/robot/config")
+async def get_robot_config(request: Request):
+    return _robot_config_payload(request)
+
+
+@router.put("/api/robot/config")
+async def put_robot_config(body: RobotConfigBody, request: Request):
+    s = request.app.state
+    if body.driver is not None:
+        if body.driver not in ("mock", "ha", "mcp"):
+            raise HTTPException(status_code=400, detail=f"unknown driver {body.driver!r}")
+        s.store.set_robot_driver(body.driver)
+    if body.entities is not None:
+        clean = {k: v for k, v in body.entities.items() if k in _ROLE_KEYS}
+        s.store.set_robot_entities(clean)
+    if body.calibration is not None:
+        s.store.set_head_calibration(body.calibration)
+    error = await _apply_robot_config(request)
+    payload = _robot_config_payload(request)
+    payload["error"] = error
+    return payload
+
+
+@router.get("/api/robot/screen")
+async def get_screen(request: Request):
+    """Read the on-device screensaver/sleep timeouts (the ESPHome number entities)."""
+    drv = request.app.state.robot.driver
+    getter = getattr(drv, "get_number", None)
+    if getter is None:
+        return {"supported": False, "screensaver_min": None, "sleep_min": None}
+    return {
+        "supported": True,
+        "screensaver_min": await getter("screensaver_number"),
+        "sleep_min": await getter("sleep_number"),
+    }
+
+
+@router.put("/api/robot/screen")
+async def put_screen(body: ScreenBody, request: Request):
+    """Set the screensaver / sleep timeouts on the robot (writes the ESPHome number entities)."""
+    drv = request.app.state.robot.driver
+    setter = getattr(drv, "set_number", None)
+    if setter is None:
+        raise HTTPException(status_code=409, detail="active backend has no screen timers")
+    try:
+        if body.screensaver_min is not None:
+            await setter("screensaver_number", body.screensaver_min)
+        if body.sleep_min is not None:
+            await setter("sleep_number", body.sleep_min)
+    except NotImplementedError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return {"ok": True}
 
 
 @router.post("/api/ai/chat")

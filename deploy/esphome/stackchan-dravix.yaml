@@ -42,6 +42,9 @@ font:
   - file: "gfonts://Roboto"
     id: text_font
     size: 28
+  - file: "gfonts://Roboto"
+    id: small_font
+    size: 20
 
 globals:
   - { id: g_expr,   type: int,  restore_value: false, initial_value: "0" }
@@ -62,6 +65,23 @@ sensor:
   - platform: wifi_signal
     id: wifi_db
     update_interval: 30s
+  - platform: uptime
+    id: up_sec
+  # ── Live values pulled FROM Home Assistant for the "home card" page ──────────
+  # Point these at any HA sensors you like (change the entity_id's below).
+  - platform: homeassistant
+    id: ha_temp
+    entity_id: sensor.living_room_temperature
+  - platform: homeassistant
+    id: ha_hum
+    entity_id: sensor.living_room_humidity
+
+text_sensor:
+  - platform: wifi_info
+    ip_address:
+      id: ip_txt
+    ssid:
+      id: ssid_txt
 
 number:
   - platform: template
@@ -82,11 +102,25 @@ number:
     step: 1
     initial_value: 15
     restore_value: true
+  - platform: template
+    name: "Screen brightness"
+    id: n_brightness
+    optimistic: true
+    min_value: 10
+    max_value: 100
+    step: 5
+    initial_value: 100
+    unit_of_measurement: "%"
+    restore_value: true
+    set_action:
+      - light.turn_on:
+          id: lcd_backlight
+          brightness: !lambda 'return x / 100.0;'
 
 lvgl:
   displays:
     - m5cores3_lcd
-  page_wrap: true
+  page_wrap: true          # tapping past the last page wraps back to the face
   on_idle:
     - timeout: !lambda 'return (uint32_t) id(n_screensaver).state * 60000;'
       then:
@@ -98,6 +132,7 @@ lvgl:
         - delay: 3s
         - light.turn_off: lcd_backlight
   pages:
+    # ── Page 1: the face ────────────────────────────────────────────────────────
     - id: page_face
       bg_color: 0x000000
       bg_opa: COVER
@@ -118,6 +153,7 @@ lvgl:
             text_color: 0x33E6C8
             text_font: face_font
             align: CENTER
+    # ── Page 2: status / vital info ─────────────────────────────────────────────
     - id: page_status
       bg_color: 0x000000
       bg_opa: COVER
@@ -128,14 +164,61 @@ lvgl:
             text_font: text_font
             text_color: 0x33E6C8
             align: CENTER
-            y: -30
+            y: -80
+        - label:
+            id: lbl_date
+            text: ""
+            text_font: small_font
+            text_color: 0x8892A0
+            align: CENTER
+            y: -42
         - label:
             id: lbl_wifi
             text: "WiFi"
-            text_font: text_font
-            text_color: 0x33E6C8
+            text_font: small_font
+            text_color: 0x8892A0
+            align: CENTER
+            y: -6
+        - label:
+            id: lbl_ip
+            text: "IP"
+            text_font: small_font
+            text_color: 0x8892A0
             align: CENTER
             y: 30
+        - label:
+            id: lbl_up
+            text: "Up"
+            text_font: small_font
+            text_color: 0x8892A0
+            align: CENTER
+            y: 66
+    # ── Page 3: home card (live Home Assistant values) ──────────────────────────
+    - id: page_home
+      bg_color: 0x000000
+      bg_opa: COVER
+      widgets:
+        - label:
+            id: lbl_home_title
+            text: "HOME"
+            text_font: small_font
+            text_color: 0x33E6C8
+            align: CENTER
+            y: -70
+        - label:
+            id: lbl_temp
+            text: "Temp --"
+            text_font: text_font
+            text_color: 0xFFFFFF
+            align: CENTER
+            y: -15
+        - label:
+            id: lbl_hum
+            text: "Hum --"
+            text_font: text_font
+            text_color: 0xFFFFFF
+            align: CENTER
+            y: 35
 
 script:
   - id: render_face
@@ -187,6 +270,7 @@ select:
       - script.execute: render_face
 
 interval:
+  # Random blink (never while sleeping / listening / talking).
   - interval: 1s
     then:
       - if:
@@ -198,6 +282,7 @@ interval:
             - delay: 160ms
             - globals.set: { id: g_blink, value: "false" }
             - script.execute: render_face
+  # Drives the sleep "zzz" and the talking mouth animation.
   - interval: 600ms
     then:
       - globals.set: { id: g_anim, value: !lambda 'return id(g_anim) + 1;' }
@@ -206,6 +291,7 @@ interval:
             lambda: 'return id(g_sleep) || id(g_talk);'
           then:
             - script.execute: render_face
+  # Occasional "alive" drift of the face (not in sleep / busy).
   - interval: 7s
     then:
       - if:
@@ -216,6 +302,7 @@ interval:
                 id: face_label
                 x: !lambda 'return (int)(random_float() * 24 - 12);'
                 y: !lambda 'return (int)(random_float() * 18 - 9);'
+  # Refresh the status + home-card labels.
   - interval: 5s
     then:
       - lvgl.label.update:
@@ -226,9 +313,37 @@ interval:
             char b[8]; snprintf(b, sizeof(b), "%02d:%02d", t.hour, t.minute);
             return std::string(b);
       - lvgl.label.update:
+          id: lbl_date
+          text: !lambda |-
+            auto t = id(dravix_time).now();
+            if (!t.is_valid()) return std::string("");
+            char b[16]; snprintf(b, sizeof(b), "%02d/%02d", t.day_of_month, t.month);
+            return std::string(b);
+      - lvgl.label.update:
           id: lbl_wifi
           text: !lambda |-
-            char b[16]; snprintf(b, sizeof(b), "WiFi %ddB", (int) id(wifi_db).state);
+            char b[20]; snprintf(b, sizeof(b), "WiFi %d dB", (int) id(wifi_db).state);
+            return std::string(b);
+      - lvgl.label.update:
+          id: lbl_ip
+          text: !lambda 'return "IP " + id(ip_txt).state;'
+      - lvgl.label.update:
+          id: lbl_up
+          text: !lambda |-
+            int s = (int) id(up_sec).state;
+            char b[24]; snprintf(b, sizeof(b), "Up %dh %dm", s / 3600, (s % 3600) / 60);
+            return std::string(b);
+      - lvgl.label.update:
+          id: lbl_temp
+          text: !lambda |-
+            if (!id(ha_temp).has_state()) return std::string("Temp --");
+            char b[24]; snprintf(b, sizeof(b), "Temp %.1f C", id(ha_temp).state);
+            return std::string(b);
+      - lvgl.label.update:
+          id: lbl_hum
+          text: !lambda |-
+            if (!id(ha_hum).has_state()) return std::string("Hum --");
+            char b[24]; snprintf(b, sizeof(b), "Hum %.0f %%", id(ha_hum).state);
             return std::string(b);
 
 touchscreen:
@@ -238,17 +353,23 @@ touchscreen:
           condition:
             lambda: 'return id(g_sleep);'
           then:
-            - light.turn_on: { id: lcd_backlight, brightness: 100% }
+            # Asleep → tap wakes it (restore your chosen brightness) and shows the face.
+            - light.turn_on:
+                id: lcd_backlight
+                brightness: !lambda 'return id(n_brightness).state / 100.0;'
             - globals.set: { id: g_sleep, value: "false" }
             - script.execute: render_face
           else:
-            - lvgl.page.next     # tap toggles face <-> status
+            # Awake → tap cycles through the pages: face → status → home → face …
+            - lvgl.page.next
 
 voice_assistant:
   microphone: i2s_mic
   media_player: va_media_player
   on_listening:
-    - light.turn_on: { id: lcd_backlight, brightness: 100% }
+    - light.turn_on:
+        id: lcd_backlight
+        brightness: !lambda 'return id(n_brightness).state / 100.0;'
     - globals.set: { id: g_sleep, value: "false" }
     - globals.set: { id: g_listen, value: "true" }
     - script.execute: render_face
@@ -260,3 +381,10 @@ voice_assistant:
     - globals.set: { id: g_listen, value: "false" }
     - globals.set: { id: g_talk, value: "false" }
     - script.execute: render_face
+
+# ── OPTIONAL: robot battery % on the status page ────────────────────────────────
+# The CoreS3 battery is read by the M5Stack BSP's power-management chip. If the BSP
+# already exposes a battery sensor (likely), it shows up in Home Assistant on its own —
+# in that case just add it to the "home card" via a `sensor: platform: homeassistant`
+# entry pointing at that battery entity (like ha_temp above). Don't hand-add an AXP2101
+# block here — it would clash with the BSP and fail Validate.

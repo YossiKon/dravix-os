@@ -13,6 +13,7 @@ import type {
   FrigateCamerasResponse,
   FunResponse,
   FunResult,
+  HaEntitiesResponse,
   HealthResponse,
   ImportResult,
   InboxPlayResponse,
@@ -28,11 +29,15 @@ import type {
   PersonasResponse,
   ReactionRule,
   ReactionsResponse,
+  RobotConfig,
+  RobotConfigUpdate,
   Routine,
   RoutinesResponse,
   SayMoodResult,
   SayResult,
   ScheduleResponse,
+  ScreenState,
+  ScreenUpdate,
   StatusResponse,
   TimerResponse,
   VoiceResponse,
@@ -189,6 +194,22 @@ export const api = {
       `/api/config/modes/${encodeURIComponent(name)}/disabled`,
       { method: "POST", json: { disabled } },
     ),
+
+  /* ── Setup: robot config / entities / calibration ─────────────────────── */
+  getRobotConfig: () => request<RobotConfig>("/api/robot/config"),
+
+  putRobotConfig: (body: RobotConfigUpdate) =>
+    request<RobotConfig>("/api/robot/config", { method: "PUT", json: body }),
+
+  haEntities: (domains: string[]) => {
+    const q = domains.length ? `?domains=${encodeURIComponent(domains.join(","))}` : "";
+    return request<HaEntitiesResponse>(`/api/ha/entities${q}`);
+  },
+
+  getScreen: () => request<ScreenState>("/api/robot/screen"),
+
+  putScreen: (body: ScreenUpdate) =>
+    request<{ ok: boolean }>("/api/robot/screen", { method: "PUT", json: body }),
 
   /* ── Cameras / Frigate ────────────────────────────────────────────────── */
   frigateCameras: () =>

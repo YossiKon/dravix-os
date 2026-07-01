@@ -41,6 +41,22 @@ def build_ai(settings: Settings, store: Store, ha: HomeAssistant | None):
     return build_provider(merged, ha, system=resolve_persona(store).system_prompt)
 
 
+def build_robot_driver(settings: Settings, store: Store, ha: HomeAssistant | None):
+    """Build the robot driver, letting dashboard picks (driver type + HA entities + head
+    calibration, saved in the store) override the add-on/env defaults."""
+    driver_name = (store.robot_driver() or settings.robot_driver).lower()
+    if driver_name == "ha":
+        from .dal.ha_driver import HARobotDriver
+
+        if ha is None:
+            raise ValueError("the 'ha' driver needs Home Assistant — set ha_url + ha_token")
+        entities = {**settings.ha_robot_entities, **store.robot_entities()}
+        entities = {k: v for k, v in entities.items() if v}
+        return HARobotDriver(ha=ha, entities=entities, calibration=store.head_calibration())
+    merged = settings.model_copy(update={"robot_driver": driver_name})
+    return build_driver(merged, ha)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     settings = get_settings()
@@ -58,8 +74,8 @@ async def lifespan(app: FastAPI):
         ha = HomeAssistant(settings.ha_url, settings.ha_token)
     frigate = Frigate(ha, settings.frigate_url)
 
-    # Robot driver + controller.
-    driver = build_driver(settings, ha)
+    # Robot driver + controller (dashboard picks in the store win over env defaults).
+    driver = build_robot_driver(settings, store, ha)
     controller = RobotController(driver, bus, runtime.robot)
     controller.default_voice = resolve_voice(store)  # active persona/override TTS voice
     controller.idle_motion = settings.idle_motion  # ambient head-glance toggle (add-on option)

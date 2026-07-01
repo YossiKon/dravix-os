@@ -28,12 +28,28 @@ class HARobotDriver(RobotDriver):
     name = "ha"
     transport = "homeassistant"
 
-    def __init__(self, ha: HomeAssistant, entities: dict[str, str] | None = None) -> None:
+    def __init__(
+        self,
+        ha: HomeAssistant,
+        entities: dict[str, str] | None = None,
+        calibration: dict[str, Any] | None = None,
+    ) -> None:
         self._ha = ha
         self._entities = entities or {}
+        # Per-axis head calibration: {yaw:{center,min,max,invert}, pitch:{...}}. Any field may be
+        # None → fall back to the servo entity's own min/max (center defaults to their midpoint).
+        self._calib = calibration or {}
         # Cache each number entity's (min, max, step) so we clamp + snap values to the
         # device's real range — ESPHome rejects out-of-range / off-step values with a 500.
         self._num_meta: dict[str, tuple[float | None, float | None, float | None]] = {}
+
+    def set_entities(self, entities: dict[str, str]) -> None:
+        """Live-swap the HA entity map (from the dashboard). Clears cached number ranges."""
+        self._entities = entities or {}
+        self._num_meta.clear()
+
+    def set_calibration(self, calibration: dict[str, Any]) -> None:
+        self._calib = calibration or {}
 
     async def connect(self) -> None:
         if not await self._ha.ping():
@@ -46,7 +62,11 @@ class HARobotDriver(RobotDriver):
 
     async def capabilities(self) -> set[str]:
         caps: set[str] = set()
-        if self._entities.get("media_player") and self._entities.get("tts_engine"):
+        tts = self._entities.get("tts_engine", "")
+        media = self._entities.get("media_player")
+        # Speech works either via tts.speak (needs a tts.* engine + a media_player) or via
+        # assist_satellite.announce (the satellite plays on its own speaker — no media_player).
+        if (tts.startswith("assist_satellite.")) or (media and tts):
             caps.add(CAP_SAY)
         if self._entities.get("led_light"):
             caps.add(CAP_LEDS)
@@ -69,14 +89,10 @@ class HARobotDriver(RobotDriver):
             "select", "select_option", {"entity_id": sel, "option": value}
         )
 
-    async def _set_number(self, entity_id: str, value: float) -> None:
-        """Set a head servo number, treating dravix's value as RELATIVE to the servo's center.
-
-        dravix sends head angles centered on 0 (0 = look straight ahead). A servo whose range
-        isn't symmetric (e.g. pitch 0..90) centers at (min+max)/2, so we offset by that center —
-        otherwise pitch 0 would drive the servo to one extreme (always looking down, never up).
-        Then clamp to min/max and snap to step (off-range / off-step values make HA return a 500).
-        """
+    async def _num_range(
+        self, entity_id: str
+    ) -> tuple[float | None, float | None, float | None]:
+        """Return (min, max, step) for a number entity, cached (from its HA attributes)."""
         meta = self._num_meta.get(entity_id)
         if meta is None:
             try:
@@ -85,29 +101,83 @@ class HARobotDriver(RobotDriver):
             except Exception:  # noqa: BLE001 — best effort; use the raw value
                 meta = (None, None, None)
             self._num_meta[entity_id] = meta
-        lo, hi, step = meta
-        if lo is not None and hi is not None:
-            value = (float(lo) + float(hi)) / 2.0 + value  # offset to the servo's center
-            value = max(float(lo), min(float(hi), value))
+        return meta
+
+    async def _set_head_axis(self, axis: str, entity_id: str, value: float) -> None:
+        """Map a dravix head command (degrees, 0 = look straight) to a calibrated servo value.
+
+        dravix sends head angles centered on 0. The servo value is ``center + command`` where the
+        user calibrates each axis from the dashboard: ``center`` (the servo value that looks
+        straight ahead — fixes a head that 'falls' down/up), ``invert`` (flip direction), and
+        optional ``min``/``max`` travel limits (default to the entity's own range). With no
+        calibration this reduces to the old behaviour (center = the servo's midpoint).
+        """
+        lo_e, hi_e, step = await self._num_range(entity_id)
+        cal = (self._calib or {}).get(axis, {}) or {}
+        lo = cal.get("min") if cal.get("min") is not None else lo_e
+        hi = cal.get("max") if cal.get("max") is not None else hi_e
+        have_range = lo is not None and hi is not None
+        if cal.get("center") is not None:
+            center = float(cal["center"])
+        elif have_range:
+            center = (float(lo) + float(hi)) / 2.0  # servo midpoint (old default)
+        else:
+            center = 0.0
+        cmd = -float(value) if cal.get("invert") else float(value)
+        out = center + cmd
+        if have_range:
+            out = max(float(lo), min(float(hi), out))
         if step:
-            value = round(value / float(step)) * float(step)
-        await self._ha.call_service("number", "set_value", {"entity_id": entity_id, "value": value})
+            out = round(out / float(step)) * float(step)
+        await self._ha.call_service(
+            "number", "set_value", {"entity_id": entity_id, "value": out}
+        )
 
     async def move_head(self, yaw: float, pitch: float, speed: float = 1.0) -> None:
         yaw_e, pitch_e = self._entities.get("head_yaw"), self._entities.get("head_pitch")
         if not (yaw_e and pitch_e):
             raise NotImplementedError("no head servo entities configured")
-        await self._set_number(yaw_e, yaw)
-        await self._set_number(pitch_e, pitch)
+        await self._set_head_axis("yaw", yaw_e, yaw)
+        await self._set_head_axis("pitch", pitch_e, pitch)
+
+    async def get_number(self, role: str) -> float | None:
+        """Read a mapped number entity's current value (e.g. screensaver_number)."""
+        ent = self._entities.get(role)
+        if not ent:
+            return None
+        try:
+            st = await self._ha.get_state(ent)
+            return float(st.get("state"))
+        except Exception:  # noqa: BLE001
+            return None
+
+    async def set_number(self, role: str, value: float) -> None:
+        """Set a mapped number entity (clamped/snapped to its range)."""
+        ent = self._entities.get(role)
+        if not ent:
+            raise NotImplementedError(f"no {role} entity configured")
+        lo, hi, step = await self._num_range(ent)
+        if lo is not None and hi is not None:
+            value = max(float(lo), min(float(hi), float(value)))
+        if step:
+            value = round(value / float(step)) * float(step)
+        await self._ha.call_service("number", "set_value", {"entity_id": ent, "value": value})
 
     async def say(self, text: str, voice: str | None = None) -> None:
+        engine = self._entities.get("tts_engine", "")
+        # An assist_satellite speaks via its own announce service (no separate media_player).
+        if engine.startswith("assist_satellite."):
+            await self._ha.call_service(
+                "assist_satellite", "announce", {"entity_id": engine, "message": text}
+            )
+            return
         media = self._entities.get("media_player")
         if not media:
             raise NotImplementedError("no media_player entity configured for TTS")
-        engine = self._entities.get("tts_engine")
         if not engine:
             raise NotImplementedError(
-                "set robot_entity_tts to your HA TTS engine (e.g. tts.piper) to enable speech"
+                "set the TTS entity to your HA TTS engine (e.g. tts.piper) or an "
+                "assist_satellite.* to enable speech"
             )
         # tts.speak: entity_id = the TTS engine, media_player_entity_id = the speaker.
         await self._ha.call_service(
