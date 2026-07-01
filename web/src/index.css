@@ -3,134 +3,79 @@
 @tailwind utilities;
 
 @layer base {
-  :root {
-    color-scheme: dark;
-  }
-
-  * {
+  html {
     -webkit-tap-highlight-color: transparent;
   }
-
-  html,
-  body,
-  #root {
-    height: 100%;
-  }
-
   body {
-    @apply bg-void text-ink font-body antialiased;
-    margin: 0;
-    /* Layered atmosphere: a faint grid + radial vignette over the void. */
-    background-color: #070809;
+    @apply bg-bg text-ink font-body antialiased;
     background-image:
-      radial-gradient(
-        1200px 800px at 78% -10%,
-        rgba(93, 255, 160, 0.06),
-        transparent 60%
-      ),
-      radial-gradient(
-        900px 700px at 8% 110%,
-        rgba(92, 200, 255, 0.05),
-        transparent 55%
-      ),
-      linear-gradient(rgba(255, 255, 255, 0.018) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(255, 255, 255, 0.018) 1px, transparent 1px);
-    background-size:
-      100% 100%,
-      100% 100%,
-      44px 44px,
-      44px 44px;
+      radial-gradient(1100px 500px at 85% -10%, rgba(46, 230, 200, 0.06), transparent 60%),
+      radial-gradient(900px 420px at 0% 110%, rgba(255, 194, 61, 0.05), transparent 60%);
     background-attachment: fixed;
   }
-
-  /* Subtle film grain overlay over everything. */
-  body::before {
-    content: "";
-    position: fixed;
-    inset: 0;
-    pointer-events: none;
-    z-index: 1;
-    opacity: 0.035;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
-  }
-
   ::selection {
-    background: rgba(93, 255, 160, 0.28);
-    color: #fff;
+    @apply bg-teal/30;
+  }
+  input,
+  textarea,
+  select,
+  button {
+    font: inherit;
   }
 }
 
-@layer utilities {
-  .scrollbar-thin {
-    scrollbar-width: thin;
-    scrollbar-color: #2b333c transparent;
+@layer components {
+  .card {
+    @apply rounded-3xl border border-line bg-card p-4 shadow-card;
   }
-  .scrollbar-thin::-webkit-scrollbar {
-    width: 8px;
-    height: 8px;
+  .card-title {
+    @apply mb-3 font-display text-lg text-soft;
   }
-  .scrollbar-thin::-webkit-scrollbar-thumb {
-    background: #2b333c;
-    border-radius: 99px;
+  .btn {
+    @apply inline-flex min-h-12 select-none items-center justify-center gap-2 rounded-2xl border border-line-2 bg-card2 px-4 py-2.5 text-base font-medium text-ink transition active:scale-95 disabled:opacity-40;
   }
-  .scrollbar-thin::-webkit-scrollbar-thumb:hover {
-    background: #3a444f;
+  .btn-primary {
+    @apply border-teal/50 bg-teal/15 text-teal;
   }
-  .scrollbar-thin::-webkit-scrollbar-track {
-    background: transparent;
+  .btn-amber {
+    @apply border-amber/50 bg-amber/15 text-amber;
   }
+  .btn-danger {
+    @apply border-red/50 bg-red/10 text-red;
+  }
+  .chip {
+    @apply inline-flex min-h-10 items-center gap-1.5 rounded-full border border-line-2 bg-card2 px-3.5 py-1.5 text-sm text-soft transition active:scale-95;
+  }
+  .chip-on {
+    @apply border-teal/60 bg-teal/15 text-teal;
+  }
+  .inp {
+    @apply min-h-12 w-full rounded-2xl border border-line-2 bg-bg px-4 py-2.5 text-ink outline-none placeholder:text-mute focus:border-teal/60;
+  }
+  .lbl {
+    @apply mb-1.5 block text-sm text-mute;
+  }
+}
 
-  .text-glow {
-    text-shadow: 0 0 18px rgba(93, 255, 160, 0.55);
-  }
+/* Hide number-input spinners (we render our own big +/- buttons) */
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type="number"] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
 
-  /* Hairline label used across panels. */
-  .eyebrow {
-    @apply font-mono text-[10px] uppercase tracking-[0.22em] text-mute;
-  }
-
-  /* Range slider styling (instrument-grade). */
-  .slider {
-    -webkit-appearance: none;
-    appearance: none;
-    width: 100%;
-    height: 4px;
-    border-radius: 99px;
-    background: #1d2228;
-    outline: none;
-  }
-  .slider::-webkit-slider-thumb {
-    -webkit-appearance: none;
-    appearance: none;
-    width: 16px;
-    height: 16px;
-    border-radius: 50%;
-    background: #5dffa0;
-    border: 3px solid #0d0f11;
-    box-shadow: 0 0 0 1px #2e7d54, 0 0 14px -2px rgba(93, 255, 160, 0.7);
-    cursor: pointer;
-    transition: transform 0.12s ease;
-  }
-  .slider::-webkit-slider-thumb:active {
-    transform: scale(1.18);
-  }
-  .slider::-moz-range-thumb {
-    width: 16px;
-    height: 16px;
-    border-radius: 50%;
-    background: #5dffa0;
-    border: 3px solid #0d0f11;
-    box-shadow: 0 0 0 1px #2e7d54, 0 0 14px -2px rgba(93, 255, 160, 0.7);
-    cursor: pointer;
-  }
-  .slider:disabled::-webkit-slider-thumb {
-    background: #3a444f;
-    box-shadow: none;
-    cursor: not-allowed;
-  }
-  .slider:disabled::-moz-range-thumb {
-    background: #3a444f;
-    box-shadow: none;
-    cursor: not-allowed;
-  }
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: #312b25;
+  border-radius: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
 }
