@@ -127,6 +127,26 @@ sensor:
           condition: { lambda: 'return x < 80;' }                    # they moved away
           then:
             - globals.set: { id: g_near, value: "false" }
+  # Ambient light — night = sleep (room goes dark), morning = wake (lights come on).
+  # ltr_als_ps exposes "Ambient light". Tune the 5/30 lux thresholds to your room.
+  - platform: homeassistant
+    id: ha_lux
+    entity_id: sensor.dravix_ambient_light
+    on_value:
+      - if:
+          condition: { lambda: 'return x < 5 && !id(g_sleep);' }      # dark → go to sleep
+          then:
+            - globals.set: { id: g_sleep, value: "true" }
+            - globals.set: { id: g_saver, value: "false" }
+            - script.execute: render_face
+            - delay: 3s
+            - light.turn_off: lcd_backlight
+      - if:
+          condition: { lambda: 'return x > 30 && id(g_sleep);' }      # light → wake up
+          then:
+            - light.turn_on: { id: lcd_backlight, brightness: !lambda 'return id(n_brightness).state / 100.0;' }
+            - globals.set: { id: g_sleep, value: "false" }
+            - script.execute: render_face
 
 text_sensor:
   - platform: wifi_info
