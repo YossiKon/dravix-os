@@ -250,11 +250,6 @@ number:
       - light.turn_on:
           id: lcd_backlight
           brightness: !lambda 'return x / 100.0;'
-  # Override the pitch servo's angle range from the BSP → your values (158..260).
-  # (If the servo can't physically reach these, we'll adjust — you asked for these.)
-  - id: !extend servo_y_angle
-    min_value: 158
-    max_value: 260
 
 # ── Behaviour toggles — flip these from Home Assistant / the dravix dashboard ────
 switch:
