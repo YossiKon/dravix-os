@@ -18,9 +18,6 @@ const LED_PRESETS: { name: string; hex: string }[] = [
   { name: "pink", hex: "#ff6ec7" },
 ];
 
-// Head joystick travel limits.
-const YAW_RANGE = 90; // ± left/right
-const PITCH_RANGE = 45; // ± down/up
 const HEAD_SPEED = 0.5; // fixed, sensible default
 
 export function ManualControl({
@@ -197,13 +194,14 @@ function HeadControl({
   const [pos, setPos] = useState({ x: 0, y: 0 });
   const padRef = useRef<HTMLDivElement>(null);
 
-  const yaw = Math.round(pos.x * YAW_RANGE);
-  // Screen up (negative y) → look up (positive pitch).
-  const pitch = Math.round(-pos.y * PITCH_RANGE);
+  // Normalised aim in [-1,1]. yaw = pad x; screen up (negative y) → look up (positive pitch).
+  const round2 = (n: number) => Math.round(n * 100) / 100;
+  const yaw = round2(pos.x);
+  const pitch = round2(-pos.y);
 
   const send = useCallback(
     (ny: number, np: number) => {
-      onMove(clamp(ny, -YAW_RANGE, YAW_RANGE), clamp(np, -PITCH_RANGE, PITCH_RANGE));
+      onMove(clamp(ny, -1, 1), clamp(np, -1, 1));
     },
     [onMove],
   );
@@ -240,7 +238,7 @@ function HeadControl({
     const pt = pointFromEvent(e.clientX, e.clientY);
     if (pt) {
       setPos(pt);
-      send(Math.round(pt.x * YAW_RANGE), Math.round(-pt.y * PITCH_RANGE));
+      send(round2(pt.x), round2(-pt.y));
     } else {
       send(yaw, pitch);
     }
@@ -297,9 +295,9 @@ function HeadControl({
               Direction
             </div>
             <div className="mt-1 font-mono text-sm tabular-nums text-ink">
-              yaw <span className="text-phosphor">{yaw}°</span>
+              yaw <span className="text-phosphor">{Math.round(yaw * 100)}%</span>
               <span className="mx-1.5 text-mute">·</span>
-              pitch <span className="text-phosphor">{pitch}°</span>
+              pitch <span className="text-phosphor">{Math.round(pitch * 100)}%</span>
             </div>
             <p className="mt-1 font-mono text-[10px] text-mute">
               drag the knob, release to aim the head

@@ -142,42 +142,29 @@ class HARobotDriver(RobotDriver):
             raise last_exc
 
     async def _set_head_axis(self, axis: str, entity_id: str, value: float) -> None:
-        """Map a dravix head command (degrees, 0 = look straight) to a calibrated servo value.
+        """Map a NORMALISED head command (-1..1, 0 = look straight) to a servo value.
 
-        dravix sends head angles centered on 0. The servo value is ``center + command`` where the
-        user calibrates each axis from the dashboard: ``center`` (the servo value that looks
-        straight ahead — fixes a head that 'falls' down/up), ``invert`` (flip direction), and
-        optional ``min``/``max`` travel limits (default to the entity's own range). With no
-        calibration this reduces to the old behaviour (center = the servo's midpoint).
+        Rebuilt to be dead simple and always in range: read the servo's real min/max/step from
+        HA (authoritative), take the calibrated ``center`` (the servo value that looks straight —
+        set via 'Set as HOME', else the range midpoint), then move a fraction of the *available
+        travel* toward max (positive) or min (negative). ``invert`` flips the direction. The
+        result is always clamped to the real range, so it can never emit an out-of-range value
+        (that out-of-range write is what made move_head 500). No calibration min/max to get wrong.
         """
-        lo_e, hi_e, step = await self._num_range(entity_id)
+        lo, hi, step = await self._num_range(entity_id)
+        if lo is None or hi is None:
+            return  # unknown servo range — do nothing rather than risk a bad write
+        lo, hi = float(lo), float(hi)
         cal = (self._calib or {}).get(axis, {}) or {}
-        lo = cal.get("min") if cal.get("min") is not None else lo_e
-        hi = cal.get("max") if cal.get("max") is not None else hi_e
-        have_range = lo is not None and hi is not None
-        if cal.get("center") is not None:
-            center = float(cal["center"])
-        elif have_range:
-            center = (float(lo) + float(hi)) / 2.0  # servo midpoint (old default)
-        else:
-            center = 0.0
-        cmd = -float(value) if cal.get("invert") else float(value)
-        out = center + cmd
-        if have_range:
-            out = max(float(lo), min(float(hi), out))  # user's calibration travel limit
-        # ALWAYS clamp to the servo's REAL hardware range too — a too-wide calibration must
-        # never emit an out-of-range value (HA rejects it with a 500). This is what made
-        # move_head fail while single writes (clamped to the real range) succeeded.
-        if lo_e is not None:
-            out = max(float(lo_e), out)
-        if hi_e is not None:
-            out = min(float(hi_e), out)
+        center = float(cal["center"]) if cal.get("center") is not None else (lo + hi) / 2.0
+        center = max(lo, min(hi, center))
+        pos = -float(value) if cal.get("invert") else float(value)
+        pos = max(-1.0, min(1.0, pos))
+        out = center + pos * ((hi - center) if pos >= 0 else (center - lo))
+        out = max(lo, min(hi, out))
         if step:
             out = round(out / float(step)) * float(step)
-            if lo_e is not None:  # snapping can nudge past the edge — keep it inside
-                out = max(float(lo_e), out)
-            if hi_e is not None:
-                out = min(float(hi_e), out)
+            out = max(lo, min(hi, out))
         await self._set_number_value(entity_id, out)
 
     async def move_head(self, yaw: float, pitch: float, speed: float = 1.0) -> None:

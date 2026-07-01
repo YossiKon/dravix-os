@@ -35,8 +35,9 @@ class FaceBody(BaseModel):
 
 
 class HeadBody(BaseModel):
-    yaw: float = Field(..., ge=-180, le=180)
-    pitch: float = Field(..., ge=-90, le=90)
+    # Normalised: -1..1 per axis, 0 = look straight. +1 = full right/up, -1 = full left/down.
+    yaw: float = Field(..., ge=-1, le=1)
+    pitch: float = Field(..., ge=-1, le=1)
     speed: float = Field(1.0, ge=0.0, le=1.0)
 
 

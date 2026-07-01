@@ -13,59 +13,60 @@ from .logging import get_logger
 
 log = get_logger("emotes")
 
-# step keys: face(str) · head([yaw,pitch]) · leds([color,brightness]) · say(str) · wait(seconds)
+# step keys: face(str) · head([yaw,pitch] normalised -1..1) · leds([color,brightness]) ·
+# say(str) · wait(seconds). Head values are a fraction of travel (0 = straight).
 EMOTES: dict[str, list[dict[str, Any]]] = {
     "happy": [
         {"face": "happy", "leds": ["yellow", 0.8]},
-        {"head": [20, 8], "wait": 0.25},
-        {"head": [-20, 8], "wait": 0.25},
+        {"head": [0.45, 0.2], "wait": 0.25},
+        {"head": [-0.45, 0.2], "wait": 0.25},
         {"head": [0, 0]},
     ],
     "love": [
         {"face": "happy", "leds": ["magenta", 0.9]},
-        {"head": [0, -8], "wait": 0.3},
-        {"head": [0, 4]},
+        {"head": [0, -0.2], "wait": 0.3},
+        {"head": [0, 0.1]},
     ],
     "sad": [
         {"face": "sad", "leds": ["blue", 0.2]},
-        {"head": [0, -14], "wait": 0.4},
+        {"head": [0, -0.35], "wait": 0.4},
         {"head": [0, 0]},
     ],
     "surprised": [
         {"face": "doubt", "leds": ["white", 1.0]},
-        {"head": [0, 12], "wait": 0.2},
+        {"head": [0, 0.3], "wait": 0.2},
         {"head": [0, 0]},
     ],
     "yes": [
         {"face": "happy"},
-        {"head": [0, 12], "wait": 0.2},
-        {"head": [0, -12], "wait": 0.2},
+        {"head": [0, 0.3], "wait": 0.2},
+        {"head": [0, -0.3], "wait": 0.2},
         {"head": [0, 0]},
     ],
     "no": [
         {"face": "doubt"},
-        {"head": [22, 0], "wait": 0.2},
-        {"head": [-22, 0], "wait": 0.2},
+        {"head": [0.5, 0], "wait": 0.2},
+        {"head": [-0.5, 0], "wait": 0.2},
         {"head": [0, 0]},
     ],
     "curious": [
         {"face": "doubt"},
-        {"head": [16, 6], "wait": 0.3},
-        {"head": [-16, 6], "wait": 0.3},
+        {"head": [0.35, 0.15], "wait": 0.3},
+        {"head": [-0.35, 0.15], "wait": 0.3},
         {"head": [0, 0]},
     ],
     "sleepy": [
         {"face": "sleepy", "leds": ["amber", 0.1]},
-        {"head": [0, -10]},
+        {"head": [0, -0.25]},
     ],
     "wake": [
         {"face": "neutral", "leds": ["white", 0.4]},
-        {"head": [0, 8], "wait": 0.2},
+        {"head": [0, 0.2], "wait": 0.2},
         {"head": [0, 0]},
     ],
     "fistbump": [
         {"face": "happy"},
-        {"head": [0, 12], "wait": 0.15},
+        {"head": [0, 0.3], "wait": 0.15},
         {"leds": ["green", 1.0]},
         {"say": "Boom!"},
         {"head": [0, 0]},

@@ -136,10 +136,16 @@ export function SetupPage() {
       // Drop blank entity selections so we send a clean mapping.
       const cleanEntities: Record<string, string> = {};
       for (const [k, v] of Object.entries(entities)) if (v) cleanEntities[k] = v;
+      // Calibration is now center + invert only — min/max are handled by the driver.
+      const cleanCalibration: Calibration = {};
+      for (const ax of ["yaw", "pitch"] as const) {
+        const a = calibration[ax];
+        if (a) cleanCalibration[ax] = { center: a.center, invert: a.invert };
+      }
       const res = await api.putRobotConfig({
         driver,
         entities: cleanEntities,
-        calibration,
+        calibration: cleanCalibration,
       });
       if (mounted.current) adopt(res);
       if (res.error) toasts.error(res.error);
@@ -427,7 +433,7 @@ function CalibrationSection({
   const toasts = useToasts();
   const [homing, setHoming] = useState(false);
 
-  // Live nudge: head values are DEGREES centered on 0 (backend applies center/invert).
+  // Live nudge: head values are NORMALISED in [-1,1] (backend applies center/invert).
   const test = useCallback(
     async (yaw: number, pitch: number) => {
       try {
@@ -470,8 +476,9 @@ function CalibrationSection({
     <Panel eyebrow="servos" title="Head Calibration">
       <div className="space-y-4">
         <p className="font-mono text-[11px] leading-relaxed text-mute">
-          If the head always looks down or the wrong way, adjust Center and Invert
-          until ⌖ Center looks straight.
+          Center = the servo value that looks straight; use Set current as HOME to
+          capture it. If the head aims the wrong way, toggle Invert. The driver
+          clamps to the servo's hardware range automatically.
         </p>
 
         {/* Live test pad */}
@@ -479,16 +486,16 @@ function CalibrationSection({
           <span className="mr-1 font-mono text-[10px] uppercase tracking-wider text-mute">
             test
           </span>
-          <Button variant="subtle" onClick={() => test(-30, 0)}>
+          <Button variant="subtle" onClick={() => test(-0.6, 0)}>
             ◀ Left
           </Button>
-          <Button variant="subtle" onClick={() => test(30, 0)}>
+          <Button variant="subtle" onClick={() => test(0.6, 0)}>
             ▶ Right
           </Button>
-          <Button variant="subtle" onClick={() => test(0, 20)}>
+          <Button variant="subtle" onClick={() => test(0, 0.6)}>
             ▲ Up
           </Button>
-          <Button variant="subtle" onClick={() => test(0, -20)}>
+          <Button variant="subtle" onClick={() => test(0, -0.6)}>
             ▼ Down
           </Button>
           <Button variant="primary" onClick={() => test(0, 0)}>
@@ -536,7 +543,7 @@ function AxisCalibration({
   axis: CalibrationAxis;
   onChange: (patch: Partial<CalibrationAxis>) => void;
 }) {
-  // Empty string → undefined (blank = use the servo's own range).
+  // Empty string → undefined (blank center falls back to the driver default).
   const num = (v: string): number | undefined =>
     v.trim() === "" ? undefined : Number(v);
 
@@ -546,24 +553,12 @@ function AxisCalibration({
         {title}
         <span className="h-px flex-1 bg-line/70" />
       </div>
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3">
         <NumField
           label="center"
           hint="looks straight"
           value={axis.center}
           onChange={(v) => onChange({ center: num(v) })}
-        />
-        <NumField
-          label="min"
-          hint="blank = servo"
-          value={axis.min}
-          onChange={(v) => onChange({ min: num(v) })}
-        />
-        <NumField
-          label="max"
-          hint="blank = servo"
-          value={axis.max}
-          onChange={(v) => onChange({ max: num(v) })}
         />
         <div className="flex flex-col justify-between">
           <span className="font-mono text-[10px] uppercase tracking-wider text-mute">

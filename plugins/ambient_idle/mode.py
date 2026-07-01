@@ -18,7 +18,8 @@ class AmbientIdleMode(Mode):
     async def on_enter(self) -> None:
         self._n = 0
         self._every = max(1, int(self.ctx.config.get("glance_every_ticks", 3)))
-        self._span = float(self.ctx.config.get("glance_yaw", 18))
+        # normalised glance amount (0..1 fraction of travel); small = subtle looks.
+        self._span = float(self.ctx.config.get("glance_yaw", 0.35))
 
     async def tick(self) -> None:
         self._n += 1

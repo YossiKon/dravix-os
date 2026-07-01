@@ -296,7 +296,12 @@ export interface HaEntity {
   domain: string;
 }
 
-/** Per-axis servo calibration. Blank min/max fall back to the servo range. */
+/**
+ * Per-axis servo calibration. The active model is center + invert only; the
+ * driver clamps to the servo's hardware range automatically. `min`/`max` are
+ * retained (optional, legacy) so older saved configs don't break, but the UI
+ * no longer sends them.
+ */
 export interface CalibrationAxis {
   center?: number;
   min?: number;

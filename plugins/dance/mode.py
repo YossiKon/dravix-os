@@ -8,7 +8,8 @@ from __future__ import annotations
 from dravix.dal.base import CAP_FACE, CAP_HEAD, CAP_LEDS, Expression
 from dravix.modes import Mode, ModeMeta
 
-_STEPS = [(-30, 6), (30, 6), (-15, -6), (15, -6), (0, 0)]
+# normalised head positions (-1..1): a playful side-to-side bob.
+_STEPS = [(-0.6, 0.2), (0.6, 0.2), (-0.3, -0.2), (0.3, -0.2), (0.0, 0.0)]
 
 
 class DanceMode(Mode):

@@ -47,35 +47,37 @@ class _FakeHA:
         return b"JPEG-bytes"
 
 
-async def test_ha_driver_move_head_offsets_to_servo_center():
-    """dravix sends head angles relative to 0; pitch (0..90) must offset to its center (45)."""
-    ha = _FakeHA()
+async def test_ha_driver_move_head_normalized_full_travel():
+    """Normalised head: 0 = servo midpoint, +1 = max, -1 = min (uses the full travel)."""
+    ha = _FakeHA()  # servo_x -164..164 (mid 0), servo_y 0..90 (mid 45), both step 5
     d = HARobotDriver(
         ha=ha, entities={"head_yaw": "number.servo_x", "head_pitch": "number.servo_y"}
     )
-    await d.move_head(0, 0)  # "look center"
-    assert ha.calls[-2][2]["value"] == 0.0    # yaw center stays 0
-    assert ha.calls[-1][2]["value"] == 45.0   # pitch center = (0+90)/2 = 45 (not 0/down)
-
-    await d.move_head(20, -20)
-    assert ha.calls[-2][2]["value"] == 20.0   # yaw 0+20
-    assert ha.calls[-1][2]["value"] == 25.0   # pitch 45-20 = 25
+    await d.move_head(0, 0)
+    assert ha.calls[-2][2]["value"] == 0.0     # yaw centre
+    assert ha.calls[-1][2]["value"] == 45.0    # pitch centre (midpoint)
+    await d.move_head(1, 1)
+    assert ha.calls[-2][2]["value"] == 164.0   # yaw max
+    assert ha.calls[-1][2]["value"] == 90.0    # pitch max
+    await d.move_head(-1, -1)
+    assert ha.calls[-2][2]["value"] == -164.0  # yaw min
+    assert ha.calls[-1][2]["value"] == 0.0     # pitch min
 
 
 async def test_ha_driver_head_calibration_center_and_invert():
-    """Dashboard calibration: a custom center fixes a head that 'falls', invert flips direction."""
-    ha = _FakeHA()
+    """Calibrated centre = 'look straight'; invert flips; travel spans centre→each real end."""
+    ha = _FakeHA()  # servo_y 0..90 step 5
     d = HARobotDriver(
         ha=ha,
         entities={"head_yaw": "number.servo_x", "head_pitch": "number.servo_y"},
-        # pitch neutral is really 20 (not the 45 midpoint), and its direction is flipped.
+        # pitch's straight-ahead is really 20 (not the 45 midpoint), and it's flipped.
         calibration={"pitch": {"center": 20, "invert": True}},
     )
-    await d.move_head(0, 0)  # look straight
-    assert ha.calls[-1][2]["value"] == 20.0   # pitch sits at the calibrated neutral, not 45
-    await d.move_head(0, 10)  # command "up" 10°
-    assert ha.calls[-1][2]["value"] == 10.0   # inverted: 20 - 10 = 10 (snapped to step 5)
-    await d.move_head(0, -100)  # over-drive down → clamps to the servo max (90)
+    await d.move_head(0, 0)   # straight → the calibrated centre
+    assert ha.calls[-1][2]["value"] == 20.0
+    await d.move_head(0, 1)   # "up", inverted → toward min: 20 + (-1)*(20-0) = 0
+    assert ha.calls[-1][2]["value"] == 0.0
+    await d.move_head(0, -1)  # "down", inverted → toward max: 20 + 1*(90-20) = 90
     assert ha.calls[-1][2]["value"] == 90.0
 
 
@@ -130,17 +132,15 @@ async def test_ha_driver_read_head_raw():
     assert await d.read_head_raw() == {"yaw": 12.0, "pitch": 45.0}
 
 
-async def test_ha_driver_head_clamps_to_real_range_over_wide_calibration():
-    """A too-wide calibration must never emit a value outside the servo's real range (→ 500)."""
-    ha = _FakeHA()  # servo_y real range is 0..90, step 5
+async def test_ha_driver_head_always_in_range():
+    """Any command (even over-driven) stays within the servo's real range — never a 500."""
+    ha = _FakeHA()  # servo_y real range 0..90
     d = HARobotDriver(
-        ha=ha,
-        entities={"head_yaw": "number.servo_x", "head_pitch": "number.servo_y"},
-        calibration={"pitch": {"center": 45, "min": -100, "max": 500}},  # absurdly wide
+        ha=ha, entities={"head_yaw": "number.servo_x", "head_pitch": "number.servo_y"}
     )
-    await d.move_head(0, 100)   # would be 145 → clamp to the real max 90
+    await d.move_head(0, 5)    # 5 clamps to +1 → the real max (90)
     assert ha.calls[-1][2]["value"] == 90.0
-    await d.move_head(0, -100)  # would be -55 → clamp to the real min 0
+    await d.move_head(0, -5)   # -5 clamps to -1 → the real min (0)
     assert ha.calls[-1][2]["value"] == 0.0
 
 
