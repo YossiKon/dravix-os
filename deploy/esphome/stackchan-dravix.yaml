@@ -1,15 +1,19 @@
 # ════════════════════════════════════════════════════════════════════════════════
 #  dravix-os · StackChan ESPHome firmware (M5Stack CoreS3)
 #  Sits ON TOP of the M5Stack BSP (servos, mic, speaker, LEDs, touch come from it).
-#  Features in this file:
-#    • Animated kaomoji FACE — blink, drift, talk/listen, sleep "zzz"
-#    • VOICE assistant (mic + speaker) — white screen while listening/talking
+#  Features:
+#    • Animated kaomoji FACE (home) — blink, drift, talk/listen, sleep "zzz"
+#    • VOICE assistant — white screen while listening/talking
 #    • SLEEP + SCREENSAVER — dim then black, wake on touch or "ok nabu"
-#    • STATUS page — time · battery · date · WiFi · IP · uptime
-#    • HOME card — live Home Assistant values (temp · humidity)
-#    • Screen BRIGHTNESS control  ·  TAP cycles pages
-#  Head servos + head calibration + petting are handled by dravix-os (the add-on),
-#  not this file. Validate-first: if `time:` clashes with the BSP, delete that block.
+#    • SWIPE navigation:
+#        swipe DOWN  → status (time · battery · date · WiFi · IP · uptime)
+#        swipe UP    → back to the face (home)
+#        swipe LEFT / RIGHT → cycle Mushroom-style HA entity cards
+#    • Screen BRIGHTNESS control
+#  Head servos + calibration + petting are handled by dravix-os (the add-on).
+#  Validate-first. Swipe is done manually via the touchscreen (no built-in gesture in
+#  ESPHome LVGL); if on_update/on_release misbehave on your build, tell me the log.
+#  If `time:` clashes with the BSP, delete that block.
 # ════════════════════════════════════════════════════════════════════════════════
 
 esphome:
@@ -61,6 +65,7 @@ font:
     size: 20
 
 globals:
+  # face state
   - { id: g_expr,   type: int,  restore_value: false, initial_value: "0" }
   - { id: g_blink,  type: bool, restore_value: false, initial_value: "false" }
   - { id: g_listen, type: bool, restore_value: false, initial_value: "false" }
@@ -68,9 +73,15 @@ globals:
   - { id: g_sleep,  type: bool, restore_value: false, initial_value: "false" }
   - { id: g_busy,   type: bool, restore_value: false, initial_value: "false" }
   - { id: g_anim,   type: int,  restore_value: false, initial_value: "0" }
+  # swipe tracking + which "home screen" (0 = face, 1 = card1, 2 = card2)
+  - { id: sw_x0,    type: int,  restore_value: false, initial_value: "0" }
+  - { id: sw_y0,    type: int,  restore_value: false, initial_value: "0" }
+  - { id: sw_x1,    type: int,  restore_value: false, initial_value: "0" }
+  - { id: sw_y1,    type: int,  restore_value: false, initial_value: "0" }
+  - { id: sw_sleep, type: bool, restore_value: false, initial_value: "false" }
+  - { id: g_card,   type: int,  restore_value: false, initial_value: "0" }
 
-# If Validate says homeassistant time already exists (from the BSP), delete this
-# `time:` block and tell me — we'll reference the existing one.
+# If Validate says homeassistant time already exists (from the BSP), delete this block.
 time:
   - platform: homeassistant
     id: dravix_time
@@ -81,13 +92,11 @@ sensor:
     update_interval: 30s
   - platform: uptime
     id: up_sec
-  # Robot battery %, imported from HA (the BSP exposes the CoreS3 battery). If your
-  # battery entity has a different name, change it here — shows "--" until it resolves.
+  # Robot battery %, imported from HA. Fix the entity_id if yours differs.
   - platform: homeassistant
     id: ha_batt
     entity_id: sensor.dravix_battery_level
-  # ── Live values pulled FROM Home Assistant for the "home card" page ──────────
-  # Point these at any HA sensors you like (change the entity_id's below).
+  # ── CARD 1 (climate) values — change these entity_ids to your sensors ─────────
   - platform: homeassistant
     id: ha_temp
     entity_id: sensor.living_room_temperature
@@ -101,6 +110,14 @@ text_sensor:
       id: ip_txt
     ssid:
       id: ssid_txt
+  # ── CARD 2 (home) entities — pick ANY HA entities you want to show here ───────
+  # Each imports the entity's STATE as text (on/off/open/…). Rename freely.
+  - platform: homeassistant
+    id: ha_e1
+    entity_id: light.living_room
+  - platform: homeassistant
+    id: ha_e2
+    entity_id: binary_sensor.front_door
 
 number:
   - platform: template
@@ -139,7 +156,6 @@ number:
 lvgl:
   displays:
     - m5cores3_lcd
-  page_wrap: true          # tapping past the last page wraps back to the face
   on_idle:
     - timeout: !lambda 'return (uint32_t) id(n_screensaver).state * 60000;'
       then:
@@ -151,7 +167,7 @@ lvgl:
         - delay: 3s
         - light.turn_off: lcd_backlight
   pages:
-    # ── Page 1: the face ────────────────────────────────────────────────────────
+    # ── Page 0: the face (HOME) ──────────────────────────────────────────────────
     - id: page_face
       bg_color: 0x000000
       bg_opa: COVER
@@ -172,81 +188,36 @@ lvgl:
             text_color: 0x33E6C8
             text_font: face_font
             align: CENTER
-    # ── Page 2: status / vital info ─────────────────────────────────────────────
+    # ── Page 1: STATUS (swipe down) ──────────────────────────────────────────────
     - id: page_status
       bg_color: 0x000000
       bg_opa: COVER
       widgets:
-        - label:
-            id: lbl_time
-            text: "--:--"
-            text_font: text_font
-            text_color: 0x33E6C8
-            align: CENTER
-            y: -88
-        - label:
-            id: lbl_batt
-            text: "Batt --"
-            text_font: small_font
-            text_color: 0x5dffa0
-            align: CENTER
-            y: -50
-        - label:
-            id: lbl_date
-            text: ""
-            text_font: small_font
-            text_color: 0x8892A0
-            align: CENTER
-            y: -16
-        - label:
-            id: lbl_wifi
-            text: "WiFi"
-            text_font: small_font
-            text_color: 0x8892A0
-            align: CENTER
-            y: 16
-        - label:
-            id: lbl_ip
-            text: "IP"
-            text_font: small_font
-            text_color: 0x8892A0
-            align: CENTER
-            y: 48
-        - label:
-            id: lbl_up
-            text: "Up"
-            text_font: small_font
-            text_color: 0x8892A0
-            align: CENTER
-            y: 80
-    # ── Page 3: home card (live Home Assistant values) ──────────────────────────
-    - id: page_home
+        - label: { id: lbl_time, text: "--:--", text_font: text_font,  text_color: 0x33E6C8, align: CENTER, y: -88 }
+        - label: { id: lbl_batt, text: "Batt --", text_font: small_font, text_color: 0x5dffa0, align: CENTER, y: -50 }
+        - label: { id: lbl_date, text: "",        text_font: small_font, text_color: 0x8892A0, align: CENTER, y: -16 }
+        - label: { id: lbl_wifi, text: "WiFi",    text_font: small_font, text_color: 0x8892A0, align: CENTER, y:  16 }
+        - label: { id: lbl_ip,   text: "IP",      text_font: small_font, text_color: 0x8892A0, align: CENTER, y:  48 }
+        - label: { id: lbl_up,   text: "Up",      text_font: small_font, text_color: 0x8892A0, align: CENTER, y:  80 }
+    # ── Page 2: CARD 1 — climate (swipe left/right) ──────────────────────────────
+    - id: page_card1
       bg_color: 0x000000
       bg_opa: COVER
       widgets:
-        - label:
-            id: lbl_home_title
-            text: "HOME"
-            text_font: small_font
-            text_color: 0x33E6C8
-            align: CENTER
-            y: -70
-        - label:
-            id: lbl_temp
-            text: "Temp --"
-            text_font: text_font
-            text_color: 0xFFFFFF
-            align: CENTER
-            y: -15
-        - label:
-            id: lbl_hum
-            text: "Hum --"
-            text_font: text_font
-            text_color: 0xFFFFFF
-            align: CENTER
-            y: 35
+        - label: { id: lbl_c1_title, text: "CLIMATE", text_font: small_font, text_color: 0x33E6C8, align: CENTER, y: -70 }
+        - label: { id: lbl_temp, text: "Temp --", text_font: text_font, text_color: 0xFFFFFF, align: CENTER, y: -15 }
+        - label: { id: lbl_hum,  text: "Hum --",  text_font: text_font, text_color: 0xFFFFFF, align: CENTER, y:  35 }
+    # ── Page 3: CARD 2 — home entities (swipe left/right) ────────────────────────
+    - id: page_card2
+      bg_color: 0x000000
+      bg_opa: COVER
+      widgets:
+        - label: { id: lbl_c2_title, text: "HOME",    text_font: small_font, text_color: 0x33E6C8, align: CENTER, y: -70 }
+        - label: { id: lbl_e1, text: "Light  --",     text_font: text_font, text_color: 0xFFFFFF, align: CENTER, y: -15 }
+        - label: { id: lbl_e2, text: "Door  --",      text_font: text_font, text_color: 0xFFFFFF, align: CENTER, y:  35 }
 
 script:
+  # Redraw the animated face.
   - id: render_face
     then:
       - lvgl.widget.update:
@@ -265,6 +236,18 @@ script:
             if (id(g_blink))  return std::string("-_-");
             const char* faces[] = {"o_o", "^_^", "T_T", ">_<", "u_u", "o_O"};
             return std::string(faces[id(g_expr) % 6]);
+  # Show the current "home screen" card (0 = face, 1 = card1, 2 = card2).
+  - id: show_card
+    then:
+      - if:
+          condition: { lambda: 'return id(g_card) == 1;' }
+          then: [ { lvgl.page.show: page_card1 } ]
+      - if:
+          condition: { lambda: 'return id(g_card) == 2;' }
+          then: [ { lvgl.page.show: page_card2 } ]
+      - if:
+          condition: { lambda: 'return id(g_card) <= 0 || id(g_card) > 2;' }
+          then: [ { lvgl.page.show: page_face } ]
 
 select:
   - platform: template
@@ -308,27 +291,24 @@ interval:
             - delay: 160ms
             - globals.set: { id: g_blink, value: "false" }
             - script.execute: render_face
-  # Drives the sleep "zzz" and the talking mouth animation.
+  # Sleep "zzz" + talking mouth animation.
   - interval: 600ms
     then:
       - globals.set: { id: g_anim, value: !lambda 'return id(g_anim) + 1;' }
       - if:
-          condition:
-            lambda: 'return id(g_sleep) || id(g_talk);'
-          then:
-            - script.execute: render_face
+          condition: { lambda: 'return id(g_sleep) || id(g_talk);' }
+          then: [ { script.execute: render_face } ]
   # Occasional "alive" drift of the face (not in sleep / busy).
   - interval: 7s
     then:
       - if:
-          condition:
-            lambda: 'return !id(g_sleep) && !id(g_busy);'
+          condition: { lambda: 'return !id(g_sleep) && !id(g_busy);' }
           then:
             - lvgl.widget.update:
                 id: face_label
                 x: !lambda 'return (int)(random_float() * 24 - 12);'
                 y: !lambda 'return (int)(random_float() * 18 - 9);'
-  # Refresh the status + home-card labels.
+  # Refresh the status + card labels.
   - interval: 5s
     then:
       - lvgl.label.update:
@@ -377,23 +357,74 @@ interval:
             if (!id(ha_hum).has_state()) return std::string("Hum --");
             char b[24]; snprintf(b, sizeof(b), "Hum %.0f %%", id(ha_hum).state);
             return std::string(b);
+      - lvgl.label.update:
+          id: lbl_e1
+          text: !lambda 'return "Light  " + (id(ha_e1).has_state() ? id(ha_e1).state : std::string("--"));'
+      - lvgl.label.update:
+          id: lbl_e2
+          text: !lambda 'return "Door  " + (id(ha_e2).has_state() ? id(ha_e2).state : std::string("--"));'
 
+# ── Manual SWIPE detection (ESPHome LVGL has no built-in gesture) ────────────────
 touchscreen:
   - id: !extend touch
     on_touch:
+      # Remember whether we were asleep at the moment of touch (so a wake isn't a swipe),
+      # and reset the swipe deltas so a plain tap doesn't replay a stale swipe.
+      - globals.set: { id: sw_sleep, value: !lambda 'return id(g_sleep);' }
+      - lambda: 'id(sw_x0) = 0; id(sw_y0) = 0; id(sw_x1) = 0; id(sw_y1) = 0;'
+    on_update:
+      # Track the gesture: start = original press point, end = current point.
+      - lambda: |-
+          for (auto t : touches) {
+            id(sw_x0) = t.x_org; id(sw_y0) = t.y_org;
+            id(sw_x1) = t.x;     id(sw_y1) = t.y;
+          }
+    on_release:
+      # Asleep → wake and stop (don't treat the wake as a swipe).
       - if:
-          condition:
-            lambda: 'return id(g_sleep);'
+          condition: { lambda: 'return id(sw_sleep);' }
           then:
-            # Asleep → tap wakes it (restore your chosen brightness) and shows the face.
-            - light.turn_on:
-                id: lcd_backlight
-                brightness: !lambda 'return id(n_brightness).state / 100.0;'
+            - light.turn_on: { id: lcd_backlight, brightness: !lambda 'return id(n_brightness).state / 100.0;' }
             - globals.set: { id: g_sleep, value: "false" }
             - script.execute: render_face
-          else:
-            # Awake → tap cycles through the pages: face → status → home → face …
-            - lvgl.page.next
+      # swipe DOWN → status
+      - if:
+          condition:
+            lambda: |-
+              int dx = id(sw_x1) - id(sw_x0), dy = id(sw_y1) - id(sw_y0);
+              int adx = dx < 0 ? -dx : dx, ady = dy < 0 ? -dy : dy;
+              return !id(sw_sleep) && ady > adx && dy > 40;
+          then: [ { lvgl.page.show: page_status } ]
+      # swipe UP → face (home)
+      - if:
+          condition:
+            lambda: |-
+              int dx = id(sw_x1) - id(sw_x0), dy = id(sw_y1) - id(sw_y0);
+              int adx = dx < 0 ? -dx : dx, ady = dy < 0 ? -dy : dy;
+              return !id(sw_sleep) && ady > adx && dy < -40;
+          then:
+            - globals.set: { id: g_card, value: "0" }
+            - lvgl.page.show: page_face
+      # swipe LEFT → next card
+      - if:
+          condition:
+            lambda: |-
+              int dx = id(sw_x1) - id(sw_x0), dy = id(sw_y1) - id(sw_y0);
+              int adx = dx < 0 ? -dx : dx, ady = dy < 0 ? -dy : dy;
+              return !id(sw_sleep) && adx >= ady && dx < -40;
+          then:
+            - globals.set: { id: g_card, value: !lambda 'return (id(g_card) + 1) % 3;' }
+            - script.execute: show_card
+      # swipe RIGHT → previous card
+      - if:
+          condition:
+            lambda: |-
+              int dx = id(sw_x1) - id(sw_x0), dy = id(sw_y1) - id(sw_y0);
+              int adx = dx < 0 ? -dx : dx, ady = dy < 0 ? -dy : dy;
+              return !id(sw_sleep) && adx >= ady && dx > 40;
+          then:
+            - globals.set: { id: g_card, value: !lambda 'return (id(g_card) + 2) % 3;' }
+            - script.execute: show_card
 
 voice_assistant:
   microphone: i2s_mic
@@ -404,6 +435,8 @@ voice_assistant:
         brightness: !lambda 'return id(n_brightness).state / 100.0;'
     - globals.set: { id: g_sleep, value: "false" }
     - globals.set: { id: g_listen, value: "true" }
+    - lvgl.page.show: page_face      # come back to the face to talk
+    - globals.set: { id: g_card, value: "0" }
     - script.execute: render_face
   on_tts_start:
     - globals.set: { id: g_listen, value: "false" }
@@ -413,9 +446,3 @@ voice_assistant:
     - globals.set: { id: g_listen, value: "false" }
     - globals.set: { id: g_talk, value: "false" }
     - script.execute: render_face
-
-# ── NOTE: battery % is already on the status page (lbl_batt / ha_batt above) ─────
-# It reads sensor.dravix_battery_level from HA — the M5Stack BSP exposes the CoreS3
-# battery on its own. If your battery entity is named differently, just fix the
-# entity_id on `ha_batt`. Don't hand-add an AXP2101 block — it would clash with the
-# BSP and fail Validate.
