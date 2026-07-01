@@ -21,10 +21,13 @@
 esphome:
   name: stackchan
   friendly_name: stackchan
+  # LIST form on purpose: package lists CONCATENATE, so the BSP's own on_boot automations
+  # (RTC clock read + restoring the servos' calibration offsets!) are kept. A mapping here
+  # would silently REPLACE them — and the head would boot uncalibrated every time.
   on_boot:
-    priority: -100
-    then:
-      - micro_wake_word.start      # start listening for "Okay, Nabu" on boot
+    - priority: -100
+      then:
+        - micro_wake_word.start    # start listening for "Okay, Nabu" on boot
 
 esp32:
   variant: esp32s3
@@ -56,7 +59,7 @@ packages:
 display:
   - id: !extend m5cores3_lcd
     show_test_card: false
-    invert_colors: false          # flip to true if colours come out inverted
+    # note: DON'T set invert_colors here — the BSP's `true` is what the CoreS3 panel needs.
 
 font:
   - file: "gfonts://Roboto Mono"

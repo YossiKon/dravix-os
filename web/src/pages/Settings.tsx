@@ -82,9 +82,11 @@ export function SettingsPage(props: {
   }
 
   async function setInvert(axis: "yaw" | "pitch", invert: boolean) {
-    if (!cfg) return;
-    const cal = { ...cfg.calibration, [axis]: { ...(cfg.calibration[axis] ?? {}), invert } };
     try {
+      // Always merge into the SERVER's current calibration (not our possibly-stale copy) —
+      // otherwise flipping a toggle could silently erase a freshly captured head centre.
+      const fresh = await apiGet<RobotConfig>("/api/robot/config");
+      const cal = { ...fresh.calibration, [axis]: { ...(fresh.calibration[axis] ?? {}), invert } };
       await apiSend("/api/robot/config", "PUT", { calibration: cal });
       props.onConfigChanged();
     } catch (e) {

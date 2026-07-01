@@ -30,28 +30,36 @@ export function ClimatePage(props: { entities: HAEntity[] }) {
       .catch(() => setLoadedCfg(true));
   }, []);
 
-  const refresh = useCallback(async (ent: string) => {
+  const [failed, setFailed] = useState(false);
+
+  const refresh = useCallback(async (ent: string, background: boolean) => {
     if (!ent) {
       setSt(null);
       return;
     }
     try {
       setSt(await apiGet<ClimateState>(`/api/climate/state?entity_id=${encodeURIComponent(ent)}`));
+      setFailed(false);
     } catch (e) {
-      setSt(null);
-      toastErr(e);
+      // Background polls stay quiet and keep the last known state; only a
+      // user-initiated load (choosing an entity) surfaces the error.
+      if (!background) {
+        setSt(null);
+        setFailed(true);
+        toastErr(e);
+      }
     }
   }, []);
 
   useEffect(() => {
-    if (loadedCfg) void refresh(entity);
+    if (loadedCfg) void refresh(entity, false);
   }, [entity, loadedCfg, refresh]);
 
   // poll while visible so the current temperature stays fresh
   useEffect(() => {
     if (!entity) return;
     const t = setInterval(() => {
-      if (document.visibilityState === "visible") void refresh(entity);
+      if (document.visibilityState === "visible") void refresh(entity, true);
     }, 10000);
     return () => clearInterval(t);
   }, [entity, refresh]);
@@ -155,7 +163,15 @@ export function ClimatePage(props: { entities: HAEntity[] }) {
         </Section>
       )}
 
-      {entity && !st && (
+      {entity && !st && failed && (
+        <div className="card animate-rise">
+          <p className="mb-3 text-red">לא הצלחתי לקרוא את מצב המזגן.</p>
+          <button className="btn w-full" onClick={() => void refresh(entity, false)}>
+            ↻ נסה שוב
+          </button>
+        </div>
+      )}
+      {entity && !st && !failed && (
         <div className="card animate-rise text-mute">טוען את מצב המזגן…</div>
       )}
       {!entity && loadedCfg && (
