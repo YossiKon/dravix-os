@@ -29,7 +29,7 @@ packages:
     files: [examples/kit/stackchan-bsp.factory.yaml]
     refresh: 1d
 
-# Turn off the BSP test card so LVGL owns the screen.
+# Turn off the test card so LVGL owns the screen.
 display:
   - id: !extend m5cores3_lcd
     show_test_card: false
@@ -39,9 +39,17 @@ font:
   - file: "gfonts://Roboto Mono"
     id: face_font
     size: 96
-    glyphs: "-_^Tu><oO "
+    glyphs: "-_^Tu><oOz "
 
-# ── The face (main screen) — a big expression dravix sets ──
+globals:
+  - { id: g_expr,   type: int,  restore_value: false, initial_value: "0" }
+  - { id: g_blink,  type: bool, restore_value: false, initial_value: "false" }
+  - { id: g_listen, type: bool, restore_value: false, initial_value: "false" }
+  - { id: g_talk,   type: bool, restore_value: false, initial_value: "false" }
+  - { id: g_sleep,  type: bool, restore_value: false, initial_value: "false" }
+  - { id: g_busy,   type: bool, restore_value: false, initial_value: "false" }
+  - { id: g_anim,   type: int,  restore_value: false, initial_value: "0" }
+
 lvgl:
   displays:
     - m5cores3_lcd
@@ -57,8 +65,25 @@ lvgl:
             text_font: face_font
             align: CENTER
 
-# Expression entity dravix controls (select.stackchan_face).
+# Draw the face from the current state.
+script:
+  - id: render_face
+    then:
+      - lvgl.label.update:
+          id: face_label
+          text: !lambda |-
+            if (id(g_sleep)) {
+              const char* z[] = {"u_u", "u_u z", "u_u zz", "u_u zzz"};
+              return std::string(z[id(g_anim) % 4]);
+            }
+            if (id(g_listen)) return std::string("O_O");
+            if (id(g_talk))   return std::string((id(g_anim) % 2) ? "o o" : "o_o");
+            if (id(g_blink))  return std::string("-_-");
+            const char* faces[] = {"o_o", "^_^", "T_T", ">_<", "u_u", "o_O"};
+            return std::string(faces[id(g_expr) % 6]);
+
 select:
+  # Expression (dravix sets this → select.stackchan_face)
   - platform: template
     name: "Face"
     id: robot_face
@@ -66,30 +91,74 @@ select:
     options: [neutral, happy, sad, angry, sleepy, doubt]
     initial_option: neutral
     set_action:
-      - lvgl.label.update:
-          id: face_label
-          text: !lambda |-
-            if (x == "happy") return std::string("^_^");
-            else if (x == "sad") return std::string("T_T");
-            else if (x == "angry") return std::string(">_<");
-            else if (x == "sleepy") return std::string("u_u");
-            else if (x == "doubt") return std::string("o_O");
-            else return std::string("-_-");
+      - globals.set:
+          id: g_expr
+          value: !lambda |-
+            if (x == "happy") return 1;
+            else if (x == "sad") return 2;
+            else if (x == "angry") return 3;
+            else if (x == "sleepy") return 4;
+            else if (x == "doubt") return 5;
+            return 0;
+      - script.execute: render_face
+  # Mode: awake / busy (blink only) / sleep (zzz)
+  - platform: template
+    name: "Mode"
+    id: robot_mode
+    optimistic: true
+    options: [awake, busy, sleep]
+    initial_option: awake
+    set_action:
+      - globals.set: { id: g_sleep, value: !lambda 'return x == std::string("sleep");' }
+      - globals.set: { id: g_busy,  value: !lambda 'return x == std::string("busy");' }
+      - script.execute: render_face
 
-# ── Voice: Home Assistant Assist + "okay nabu" wake word (on-device) ──
-micro_wake_word:
-  microphone: i2s_mic
-  models:
-    - model: okay_nabu
-  on_wake_word_detected:
-    - voice_assistant.start
+interval:
+  # Random blink (also in busy; never while sleeping/talking/listening)
+  - interval: 1s
+    then:
+      - if:
+          condition:
+            lambda: 'return !id(g_sleep) && !id(g_talk) && !id(g_listen) && random_float() < 0.22;'
+          then:
+            - globals.set: { id: g_blink, value: "true" }
+            - script.execute: render_face
+            - delay: 160ms
+            - globals.set: { id: g_blink, value: "false" }
+            - script.execute: render_face
+  # Animate: zzz while asleep, mouth while talking
+  - interval: 600ms
+    then:
+      - globals.set: { id: g_anim, value: !lambda 'return id(g_anim) + 1;' }
+      - if:
+          condition:
+            lambda: 'return id(g_sleep) || id(g_talk);'
+          then:
+            - script.execute: render_face
+  # Subtle random drift (alive + anti burn-in); not while busy/sleeping
+  - interval: 7s
+    then:
+      - if:
+          condition:
+            lambda: 'return !id(g_sleep) && !id(g_busy);'
+          then:
+            - lvgl.widget.update:
+                id: face_label
+                x: !lambda 'return (int)(random_float() * 24 - 12);'
+                y: !lambda 'return (int)(random_float() * 18 - 9);'
 
+# Voice: Home Assistant Assist (wake word handled by HA's openWakeWord pipeline).
 voice_assistant:
   microphone: i2s_mic
   media_player: va_media_player
   on_listening:
-    - lvgl.label.update: { id: face_label, text: "O_O" }   # listening
+    - globals.set: { id: g_listen, value: "true" }
+    - script.execute: render_face
   on_tts_start:
-    - lvgl.label.update: { id: face_label, text: "-o-" }   # talking (mouth open)
+    - globals.set: { id: g_listen, value: "false" }
+    - globals.set: { id: g_talk, value: "true" }
+    - script.execute: render_face
   on_end:
-    - lvgl.label.update: { id: face_label, text: "-_-" }   # back to neutral
+    - globals.set: { id: g_listen, value: "false" }
+    - globals.set: { id: g_talk, value: "false" }
+    - script.execute: render_face
