@@ -52,6 +52,10 @@ class Settings(BaseSettings):
     # Manual control + commanded movements still work. Toggle live from the dashboard too.
     idle_motion: bool = True
 
+    # Pet reaction: when petted, tilt the head up (pleased) then return after a hold.
+    pet_head_raise: float = 30.0  # degrees up on a pet (0 disables the head-lift)
+    pet_head_hold_s: float = 10.0  # seconds to hold up before returning to centre
+
     # Home Assistant
     ha_url: str = "http://homeassistant.local:8123"
     ha_token: str = ""

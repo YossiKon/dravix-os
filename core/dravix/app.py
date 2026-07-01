@@ -24,6 +24,7 @@ from .logging import get_logger, setup_logging
 from .modes import ModeContext, ModeEngine
 from .mood import MoodEngine
 from .persona import resolve_voice
+from .pethead import PetHeadBehavior
 from .reactions import ReactionEngine
 from .scheduler import Scheduler
 from .state import RuntimeState
@@ -110,6 +111,13 @@ async def lifespan(app: FastAPI):
     mood = MoodEngine(bus, controller, store=store, engine=engine)
     await mood.start()
 
+    # Pet reaction: lift the head up when petted (pleased), lower it after a hold.
+    pet_head = PetHeadBehavior(
+        bus, controller, hold_s=settings.pet_head_hold_s, raise_pitch=settings.pet_head_raise
+    )
+    if settings.pet_head_raise:
+        await pet_head.start()
+
     # Scheduler: daily jobs (good-morning, reminders) + one-shot timers.
     scheduler = Scheduler(bus, controller, store=store, engine=engine)
     await scheduler.start()
@@ -153,6 +161,7 @@ async def lifespan(app: FastAPI):
     app.state.frigate = frigate
     app.state.reactions = reactions
     app.state.mood = mood
+    app.state.pet_head = pet_head
     app.state.scheduler = scheduler
     app.state.xiaozhi = xiaozhi
 
@@ -165,6 +174,7 @@ async def lifespan(app: FastAPI):
         if ha_bridge is not None:
             await ha_bridge.stop()
         await scheduler.stop()
+        await pet_head.stop()
         await mood.stop()
         await reactions.stop()
         await engine.stop()

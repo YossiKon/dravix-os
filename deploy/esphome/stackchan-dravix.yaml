@@ -1,3 +1,17 @@
+# ════════════════════════════════════════════════════════════════════════════════
+#  dravix-os · StackChan ESPHome firmware (M5Stack CoreS3)
+#  Sits ON TOP of the M5Stack BSP (servos, mic, speaker, LEDs, touch come from it).
+#  Features in this file:
+#    • Animated kaomoji FACE — blink, drift, talk/listen, sleep "zzz"
+#    • VOICE assistant (mic + speaker) — white screen while listening/talking
+#    • SLEEP + SCREENSAVER — dim then black, wake on touch or "ok nabu"
+#    • STATUS page — time · date · WiFi · IP · uptime
+#    • HOME card — live Home Assistant values (temp · humidity)
+#    • Screen BRIGHTNESS control  ·  TAP cycles pages
+#  Head servos + head calibration + petting are handled by dravix-os (the add-on),
+#  not this file. Validate-first: if `time:` clashes with the BSP, delete that block.
+# ════════════════════════════════════════════════════════════════════════════════
+
 esphome:
   name: stackchan
   friendly_name: stackchan
