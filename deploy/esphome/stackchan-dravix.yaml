@@ -29,12 +29,13 @@ packages:
     files: [examples/kit/stackchan-bsp.factory.yaml]
     refresh: 1d
 
-# Turn off the test card so LVGL owns the screen.
+# Own the screen with LVGL. invert_colors:false so black draws black (flip to
+# true if the colours come out inverted on your panel).
 display:
   - id: !extend m5cores3_lcd
     show_test_card: false
+    invert_colors: false
 
-# Big font for the face.
 font:
   - file: "gfonts://Roboto Mono"
     id: face_font
@@ -50,27 +51,73 @@ globals:
   - { id: g_busy,   type: bool, restore_value: false, initial_value: "false" }
   - { id: g_anim,   type: int,  restore_value: false, initial_value: "0" }
 
+# Screensaver + sleep timers (you pick the minutes from HA).
+number:
+  - platform: template
+    name: "Screensaver after (min)"
+    id: n_screensaver
+    optimistic: true
+    min_value: 1
+    max_value: 120
+    step: 1
+    initial_value: 5
+    restore_value: true
+  - platform: template
+    name: "Sleep after (min)"
+    id: n_sleep
+    optimistic: true
+    min_value: 1
+    max_value: 240
+    step: 1
+    initial_value: 15
+    restore_value: true
+
 lvgl:
   displays:
     - m5cores3_lcd
+  on_idle:
+    - timeout: !lambda 'return (uint32_t) id(n_screensaver).state * 60000;'
+      then:
+        - light.turn_on: { id: lcd_backlight, brightness: 25% }
+    - timeout: !lambda 'return (uint32_t) id(n_sleep).state * 60000;'
+      then:
+        - globals.set: { id: g_sleep, value: "true" }
+        - script.execute: render_face
+        - delay: 3s
+        - light.turn_off: lcd_backlight
   pages:
     - id: page_face
       bg_color: 0x000000
       bg_opa: COVER
       widgets:
-        - label:
+        - obj:            # full-screen background (black; white when the AI is active)
+            id: bg_rect
+            x: 0
+            y: 0
+            width: 320
+            height: 240
+            radius: 0
+            border_width: 0
+            bg_color: 0x000000
+            bg_opa: COVER
+        - label:          # the face
             id: face_label
-            text: "-_-"
+            text: "o_o"
             text_color: 0x33E6C8
             text_font: face_font
             align: CENTER
 
-# Draw the face from the current state.
 script:
   - id: render_face
     then:
+      # Background: white while listening/talking, else black.
+      - lvgl.widget.update:
+          id: bg_rect
+          bg_color: !lambda 'return (id(g_listen) || id(g_talk)) ? lv_color_hex(0xFFFFFF) : lv_color_hex(0x000000);'
+      # Face: black on the white "active" background, else phosphor.
       - lvgl.label.update:
           id: face_label
+          text_color: !lambda 'return (id(g_listen) || id(g_talk)) ? lv_color_hex(0x000000) : lv_color_hex(0x33E6C8);'
           text: !lambda |-
             if (id(g_sleep)) {
               const char* z[] = {"u_u", "u_u z", "u_u zz", "u_u zzz"};
@@ -83,7 +130,6 @@ script:
             return std::string(faces[id(g_expr) % 6]);
 
 select:
-  # Expression (dravix sets this → select.stackchan_face)
   - platform: template
     name: "Face"
     id: robot_face
@@ -101,7 +147,6 @@ select:
             else if (x == "doubt") return 5;
             return 0;
       - script.execute: render_face
-  # Mode: awake / busy (blink only) / sleep (zzz)
   - platform: template
     name: "Mode"
     id: robot_mode
@@ -114,7 +159,6 @@ select:
       - script.execute: render_face
 
 interval:
-  # Random blink (also in busy; never while sleeping/talking/listening)
   - interval: 1s
     then:
       - if:
@@ -126,7 +170,6 @@ interval:
             - delay: 160ms
             - globals.set: { id: g_blink, value: "false" }
             - script.execute: render_face
-  # Animate: zzz while asleep, mouth while talking
   - interval: 600ms
     then:
       - globals.set: { id: g_anim, value: !lambda 'return id(g_anim) + 1;' }
@@ -135,7 +178,6 @@ interval:
             lambda: 'return id(g_sleep) || id(g_talk);'
           then:
             - script.execute: render_face
-  # Subtle random drift (alive + anti burn-in); not while busy/sleeping
   - interval: 7s
     then:
       - if:
@@ -147,11 +189,21 @@ interval:
                 x: !lambda 'return (int)(random_float() * 24 - 12);'
                 y: !lambda 'return (int)(random_float() * 18 - 9);'
 
-# Voice: Home Assistant Assist (wake word handled by HA's openWakeWord pipeline).
+# Touch → wake up.
+touchscreen:
+  - id: !extend touch
+    on_touch:
+      - light.turn_on: { id: lcd_backlight, brightness: 100% }
+      - globals.set: { id: g_sleep, value: "false" }
+      - script.execute: render_face
+
+# Voice: HA Assist (wake word via HA openWakeWord). Also wakes the screen.
 voice_assistant:
   microphone: i2s_mic
   media_player: va_media_player
   on_listening:
+    - light.turn_on: { id: lcd_backlight, brightness: 100% }
+    - globals.set: { id: g_sleep, value: "false" }
     - globals.set: { id: g_listen, value: "true" }
     - script.execute: render_face
   on_tts_start:
