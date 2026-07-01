@@ -6,6 +6,9 @@ import type {
   AiFunResult,
   AiProviderResponse,
   ChatResponse,
+  ClimateConfig,
+  ClimateSetBody,
+  ClimateState,
   ConfigResponse,
   EmotesResponse,
   ExportStore,
@@ -31,6 +34,8 @@ import type {
   ReactionsResponse,
   RobotConfig,
   RobotConfigUpdate,
+  RobotMode,
+  RobotModeResponse,
   Routine,
   RoutinesResponse,
   SayMoodResult,
@@ -147,6 +152,13 @@ export const api = {
       json: { enabled },
     }),
 
+  // Sleep now / wake via the robot's HA mode_select entity.
+  setRobotMode: (mode: RobotMode) =>
+    request<RobotModeResponse>("/api/robot/mode", {
+      method: "POST",
+      json: { mode },
+    }),
+
   chat: (text: string, conversationId?: string, speak = false) =>
     request<ChatResponse>("/api/ai/chat", {
       method: "POST",
@@ -225,6 +237,26 @@ export const api = {
     request<ScreensResponse>("/api/screens", {
       method: "PUT",
       json: { screens },
+    }),
+
+  /* ── Climate (AC / thermostat) ────────────────────────────────────────── */
+  getClimateState: (entityId: string) =>
+    request<ClimateState>(
+      `/api/climate/state?entity_id=${encodeURIComponent(entityId)}`,
+    ),
+
+  setClimate: (body: ClimateSetBody) =>
+    request<{ ok: boolean }>("/api/climate/set", {
+      method: "POST",
+      json: body,
+    }),
+
+  getClimateConfig: () => request<ClimateConfig>("/api/config/climate"),
+
+  setClimateConfig: (entity: string) =>
+    request<ClimateConfig>("/api/config/climate", {
+      method: "PUT",
+      json: { entity },
     }),
 
   /* ── Cameras / Frigate ────────────────────────────────────────────────── */

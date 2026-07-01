@@ -6,6 +6,7 @@ import { EventsLog } from "../components/EventsLog";
 import { ManualControl } from "../components/ManualControl";
 import { ModesPanel } from "../components/ModesPanel";
 import { MoodMeters } from "../components/MoodMeters";
+import { PowerModeControl } from "../components/PowerModeControl";
 import { StatusPanel } from "../components/StatusPanel";
 import { TalkPanel } from "../components/TalkPanel";
 
@@ -66,6 +67,9 @@ export function AgentPage({
             />
           )}
         </div>
+
+        {/* Sleep now / Wake — only shows when a mode_select entity is mapped */}
+        <PowerModeControl />
 
         {/* Live actuator control — joystick head pad + face/leds/say, gated */}
         <ManualControl status={status} onRefresh={refreshStatus} />

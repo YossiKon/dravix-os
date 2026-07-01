@@ -85,6 +85,19 @@ class ScreenPusher:
             name = attrs.get("friendly_name") or entity_id
             name = str(name)[:NAME_MAX]
             state = st.get("state", "")
+            # Climate entities read nicer as "Name  cool 24>21" (mode + current>target)
+            # than the bare hvac state; fall back to the plain line if attrs are missing.
+            if entity_id.startswith("climate."):
+                try:
+                    current = attrs.get("current_temperature")
+                    target = attrs.get("temperature")
+                    if current is not None and target is not None:
+                        lines.append(
+                            f"{name}  {state} {float(current):.0f}>{float(target):.0f}"
+                        )
+                        continue
+                except Exception as exc:  # noqa: BLE001 — never let one card break the loop
+                    log.debug("climate format for %s failed: %s", entity_id, exc)
             lines.append(f"{name}  {state}")
         return "\n".join(lines)
 

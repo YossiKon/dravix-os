@@ -375,6 +375,36 @@ export interface ScreenUpdate {
   sleep_min?: number;
 }
 
+/* ── Robot power mode (awake / busy / sleep) ─────────────────────────────── */
+export type RobotMode = "awake" | "busy" | "sleep";
+
+export interface RobotModeResponse {
+  ok: boolean;
+  mode: RobotMode;
+}
+
+/* ── Climate (AC / thermostat) ───────────────────────────────────────────── */
+export interface ClimateState {
+  state: string | null;
+  current_temperature: number | null;
+  temperature: number | null;
+  hvac_mode: string | null;
+  hvac_modes: string[] | null;
+  min_temp: number | null;
+  max_temp: number | null;
+  target_temp_step: number | null;
+}
+
+export interface ClimateSetBody {
+  entity_id: string;
+  temperature?: number;
+  hvac_mode?: string;
+}
+
+export interface ClimateConfig {
+  entity: string;
+}
+
 /* ── Inbox (queued / spoken messages) ────────────────────────────────────── */
 export interface InboxMessage {
   id: string;

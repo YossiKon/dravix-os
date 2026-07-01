@@ -94,6 +94,15 @@ class HARobotDriver(RobotDriver):
             "select", "select_option", {"entity_id": sel, "option": value}
         )
 
+    async def set_mode(self, mode: str) -> None:
+        """Set the robot's power mode (awake | busy | sleep) via its ``mode_select`` entity."""
+        sel = self._entities.get("mode_select")
+        if not sel:
+            raise NotImplementedError("no mode_select entity configured")
+        await self._ha.call_service(
+            "select", "select_option", {"entity_id": sel, "option": mode}
+        )
+
     async def _num_range(
         self, entity_id: str
     ) -> tuple[float | None, float | None, float | None]:

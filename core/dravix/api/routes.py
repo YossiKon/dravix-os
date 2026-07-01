@@ -50,6 +50,10 @@ class IdleMotionBody(BaseModel):
     enabled: bool
 
 
+class ModeBody(BaseModel):
+    mode: str  # awake | busy | sleep
+
+
 class ChatBody(BaseModel):
     text: str
     conversation_id: str | None = None
@@ -144,6 +148,28 @@ async def robot_head(body: HeadBody, request: Request):
 async def robot_leds(body: LedsBody, request: Request):
     await _guard(_robot(request).set_leds(body.color, body.brightness))
     return {"ok": True}
+
+
+_ROBOT_MODES = {"awake", "busy", "sleep"}
+
+
+@router.post("/api/robot/mode")
+async def set_robot_mode(body: ModeBody, request: Request):
+    """Put the robot to sleep / wake it via its HA ``mode_select`` entity."""
+    mode = body.mode.strip().lower()
+    if mode not in _ROBOT_MODES:
+        raise HTTPException(status_code=400, detail=f"unknown mode {body.mode!r}")
+    drv = request.app.state.robot.driver
+    setter = getattr(drv, "set_mode", None)
+    if setter is None:
+        raise HTTPException(status_code=409, detail="active backend has no mode control")
+    try:
+        await setter(mode)
+    except NotImplementedError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return {"ok": True, "mode": mode}
 
 
 @router.put("/api/robot/idle-motion")
@@ -622,6 +648,71 @@ async def put_screens(body: ScreensBody, request: Request):
         clean.append({"title": str(card.get("title", "")), "entities": entities})
     request.app.state.store.set_screens(clean)  # the pusher reads these live
     return {"screens": request.app.state.store.screens()}
+
+
+# ── climate (AC / thermostat control) ─────────────────────────────────────────
+class ClimateSetBody(BaseModel):
+    entity_id: str
+    temperature: float | None = None
+    hvac_mode: str | None = None
+
+
+class ClimateConfigBody(BaseModel):
+    entity: str = ""
+
+
+@router.get("/api/climate/state")
+async def get_climate_state(request: Request, entity_id: str):
+    ha = request.app.state.ha
+    if ha is None:
+        raise HTTPException(status_code=503, detail="Home Assistant not configured")
+    try:
+        st = await ha.get_state(entity_id)
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=502, detail=f"climate state fetch failed: {exc}") from exc
+    attrs = st.get("attributes") or {}
+    return {
+        "state": st.get("state"),
+        "current_temperature": attrs.get("current_temperature"),
+        "temperature": attrs.get("temperature"),
+        "hvac_mode": st.get("state"),
+        "hvac_modes": attrs.get("hvac_modes"),
+        "min_temp": attrs.get("min_temp"),
+        "max_temp": attrs.get("max_temp"),
+        "target_temp_step": attrs.get("target_temp_step"),
+    }
+
+
+@router.post("/api/climate/set")
+async def set_climate(body: ClimateSetBody, request: Request):
+    ha = request.app.state.ha
+    if ha is None:
+        raise HTTPException(status_code=503, detail="Home Assistant not configured")
+    try:
+        if body.temperature is not None:
+            await ha.call_service(
+                "climate", "set_temperature",
+                {"entity_id": body.entity_id, "temperature": body.temperature},
+            )
+        if body.hvac_mode is not None:
+            await ha.call_service(
+                "climate", "set_hvac_mode",
+                {"entity_id": body.entity_id, "hvac_mode": body.hvac_mode},
+            )
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=502, detail=f"climate set failed: {exc}") from exc
+    return {"ok": True}
+
+
+@router.get("/api/config/climate")
+async def get_climate_config(request: Request):
+    return {"entity": request.app.state.store.climate_entity()}
+
+
+@router.put("/api/config/climate")
+async def put_climate_config(body: ClimateConfigBody, request: Request):
+    request.app.state.store.set_climate_entity(body.entity)
+    return {"entity": request.app.state.store.climate_entity()}
 
 
 # ── personality: mood + emotes ────────────────────────────────────────────────

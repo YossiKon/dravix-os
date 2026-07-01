@@ -169,6 +169,25 @@ async def test_ha_driver_screen_number_get_set():
     assert ha.calls[-1] == ("number", "set_value", {"entity_id": "number.servo_y", "value": 5.0})
 
 
+async def test_ha_driver_set_mode_via_select():
+    """Sleep/wake maps to select.select_option on the mode_select entity."""
+    ha = _FakeHA()
+    d = HARobotDriver(ha=ha, entities={"mode_select": "select.dravix_mode"})
+    await d.set_mode("sleep")
+    assert ha.calls[-1] == (
+        "select", "select_option",
+        {"entity_id": "select.dravix_mode", "option": "sleep"},
+    )
+
+
+async def test_ha_driver_set_mode_without_entity_raises():
+    d = HARobotDriver(ha=_FakeHA(), entities={})
+    import pytest
+
+    with pytest.raises(NotImplementedError):
+        await d.set_mode("awake")
+
+
 async def test_ha_driver_stackchan_esphome_entities():
     """The full StackChan ESPHome entity set: face (select) + camera add CAP_FACE/CAP_PHOTO."""
     ha = _FakeHA()

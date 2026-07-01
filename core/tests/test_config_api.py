@@ -79,6 +79,17 @@ def test_config_api(tmp_path, monkeypatch):
             assert client.post("/api/import", json={"store": {"voices": ["imported-voice"]}}).status_code == 200
             assert client.get("/api/voice").json()["voices"] == ["imported-voice"]
 
+            # Climate config round-trips through the store; state/set need HA → 503 here.
+            assert client.get("/api/config/climate").json()["entity"] == ""
+            assert client.put("/api/config/climate", json={"entity": "climate.ac"}).json()["entity"] == "climate.ac"
+            assert client.get("/api/config/climate").json()["entity"] == "climate.ac"
+            assert client.get("/api/climate/state", params={"entity_id": "climate.ac"}).status_code == 503
+            assert client.post("/api/climate/set", json={"entity_id": "climate.ac", "temperature": 22}).status_code == 503
+
+            # Robot mode: the mock driver has no mode control → 409; a bad mode → 400.
+            assert client.post("/api/robot/mode", json={"mode": "sleep"}).status_code == 409
+            assert client.post("/api/robot/mode", json={"mode": "nope"}).status_code == 400
+
             # Frigate cameras with no HA configured → empty list.
             assert client.get("/api/frigate/cameras").json()["cameras"] == []
             # Robot camera relay: mock yields no real frame → 503 (not a crash).

@@ -14,6 +14,15 @@ class _FakeHA:
         self.states = {
             "sensor.temp": {"state": "21", "attributes": {"friendly_name": "Living Room Temperature"}},
             "light.lamp": {"state": "on", "attributes": {"friendly_name": "Lamp"}},
+            "climate.ac": {
+                "state": "cool",
+                "attributes": {
+                    "friendly_name": "AC",
+                    "current_temperature": 24.4,
+                    "temperature": 21.0,
+                },
+            },
+            "climate.bare": {"state": "heat", "attributes": {"friendly_name": "Bare AC"}},
         }
 
     async def call_service(self, domain, service, data=None):
@@ -57,6 +66,30 @@ async def test_configured_screen_pushes_title_and_body():
     # Cards beyond what's configured get empty title + body.
     assert _value(ha.calls, "text.dravix_card2_title") == ""
     assert _value(ha.calls, "text.dravix_card2_body") == ""
+
+
+async def test_climate_card_formats_mode_and_temps():
+    ha = _FakeHA()
+    store = _StoreStub([{"title": "Air", "entities": ["climate.ac"]}])
+    pusher = ScreenPusher(ha, store, interval=0.01)
+    await pusher.start()
+    await asyncio.sleep(0.05)
+    await pusher.stop()
+
+    # "Name  <mode> <current>><target>" — temps rounded to whole degrees.
+    assert _value(ha.calls, "text.dravix_card1_body") == "AC  cool 24>21"
+
+
+async def test_climate_card_without_temps_falls_back_to_plain_line():
+    ha = _FakeHA()
+    store = _StoreStub([{"title": "Air", "entities": ["climate.bare"]}])
+    pusher = ScreenPusher(ha, store, interval=0.01)
+    await pusher.start()
+    await asyncio.sleep(0.05)
+    await pusher.stop()
+
+    # No current/target attributes → the plain "Name  State" line.
+    assert _value(ha.calls, "text.dravix_card1_body") == "Bare AC  heat"
 
 
 async def test_pusher_noop_without_ha():

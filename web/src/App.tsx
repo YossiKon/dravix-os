@@ -13,6 +13,7 @@ import { useWebSocket } from "./hooks/useWebSocket";
 import { CAP, type BusEvent } from "./lib/types";
 import { AgentPage } from "./pages/AgentPage";
 import { AutomationsPage } from "./pages/AutomationsPage";
+import { ClimatePage } from "./pages/ClimatePage";
 import { ScreensPage } from "./pages/ScreensPage";
 import { SetupPage } from "./pages/SetupPage";
 
@@ -24,6 +25,7 @@ type PageId =
   | "memory"
   | "cloud"
   | "screens"
+  | "climate"
   | "setup"
   | "settings";
 
@@ -81,6 +83,8 @@ function Shell() {
       { id: "cloud", label: "Cloud", icon: "☁", visible: cloudConfigured },
       // Screens: pick which HA entities show on the robot's 3 display cards.
       { id: "screens", label: "Screens", icon: "▦", visible: true },
+      // Climate: control an AC / thermostat (always available).
+      { id: "climate", label: "Climate", icon: "❄", visible: true },
       // Setup is always visible — it's how the robot gets configured.
       { id: "setup", label: "Setup", icon: "⛭", visible: true },
       { id: "settings", label: "Settings", icon: "⚙", visible: true },
@@ -158,6 +162,12 @@ function Shell() {
         {page === "screens" && (
           <div className="mx-auto max-w-3xl">
             <ScreensPage />
+          </div>
+        )}
+
+        {page === "climate" && (
+          <div className="mx-auto max-w-3xl">
+            <ClimatePage />
           </div>
         )}
 

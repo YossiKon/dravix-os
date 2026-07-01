@@ -31,6 +31,7 @@ _DEFAULTS: dict[str, Any] = {
     "voices": [],  # user catalog of voice ids to pick from (depends on your TTS engine)
     "inbox": [],  # [{id, text}] — queued notifications for the robot to read out
     "screens": [],  # up to 3 display cards: [{title, entities:[entity_id, ...]}] pushed to the robot
+    "climate_entity": "",  # the dashboard's chosen AC / thermostat (climate.*) for the Climate page
     # Robot wiring picked from the dashboard (overrides the add-on/env defaults):
     "robot_driver": None,  # None = env default (mock|ha|mcp)
     "robot_entities": {},  # {face_select, head_yaw, head_pitch, media_player, tts_engine,
@@ -70,6 +71,7 @@ class Store:
             "ai_provider", "mode_overrides", "disabled_modes", "reactions", "schedule",
             "personas", "active_persona", "memories", "routines", "voice", "voices", "inbox",
             "screens", "robot_driver", "robot_entities", "head_calibration",
+            "climate_entity",
         )
         for key in keys:
             if key in patch:
@@ -191,6 +193,13 @@ class Store:
 
     def set_screens(self, screens: list[dict[str, Any]]) -> None:
         self._data["screens"] = screens
+        self.save()
+
+    def climate_entity(self) -> str:
+        return str(self._data.get("climate_entity", "") or "")
+
+    def set_climate_entity(self, entity: str) -> None:
+        self._data["climate_entity"] = str(entity or "")
         self.save()
 
     def mood(self) -> dict[str, Any]:
