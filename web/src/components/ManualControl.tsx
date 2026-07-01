@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { ApiError, api } from "../lib/api";
 import { clamp } from "../lib/format";
 import { CAP, EXPRESSIONS, type Expression, type StatusResponse } from "../lib/types";
@@ -18,6 +18,12 @@ const LED_PRESETS: { name: string; hex: string }[] = [
   { name: "pink", hex: "#ff6ec7" },
 ];
 
+// Head joystick travel limits.
+const YAW_RANGE = 90; // ± left/right
+const PITCH_RANGE = 45; // ± down/up
+const HEAD_SPEED = 0.5; // fixed, sensible default
+const SEND_INTERVAL_MS = 100; // ~10 sends/sec while dragging
+
 export function ManualControl({
   status,
   onRefresh,
@@ -27,12 +33,15 @@ export function ManualControl({
 }) {
   const toasts = useToasts();
   const [idleBusy, setIdleBusy] = useState(false);
+
   const caps = new Set(status?.robot.capabilities ?? []);
   const canFace = caps.has(CAP.setFace);
   const canHead = caps.has(CAP.moveHead);
   const canLeds = caps.has(CAP.setLeds);
+  const canSay = caps.has(CAP.say);
   const ready = status !== null;
   const idleMotion = status?.idle_motion ?? false;
+  const nothing = ready && !canFace && !canHead && !canLeds && !canSay;
 
   function onError(err: unknown) {
     toasts.error(err instanceof ApiError ? err.detail : String(err));
@@ -53,51 +62,72 @@ export function ManualControl({
 
   return (
     <Panel eyebrow="actuators" title="Manual Control">
-      <div className="space-y-6">
-        <ExpressionPicker
-          disabled={!ready || !canFace}
-          current={status?.robot.expression}
-          reason={!canFace ? "Driver lacks set_face" : undefined}
-          onPick={async (e) => {
-            try {
-              await api.face(e);
-              toasts.ok(`Face → ${e}`);
-            } catch (err) {
-              onError(err);
-            }
-          }}
-        />
+      {!ready ? (
+        <p className="font-mono text-[11px] text-mute">Awaiting robot telemetry…</p>
+      ) : nothing ? (
+        <p className="font-mono text-[11px] text-mute">
+          No controls available for this robot.
+        </p>
+      ) : (
+        <div className="space-y-6">
+          {canFace && (
+            <ExpressionPicker
+              current={status?.robot.expression}
+              onPick={async (e) => {
+                try {
+                  await api.face(e);
+                  toasts.ok(`Face → ${e}`);
+                } catch (err) {
+                  onError(err);
+                }
+              }}
+            />
+          )}
 
-        <HeadControl
-          disabled={!ready || !canHead}
-          reason={!canHead ? "Driver lacks move_head" : undefined}
-          yaw={status?.robot.head_yaw ?? 0}
-          pitch={status?.robot.head_pitch ?? 0}
-          onMove={async (yaw, pitch, speed) => {
-            try {
-              await api.head(yaw, pitch, speed);
-            } catch (err) {
-              onError(err);
-            }
-          }}
-          idleMotion={idleMotion}
-          idleMotionDisabled={!ready || idleBusy}
-          onToggleIdleMotion={toggleIdleMotion}
-        />
+          {canHead && (
+            <HeadControl
+              onMove={async (yaw, pitch) => {
+                try {
+                  await api.head(yaw, pitch, HEAD_SPEED);
+                } catch (err) {
+                  onError(err);
+                }
+              }}
+              idleMotion={idleMotion}
+              idleMotionDisabled={idleBusy}
+              onToggleIdleMotion={toggleIdleMotion}
+            />
+          )}
 
-        <LedControl
-          disabled={!ready || !canLeds}
-          reason={!canLeds ? "Driver lacks set_leds" : undefined}
-          onApply={async (color, brightness) => {
-            try {
-              await api.leds(color, brightness);
-              toasts.ok(`LEDs → ${color} @ ${Math.round(brightness * 100)}%`);
-            } catch (err) {
-              onError(err);
-            }
-          }}
-        />
-      </div>
+          {canLeds && (
+            <LedControl
+              onApply={async (color, brightness) => {
+                try {
+                  await api.leds(color, brightness);
+                  toasts.ok(`LEDs → ${color} @ ${Math.round(brightness * 100)}%`);
+                } catch (err) {
+                  onError(err);
+                }
+              }}
+            />
+          )}
+
+          {canSay && (
+            <SayControl
+              onSay={async (text) => {
+                try {
+                  await api.say(text);
+                  toasts.ok("Spoken");
+                  return true;
+                } catch (err) {
+                  onError(err);
+                  return false;
+                }
+              }}
+            />
+          )}
+        </div>
+      )}
     </Panel>
   );
 }
@@ -105,17 +135,13 @@ export function ManualControl({
 /* ── Expression picker ──────────────────────────────────────────────────── */
 function ExpressionPicker({
   current,
-  disabled,
-  reason,
   onPick,
 }: {
   current?: string;
-  disabled: boolean;
-  reason?: string;
   onPick: (e: Expression) => void;
 }) {
   return (
-    <ControlBlock label="Expression" disabled={disabled} reason={reason}>
+    <ControlBlock label="Face">
       <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">
         {EXPRESSIONS.map((e) => {
           const meta = exprMeta(e);
@@ -123,11 +149,9 @@ function ExpressionPicker({
           return (
             <button
               key={e}
-              disabled={disabled}
               onClick={() => onPick(e)}
               className={cx(
                 "group flex flex-col items-center gap-1.5 rounded-xl border py-3 transition-all",
-                "disabled:cursor-not-allowed disabled:opacity-40",
                 selected
                   ? cx(meta.ring, "shadow-glow")
                   : "border-line bg-panel-2/40 hover:border-line-bright hover:bg-panel-2",
@@ -157,158 +181,161 @@ function ExpressionPicker({
   );
 }
 
-/* ── Head control ───────────────────────────────────────────────────────── */
+/* ── Head control (2D joystick pad) ─────────────────────────────────────── */
 function HeadControl({
-  yaw,
-  pitch,
-  disabled,
-  reason,
   onMove,
   idleMotion,
   idleMotionDisabled,
   onToggleIdleMotion,
 }: {
-  yaw: number;
-  pitch: number;
-  disabled: boolean;
-  reason?: string;
-  onMove: (yaw: number, pitch: number, speed: number) => void;
+  onMove: (yaw: number, pitch: number) => void;
   idleMotion: boolean;
   idleMotionDisabled: boolean;
   onToggleIdleMotion: (next: boolean) => void;
 }) {
-  const [y, setY] = useState(yaw);
-  const [p, setP] = useState(pitch);
-  const [speed, setSpeed] = useState(0.7);
-  const dirty = useRef(false);
-  const debounce = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Knob position as a fraction of half-extent, x ∈ [-1,1], y ∈ [-1,1]
+  // where +y on screen is DOWN. Yaw/pitch derive from this.
+  const [pos, setPos] = useState({ x: 0, y: 0 });
+  const padRef = useRef<HTMLDivElement>(null);
+  const lastSend = useRef(0);
 
-  // Sync from telemetry while the user isn't actively dragging.
-  useEffect(() => {
-    if (!dirty.current) {
-      setY(yaw);
-      setP(pitch);
+  const yaw = Math.round(pos.x * YAW_RANGE);
+  // Screen up (negative y) → look up (positive pitch).
+  const pitch = Math.round(-pos.y * PITCH_RANGE);
+
+  const send = useCallback(
+    (ny: number, np: number) => {
+      onMove(clamp(ny, -YAW_RANGE, YAW_RANGE), clamp(np, -PITCH_RANGE, PITCH_RANGE));
+    },
+    [onMove],
+  );
+
+  const pointFromEvent = useCallback((clientX: number, clientY: number) => {
+    const el = padRef.current;
+    if (!el) return null;
+    const r = el.getBoundingClientRect();
+    // Map to [-1,1] with 0 at centre; clamp to the circular-ish square.
+    const x = clamp(((clientX - r.left) / r.width) * 2 - 1, -1, 1);
+    const y = clamp(((clientY - r.top) / r.height) * 2 - 1, -1, 1);
+    return { x, y };
+  }, []);
+
+  function handlePointerDown(e: React.PointerEvent<HTMLDivElement>) {
+    e.preventDefault();
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    const pt = pointFromEvent(e.clientX, e.clientY);
+    if (!pt) return;
+    setPos(pt);
+    lastSend.current = Date.now();
+    send(Math.round(pt.x * YAW_RANGE), Math.round(-pt.y * PITCH_RANGE));
+  }
+
+  function handlePointerMove(e: React.PointerEvent<HTMLDivElement>) {
+    if (!(e.currentTarget as HTMLElement).hasPointerCapture(e.pointerId)) return;
+    const pt = pointFromEvent(e.clientX, e.clientY);
+    if (!pt) return;
+    setPos(pt);
+    const now = Date.now();
+    if (now - lastSend.current >= SEND_INTERVAL_MS) {
+      lastSend.current = now;
+      send(Math.round(pt.x * YAW_RANGE), Math.round(-pt.y * PITCH_RANGE));
     }
-  }, [yaw, pitch]);
+  }
 
-  function commit(ny: number, np: number) {
-    dirty.current = true;
-    if (debounce.current) clearTimeout(debounce.current);
-    debounce.current = setTimeout(() => {
-      onMove(clamp(ny, -180, 180), clamp(np, -90, 90), speed);
-      // Allow telemetry to resync shortly after a move settles.
-      setTimeout(() => (dirty.current = false), 1200);
-    }, 120);
+  function handlePointerUp(e: React.PointerEvent<HTMLDivElement>) {
+    if (!(e.currentTarget as HTMLElement).hasPointerCapture(e.pointerId)) return;
+    (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
+    // Final send at the resting position (knob stays put).
+    send(yaw, pitch);
   }
 
   function center() {
-    setY(0);
-    setP(0);
-    dirty.current = true;
-    onMove(0, 0, speed);
-    setTimeout(() => (dirty.current = false), 1200);
+    setPos({ x: 0, y: 0 });
+    send(0, 0);
   }
 
   return (
     <ControlBlock
       label="Head"
-      disabled={disabled}
-      reason={reason}
       right={
-        <Button variant="subtle" disabled={disabled} onClick={center}>
-          ⌖ Look center
+        <Button variant="subtle" onClick={center}>
+          ⌖ Center
         </Button>
       }
     >
-      {/* Visual crosshair readout */}
-      <div className="mb-4 flex items-center gap-4">
-        <Crosshair yaw={y} pitch={p} />
-        <div className="flex-1 space-y-3">
-          <Slider
-            label="yaw"
-            min={-180}
-            max={180}
-            step={1}
-            value={y}
-            suffix="°"
-            disabled={disabled}
-            onChange={(v) => {
-              setY(v);
-              commit(v, p);
+      <div className="flex flex-col items-center gap-3 sm:flex-row sm:items-start sm:gap-5">
+        {/* Joystick pad */}
+        <div
+          ref={padRef}
+          onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
+          onPointerUp={handlePointerUp}
+          onPointerCancel={handlePointerUp}
+          className={cx(
+            "relative h-[180px] w-[180px] shrink-0 cursor-grab touch-none select-none rounded-2xl",
+            "border border-line bg-void/70 active:cursor-grabbing",
+          )}
+        >
+          {/* grid */}
+          <div className="pointer-events-none absolute inset-0 rounded-2xl [background:linear-gradient(rgba(255,255,255,0.04)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.04)_1px,transparent_1px)] [background-size:20px_20px]" />
+          {/* crosshair */}
+          <span className="pointer-events-none absolute left-1/2 top-0 h-full w-px -translate-x-1/2 bg-line-bright/50" />
+          <span className="pointer-events-none absolute left-0 top-1/2 h-px w-full -translate-y-1/2 bg-line-bright/50" />
+          {/* centre ring */}
+          <span className="pointer-events-none absolute left-1/2 top-1/2 h-10 w-10 -translate-x-1/2 -translate-y-1/2 rounded-full border border-line/60" />
+          {/* knob */}
+          <span
+            className="pointer-events-none absolute h-6 w-6 -translate-x-1/2 -translate-y-1/2 rounded-full bg-phosphor shadow-glow ring-2 ring-phosphor/30"
+            style={{
+              left: `${(pos.x + 1) * 50}%`,
+              top: `${(pos.y + 1) * 50}%`,
             }}
-          />
-          <Slider
-            label="pitch"
-            min={-90}
-            max={90}
-            step={1}
-            value={p}
-            suffix="°"
-            disabled={disabled}
-            onChange={(v) => {
-              setP(v);
-              commit(y, v);
-            }}
-          />
-          <Slider
-            label="speed"
-            min={0}
-            max={1}
-            step={0.05}
-            value={speed}
-            format={(v) => v.toFixed(2)}
-            disabled={disabled}
-            onChange={setSpeed}
           />
         </div>
-      </div>
 
-      {/* Idle motion: ambient automatic head glances */}
-      <div className="flex items-center justify-between gap-3 rounded-xl border border-line bg-panel-2/40 px-3.5 py-2.5">
-        <div className="min-w-0">
-          <div className="font-mono text-[11px] uppercase tracking-wide text-soft">
-            Idle motion
+        {/* Readout + idle toggle */}
+        <div className="w-full flex-1 space-y-3">
+          <div className="rounded-xl border border-line bg-panel-2/40 px-3.5 py-3">
+            <div className="font-mono text-[10px] uppercase tracking-wider text-mute">
+              Direction
+            </div>
+            <div className="mt-1 font-mono text-sm tabular-nums text-ink">
+              yaw <span className="text-phosphor">{yaw}°</span>
+              <span className="mx-1.5 text-mute">·</span>
+              pitch <span className="text-phosphor">{pitch}°</span>
+            </div>
+            <p className="mt-1 font-mono text-[10px] text-mute">
+              drag the knob to aim the head
+            </p>
           </div>
-          <p className="truncate font-mono text-[10px] text-mute">
-            occasional head glances
-          </p>
+
+          {/* Idle motion: ambient automatic head glances */}
+          <div className="flex items-center justify-between gap-3 rounded-xl border border-line bg-panel-2/40 px-3.5 py-2.5">
+            <div className="min-w-0">
+              <div className="font-mono text-[11px] uppercase tracking-wide text-soft">
+                Idle motion
+              </div>
+              <p className="truncate font-mono text-[10px] text-mute">
+                occasional head glances
+              </p>
+            </div>
+            <Toggle
+              on={idleMotion}
+              disabled={idleMotionDisabled}
+              label="Idle motion"
+              onChange={onToggleIdleMotion}
+            />
+          </div>
         </div>
-        <Toggle
-          on={idleMotion}
-          disabled={idleMotionDisabled}
-          label="Idle motion"
-          onChange={onToggleIdleMotion}
-        />
       </div>
     </ControlBlock>
   );
 }
 
-function Crosshair({ yaw, pitch }: { yaw: number; pitch: number }) {
-  // Map yaw [-180,180] → x, pitch [-90,90] → y (inverted: up = look up).
-  const x = ((clamp(yaw, -180, 180) + 180) / 360) * 100;
-  const yv = ((clamp(-pitch, -90, 90) + 90) / 180) * 100;
-  return (
-    <div className="relative hidden h-24 w-24 shrink-0 rounded-lg border border-line bg-void/60 sm:block">
-      <div className="absolute inset-0 [background:linear-gradient(rgba(255,255,255,0.05)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.05)_1px,transparent_1px)] [background-size:12px_12px]" />
-      <span className="absolute left-1/2 top-0 h-full w-px -translate-x-1/2 bg-line-bright/60" />
-      <span className="absolute top-1/2 left-0 h-px w-full -translate-y-1/2 bg-line-bright/60" />
-      <span
-        className="absolute h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-phosphor shadow-glow transition-all duration-200"
-        style={{ left: `${x}%`, top: `${yv}%` }}
-      />
-    </div>
-  );
-}
-
 /* ── LED control ────────────────────────────────────────────────────────── */
 function LedControl({
-  disabled,
-  reason,
   onApply,
 }: {
-  disabled: boolean;
-  reason?: string;
   onApply: (color: string, brightness: number) => void;
 }) {
   const [color, setColor] = useState("#5dffa0");
@@ -317,14 +344,8 @@ function LedControl({
   return (
     <ControlBlock
       label="LEDs"
-      disabled={disabled}
-      reason={reason}
       right={
-        <Button
-          variant="primary"
-          disabled={disabled}
-          onClick={() => onApply(color, brightness)}
-        >
+        <Button variant="primary" onClick={() => onApply(color, brightness)}>
           Apply
         </Button>
       }
@@ -333,11 +354,10 @@ function LedControl({
         {LED_PRESETS.map((c) => (
           <button
             key={c.name}
-            disabled={disabled}
             title={c.name}
             onClick={() => setColor(c.hex)}
             className={cx(
-              "h-8 w-8 rounded-full border-2 transition-transform disabled:cursor-not-allowed disabled:opacity-40",
+              "h-8 w-8 rounded-full border-2 transition-transform",
               color.toLowerCase() === c.hex.toLowerCase()
                 ? "scale-110 border-ink"
                 : "border-line hover:scale-105 hover:border-line-bright",
@@ -352,17 +372,13 @@ function LedControl({
           />
         ))}
         <label
-          className={cx(
-            "relative ml-1 grid h-8 w-8 cursor-pointer place-items-center rounded-full border-2 border-dashed border-line text-mute hover:border-line-bright",
-            disabled && "pointer-events-none opacity-40",
-          )}
+          className="relative ml-1 grid h-8 w-8 cursor-pointer place-items-center rounded-full border-2 border-dashed border-line text-mute hover:border-line-bright"
           title="Custom color"
         >
           <span className="font-mono text-xs">+</span>
           <input
             type="color"
             value={color}
-            disabled={disabled}
             onChange={(e) => setColor(e.target.value)}
             className="absolute inset-0 cursor-pointer opacity-0"
           />
@@ -379,9 +395,57 @@ function LedControl({
           step={0.05}
           value={brightness}
           format={(v) => `${Math.round(v * 100)}%`}
-          disabled={disabled}
           onChange={setBrightness}
         />
+      </div>
+    </ControlBlock>
+  );
+}
+
+/* ── Say control (literal speech) ───────────────────────────────────────── */
+function SayControl({
+  onSay,
+}: {
+  onSay: (text: string) => Promise<boolean>;
+}) {
+  const [text, setText] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  async function submit() {
+    const t = text.trim();
+    if (!t || busy) return;
+    setBusy(true);
+    const ok = await onSay(t);
+    setBusy(false);
+    if (ok) setText("");
+  }
+
+  return (
+    <ControlBlock label="Say">
+      <textarea
+        value={text}
+        placeholder="Type exactly what the robot should speak…"
+        rows={2}
+        onChange={(e) => setText(e.target.value)}
+        onKeyDown={(e) => {
+          if ((e.metaKey || e.ctrlKey) && e.key === "Enter") submit();
+        }}
+        className={cx(
+          "w-full resize-none rounded-xl border border-line bg-void/60 px-3.5 py-3",
+          "font-body text-sm text-ink placeholder:text-mute/70",
+          "focus:border-phosphor/50 focus:outline-none focus:ring-1 focus:ring-phosphor/30",
+        )}
+      />
+      <div className="mt-2 flex items-center justify-between">
+        <span className="font-mono text-[10px] text-mute">⌘/Ctrl + Enter</span>
+        <Button
+          variant="primary"
+          loading={busy}
+          disabled={!text.trim()}
+          onClick={submit}
+        >
+          ▸ Speak
+        </Button>
       </div>
     </ControlBlock>
   );
@@ -390,28 +454,17 @@ function LedControl({
 /* ── shared sub-components ──────────────────────────────────────────────── */
 function ControlBlock({
   label,
-  reason,
-  disabled,
   right,
   children,
 }: {
   label: string;
-  reason?: string;
-  disabled?: boolean;
   right?: React.ReactNode;
   children: React.ReactNode;
 }) {
   return (
     <div>
       <div className="mb-2.5 flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
-          <span className="eyebrow">{label}</span>
-          {disabled && reason && (
-            <span className="rounded border border-amber/30 bg-amber/5 px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-wide text-amber">
-              {reason}
-            </span>
-          )}
-        </div>
+        <span className="eyebrow">{label}</span>
         {right}
       </div>
       {children}
@@ -427,7 +480,6 @@ function Slider({
   value,
   suffix,
   format,
-  disabled,
   onChange,
 }: {
   label: string;
@@ -437,7 +489,6 @@ function Slider({
   value: number;
   suffix?: string;
   format?: (v: number) => string;
-  disabled?: boolean;
   onChange: (v: number) => void;
 }) {
   return (
@@ -457,7 +508,6 @@ function Slider({
         max={max}
         step={step}
         value={value}
-        disabled={disabled}
         onChange={(e) => onChange(Number(e.target.value))}
       />
     </div>
