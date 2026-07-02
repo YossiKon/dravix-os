@@ -27,7 +27,7 @@ export function EntityPicker(props: {
   const current = props.entities.find((e) => e.entity_id === props.value);
 
   return (
-    <div className="relative">
+    <div className={`relative ${open ? "z-40" : ""}`}>
       <button
         type="button"
         className="inp flex items-center justify-between gap-2 text-start"

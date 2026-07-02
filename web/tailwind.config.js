@@ -41,7 +41,10 @@ export default {
         },
       },
       animation: {
-        rise: "rise 0.45s cubic-bezier(0.2,0.8,0.2,1) both",
+        // "backwards" (not "both"): once the entrance finishes, no transform lingers on the
+        // card — a lingering transform creates a stacking context that buries dropdowns
+        // under the NEXT card in the page.
+        rise: "rise 0.45s cubic-bezier(0.2,0.8,0.2,1) backwards",
         breathe: "breathe 1.8s ease-in-out infinite",
       },
     },

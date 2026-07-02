@@ -572,6 +572,9 @@ lvgl:
             height: 56
             radius: 28
             bg_color: 0x33E6C8
+            widgets:
+              # the dot is a tiny creature — it has a face 🙂
+              - label: { text: "o_o", text_font: small_font, text_color: 0x05080b, align: CENTER }
             on_click:
               - lambda: 'id(g_score) += 1;'
               - lvgl.label.update:
@@ -1119,19 +1122,18 @@ interval:
                 id: face_box
                 x: !lambda 'return (int)(random_float() * 32 - 16);'
                 y: !lambda 'return (int)(random_float() * 18 - 9);'
-      # …and sometimes the HEAD glances too (a small random turn, like a curious pet).
+      # …and sometimes the HEAD glances too — ABSOLUTE, small angles around centre, so
+      # repeated glances can never accumulate and wander the head off to the side.
       - if:
           condition:
             lambda: |-
               return id(sw_move).state && id(sw_drift).state && !id(g_sleep) && !id(g_saver)
                      && !id(g_busy) && !id(g_night) && !id(g_focus) && !id(g_voice)
-                     && !std::isnan(id(servo_x_angle).state) && random_float() < 0.35;
+                     && !std::isnan(id(servo_x_angle).state) && random_float() < 0.25;
           then:
             - number.set:
                 id: servo_x_angle
-                value: !lambda |-
-                  float v = id(servo_x_angle).state + (random_float() * 24.0f - 12.0f);
-                  return v < -164 ? -164 : (v > 164 ? 164 : v);
+                value: !lambda 'return random_float() * 28.0f - 14.0f;'   # always within ±14 of centre
       # ...and drift back to centre half the time, so it doesn't wander off.
       - if:
           condition: { lambda: 'return id(sw_drift).state && !id(g_sleep) && !id(g_saver) && random_float() < 0.5;' }
