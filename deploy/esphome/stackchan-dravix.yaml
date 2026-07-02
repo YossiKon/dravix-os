@@ -35,6 +35,10 @@ esphome:
   on_boot:
     - priority: -100
       then:
+        # LVGL is ready from here on — allow face redraws (guards the privacy-restore path,
+        # which otherwise fires render_face BEFORE the display exists → boot crash).
+        - globals.set: { id: g_booted, value: "true" }
+        - script.execute: render_face   # correct face + PRIVACY badge after any reboot
         # start listening for "Okay, Nabu" — unless privacy mode was left ON
         - if:
             condition: { switch.is_off: sw_privacy }
@@ -108,6 +112,8 @@ font:
     size: 52
 
 globals:
+  # true once on_boot ran — LVGL widgets exist and it's safe to draw
+  - { id: g_booted, type: bool, restore_value: false, initial_value: "false" }
   # face state
   - { id: g_expr,   type: int,  restore_value: false, initial_value: "0" }
   - { id: g_blink,  type: bool, restore_value: false, initial_value: "false" }
@@ -370,10 +376,15 @@ switch:
     on_turn_on:
       - voice_assistant.stop
       - micro_wake_word.stop
-      - script.execute: render_face
+      # restore_mode replays this at BOOT, before the display exists — only draw when ready
+      - if:
+          condition: { lambda: 'return id(g_booted);' }
+          then: [ { script.execute: render_face } ]
     on_turn_off:
       - micro_wake_word.start
-      - script.execute: render_face
+      - if:
+          condition: { lambda: 'return id(g_booted);' }
+          then: [ { script.execute: render_face } ]
 
 lvgl:
   displays:
@@ -1070,7 +1081,11 @@ select:
             - script.execute: { id: led_flash, r: 100, g: 60, b: 15 }   # warm sunrise
             - script.execute: { id: head_nudge, dx: 0, dy: 10 }
             - delay: 4s
-            - select.set: { id: robot_mode, option: awake }
+            # settle into awake — unless the user already switched mode meanwhile
+            - if:
+                condition: { lambda: 'return id(robot_mode).state == std::string("morning");' }
+                then:
+                  - select.set: { id: robot_mode, option: awake }
 
 interval:
   # Random blink (never while sleeping / listening / talking).
