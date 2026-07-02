@@ -6,12 +6,17 @@ import asyncio
 from dravix.screens import ScreenPusher
 
 
+# The card slots carry whatever device prefix HA gave them (this one was renamed) —
+# the pusher must DISCOVER them by suffix, not assume "text.dravix_...".
+PREFIX = "text.mmd_room_dravix"
+
+
 class _FakeHA:
     """Minimal HA stub: records service calls, returns canned states."""
 
     def __init__(self) -> None:
         self.calls: list = []
-        self.states = {
+        self._states = {
             "sensor.temp": {"state": "21", "attributes": {"friendly_name": "Living Room Temperature"}},
             "light.lamp": {"state": "on", "attributes": {"friendly_name": "Lamp"}},
             "climate.ac": {
@@ -29,7 +34,12 @@ class _FakeHA:
         self.calls.append((domain, service, data))
 
     async def get_state(self, entity_id):
-        return self.states.get(entity_id, {"state": "unknown", "attributes": {}})
+        return self._states.get(entity_id, {"state": "unknown", "attributes": {}})
+
+    async def states(self):
+        out = [{"entity_id": f"{PREFIX}_card{n}_{kind}"} for n in (1, 2, 3) for kind in ("title", "body")]
+        out.append({"entity_id": "text.something_else"})
+        return out
 
 
 class _StoreStub:
@@ -58,14 +68,14 @@ async def test_configured_screen_pushes_title_and_body():
     await asyncio.sleep(0.05)  # let at least one push happen
     await pusher.stop()
 
-    assert ("text", "set_value", {"entity_id": "text.dravix_card1_title", "value": "Home"}) in ha.calls
-    body = _value(ha.calls, "text.dravix_card1_body")
+    assert ("text", "set_value", {"entity_id": f"{PREFIX}_card1_title", "value": "Home"}) in ha.calls
+    body = _value(ha.calls, f"{PREFIX}_card1_body")
     # friendly name truncated to ~14 chars, "Name  State" per line, newline-joined.
     assert body == "Living Room Te  21\nLamp  on"
 
     # Cards beyond what's configured get empty title + body.
-    assert _value(ha.calls, "text.dravix_card2_title") == ""
-    assert _value(ha.calls, "text.dravix_card2_body") == ""
+    assert _value(ha.calls, f"{PREFIX}_card2_title") == ""
+    assert _value(ha.calls, f"{PREFIX}_card2_body") == ""
 
 
 async def test_climate_card_formats_mode_and_temps():
@@ -77,7 +87,7 @@ async def test_climate_card_formats_mode_and_temps():
     await pusher.stop()
 
     # "Name  <mode> <current>><target>" — temps rounded to whole degrees.
-    assert _value(ha.calls, "text.dravix_card1_body") == "AC  cool 24>21"
+    assert _value(ha.calls, f"{PREFIX}_card1_body") == "AC  cool 24>21"
 
 
 async def test_climate_card_without_temps_falls_back_to_plain_line():
@@ -89,7 +99,7 @@ async def test_climate_card_without_temps_falls_back_to_plain_line():
     await pusher.stop()
 
     # No current/target attributes → the plain "Name  State" line.
-    assert _value(ha.calls, "text.dravix_card1_body") == "Bare AC  heat"
+    assert _value(ha.calls, f"{PREFIX}_card1_body") == "Bare AC  heat"
 
 
 async def test_pusher_noop_without_ha():
@@ -115,4 +125,20 @@ async def test_bad_entity_does_not_kill_the_task():
     await pusher.stop()
 
     # The bad entity is skipped; the good one still renders.
-    assert _value(ha.calls, "text.dravix_card1_body") == "Lamp  on"
+    assert _value(ha.calls, f"{PREFIX}_card1_body") == "Lamp  on"
+
+
+async def test_unchanged_values_written_only_once():
+    """Repeated polls must not re-write identical text (no device spam every cycle)."""
+    ha = _FakeHA()
+    store = _StoreStub([{"title": "Home", "entities": ["light.lamp"]}])
+    pusher = ScreenPusher(ha, store, interval=0.01)
+    await pusher.start()
+    await asyncio.sleep(0.08)  # several polls
+    await pusher.stop()
+
+    title_writes = [
+        c for c in ha.calls
+        if c[0] == "text" and c[2].get("entity_id") == f"{PREFIX}_card1_title"
+    ]
+    assert len(title_writes) == 1
