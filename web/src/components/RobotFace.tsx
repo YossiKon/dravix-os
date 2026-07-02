@@ -8,6 +8,10 @@ const STATE_HE: Record<string, string> = {
   screensaver: "שומר מסך",
   sleep: "ישן",
   busy: "עסוק",
+  morning: "בוקר טוב",
+  night: "מצב לילה",
+  focus: "מרוכז",
+  quiet: "מצב שקט",
 };
 
 export function stateLabel(state: string | null): string {
@@ -40,10 +44,11 @@ export function RobotFace(props: { state: string | null; online: boolean }) {
   else if (state === "listening") glyph = "•_•";
   else if (state === "speaking") glyph = tick % 2 ? "o o" : "o_o";
   else if (blink) glyph = "-_-";
-  else if (state === "busy") glyph = ">_<";
+  else if (state === "busy" || state === "focus") glyph = ">_<";
+  else if (state === "morning") glyph = "^_^";
 
   const talking = state === "listening" || state === "speaking";
-  const asleep = state === "sleep" || state === "screensaver";
+  const asleep = state === "sleep" || state === "screensaver" || state === "night";
 
   return (
     <div className="overflow-hidden rounded-3xl border border-line bg-black shadow-card">

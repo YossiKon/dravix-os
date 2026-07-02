@@ -198,6 +198,24 @@ async def test_ha_driver_leds_off():
     assert ha.calls[-1][1] == "turn_on"
 
 
+async def test_ha_driver_privacy():
+    """Privacy: read the switch state; set via switch.turn_on/off; unmapped = never private."""
+    class _PrivHA(_FakeHA):
+        async def get_state(self, entity_id):
+            if entity_id == "switch.priv":
+                return {"state": "on", "attributes": {}}
+            return await super().get_state(entity_id)
+
+    ha = _PrivHA()
+    d = HARobotDriver(ha=ha, entities={"privacy_switch": "switch.priv"})
+    assert await d.is_private() is True
+    await d.set_privacy(False)
+    assert ha.calls[-1] == ("switch", "turn_off", {"entity_id": "switch.priv"})
+    await d.set_privacy(True)
+    assert ha.calls[-1] == ("switch", "turn_on", {"entity_id": "switch.priv"})
+    assert await HARobotDriver(ha=ha, entities={}).is_private() is False
+
+
 async def test_ha_driver_show_image_url():
     """Image-by-URL lands in the firmware's Show-image text slot (text.set_value)."""
     ha = _FakeHA()

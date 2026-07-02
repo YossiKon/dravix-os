@@ -283,6 +283,24 @@ class HARobotDriver(RobotDriver):
     async def show_image(self, image: bytes) -> None:
         raise NotImplementedError("showing an image over HA needs a custom display entity")
 
+    async def is_private(self) -> bool:
+        """True while the robot's Privacy-mode switch is ON (camera endpoints get blocked)."""
+        ent = self._entities.get("privacy_switch")
+        if not ent:
+            return False
+        try:
+            return (await self._ha.get_state(ent)).get("state") == "on"
+        except Exception:  # noqa: BLE001 — unreadable switch must not break the camera
+            return False
+
+    async def set_privacy(self, private: bool) -> None:
+        ent = self._entities.get("privacy_switch")
+        if not ent:
+            raise NotImplementedError("no privacy_switch entity configured")
+        await self._ha.call_service(
+            "switch", "turn_on" if private else "turn_off", {"entity_id": ent}
+        )
+
     async def show_image_url(self, url: str) -> None:
         """Show an image on the robot's screen by URL — the firmware's "Show image URL"
         text slot downloads it and displays it full-screen (empty string = back to face)."""

@@ -32,6 +32,15 @@ interface ChatMsg {
   text: string;
 }
 
+const MODES: { id: string; he: string; icon: string }[] = [
+  { id: "awake", he: "ער", icon: "☀" },
+  { id: "morning", he: "בוקר", icon: "🌅" },
+  { id: "focus", he: "מרוכז", icon: "🎯" },
+  { id: "quiet", he: "שקט", icon: "🤫" },
+  { id: "night", he: "לילה", icon: "🌌" },
+  { id: "sleep", he: "שינה", icon: "😴" },
+];
+
 const FACES: { name: string; glyph: string; he: string }[] = [
   { name: "neutral", glyph: "o_o", he: "רגיל" },
   { name: "happy", glyph: "^_^", he: "שמח" },
@@ -66,11 +75,29 @@ export function HomePage(props: { config: RobotConfig | null }) {
   const [emotes, setEmotes] = useState<string[]>([]);
   // live view through the robot's camera (off by default — saves bandwidth)
   const [camOn, setCamOn] = useState(false);
+  // privacy mode: camera blocked + on-device mic off
+  const [privacy, setPrivacy] = useState<{ supported: boolean; private: boolean }>({
+    supported: false,
+    private: false,
+  });
 
   useEffect(() => {
     apiGet<{ games: string[] }>("/api/fun").then((r) => setGames(r.games)).catch(() => undefined);
     apiGet<{ emotes: string[] }>("/api/emotes").then((r) => setEmotes(r.emotes)).catch(() => undefined);
+    apiGet<{ supported: boolean; private: boolean }>("/api/robot/privacy").then(setPrivacy).catch(() => undefined);
   }, []);
+
+  async function togglePrivacy() {
+    const next = !privacy.private;
+    try {
+      await apiSend("/api/robot/privacy", "PUT", { private: next });
+      setPrivacy((p) => ({ ...p, private: next }));
+      if (next) setCamOn(false);
+      toast(next ? "מצב פרטיות פועל — מצלמה ומיקרופון כבויים 🔒" : "מצב פרטיות כובה");
+    } catch (e) {
+      toastErr(e);
+    }
+  }
 
   useEffect(() => {
     chatRef.current?.scrollTo({ top: chatRef.current.scrollHeight });
@@ -161,22 +188,27 @@ export function HomePage(props: { config: RobotConfig | null }) {
             />
             {online ? (state ? stateLabel(state) : "מחובר") : "לא מחובר"}
           </span>
-          <div className="flex gap-2">
+          {privacy.supported && (
             <button
-              className={`btn ${state !== "sleep" ? "btn-primary" : ""}`}
-              disabled={busy !== null}
-              onClick={() => void run("wake", () => apiSend("/api/robot/mode", "POST", { mode: "awake" }), "הרובוט ער")}
+              className={`chip ${privacy.private ? "border-red/60 bg-red/15 text-red" : ""}`}
+              onClick={() => void togglePrivacy()}
             >
-              ☀ ער
+              {privacy.private ? "🔒 פרטיות פועלת" : "🔓 מצב פרטיות"}
             </button>
+          )}
+        </div>
+        {/* modes */}
+        <div className="mt-3 flex flex-wrap gap-2">
+          {MODES.map((m) => (
             <button
-              className={`btn ${state === "sleep" ? "btn-primary" : ""}`}
+              key={m.id}
+              className={`chip ${state === m.id || (m.id === "awake" && state === "awake") ? "chip-on" : ""}`}
               disabled={busy !== null}
-              onClick={() => void run("sleep", () => apiSend("/api/robot/mode", "POST", { mode: "sleep" }), "לילה טוב 😴")}
+              onClick={() => void run(`mode-${m.id}`, () => apiSend("/api/robot/mode", "POST", { mode: m.id }))}
             >
-              🌙 שינה
+              {m.icon} {m.he}
             </button>
-          </div>
+          ))}
         </div>
         {/* what it heard / answered — live */}
         {(live?.heard || live?.reply) && (
@@ -360,7 +392,11 @@ export function HomePage(props: { config: RobotConfig | null }) {
       {/* ── robot camera (only when a camera is mapped) ── */}
       {(props.config?.capabilities ?? []).includes("take_photo") && (
         <Section title="מצלמה" delay={300}>
-          {camOn ? (
+          {privacy.private ? (
+            <p className="rounded-2xl border border-red/30 bg-red/10 p-3 text-sm text-red">
+              🔒 מצב פרטיות פועל — המצלמה חסומה לגמרי (גם ל-Frigate).
+            </p>
+          ) : camOn ? (
             <>
               <img
                 src="/camera/robot/stream.mjpeg"

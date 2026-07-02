@@ -20,6 +20,8 @@ const ROLE_HE: Record<string, string> = {
   state_sensor: "מצב חי (State)",
   heard_sensor: "מה שמע (Last heard)",
   reply_sensor: "מה ענה (Last reply)",
+  image_url_text: "הצגת תמונה (Show image URL)",
+  privacy_switch: "מצב פרטיות (Privacy)",
 };
 
 const PROVIDER_HE: Record<string, string> = {

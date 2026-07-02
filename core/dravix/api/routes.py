@@ -150,7 +150,7 @@ async def robot_leds(body: LedsBody, request: Request):
     return {"ok": True}
 
 
-_ROBOT_MODES = {"awake", "busy", "sleep"}
+_ROBOT_MODES = {"awake", "morning", "focus", "quiet", "night", "busy", "sleep"}
 
 
 @router.post("/api/robot/mode")
@@ -200,6 +200,7 @@ ROBOT_ENTITY_ROLES = [
     {"key": "heard_sensor", "label": "Last heard (STT sensor)", "domains": ["sensor"]},
     {"key": "reply_sensor", "label": "Last reply (TTS sensor)", "domains": ["sensor"]},
     {"key": "image_url_text", "label": "Show-image URL (text)", "domains": ["text"]},
+    {"key": "privacy_switch", "label": "Privacy mode (switch)", "domains": ["switch"]},
 ]
 _ROLE_KEYS = {r["key"] for r in ROBOT_ENTITY_ROLES}
 
@@ -319,6 +320,40 @@ async def set_head_home(request: Request):
     request.app.state.store.set_head_calibration(calib)
     error = await _apply_robot_config(request)
     return {"calibration": request.app.state.store.head_calibration(), "captured": raw, "error": error}
+
+
+class PrivacyBody(BaseModel):
+    private: bool
+
+
+async def _camera_blocked(request: Request) -> bool:
+    """True while privacy mode is on — the camera endpoints must serve nothing."""
+    reader = getattr(request.app.state.robot.driver, "is_private", None)
+    return bool(reader is not None and await reader())
+
+
+@router.get("/api/robot/privacy")
+async def get_privacy(request: Request):
+    drv = request.app.state.robot.driver
+    reader = getattr(drv, "is_private", None)
+    return {
+        "supported": getattr(drv, "set_privacy", None) is not None,
+        "private": bool(reader is not None and await reader()),
+    }
+
+
+@router.put("/api/robot/privacy")
+async def put_privacy(body: PrivacyBody, request: Request):
+    setter = getattr(request.app.state.robot.driver, "set_privacy", None)
+    if setter is None:
+        raise HTTPException(status_code=409, detail="active backend has no privacy control")
+    try:
+        await setter(body.private)
+    except NotImplementedError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return {"ok": True, "private": body.private}
 
 
 @router.get("/api/robot/live")
@@ -596,11 +631,14 @@ async def frigate_show(body: FrigateShowBody, request: Request):
 
 
 # Robot's own camera, served as a standard HTTP camera so Frigate (or HA) can ingest it.
+# Both endpoints go dark while the robot's Privacy-mode switch is ON.
 @router.get("/camera/robot/snapshot.jpg", include_in_schema=False)
 async def robot_camera_snapshot(request: Request):
     robot = _robot(request)
     if not robot.supports(CAP_PHOTO):
         raise HTTPException(status_code=503, detail="robot has no camera capability")
+    if await _camera_blocked(request):
+        raise HTTPException(status_code=503, detail="privacy mode is on")
     img = await _guard(robot.take_photo())
     if not img:
         raise HTTPException(status_code=503, detail="no frame from robot camera")
@@ -612,10 +650,14 @@ async def robot_camera_stream(request: Request, fps: float = 2.0):
     robot = _robot(request)
     if not robot.supports(CAP_PHOTO):
         raise HTTPException(status_code=503, detail="robot has no camera capability")
+    if await _camera_blocked(request):
+        raise HTTPException(status_code=503, detail="privacy mode is on")
     delay = 1.0 / max(0.2, min(fps, 10.0))
 
     async def frames():
         while True:
+            if await _camera_blocked(request):
+                break  # privacy flipped on mid-stream → end the stream immediately
             try:
                 img = await robot.take_photo()
             except Exception:  # noqa: BLE001
