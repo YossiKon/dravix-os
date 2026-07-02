@@ -696,10 +696,11 @@ script:
       b: int
     then:
       - if:
+          # calm modes (night / focus / quiet) = no light shows
           condition:
             lambda: |-
               return id(sw_mood_led).state && !id(g_voice)
-                     && !id(g_night) && !id(g_focus) && !id(g_quiet);   # calm modes = no light shows
+                     && !id(g_night) && !id(g_focus) && !id(g_quiet);
           then:
             - if:
                 condition: { lambda: 'return !id(g_flash);' }   # don't re-save our own colour
