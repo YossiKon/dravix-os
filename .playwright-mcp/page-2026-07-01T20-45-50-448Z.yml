@@ -1,0 +1,49 @@
+- generic [ref=e3]:
+  - banner [ref=e4]:
+    - heading "דרביקסdravix-os" [level=1] [ref=e5]
+    - generic "מחובר" [ref=e80]
+  - main [ref=e7]:
+    - generic [ref=e211]:
+      - paragraph [ref=e212]: מחליקים ימינה / שמאלה על מסך הרובוט כדי לעבור בין 3 כרטיסים. כאן בוחרים מה יופיע על כל אחד (עד 4 ישויות לכרטיס).
+      - generic [ref=e213]:
+        - heading "כרטיס 1" [level=2] [ref=e214]
+        - generic [ref=e215]: כותרת הכרטיס
+        - 'textbox "למשל: סלון / מזג אוויר / חיישנים" [ref=e216]'
+        - generic [ref=e217]: ישויות להצגה
+        - generic [ref=e219]: עוד לא נבחרו ישויות
+        - button "＋ הוסף ישות… ▼" [ref=e221] [cursor=pointer]:
+          - generic [ref=e222]: ＋ הוסף ישות…
+          - generic [ref=e223]: ▼
+      - generic [ref=e224]:
+        - heading "כרטיס 2" [level=2] [ref=e225]
+        - generic [ref=e226]: כותרת הכרטיס
+        - 'textbox "למשל: סלון / מזג אוויר / חיישנים" [ref=e227]'
+        - generic [ref=e228]: ישויות להצגה
+        - generic [ref=e230]: עוד לא נבחרו ישויות
+        - button "＋ הוסף ישות… ▼" [ref=e232] [cursor=pointer]:
+          - generic [ref=e233]: ＋ הוסף ישות…
+          - generic [ref=e234]: ▼
+      - generic [ref=e235]:
+        - heading "כרטיס 3" [level=2] [ref=e236]
+        - generic [ref=e237]: כותרת הכרטיס
+        - 'textbox "למשל: סלון / מזג אוויר / חיישנים" [ref=e238]'
+        - generic [ref=e239]: ישויות להצגה
+        - generic [ref=e241]: עוד לא נבחרו ישויות
+        - button "＋ הוסף ישות… ▼" [ref=e243] [cursor=pointer]:
+          - generic [ref=e244]: ＋ הוסף ישות…
+          - generic [ref=e245]: ▼
+      - button "💾 שמור את הכרטיסים" [disabled] [ref=e246]
+  - navigation [ref=e66]:
+    - generic [ref=e67]:
+      - button "🏠 בית" [ref=e68] [cursor=pointer]:
+        - generic [ref=e69]: 🏠
+        - text: בית
+      - button "🗂 מסכים" [ref=e71] [cursor=pointer]:
+        - generic [ref=e72]: 🗂
+        - text: מסכים
+      - button "❄ מזגן" [ref=e74] [cursor=pointer]:
+        - generic [ref=e75]: ❄
+        - text: מזגן
+      - button "⚙ הגדרות" [ref=e77] [cursor=pointer]:
+        - generic [ref=e78]: ⚙
+        - text: הגדרות

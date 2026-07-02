@@ -198,6 +198,22 @@ async def test_ha_driver_leds_off():
     assert ha.calls[-1][1] == "turn_on"
 
 
+async def test_ha_driver_show_image_url():
+    """Image-by-URL lands in the firmware's Show-image text slot (text.set_value)."""
+    ha = _FakeHA()
+    d = HARobotDriver(ha=ha, entities={"image_url_text": "text.dravix_show_image_url"})
+    await d.show_image_url("http://frigate:5000/api/door/latest.jpg?height=240")
+    assert ha.calls[-1] == (
+        "text", "set_value",
+        {"entity_id": "text.dravix_show_image_url",
+         "value": "http://frigate:5000/api/door/latest.jpg?height=240"},
+    )
+    import pytest
+
+    with pytest.raises(NotImplementedError):
+        await HARobotDriver(ha=ha, entities={}).show_image_url("http://x/y.jpg")
+
+
 async def test_ha_driver_set_mode_via_select():
     """Sleep/wake maps to select.select_option on the mode_select entity."""
     ha = _FakeHA()

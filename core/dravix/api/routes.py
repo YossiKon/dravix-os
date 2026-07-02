@@ -199,6 +199,7 @@ ROBOT_ENTITY_ROLES = [
     {"key": "state_sensor", "label": "Live state (State sensor)", "domains": ["sensor"]},
     {"key": "heard_sensor", "label": "Last heard (STT sensor)", "domains": ["sensor"]},
     {"key": "reply_sensor", "label": "Last reply (TTS sensor)", "domains": ["sensor"]},
+    {"key": "image_url_text", "label": "Show-image URL (text)", "domains": ["text"]},
 ]
 _ROLE_KEYS = {r["key"] for r in ROBOT_ENTITY_ROLES}
 
@@ -528,7 +529,19 @@ class FrigateShowBody(BaseModel):
 
 @router.post("/api/robot/show_image")
 async def robot_show_image(body: ShowImageBody, request: Request):
-    """Fetch an image URL and display it on the robot's screen."""
+    """Display an image URL on the robot's screen.
+
+    Preferred path: the robot downloads the URL itself (the firmware's Show-image slot).
+    Fallback: fetch here and push the bytes (MCP driver)."""
+    shower = getattr(request.app.state.robot.driver, "show_image_url", None)
+    if shower is not None:
+        try:
+            await shower(body.url)
+            return {"ok": True, "mode": "url"}
+        except NotImplementedError:
+            pass  # role not mapped — fall through to the bytes path
+        except Exception as exc:  # noqa: BLE001
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
     async with httpx.AsyncClient(timeout=10.0) as c:
         try:
             r = await c.get(body.url)
@@ -549,22 +562,37 @@ async def frigate_cameras(request: Request):
 
 @router.post("/api/frigate/show")
 async def frigate_show(body: FrigateShowBody, request: Request):
-    """Pull a Frigate camera snapshot (locally) and display it on the robot's screen."""
+    """Show a Frigate camera snapshot on the robot's screen (all local).
+
+    With the ESPHome firmware + a direct Frigate URL, the robot downloads the snapshot
+    itself (?height=240 keeps it light). Otherwise falls back to pushing the bytes."""
     s = request.app.state
     camera = body.camera or s.settings.frigate_camera
     if not camera:
         raise HTTPException(status_code=400, detail="no camera given and DRAVIX_FRIGATE_CAMERA is empty")
-    try:
-        img = await s.frigate.snapshot(camera)
-    except Exception as exc:  # noqa: BLE001
-        raise HTTPException(status_code=502, detail=f"frigate snapshot failed: {exc}") from exc
-    await _guard(_robot(request).show_image(img))
+    shown = False
+    shower = getattr(s.robot.driver, "show_image_url", None)
+    frigate_base = (s.settings.frigate_url or "").rstrip("/")
+    if shower is not None and frigate_base and not camera.startswith("camera."):
+        try:
+            await shower(f"{frigate_base}/api/{camera}/latest.jpg?height=240")
+            shown = True
+        except NotImplementedError:
+            pass  # image slot not mapped — fall back to bytes below
+        except Exception as exc:  # noqa: BLE001
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
+    if not shown:
+        try:
+            img = await s.frigate.snapshot(camera)
+        except Exception as exc:  # noqa: BLE001
+            raise HTTPException(status_code=502, detail=f"frigate snapshot failed: {exc}") from exc
+        await _guard(_robot(request).show_image(img))
     if body.alert and _robot(request).supports(CAP_FACE):
         try:
             await _robot(request).set_face("doubt")
         except Exception:  # noqa: BLE001
             pass
-    return {"ok": True, "camera": camera, "bytes": len(img)}
+    return {"ok": True, "camera": camera, "mode": "url" if shown else "bytes"}
 
 
 # Robot's own camera, served as a standard HTTP camera so Frigate (or HA) can ingest it.

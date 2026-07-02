@@ -64,6 +64,8 @@ export function HomePage(props: { config: RobotConfig | null }) {
   // games + emotes offered by the core
   const [games, setGames] = useState<string[]>([]);
   const [emotes, setEmotes] = useState<string[]>([]);
+  // live view through the robot's camera (off by default — saves bandwidth)
+  const [camOn, setCamOn] = useState(false);
 
   useEffect(() => {
     apiGet<{ games: string[] }>("/api/fun").then((r) => setGames(r.games)).catch(() => undefined);
@@ -354,6 +356,31 @@ export function HomePage(props: { config: RobotConfig | null }) {
           </button>
         </div>
       </Section>
+
+      {/* ── robot camera (only when a camera is mapped) ── */}
+      {(props.config?.capabilities ?? []).includes("take_photo") && (
+        <Section title="מצלמה" delay={300}>
+          {camOn ? (
+            <>
+              <img
+                src="/camera/robot/stream.mjpeg"
+                alt="מצלמת הרובוט"
+                className="w-full rounded-2xl border border-line bg-black"
+              />
+              <button className="btn mt-3 w-full" onClick={() => setCamOn(false)}>
+                ⏹ עצור צפייה
+              </button>
+            </>
+          ) : (
+            <button className="btn btn-primary w-full" onClick={() => setCamOn(true)}>
+              🎥 צפה דרך העיניים של הרובוט
+            </button>
+          )}
+          <p className="mt-2 text-xs text-mute">
+            אותו זרם משמש גם את Frigate לזיהוי אנשים: <span dir="ltr" className="font-mono">/camera/robot/stream.mjpeg</span>
+          </p>
+        </Section>
+      )}
     </div>
   );
 }

@@ -283,5 +283,13 @@ class HARobotDriver(RobotDriver):
     async def show_image(self, image: bytes) -> None:
         raise NotImplementedError("showing an image over HA needs a custom display entity")
 
+    async def show_image_url(self, url: str) -> None:
+        """Show an image on the robot's screen by URL — the firmware's "Show image URL"
+        text slot downloads it and displays it full-screen (empty string = back to face)."""
+        ent = self._entities.get("image_url_text")
+        if not ent:
+            raise NotImplementedError("no image_url_text entity configured")
+        await self._ha.call_service("text", "set_value", {"entity_id": ent, "value": url})
+
     async def get_status(self) -> dict[str, Any]:
         return {"driver": self.name, "entities": self._entities}

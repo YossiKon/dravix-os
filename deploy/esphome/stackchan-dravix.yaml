@@ -58,6 +58,27 @@ wifi:
 
 captive_portal:
 
+# Lets the robot DOWNLOAD images (Frigate person snapshots, any camera) to its screen.
+http_request:
+  verify_ssl: false
+
+# The downloadable image for the ALERT page. Setting the "Show image URL" text entity
+# (from HA automations / the dravix add-on) fetches the URL and shows it full-screen for
+# ~25s, then returns to the face. Tip: append ?height=240 to Frigate snapshot URLs.
+online_image:
+  - id: oi_show
+    url: "http://127.0.0.1/placeholder.jpg"   # replaced at runtime via Show image URL
+    format: JPEG
+    type: RGB565
+    resize: 320x240
+    update_interval: never
+    on_download_finished:
+      - lvgl.image.update: { id: img_show, src: oi_show }
+      - lvgl.page.show: page_image
+      - script.execute: img_timeout
+    on_error:
+      - logger.log: "show-image: download failed"
+
 packages:
   m5stack_stackchan:
     url: https://github.com/m5stack/esphome-yaml
@@ -240,6 +261,25 @@ text:
     mode: text
     max_length: 160
     initial_value: ""
+  # Set this to any image URL → the robot shows it full-screen (empty = back to the face).
+  # e.g. http://<frigate>:5000/api/<camera>/latest.jpg?height=240
+  - platform: template
+    name: "Show image URL"
+    id: t_img_url
+    optimistic: true
+    mode: text
+    max_length: 255
+    initial_value: ""
+    set_action:
+      - if:
+          condition: { lambda: 'return x.empty();' }
+          then:
+            - lvgl.page.show: page_face
+          else:
+            - online_image.set_url:
+                id: oi_show
+                url: !lambda 'return x;'
+            - component.update: oi_show
 
 number:
   - platform: template
@@ -488,8 +528,25 @@ lvgl:
                   then:
                     - script.execute: { id: led_flash, r: 20, g: 100, b: 30 }
                     - script.execute: head_shake
+    # ── Page 6: ALERT IMAGE — a downloaded snapshot (Frigate person, doorbell, …) ──
+    - id: page_image
+      bg_color: 0x000000
+      bg_opa: COVER
+      widgets:
+        - image:
+            id: img_show
+            align: CENTER
+            src: oi_show
 
 script:
+  # After ~25s the alert image goes away and the face comes back.
+  - id: img_timeout
+    mode: restart
+    then:
+      - delay: 25s
+      - if:
+          condition: { lvgl.page.is_showing: page_image }
+          then: [ { lvgl.page.show: page_face } ]
   # Set both eyes to a shape: width / height / corner-radius / vertical offset.
   # (Eyes are align:CENTER, so size changes keep them centred — no x math needed.)
   - id: set_eyes
@@ -599,7 +656,12 @@ script:
                 green: !lambda 'return g / 100.0f;'
                 blue: !lambda 'return b / 100.0f;'
             - delay: 2500ms
-            - script.execute: restore_leds
+            # if a voice conversation started meanwhile, DON'T stomp its yellow —
+            # the conversation's own on_end will restore the true original colour.
+            - if:
+                condition: { lambda: 'return !id(g_voice);' }
+                then:
+                  - script.execute: restore_leds
             - globals.set: { id: g_flash, value: "false" }
   # ── PETTING — wake up, blush, pink LEDs, nuzzle up + a happy wiggle ─────────────
   - id: pet_react
@@ -1084,10 +1146,12 @@ voice_assistant:
   volume_multiplier: 2.0
   on_listening:
     - lambda: 'lv_disp_trig_activity(NULL);'   # a conversation is activity — no screensaver
-    # remember the current LEDs — but only at the START of a conversation, so a
-    # follow-up question doesn't overwrite the saved colour with our own yellow.
+    # a mood flash may be mid-run — stop it so its delayed restore can't fire mid-talk
+    - script.stop: led_flash
+    # remember the current LEDs — but only at the START of a conversation, and never
+    # while a mood flash is showing (the flash already saved the TRUE original colour).
     - if:
-        condition: { lambda: 'return !id(g_voice);' }
+        condition: { lambda: 'return !id(g_voice) && !id(g_flash);' }
         then:
           - lambda: |-
               auto v = id(stackchan_light_bar).current_values;
@@ -1096,6 +1160,7 @@ voice_assistant:
               id(led_r)   = v.get_red();
               id(led_g)   = v.get_green();
               id(led_b)   = v.get_blue();
+    - globals.set: { id: g_flash, value: "false" }   # flash cancelled; save is now ours
     - select.set: { id: robot_mode, option: awake }
     - globals.set: { id: g_listen, value: "true" }
     - globals.set: { id: g_voice, value: "true" }
