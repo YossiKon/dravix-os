@@ -273,9 +273,32 @@ async def ha_entities(request: Request, domains: str = ""):
             "entity_id": eid,
             "name": attrs.get("friendly_name") or eid,
             "domain": dom,
+            "state": stt.get("state"),
         })
     out.sort(key=lambda e: (e["domain"], e["name"].lower()))
     return {"entities": out, "ha_configured": True}
+
+
+class HASwitchBody(BaseModel):
+    entity_id: str
+    on: bool
+
+
+@router.post("/api/ha/switch")
+async def ha_switch(body: HASwitchBody, request: Request):
+    """Flip a Home Assistant switch — used for the robot's behaviour toggles."""
+    ha = request.app.state.ha
+    if ha is None:
+        raise HTTPException(status_code=503, detail="Home Assistant not configured")
+    if not body.entity_id.startswith("switch."):
+        raise HTTPException(status_code=400, detail="only switch.* entities can be flipped here")
+    try:
+        await ha.call_service(
+            "switch", "turn_on" if body.on else "turn_off", {"entity_id": body.entity_id}
+        )
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=502, detail=f"switch flip failed: {exc}") from exc
+    return {"ok": True, "entity_id": body.entity_id, "on": body.on}
 
 
 @router.get("/api/robot/config")

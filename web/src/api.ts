@@ -57,6 +57,7 @@ export interface HAEntity {
   entity_id: string;
   name: string;
   domain: string;
+  state?: string | null;
 }
 
 export interface ScreenCard {

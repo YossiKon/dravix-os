@@ -476,24 +476,36 @@ lvgl:
             align: TOP_RIGHT
             x: -6
             y: 4
-    # ── Page 1: STATUS (swipe down) ──────────────────────────────────────────────
+    # ── Page 1: STATUS (swipe down): time · battery %+mAh+bar+time-left · wifi · ip ──
+    # The CoreS3 has a 500mAh battery (AXP2101); time-left is estimated at ~200mA draw.
     - id: page_status
       bg_color: 0x05080b
       bg_opa: COVER
       widgets:
         - obj:
             styles: card_box
+            pad_all: 10
             align: CENTER
             width: 300
             height: 222
             scrollbar_mode: "OFF"
             widgets:
-              - label: { id: lbl_time, text: "--:--", text_font: big_font,   text_color: 0xFFFFFF, align: TOP_MID,  y: 4 }
-              - label: { id: lbl_date, text: "",       text_font: small_font, styles: muted_txt,   align: TOP_MID,  y: 58 }
-              - label: { id: lbl_batt, text: "Batt --", text_font: text_font, text_color: 0x5dffa0, align: TOP_LEFT, x: 8, y: 96 }
-              - label: { id: lbl_wifi, text: "WiFi",   text_font: small_font, styles: muted_txt,   align: TOP_LEFT, x: 8, y: 130 }
-              - label: { id: lbl_ip,   text: "IP",     text_font: small_font, styles: muted_txt,   align: TOP_LEFT, x: 8, y: 158 }
-              - label: { id: lbl_up,   text: "Up",     text_font: small_font, styles: muted_txt,   align: TOP_LEFT, x: 8, y: 186 }
+              - label: { id: lbl_time, text: "--:--", text_font: big_font,   text_color: 0xFFFFFF, align: TOP_MID,  y: 0 }
+              - label: { id: lbl_date, text: "",       text_font: small_font, styles: muted_txt,   align: TOP_MID,  y: 48 }
+              - label: { id: lbl_batt, text: "Batt --", text_font: text_font, text_color: 0x5dffa0, align: TOP_LEFT, x: 8, y: 72 }
+              - bar:
+                  id: bar_batt
+                  x: 8
+                  y: 100
+                  width: 260
+                  height: 10
+                  min_value: 0
+                  max_value: 100
+                  value: 0
+              - label: { id: lbl_est,  text: "",       text_font: small_font, styles: muted_txt,   align: TOP_LEFT, x: 8, y: 116 }
+              - label: { id: lbl_wifi, text: "WiFi",   text_font: small_font, styles: muted_txt,   align: TOP_LEFT, x: 8, y: 140 }
+              - label: { id: lbl_ip,   text: "IP",     text_font: small_font, styles: muted_txt,   align: TOP_LEFT, x: 8, y: 161 }
+              - label: { id: lbl_up,   text: "Up",     text_font: small_font, styles: muted_txt,   align: TOP_LEFT, x: 8, y: 182 }
     # ── Pages 2-4: the 3 dynamic cards (swipe left/right) ────────────────────────
     - id: page_card1
       bg_color: 0x05080b
@@ -1141,6 +1153,7 @@ interval:
             int s = (int) id(up_sec).state;
             char b[24]; snprintf(b, sizeof(b), "Up %dh %dm", s / 3600, (s % 3600) / 60);
             return std::string(b);
+      # Battery: % + remaining mAh (500mAh cell) + bar + estimated time left (~200mA draw).
       - lvgl.label.update:
           id: lbl_batt
           text_color: !lambda |-
@@ -1148,7 +1161,22 @@ interval:
                 ? lv_color_hex(0xFF5555) : lv_color_hex(0x5dffa0);
           text: !lambda |-
             if (!id(ha_batt).has_state()) return std::string("Batt --");
-            char b[16]; snprintf(b, sizeof(b), "Batt %.0f%%", id(ha_batt).state);
+            int mah = (int)(id(ha_batt).state * 500.0f / 100.0f);
+            char b[32]; snprintf(b, sizeof(b), "Batt %.0f%%  ~%d mAh", id(ha_batt).state, mah);
+            return std::string(b);
+      - lvgl.bar.update:
+          id: bar_batt
+          value: !lambda 'return id(ha_batt).has_state() ? (int) id(ha_batt).state : 0;'
+      - lvgl.label.update:
+          id: lbl_est
+          text: !lambda |-
+            char b[40];
+            if (id(ha_batt).has_state()) {
+              float hours = (id(ha_batt).state * 500.0f / 100.0f) / 200.0f;  // ~200mA typical
+              snprintf(b, sizeof(b), "~%.1f h left  ·  %s", hours, id(robot_mode).state.c_str());
+            } else {
+              snprintf(b, sizeof(b), "%s", id(robot_mode).state.c_str());
+            }
             return std::string(b);
       # Soft clock on the screensaver (empty otherwise).
       - lvgl.label.update:

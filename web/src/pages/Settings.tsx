@@ -1,9 +1,22 @@
-// הגדרות — חיבור לרובוט, מיפוי ישויות, כיול ראש, טיימרים, בינה.
-import { useEffect, useState } from "react";
+// הגדרות — חיבור לרובוט, מיפוי ישויות, התנהגות, כיול ראש, טיימרים, בינה.
+import { useEffect, useMemo, useState } from "react";
 import { apiGet, apiSend } from "../api";
 import type { AppConfig, HAEntity, RobotConfig, ScreenTimers } from "../api";
 import { EntityPicker } from "../components/EntityPicker";
 import { Section, Toggle, toast, toastErr } from "../ui";
+
+// Hebrew labels for the robot's behaviour switches (matched by entity object_id suffix).
+const BEHAVIOR_HE: [string, string][] = [
+  ["greet_on_approach", "ברכה כשמישהו מתקרב"],
+  ["sleep_when_dark", "שינה כשחשוך בחדר"],
+  ["touch_reaction", "תגובה לליטוף"],
+  ["speaking_leds", "לדים צהובים בשיחה"],
+  ["random_blink", "מצמוץ טבעי"],
+  ["idle_head_drift", "מבט/תנועה עצמאית"],
+  ["tap_face_to_talk", "הקשה על הפרצוף = דיבור"],
+  ["body_language", "שפת גוף (תנועות ראש)"],
+  ["mood_leds", "לדים לפי רגש"],
+];
 
 // Hebrew labels for the entity roles (falls back to the server's English label).
 const ROLE_HE: Record<string, string> = {
@@ -42,6 +55,42 @@ export function SettingsPage(props: {
   const [saving, setSaving] = useState(false);
   const [timers, setTimers] = useState<{ saver: string; sleep: string }>({ saver: "", sleep: "" });
   const [app, setApp] = useState<AppConfig | null>(null);
+  const [switches, setSwitches] = useState<HAEntity[]>([]);
+
+  // the robot's entity prefix, derived from any mapped entity (e.g. select.dravix_mode → "dravix")
+  const robotPrefix = useMemo(() => {
+    for (const id of Object.values(cfg?.entities ?? {})) {
+      const obj = id.split(".")[1];
+      const p = obj?.split("_")[0];
+      if (p) return p;
+    }
+    return "";
+  }, [cfg]);
+
+  useEffect(() => {
+    apiGet<{ entities: HAEntity[] }>("/api/ha/entities?domains=switch")
+      .then((r) => setSwitches(r.entities))
+      .catch(() => undefined);
+  }, []);
+
+  const behaviors = useMemo(() => {
+    if (!robotPrefix) return [];
+    return BEHAVIOR_HE.flatMap(([suffix, he]) => {
+      const ent = switches.find((s) => s.entity_id === `switch.${robotPrefix}_${suffix}`);
+      return ent ? [{ ...ent, he }] : [];
+    });
+  }, [switches, robotPrefix]);
+
+  async function flipBehavior(entityId: string, on: boolean) {
+    try {
+      await apiSend("/api/ha/switch", "POST", { entity_id: entityId, on });
+      setSwitches((cur) =>
+        cur.map((s) => (s.entity_id === entityId ? { ...s, state: on ? "on" : "off" } : s)),
+      );
+    } catch (e) {
+      toastErr(e);
+    }
+  }
 
   useEffect(() => {
     if (cfg) setEntities(cfg.entities);
@@ -199,6 +248,22 @@ export function SettingsPage(props: {
           {saving ? "שומר…" : "💾 שמור חיבורים"}
         </button>
       </Section>
+
+      {/* ── behaviour toggles (the robot's on-device switches) ── */}
+      {behaviors.length > 0 && (
+        <Section title="התנהגות הרובוט" delay={90}>
+          <div className="space-y-2">
+            {behaviors.map((b) => (
+              <Toggle
+                key={b.entity_id}
+                label={b.he}
+                on={b.state === "on"}
+                onChange={(v) => void flipBehavior(b.entity_id, v)}
+              />
+            ))}
+          </div>
+        </Section>
+      )}
 
       {/* ── head calibration ── */}
       <Section title="כיול ראש" delay={120}>
