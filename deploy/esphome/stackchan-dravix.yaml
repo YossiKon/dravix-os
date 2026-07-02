@@ -647,7 +647,8 @@ script:
           radius: !lambda 'return r;'
           y: !lambda 'return dy;'
   # ── BODY LANGUAGE ─────────────────────────────────────────────────────────────
-  # Nudge the head relative to where it is now (clamped to the servos' real ranges).
+  # Nudge the head relative to where it is now. PITCH goes through n_head_pitch, i.e.
+  # in YOUR units (158..260, straight=165) — never the motor's internal 0..90 scale.
   # Writes are spaced 350ms apart — the SCS9009 serial bus drops back-to-back writes.
   - id: head_nudge
     mode: restart
@@ -665,13 +666,13 @@ script:
                   return v < -164 ? -164 : (v > 164 ? 164 : v);
             - delay: 350ms
       - if:
-          condition: { lambda: 'return id(sw_move).state && dy != 0 && !std::isnan(id(servo_y_angle).state);' }
+          condition: { lambda: 'return id(sw_move).state && dy != 0 && !std::isnan(id(n_head_pitch).state);' }
           then:
             - number.set:
-                id: servo_y_angle
+                id: n_head_pitch
                 value: !lambda |-
-                  float v = id(servo_y_angle).state + dy;
-                  return v < 0 ? 0 : (v > 90 ? 90 : v);
+                  float v = id(n_head_pitch).state + dy;
+                  return v < 158 ? 158 : (v > 260 ? 260 : v);
   # A quick left-right "no!" shake (angry / playful).
   - id: head_shake
     mode: restart
@@ -1035,14 +1036,14 @@ select:
       - if:
           condition: { lambda: 'return x == std::string("sleep");' }
           then:
-            # the head slowly droops (remembering where it was), LEDs off…
+            # the head slowly droops (remembering where it was — in the 158..260 scale), LEDs off…
             - if:
                 condition: { lambda: 'return id(sw_move).state && id(g_pitch_saved) < 0;' }
                 then:
-                  - lambda: 'id(g_pitch_saved) = id(servo_y_angle).state;'
+                  - lambda: 'id(g_pitch_saved) = id(n_head_pitch).state;'
                   - number.set:
-                      id: servo_y_angle
-                      value: !lambda 'float v = id(servo_y_angle).state - 25.0f; return v < 0 ? 0 : v;'
+                      id: n_head_pitch
+                      value: !lambda 'float v = id(n_head_pitch).state - 25.0f; return v < 158 ? 158 : v;'
             - light.turn_off: stackchan_light_bar
             # …the zzz face shows for a moment, then the screen goes fully off
             - delay: 2s
@@ -1065,7 +1066,7 @@ select:
                 condition: { lambda: 'return id(sw_move).state && id(g_pitch_saved) >= 0;' }
                 then:
                   - number.set:
-                      id: servo_y_angle
+                      id: n_head_pitch
                       value: !lambda 'return id(g_pitch_saved);'
                   - globals.set: { id: g_pitch_saved, value: "-1" }
       - if:
@@ -1076,7 +1077,7 @@ select:
             - if:
                 condition: { lambda: 'return id(sw_move).state && id(g_pitch_saved) >= 0;' }
                 then:
-                  - number.set: { id: servo_y_angle, value: !lambda 'return id(g_pitch_saved);' }
+                  - number.set: { id: n_head_pitch, value: !lambda 'return id(g_pitch_saved);' }
                   - globals.set: { id: g_pitch_saved, value: "-1" }
             - globals.set: { id: g_expr, value: "1" }
             - globals.set: { id: g_card, value: "0" }
