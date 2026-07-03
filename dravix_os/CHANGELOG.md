@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.0.44
+
+- **Everything personal is now a local knob** (firmware v3): device name (run several
+  robots!), wake-word model, entity prefix, battery, and room thresholds are all
+  substitutions — the git-stub lists the complete set, documented; Wi-Fi stays in your
+  local secrets. The repo firmware contains nothing person-specific.
+
 ## 0.0.43
 
 - **isLocal is a pure user choice**: on or off, set by you, persisted, and never flipped
