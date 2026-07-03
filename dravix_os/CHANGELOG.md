@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.0.43
+
+- **isLocal is a pure user choice**: on or off, set by you, persisted, and never flipped
+  automatically (the add-on option only seeds the very first run). ON now means
+  *everything stays inside your home network* — cloud AI blocked, cloud bridge
+  disconnected, LAN-only images, and no update checks leave the house.
+- **Choose it on the robot too**: firmware v2 adds a "Local only" switch and a LOCAL
+  button on the robot's swipe-down status bar (teal when on). The robot, Home Assistant,
+  and the dashboard all stay in sync automatically.
+
 ## 0.0.42
 
 - **Releases + rollback**: every version now gets a git tag (`v0.0.42`) and a GitHub

@@ -85,7 +85,6 @@ export interface AppConfig {
   ai_available: boolean;
   providers: string[];
   local_only: boolean;
-  local_only_override?: boolean | null;
   store: { idle_motion?: boolean } & Record<string, unknown>;
 }
 

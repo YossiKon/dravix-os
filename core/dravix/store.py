@@ -152,16 +152,21 @@ class Store:
 
     def local_only(self, default: bool = True) -> bool:
         """The MASTER isLocal flag: only local things may run (cloud AI blocked, the cloud
-        MCP bridge disconnected, external image URLs rejected). ``None`` in the store =
-        follow the add-on/env default; the dashboard writes True/False here."""
+        MCP bridge disconnected, external image URLs rejected).
+
+        This is the USER's explicit choice — ON or OFF, set from the dashboard toggle,
+        persisted, and never changed automatically. The ``default`` (add-on option) seeds
+        only the very first run, before the user has ever chosen; that seed is frozen
+        here so a later add-on option change can't silently flip the robot's behavior."""
         v = self._data.get("local_only")
-        return default if v is None else bool(v)
+        if v is None:
+            self._data["local_only"] = bool(default)
+            self.save()
+            return bool(default)
+        return bool(v)
 
-    def local_only_override(self) -> bool | None:
-        return self._data.get("local_only")
-
-    def set_local_only(self, enabled: bool | None) -> None:
-        self._data["local_only"] = enabled
+    def set_local_only(self, enabled: bool) -> None:
+        self._data["local_only"] = bool(enabled)
         self.save()
 
     def robot_name(self) -> str:

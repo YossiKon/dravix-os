@@ -38,6 +38,7 @@ _ROLES: dict[str, tuple[str, tuple[str, ...], bool]] = {
     "reply_sensor": ("sensor", ("last_reply",), False),
     "image_url_text": ("text", ("show_image_url",), False),
     "privacy_switch": ("switch", ("privacy_mode",), False),
+    "islocal_switch": ("switch", ("local_only",), False),
     "screensaver_number": ("number", ("screensaver_after_min",), False),
     "sleep_number": ("number", ("sleep_after_min",), False),
 }

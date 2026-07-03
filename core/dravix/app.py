@@ -5,6 +5,7 @@ Builds and connects all the pieces (config → event bus → HA client → robot
 """
 from __future__ import annotations
 
+import asyncio
 import secrets
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -42,7 +43,8 @@ def build_ai(settings: Settings, store: Store, ha: HomeAssistant | None):
     from .persona import resolve_persona
 
     provider = store.ai_provider() or settings.ai_provider
-    # The dashboard's master isLocal flag overrides the env default, both ways.
+    # The master isLocal flag is the user's persisted dashboard choice (the add-on option
+    # only seeds the very first run) — it decides whether cloud providers are allowed.
     merged = settings.model_copy(
         update={"ai_provider": provider, "local_only": store.local_only(settings.local_only)}
     )
@@ -215,10 +217,52 @@ async def lifespan(app: FastAPI):
     app.state.screen_pusher = screen_pusher
     app.state.xiaozhi = xiaozhi
 
+    # ── isLocal ⇄ the robot's own "Local only" switch ─────────────────────────────
+    # The choice can be made ON the robot (the LOCAL button on its status bar). The HA
+    # event bridge republishes that switch's transitions as `islocal.set`; this watcher
+    # applies them (without echoing back to the robot). And at startup dravix pushes the
+    # persisted choice TO the robot, so the LOCAL button always shows the truth.
+    islocal_eid = discovered.get("islocal_switch")
+    if ha is not None and islocal_eid:
+        try:
+            await ha.call_service(
+                "switch",
+                "turn_on" if store.local_only(settings.local_only) else "turn_off",
+                {"entity_id": islocal_eid},
+            )
+        except Exception:  # noqa: BLE001 — robot may be offline; the sync is best-effort
+            pass
+
+    async def _islocal_watcher() -> None:
+        from .localmode import apply_local_only
+
+        q = bus.subscribe()
+        try:
+            while True:
+                ev = await q.get()
+                if ev.type != "islocal.set":
+                    continue
+                enabled = bool(ev.data.get("enabled"))
+                try:
+                    if enabled != store.local_only(settings.local_only):
+                        await apply_local_only(app.state, enabled, push_to_robot=False)
+                        log.info("isLocal set from the robot's switch: %s", enabled)
+                except Exception:  # noqa: BLE001 — never kill the watcher
+                    log.exception("applying isLocal from the robot failed")
+        finally:
+            bus.unsubscribe(q)
+
+    islocal_task = asyncio.create_task(_islocal_watcher(), name="dravix-islocal")
+
     try:
         yield
     finally:
         log.info("shutting down dravix-os")
+        islocal_task.cancel()
+        try:
+            await islocal_task
+        except asyncio.CancelledError:
+            pass
         # read the CURRENT bridge from app.state — /api/config/local_only may have
         # stopped/replaced the one this scope created.
         if getattr(app.state, "xiaozhi", None) is not None:

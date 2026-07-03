@@ -1,5 +1,5 @@
 name: dravix-os
-version: "0.0.42"
+version: "0.0.43"
 slug: dravix_os
 description: Companion OS for the M5Stack StackChan robot (local-first)
 url: https://github.com/YossiKon/dravix-os
@@ -40,6 +40,8 @@ options:
   # Language for the robot's wellness tips etc. (the dashboard has its own live toggle).
   language: en
   idle_motion: false             # dravix's own idle glances; OFF by default — the firmware glances on its own and freezes in sleep/focus/quiet (on = double motion)
+  # Seeds the dashboard's isLocal toggle on the VERY FIRST run only — from then on the
+  # toggle is the user's explicit choice and this option is ignored (never auto-flips).
   local_only: true
   frigate_url: ""
   frigate_camera: ""

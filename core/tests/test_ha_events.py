@@ -66,3 +66,13 @@ def test_removed_entity_returns_none():
 def test_ws_url_derivation():
     assert ha_ws_url("https://ha.example.com") == "wss://ha.example.com/api/websocket"
     assert ha_ws_url("http://homeassistant.local:8123/") == "ws://homeassistant.local:8123/api/websocket"
+
+
+def test_islocal_switch_maps_both_directions():
+    on = map_state_changed(_changed("switch.dravix_local_only", "off", "on"))
+    assert on == ("islocal.set", {"entity_id": "switch.dravix_local_only", "enabled": True})
+    off = map_state_changed(_changed("switch.dravix_local_only", "on", "off"))
+    assert off == ("islocal.set", {"entity_id": "switch.dravix_local_only", "enabled": False})
+    # boot noise (unknown -> off) and unrelated switches don't fire
+    assert map_state_changed(_changed("switch.dravix_local_only", "unavailable", "off")) is None
+    assert map_state_changed(_changed("switch.garden_lights", "off", "on")) is None

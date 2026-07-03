@@ -231,6 +231,7 @@ ROBOT_ENTITY_ROLES = [
     {"key": "reply_sensor", "label": "Last reply (TTS sensor)", "domains": ["sensor"]},
     {"key": "image_url_text", "label": "Show-image URL (text)", "domains": ["text"]},
     {"key": "privacy_switch", "label": "Privacy mode (switch)", "domains": ["switch"]},
+    {"key": "islocal_switch", "label": "Local-only (switch)", "domains": ["switch"]},
 ]
 _ROLE_KEYS = {r["key"] for r in ROBOT_ENTITY_ROLES}
 
@@ -591,7 +592,6 @@ async def get_config(request: Request):
         "ai_available": s.ai is not None,
         "providers": ["ha_assist", "claude", "openai", "ollama"],
         "local_only": _local_only(request),
-        "local_only_override": s.store.local_only_override(),
         "cloud_providers": ["claude", "openai"],
     }
 
@@ -608,48 +608,19 @@ async def get_updates(request: Request):
 
 
 class LocalOnlyBody(BaseModel):
-    enabled: bool | None = None  # None = follow the add-on/env default again
+    enabled: bool  # the user's explicit choice — there is no "auto" value
 
 
 @router.put("/api/config/local_only")
 async def set_local_only(body: LocalOnlyBody, request: Request):
-    """The MASTER isLocal flag. ON = only local things run: cloud AI providers are blocked,
-    the cloud MCP bridge is disconnected, and external (non-LAN) image URLs are rejected.
-    OFF = everything behaves normally. Applied immediately — no restart."""
-    s = request.app.state
-    s.store.set_local_only(body.enabled)
-    effective = _local_only(request)
-    # 1 · the cloud MCP bridge follows the flag, live
-    bridge_error: str | None = None
-    try:
-        if effective and getattr(s, "xiaozhi", None) is not None:
-            await s.xiaozhi.stop()
-            s.xiaozhi = None
-        elif not effective and getattr(s, "xiaozhi", None) is None and s.settings.xiaozhi_mcp_url:
-            from ..integrations.xiaozhi_bridge import XiaoZhiBridge
-            from ..mcpserver.server import build_server
+    """The MASTER isLocal flag — the USER's explicit on/off choice, nothing automatic.
+    ON = everything stays inside the home network (cloud AI blocked, cloud bridge
+    disconnected, non-LAN image URLs rejected, update checks stopped). OFF = everything
+    behaves normally. Persisted until the user flips it again; applied immediately,
+    and mirrored onto the robot's own "Local only" switch."""
+    from ..localmode import apply_local_only
 
-            include_robot = (s.store.robot_driver() or s.settings.robot_driver).lower() != "mock"
-            s.xiaozhi = XiaoZhiBridge(
-                s.settings.xiaozhi_mcp_url,
-                lambda: build_server(
-                    s.robot, s.engine, s.ai, ha=s.ha, store=s.store, mood=s.mood,
-                    weather_entity=s.settings.weather_entity,
-                    include_robot_control=include_robot,
-                ),
-            )
-            await s.xiaozhi.start()
-    except Exception as exc:  # noqa: BLE001 — surface, don't 500 (the flag itself was saved)
-        bridge_error = str(exc)
-    # 2 · cloud AI providers are (un)blocked by rebuilding against the new flag
-    ai_error = _rebuild_ai(request)
-    return {
-        "local_only": effective,
-        "local_only_override": s.store.local_only_override(),
-        "ai_available": s.ai is not None,
-        "cloud_bridge_connected": getattr(s, "xiaozhi", None) is not None,
-        "error": ai_error or bridge_error,
-    }
+    return await apply_local_only(request.app.state, body.enabled)
 
 
 class RobotNameBody(BaseModel):

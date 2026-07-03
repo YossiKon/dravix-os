@@ -62,6 +62,13 @@ def map_state_changed(
         return None
 
     domain, _, object_id = eid.partition(".")
+    # The robot's "Local only" switch — republish EVERY real on/off transition (both
+    # directions, unlike the became-active events): the user's isLocal choice made ON
+    # the robot must flow back into dravix. app.py's watcher applies it.
+    if domain == "switch" and (object_id == "local_only" or object_id.endswith("_local_only")):
+        if state in ("on", "off") and old.get("state") in ("on", "off") and old.get("state") != state:
+            return "islocal.set", {"entity_id": eid, "enabled": state == "on"}
+
     if domain == "binary_sensor" and became_active:
         device_class = (new.get("attributes") or {}).get("device_class")
         event_type = _DEVICE_CLASS_EVENT.get(device_class or "")

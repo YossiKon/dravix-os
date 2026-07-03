@@ -38,6 +38,7 @@ const ROLES: Record<string, Bi> = {
   reply_sensor: { he: "מה ענה (Last reply)", en: "Last reply" },
   image_url_text: { he: "הצגת תמונה (Show image URL)", en: "Show image URL" },
   privacy_switch: { he: "מצב פרטיות (Privacy)", en: "Privacy mode" },
+  islocal_switch: { he: "מקומי בלבד (isLocal)", en: "Local-only (isLocal)" },
 };
 
 const PROVIDERS: Record<string, Bi> = {
@@ -308,8 +309,8 @@ export function SettingsPage(props: {
       <Section title={tr("🏠 מקומי בלבד (isLocal)", "🏠 Local only (isLocal)")} delay={50}>
         <p className="mb-3 text-sm text-mute">
           {tr(
-            "כשהמתג דלוק — רק דברים מקומיים מאושרים: בינה בענן חסומה, החיבור לענן מתנתק, ותמונות רק מכתובות ברשת הביתית. כשהוא כבוי — הכל רגיל.",
-            "When ON, only local things are allowed: cloud AI is blocked, the cloud bridge disconnects, and images load only from LAN addresses. When OFF, everything works normally.",
+            "הבחירה שלך בלבד — נשאר בדיוק כמו שקבעת, שום דבר לא מחליף אותו אוטומטית. דלוק: הכל נשאר ברשת הביתית — כלום לא יוצא החוצה וכלום לא נכנס מבחוץ (בינה בענן חסומה, החיבור לענן מנותק, תמונות רק מהרשת, בלי בדיקות עדכונים). כבוי: הכל רגיל. אפשר להחליף גם מהרובוט עצמו — כפתור LOCAL בסרגל שנפתח בהחלקה למטה.",
+            "Your choice alone — it stays exactly as you set it, nothing flips it automatically. ON: everything stays inside your home network — nothing goes out and nothing comes in (cloud AI blocked, cloud bridge disconnected, LAN-only images, no update checks). OFF: everything works normally. You can also flip it on the robot itself — the LOCAL button on its swipe-down status bar.",
           )}
         </p>
         <Toggle
