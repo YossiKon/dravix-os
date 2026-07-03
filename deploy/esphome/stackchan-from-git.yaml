@@ -18,6 +18,16 @@
 #    (pick any older tag from the repo's Releases page), press Install, done.
 # ════════════════════════════════════════════════════════════════════════════════
 
+# ── Wi-Fi — YOUR network ──────────────────────────────────────────────────────────
+# The values live in your ESPHome secrets.yaml (the SECRETS button, top-right of the
+# ESPHome dashboard):    wifi_ssid: "MyHomeWifi"
+#                        wifi_password: "my-password"
+# Prefer writing them right here instead? Replace the !secret lines with plain strings:
+#                        ssid: "MyHomeWifi"
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+
 substitutions:
   # ── identity ──────────────────────────────────────────────────────────────────
   # Running more than one robot? Give each a unique node name (mDNS + fresh-flash
