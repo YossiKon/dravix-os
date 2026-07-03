@@ -82,7 +82,7 @@ robot_entity_light:        light.stackchan_led
 robot_entity_camera:       camera.stackchan
 ```
 
-Leave `xiaozhi_mcp_url` blank (that's the cloud path). **Save → Restart.**
+**Save → Restart.**
 
 ## Step 4 — It's alive 🎉
 

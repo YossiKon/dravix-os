@@ -1,0 +1,24 @@
+name: follow
+description: The robot's head follows a person in real time, using Frigate detections (off-device — no load on the robot).
+kind: foreground
+entrypoint: mode:FollowMode
+enabled: true
+config:
+  # Frigate camera name that sees YOU. Re-serve the robot's own camera to Frigate and
+  # track it there (see docs/frigate.md), then put that camera's name here.
+  camera: stackchan
+  label: person            # what to follow: person | face | cat | dog … (must be tracked in Frigate)
+  frigate_url: ""          # direct Frigate base, e.g. http://192.168.50.134:5000 (blank → DRAVIX_FRIGATE_URL)
+  frame_w: 320             # Frigate detect width  (for normalising a pixel box)
+  frame_h: 240             # Frigate detect height
+  box_format: xywh         # Frigate's data.box format: xywh (default) or xyxy
+  gain_yaw: 0.4            # how hard it turns left/right toward you (P gain)
+  gain_pitch: 0.4          # how hard it tilts up/down toward you
+  deadzone: 0.12           # ignore small offsets so it doesn't jitter (0..1 of half-frame)
+  max_step: 0.2            # biggest single head move per update (smoothness)
+  update_hz: 2.0           # tracking updates per second (the servo bus caps at ~2)
+  invert_yaw: false        # flip if it turns the wrong way
+  invert_pitch: false      # flip if it tilts the wrong way
+  lost_timeout: 3.0        # seconds with no detection before easing back to centre
+  recenter_when_lost: true # ease the head back to centre when it loses you
+  speed: 1.0

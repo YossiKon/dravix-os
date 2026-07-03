@@ -26,13 +26,10 @@ export DRAVIX_IDLE_MOTION="$(opt idle_motion)"
 export DRAVIX_LOCAL_ONLY="$(opt local_only)"
 export DRAVIX_FRIGATE_URL="$(opt frigate_url)"
 export DRAVIX_FRIGATE_CAMERA="$(opt frigate_camera)"
-export DRAVIX_ROBOT_MCP_URL="$(opt robot_mcp_url)"
-export DRAVIX_ROBOT_MCP_TRANSPORT="$(opt robot_mcp_transport)"
-export DRAVIX_XIAOZHI_MCP_URL="$(opt xiaozhi_mcp_url)"
-
-# Robot driver: explicit option (mock|ha|mcp).
+# Robot driver: the `ha` path (Home Assistant + the custom dravix ESPHome firmware).
+# `mock` stays available in code for offline tests, but the add-on always runs `ha`.
 export DRAVIX_ROBOT_DRIVER="$(opt robot_driver)"
-[ -z "$DRAVIX_ROBOT_DRIVER" ] && export DRAVIX_ROBOT_DRIVER="mock"
+[ -z "$DRAVIX_ROBOT_DRIVER" ] && export DRAVIX_ROBOT_DRIVER="ha"
 
 # For the `ha` driver, assemble the entity map (StackChan ESPHome entities) as JSON.
 export DRAVIX_HA_ROBOT_ENTITIES="$(

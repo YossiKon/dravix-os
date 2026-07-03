@@ -93,6 +93,7 @@ async def status(request: Request):
     data["ambient_modes"] = engine.ambient_active
     data["ai_available"] = request.app.state.ai is not None
     data["mood"] = request.app.state.mood.snapshot()
+    data["vitals"] = request.app.state.vitals.snapshot()
     data["idle_motion"] = getattr(request.app.state.robot, "idle_motion", True)
     xz = getattr(request.app.state, "xiaozhi", None)
     data["xiaozhi"] = {
@@ -226,7 +227,7 @@ def _robot_config_payload(request: Request) -> dict:
     st = s.robot.state
     return {
         "driver": (s.store.robot_driver() or s.settings.robot_driver),
-        "drivers": ["mock", "ha", "mcp"],
+        "drivers": ["ha"],
         "roles": ROBOT_ENTITY_ROLES,
         "entities": _effective_entities(request),
         "calibration": s.store.head_calibration(),
@@ -875,6 +876,36 @@ async def robot_interact(body: InteractBody, request: Request):
         raise HTTPException(status_code=400, detail=f"unknown kind {body.kind!r}")
     await request.app.state.bus.publish(etype, source="api")
     return {"ok": True, "event": etype}
+
+
+@router.get("/api/vitals")
+async def get_vitals(request: Request):
+    """The robot's live needs (energy/food/fun/calm, 0-100) + whether nudges are on."""
+    return request.app.state.vitals.snapshot()
+
+
+class VitalsActionBody(BaseModel):
+    action: str  # feed | rest | play | calm
+
+
+@router.post("/api/vitals/action")
+async def vitals_action(body: VitalsActionBody, request: Request):
+    """Satisfy a need — feed / rest / play / calm. User-initiated: always runs + shows feedback."""
+    action = body.action.strip().lower()
+    if action not in {"feed", "rest", "play", "calm"}:
+        raise HTTPException(status_code=400, detail=f"unknown action {body.action!r}")
+    return await request.app.state.vitals.satisfy(action)
+
+
+class NudgesBody(BaseModel):
+    enabled: bool
+
+
+@router.put("/api/vitals/nudges")
+async def set_nudges(body: NudgesBody, request: Request):
+    """Turn the wellness nudges (rest/hydrate/eye-break tips) on or off."""
+    request.app.state.store.set_nudges_enabled(body.enabled)
+    return {"nudges": body.enabled}
 
 
 class EventBody(BaseModel):

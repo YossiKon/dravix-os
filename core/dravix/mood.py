@@ -194,9 +194,12 @@ class MoodEngine:
                 pass
 
     async def idle_behavior(self) -> None:
-        """A small spontaneous behavior when bored (skipped if a mode owns the face)."""
+        """A small spontaneous behavior when bored (skipped if a mode owns the face, or if
+        the robot's autonomous idle motion is switched off)."""
         if self._locked():
             return
+        if not getattr(self._robot, "idle_motion", True):
+            return  # idle motion off → stay still & quiet (e.g. the firmware owns idle life)
         try:
             await play_emote(self._robot, "curious")
             if self._robot.supports(CAP_SAY):

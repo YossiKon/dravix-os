@@ -71,6 +71,38 @@ EMOTES: dict[str, list[dict[str, Any]]] = {
         {"say": "Boom!"},
         {"head": [0, 0]},
     ],
+    # ── vitals / needs feedback (fed by the VitalsEngine) ──
+    "eat": [  # nom nom — bobs the head down to the "food" and chews, warm leds
+        {"face": "happy", "leds": ["orange", 0.9]},
+        {"head": [0, 0.35], "wait": 0.25},
+        {"head": [0, 0.1], "wait": 0.2},
+        {"head": [0, 0.35], "wait": 0.25},
+        {"head": [0, 0.1], "wait": 0.2},
+        {"head": [0, 0]},
+    ],
+    "yawn": [  # tired — a slow droop + dim amber
+        {"face": "sleepy", "leds": ["amber", 0.15]},
+        {"head": [0, -0.3], "wait": 0.5},
+        {"head": [0, -0.1]},
+    ],
+    "calm": [  # soothe — settle to neutral, soft blue, gentle centre
+        {"face": "neutral", "leds": ["blue", 0.25]},
+        {"head": [0, -0.1], "wait": 0.4},
+        {"head": [0, 0]},
+    ],
+    "play": [  # excited play — quick wiggle, bright cyan
+        {"face": "happy", "leds": ["cyan", 1.0]},
+        {"head": [0.4, 0.15], "wait": 0.18},
+        {"head": [-0.4, 0.15], "wait": 0.18},
+        {"head": [0.3, 0.2], "wait": 0.18},
+        {"head": [0, 0]},
+    ],
+    "nudge": [  # "hey, notice me" — a gentle attention wiggle for a wellness tip
+        {"leds": ["cyan", 1.0]},
+        {"head": [0.3, 0.1], "wait": 0.2},
+        {"head": [-0.3, 0.1], "wait": 0.2},
+        {"head": [0, 0]},
+    ],
 }
 
 

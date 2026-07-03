@@ -44,3 +44,5 @@ data/
 *.db
 .playwright-mcp/
 *.png
+deploy/esphome/secrets.yaml
+deploy/esphome/.esphome/

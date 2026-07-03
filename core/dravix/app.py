@@ -24,6 +24,7 @@ from .logging import get_logger, setup_logging
 from .modes import ModeContext, ModeEngine
 from .mood import MoodEngine
 from .persona import resolve_voice
+from .vitals import VitalsEngine
 from .pethead import PetHeadBehavior
 from .reactions import ReactionEngine
 from .scheduler import Scheduler
@@ -80,7 +81,10 @@ async def lifespan(app: FastAPI):
     driver = build_robot_driver(settings, store, ha)
     controller = RobotController(driver, bus, runtime.robot)
     controller.default_voice = resolve_voice(store)  # active persona/override TTS voice
-    controller.idle_motion = settings.idle_motion  # ambient head-glance toggle (add-on option)
+    # The dashboard toggle (persisted in the store) wins; the add-on/env value is the default
+    # only until the user flips it. (Previously this always used the env default, so a restart
+    # silently re-enabled idle motion — the head then moved even in sleep/focus.)
+    controller.idle_motion = store.idle_motion(settings.idle_motion)
     try:
         await controller.connect()
     except Exception as exc:  # noqa: BLE001 — degrade gracefully, surface in status
@@ -111,6 +115,11 @@ async def lifespan(app: FastAPI):
     # Personality: persistent mood that drifts + shows on the face when idle.
     mood = MoodEngine(bus, controller, store=store, engine=engine)
     await mood.start()
+
+    # Vitals: the Tamagotchi "life" needs (energy/food/fun/calm) + wellness nudges. Silent in
+    # calm modes (focus/quiet/night/busy/sleep) — the HARD do-not-disturb rule.
+    vitals = VitalsEngine(bus, controller, store=store, engine=engine, ha=ha)
+    await vitals.start()
 
     # Pet reaction: lift the head up when petted (pleased), lower it after a hold.
     pet_head = PetHeadBehavior(
@@ -167,6 +176,7 @@ async def lifespan(app: FastAPI):
     app.state.frigate = frigate
     app.state.reactions = reactions
     app.state.mood = mood
+    app.state.vitals = vitals
     app.state.pet_head = pet_head
     app.state.scheduler = scheduler
     app.state.screen_pusher = screen_pusher
@@ -183,6 +193,7 @@ async def lifespan(app: FastAPI):
         await screen_pusher.stop()
         await scheduler.stop()
         await pet_head.stop()
+        await vitals.stop()
         await mood.stop()
         await reactions.stop()
         await engine.stop()

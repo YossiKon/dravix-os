@@ -49,6 +49,20 @@ esp32:
   flash_size: 16MB
   framework:
     type: esp-idf
+    # REBOOT FIX / TEST: the ESP32-S3 brownout detector FALSE-fires on the current spike
+    # when a servo starts moving while WiFi transmits — rebooting the board every few
+    # minutes. Turning it off stops those false reboots (the #1 suspect here).
+    #   · If the reboots STOP  → it was a (false) brownout. Done.
+    #   · If it now HANGS or still reboots → you have a REAL power sag: use a strong
+    #     5V/2A+ USB-C charger + a good cable (a tired battery / thin cable can't feed
+    #     the servos). Re-enable detection by deleting the two lines below.
+    sdkconfig_options:
+      CONFIG_ESP_BROWNOUT_DET: "n"
+      # OOM-RESET FIX: move the big WiFi + lwIP buffers into PSRAM (the CoreS3 has 8MB, nearly
+      # empty) instead of the scarce ~300KB internal RAM. WiFi alone uses 64 RX + 64 TX buffers —
+      # relocating them frees tens of KB of internal heap, which is exactly what the added LVGL
+      # pages/widgets were starving (the resets are an internal-RAM out-of-memory, not the games).
+      CONFIG_SPIRAM_TRY_ALLOCATE_WIFI_LWIP: "y"
 
 logger:
 
@@ -110,6 +124,14 @@ font:
   - file: "gfonts://Roboto"
     id: big_font
     size: 52
+  # Hebrew-capable font for the speech bubble (HA Assist usually replies in Hebrew).
+  # ESPHome has no GF_Hebrew glyphset, so the Hebrew letters are listed explicitly here;
+  # GF_Latin_Core covers digits / punctuation / any Latin the reply mixes in.
+  - file: "gfonts://Heebo"
+    id: heb_font
+    size: 20
+    glyphsets: [GF_Latin_Core]
+    glyphs: ["א", "ב", "ג", "ד", "ה", "ו", "ז", "ח", "ט", "י", "כ", "ך", "ל", "מ", "ם", "נ", "ן", "ס", "ע", "פ", "ף", "צ", "ץ", "ק", "ר", "ש", "ת", "־", "׳", "״"]
 
 globals:
   # true once on_boot ran — LVGL widgets exist and it's safe to draw
@@ -119,6 +141,7 @@ globals:
   - { id: g_blink,  type: bool, restore_value: false, initial_value: "false" }
   - { id: g_listen, type: bool, restore_value: false, initial_value: "false" }
   - { id: g_talk,   type: bool, restore_value: false, initial_value: "false" }
+  - { id: g_tip,    type: bool, restore_value: false, initial_value: "false" }  # a wellness tip is showing
   - { id: g_voice,  type: bool, restore_value: false, initial_value: "false" }  # voice pipeline active
   - { id: g_sleep,  type: bool, restore_value: false, initial_value: "false" }
   - { id: g_saver,  type: bool, restore_value: false, initial_value: "false" }
@@ -148,13 +171,44 @@ globals:
   - { id: led_r,   type: float, restore_value: false, initial_value: "0" }
   - { id: led_g,   type: float, restore_value: false, initial_value: "0" }
   - { id: led_b,   type: float, restore_value: false, initial_value: "0" }
+  # ── mini-games (the Games menu: Catch Me · Reaction · Simon · Rock-Paper-Scissors) ──
+  - { id: g_react,   type: int,  restore_value: false, initial_value: "0" }   # reaction: 0 wait · 1 go · 2 result
+  - { id: g_react_t, type: long, restore_value: false, initial_value: "0" }   # millis when it turned green
+  - { id: g_slen,    type: int,  restore_value: false, initial_value: "0" }   # simon: sequence length so far
+  - { id: g_spi,     type: int,  restore_value: false, initial_value: "0" }   # simon: playback cursor
+  - { id: g_sipos,   type: int,  restore_value: false, initial_value: "0" }   # simon: your-turn cursor
+  - { id: g_saccept, type: bool, restore_value: false, initial_value: "false" } # simon: accepting your taps
+  - { id: g_rps_bot, type: int,  restore_value: false, initial_value: "0" }   # RPS: the robot's pick
+  - { id: g_rps_out, type: int,  restore_value: false, initial_value: "0" }   # RPS: 0 tie · 1 you win · 2 robot wins
+  - id: g_sq
+    type: int[16]
+    restore_value: false
+    # plain '{}' is ambiguous between GlobalsComponent's two ctors (scalar vs array) in
+    # ESPHome 2026.6.4 — pass an explicit std::array so it binds the array ctor cleanly.
+    initial_value: "std::array<int, 16>{}"
 
 # If Validate says homeassistant time already exists (from the BSP), delete this block.
 time:
   - platform: homeassistant
     id: dravix_time
 
+# ── DIAGNOSTICS (temporary — pull these out once the reboot cause is found) ──────
+#  WHY DOES IT REBOOT? Watch these entities in HA:
+#   · "Reset Reason" — the exact cause of the LAST reboot. Brownout ⇒ power/servo-stall
+#     (a strong charger or fewer big moves fixes it) · Software Reset/panic ⇒ a code bug
+#     · Task/Int Watchdog ⇒ a lambda that blocks the loop too long.
+#   · "Heap Free" — if it slides toward ~0 just before each reboot, it's OOM (micro_wake_word
+#     + camera + LVGL + voice is RAM-heavy). Stable & high ⇒ NOT memory.
+#   · "Loop Time" — big spikes ⇒ something blocks the main loop (watchdog reboot).
+debug:
+  update_interval: 10s
+
 sensor:
+  - platform: debug
+    free: { name: "Heap Free" }
+    block: { name: "Heap Largest Block" }
+    loop_time: { name: "Loop Time" }
+    psram: { name: "PSRAM Free" }
   - platform: wifi_signal
     id: wifi_db
     update_interval: 30s
@@ -194,6 +248,9 @@ sensor:
           then:
             - select.set: { id: robot_mode, option: awake }
 text_sensor:
+  # DIAGNOSTIC (temporary): the exact reason for the last reboot — see the debug block above.
+  - platform: debug
+    reset_reason: { name: "Reset Reason" }
   # PETTING — the BSP's touch sensors publish TEXT ("No touch" / touch levels), so they
   # must be imported as text. Any state that isn't "No touch" = you're petting the head →
   # pink LEDs + nuzzle + happy face (see pet_react). Add sensors 2/3 the same way if you like.
@@ -211,6 +268,25 @@ text_sensor:
             - script.execute: pet_react
       - if:
           condition: { lambda: 'return x == "No touch";' }            # released
+          then:
+            - globals.set: { id: g_pet, value: "false" }
+  # Fallback: some flashes register the touch sensor under the `mmd_room_dravix_` prefix
+  # (the device/area-rename quirk) instead of `dravix_`. Only one of the two really exists;
+  # the other just stays unavailable. This makes petting survive either prefix.
+  - platform: homeassistant
+    id: ha_touch1b
+    entity_id: sensor.mmd_room_dravix_touch_sensor_1
+    on_value:
+      - if:
+          condition:
+            lambda: |-
+              return x != "No touch" && x != "unknown" && x != "unavailable" && x != ""
+                     && !id(g_pet) && id(sw_touch).state;
+          then:
+            - globals.set: { id: g_pet, value: "true" }
+            - script.execute: pet_react
+      - if:
+          condition: { lambda: 'return x == "No touch";' }
           then:
             - globals.set: { id: g_pet, value: "false" }
   - platform: wifi_info
@@ -292,6 +368,29 @@ text:
             - online_image.set_url:      # set_url also starts the download itself
                 id: oi_show
                 url: !lambda 'return x;'
+  # ── WELLNESS TIP — dravix writes a short tip here; the robot pops it in the speech
+  #    bubble, flashes cyan + wiggles so you notice, then auto-hides after ~12s.
+  - platform: template
+    name: "Tip"
+    id: t_tip
+    optimistic: true
+    mode: text
+    max_length: 120
+    initial_value: ""
+    set_action:
+      - if:
+          condition: { lambda: 'return !x.empty();' }
+          then:
+            - globals.set: { id: g_tip, value: "true" }
+            - lvgl.label.update: { id: speech_txt, text: !lambda 'return x;' }
+            - lvgl.page.show: page_face
+            - script.execute: render_face
+            - script.execute: { id: led_flash, r: 0, g: 80, b: 100 }   # cyan attention flash
+            - script.execute: head_shake                                # a wiggle so you notice
+            - script.execute: tip_timeout
+          else:
+            - globals.set: { id: g_tip, value: "false" }
+            - script.execute: render_face
 
 number:
   - platform: template
@@ -342,6 +441,11 @@ number:
       - number.set:
           id: servo_y_angle
           value: !lambda 'return (x - 158.0f) * 90.0f / 102.0f;'   # 158..260 → 0..90
+  # ── VITALS bars — dravix writes these 0-100; page_vitals draws them as bars ──
+  - { platform: template, name: "Vital energy", id: n_vital_energy, optimistic: true, min_value: 0, max_value: 100, step: 1, initial_value: 80 }
+  - { platform: template, name: "Vital food",   id: n_vital_food,   optimistic: true, min_value: 0, max_value: 100, step: 1, initial_value: 80 }
+  - { platform: template, name: "Vital fun",    id: n_vital_fun,    optimistic: true, min_value: 0, max_value: 100, step: 1, initial_value: 70 }
+  - { platform: template, name: "Vital calm",   id: n_vital_calm,   optimistic: true, min_value: 0, max_value: 100, step: 1, initial_value: 80 }
 
 # ── Utility buttons ───────────────────────────────────────────────────────────
 button:
@@ -402,7 +506,63 @@ lvgl:
       text_color: 0x33E6C8
     - id: muted_txt
       text_color: 0x8b96a4
+  # ── STATUS BAR — a slim overlay on the TOP LAYER (floats above every page). Swipe DOWN
+  #    shows it; swipe up/left/right hides it. Stays until you dismiss it (no auto-vanish).
+  #    Drawn from primitives (no icon font): wifi = 4 signal bars, battery = outline+fill.
+  top_layer:
+    widgets:
+      - obj:
+          id: statusbar
+          align: TOP_MID
+          x: 0
+          y: 0
+          width: 320
+          height: 40
+          radius: 0
+          bg_color: 0x05080b
+          bg_opa: COVER
+          border_width: 0
+          pad_all: 0          # no default padding — otherwise the text is clipped
+          hidden: true
+          scrollbar_mode: "OFF"
+          widgets:
+            # WiFi — 4 ascending signal bars (upper bars hidden as the signal drops)
+            - obj: { id: sb_w1, x: 12, y: 24, width: 4, height: 6,  radius: 1, bg_color: 0x33E6C8, bg_opa: COVER, border_width: 0 }
+            - obj: { id: sb_w2, x: 18, y: 20, width: 4, height: 10, radius: 1, bg_color: 0x33E6C8, bg_opa: COVER, border_width: 0 }
+            - obj: { id: sb_w3, x: 24, y: 16, width: 4, height: 14, radius: 1, bg_color: 0x33E6C8, bg_opa: COVER, border_width: 0 }
+            - obj: { id: sb_w4, x: 30, y: 12, width: 4, height: 18, radius: 1, bg_color: 0x33E6C8, bg_opa: COVER, border_width: 0 }
+            # Clock + date — SMALL font, vertically centred (LEFT_MID) so nothing is clipped
+            - label: { id: sb_time, text: "--:--", text_font: small_font, text_color: 0xFFFFFF, align: LEFT_MID, x: 60,  y: 0 }
+            - label: { id: sb_date, text: "",      text_font: small_font, text_color: 0x8b96a4, align: LEFT_MID, x: 132, y: 0 }
+            # Battery — % label + outline + fill + nub (right side)
+            - label: { id: sb_batt, text: "--%", text_font: small_font, text_color: 0x5dffa0, align: LEFT_MID, x: 196, y: 0 }
+            - obj: { id: sb_bat_o, x: 244, y: 12, width: 34, height: 16, radius: 2, bg_opa: TRANSP, border_color: 0xFFFFFF, border_width: 2 }
+            - bar:
+                id: sb_bat_f
+                x: 247
+                y: 15
+                width: 28
+                height: 10
+                min_value: 0
+                max_value: 100
+                value: 0
+                indicator:
+                  bg_color: 0x5dffa0
+                  bg_opa: COVER
+            - obj: { id: sb_bat_n, x: 279, y: 16, width: 3, height: 8, radius: 1, bg_color: 0xFFFFFF, bg_opa: COVER, border_width: 0 }
   on_idle:
+    # After 3 min of no touch, drift back to the FACE from any other screen (cards / games /
+    # vitals). Touching any screen resets this timer (LVGL counts touches as activity).
+    - timeout: 180000ms
+      then:
+        - if:
+            condition:
+              not:
+                lvgl.page.is_showing: page_face
+            then:
+              - globals.set: { id: g_card, value: "0" }
+              - lvgl.widget.hide: statusbar
+              - lvgl.page.show: page_face
     # Screensaver: dim + dozy breathing eyes + a soft clock (night mode is already dim — skip).
     - timeout: !lambda 'return (uint32_t) id(n_screensaver).state * 60000;'
       then:
@@ -487,37 +647,34 @@ lvgl:
             align: TOP_RIGHT
             x: -6
             y: 4
-    # ── Page 1: STATUS (swipe down): time · battery %+mAh+bar+time-left · wifi · ip ──
-    # The CoreS3 has a 500mAh battery (AXP2101); time-left is estimated at ~200mA draw.
-    - id: page_status
-      bg_color: 0x05080b
-      bg_opa: COVER
-      widgets:
+        # SPEECH BUBBLE — shows "Listening..." while listening and the AI's reply while
+        # speaking (Hebrew via heb_font). Hidden otherwise; text set by the voice events.
         - obj:
-            styles: card_box
-            pad_all: 10
-            align: CENTER
-            width: 300
-            height: 222
+            id: speech_bubble
+            align: BOTTOM_MID
+            y: -2
+            width: 312
+            height: 66
+            radius: 14
+            bg_color: 0x1a2233
+            bg_opa: COVER
+            border_color: 0x33E6C8
+            border_width: 2
+            pad_all: 6
+            hidden: true
             scrollbar_mode: "OFF"
             widgets:
-              - label: { id: lbl_time, text: "--:--", text_font: big_font,   text_color: 0xFFFFFF, align: TOP_MID,  y: 0 }
-              - label: { id: lbl_date, text: "",       text_font: small_font, styles: muted_txt,   align: TOP_MID,  y: 48 }
-              - label: { id: lbl_batt, text: "Batt --", text_font: text_font, text_color: 0x5dffa0, align: TOP_LEFT, x: 8, y: 72 }
-              - bar:
-                  id: bar_batt
-                  x: 8
-                  y: 100
-                  width: 260
-                  height: 10
-                  min_value: 0
-                  max_value: 100
-                  value: 0
-              - label: { id: lbl_est,  text: "",       text_font: small_font, styles: muted_txt,   align: TOP_LEFT, x: 8, y: 116 }
-              - label: { id: lbl_wifi, text: "WiFi",   text_font: small_font, styles: muted_txt,   align: TOP_LEFT, x: 8, y: 140 }
-              - label: { id: lbl_ip,   text: "IP",     text_font: small_font, styles: muted_txt,   align: TOP_LEFT, x: 8, y: 161 }
-              - label: { id: lbl_up,   text: "Up",     text_font: small_font, styles: muted_txt,   align: TOP_LEFT, x: 8, y: 182 }
-    # ── Pages 2-4: the 3 dynamic cards (swipe left/right) ────────────────────────
+              - label:
+                  id: speech_txt
+                  align: CENTER
+                  width: 296
+                  text: ""
+                  text_font: heb_font
+                  text_color: 0xFFFFFF
+                  text_align: RIGHT
+                  long_mode: WRAP
+    # ── The 3 dynamic cards (swipe left/right). (The old full status PAGE was removed —
+    #    the swipe-down status BAR overlay replaced it; keeping both just wasted RAM.) ──
     - id: page_card1
       bg_color: 0x05080b
       bg_opa: COVER
@@ -562,8 +719,21 @@ lvgl:
       bg_color: 0x05080b
       bg_opa: COVER
       widgets:
-        - label: { id: lbl_play, text: "CATCH ME!", text_font: title_font, styles: accent_txt, align: TOP_LEFT, x: 10, y: 6 }
+        - label: { id: lbl_play, text: "CATCH ME!", text_font: title_font, styles: accent_txt, align: TOP_MID, y: 6 }
         - label: { id: lbl_score, text: "0", text_font: big_font, text_color: 0xFFFFFF, align: TOP_RIGHT, x: -12, y: 0 }
+        - button:
+            id: play_back
+            x: 6
+            y: 6
+            width: 52
+            height: 28
+            radius: 8
+            bg_color: 0x05080b
+            widgets:
+              - label: { text: "<", text_font: text_font, text_color: 0x33E6C8, align: CENTER }
+            on_click:
+              - globals.set: { id: g_card, value: "4" }
+              - lvgl.page.show: page_games
         - button:
             id: btn_dot
             x: 132
@@ -600,6 +770,223 @@ lvgl:
             id: img_show
             align: CENTER
             src: oi_show
+    # ── GAMES MENU — swipe to the "game" slot in the card cycle to open this ──────
+    - id: page_games
+      bg_color: 0x05080b
+      bg_opa: COVER
+      widgets:
+        - label: { text: "GAMES", text_font: title_font, styles: accent_txt, align: TOP_MID, y: 8 }
+        - button:
+            id: btn_g_catch
+            x: 22
+            y: 56
+            width: 132
+            height: 66
+            radius: 12
+            bg_color: 0x14324a
+            widgets:
+              - label: { text: "CATCH ME", text_font: text_font, text_color: 0xFFFFFF, align: CENTER }
+            on_click:
+              - globals.set: { id: g_score, value: "0" }
+              - lvgl.label.update: { id: lbl_score, text: "0" }
+              - lvgl.page.show: page_play
+        - button:
+            id: btn_g_react
+            x: 166
+            y: 56
+            width: 132
+            height: 66
+            radius: 12
+            bg_color: 0x14324a
+            widgets:
+              - label: { text: "REACTION", text_font: text_font, text_color: 0xFFFFFF, align: CENTER }
+            on_click:
+              - lvgl.page.show: page_react
+              - script.execute: react_start
+        - button:
+            id: btn_g_simon
+            x: 22
+            y: 132
+            width: 132
+            height: 66
+            radius: 12
+            bg_color: 0x14324a
+            widgets:
+              - label: { text: "SIMON", text_font: text_font, text_color: 0xFFFFFF, align: CENTER }
+            on_click:
+              - lvgl.page.show: page_simon
+              - script.execute: simon_new
+        - button:
+            id: btn_g_rps
+            x: 166
+            y: 132
+            width: 132
+            height: 66
+            radius: 12
+            bg_color: 0x14324a
+            widgets:
+              - label: { text: "R-P-S", text_font: text_font, text_color: 0xFFFFFF, align: CENTER }
+            on_click:
+              - lvgl.label.update: { id: rps_msg, text: "Pick one!" }
+              - lvgl.page.show: page_rps
+    # ── REACTION — wait for GREEN, then tap as fast as you can (shows your ms) ─────
+    - id: page_react
+      bg_color: 0x000000
+      bg_opa: COVER
+      widgets:
+        - button:
+            id: react_pad
+            x: 0
+            y: 0
+            width: 320
+            height: 240
+            radius: 0
+            bg_color: 0x8a1c1c
+            widgets:
+              - label: { id: react_txt, text: "WAIT...", text_font: title_font, text_color: 0xFFFFFF, align: CENTER }
+            on_click:
+              - script.execute: react_tap
+        - button:
+            id: react_back
+            x: 6
+            y: 6
+            width: 52
+            height: 28
+            radius: 8
+            bg_color: 0x05080b
+            widgets:
+              - label: { text: "<", text_font: text_font, text_color: 0x33E6C8, align: CENTER }
+            on_click:
+              - globals.set: { id: g_card, value: "4" }
+              - lvgl.page.show: page_games
+    # ── SIMON — watch the colour sequence, repeat it; it grows one step each round ─
+    - id: page_simon
+      bg_color: 0x05080b
+      bg_opa: COVER
+      widgets:
+        - button: { id: sq0, x: 20,  y: 44,  width: 130, height: 88, radius: 10, bg_color: 0x1f6b3a, on_click: [ { script.execute: { id: simon_tap, tap: 0 } } ] }
+        - button: { id: sq1, x: 170, y: 44,  width: 130, height: 88, radius: 10, bg_color: 0x6b1f1f, on_click: [ { script.execute: { id: simon_tap, tap: 1 } } ] }
+        - button: { id: sq2, x: 20,  y: 140, width: 130, height: 88, radius: 10, bg_color: 0x1f3a6b, on_click: [ { script.execute: { id: simon_tap, tap: 2 } } ] }
+        - button: { id: sq3, x: 170, y: 140, width: 130, height: 88, radius: 10, bg_color: 0x6b5f1f, on_click: [ { script.execute: { id: simon_tap, tap: 3 } } ] }
+        - label: { id: simon_msg, text: "WATCH", text_font: text_font, styles: accent_txt, align: TOP_MID, y: 12 }
+        - button:
+            id: simon_back
+            x: 6
+            y: 6
+            width: 52
+            height: 28
+            radius: 8
+            bg_color: 0x05080b
+            widgets:
+              - label: { text: "<", text_font: text_font, text_color: 0x33E6C8, align: CENTER }
+            on_click:
+              - globals.set: { id: g_card, value: "4" }
+              - lvgl.page.show: page_games
+    # ── ROCK · PAPER · SCISSORS — beat the robot (it nods when it wins) ───────────
+    - id: page_rps
+      bg_color: 0x05080b
+      bg_opa: COVER
+      widgets:
+        - label: { id: rps_msg, text: "Pick one!", text_font: text_font, text_color: 0xFFFFFF, align: CENTER, y: -12 }
+        - button:
+            id: rps_rock
+            x: 16
+            y: 158
+            width: 92
+            height: 64
+            radius: 10
+            bg_color: 0x14324a
+            widgets:
+              - label: { text: "ROCK", text_font: small_font, text_color: 0xFFFFFF, align: CENTER }
+            on_click:
+              - script.execute: { id: rps_play, me: 0 }
+        - button:
+            id: rps_paper
+            x: 114
+            y: 158
+            width: 92
+            height: 64
+            radius: 10
+            bg_color: 0x14324a
+            widgets:
+              - label: { text: "PAPER", text_font: small_font, text_color: 0xFFFFFF, align: CENTER }
+            on_click:
+              - script.execute: { id: rps_play, me: 1 }
+        - button:
+            id: rps_sciss
+            x: 212
+            y: 158
+            width: 92
+            height: 64
+            radius: 10
+            bg_color: 0x14324a
+            widgets:
+              - label: { text: "SCISSORS", text_font: small_font, text_color: 0xFFFFFF, align: CENTER }
+            on_click:
+              - script.execute: { id: rps_play, me: 2 }
+        - button:
+            id: rps_back
+            x: 6
+            y: 6
+            width: 52
+            height: 28
+            radius: 8
+            bg_color: 0x05080b
+            widgets:
+              - label: { text: "<", text_font: text_font, text_color: 0x33E6C8, align: CENTER }
+            on_click:
+              - globals.set: { id: g_card, value: "4" }
+              - lvgl.page.show: page_games
+    # ── VITALS — the robot's "life" needs (dravix pushes the 0-100 values in real time) ──
+    - id: page_vitals
+      bg_color: 0x05080b
+      bg_opa: COVER
+      widgets:
+        - label: { text: "VITALS", text_font: title_font, styles: accent_txt, align: TOP_MID, y: 8 }
+        - label: { text: "Energy", text_font: small_font, text_color: 0xFFFFFF, align: TOP_LEFT, x: 16, y: 46 }
+        - bar:
+            id: bar_energy
+            x: 16
+            y: 66
+            width: 288
+            height: 16
+            min_value: 0
+            max_value: 100
+            value: 0
+            indicator: { bg_color: 0x5dffa0, bg_opa: COVER }
+        - label: { text: "Food", text_font: small_font, text_color: 0xFFFFFF, align: TOP_LEFT, x: 16, y: 96 }
+        - bar:
+            id: bar_food
+            x: 16
+            y: 116
+            width: 288
+            height: 16
+            min_value: 0
+            max_value: 100
+            value: 0
+            indicator: { bg_color: 0xffb84d, bg_opa: COVER }
+        - label: { text: "Fun", text_font: small_font, text_color: 0xFFFFFF, align: TOP_LEFT, x: 16, y: 146 }
+        - bar:
+            id: bar_fun
+            x: 16
+            y: 166
+            width: 288
+            height: 16
+            min_value: 0
+            max_value: 100
+            value: 0
+            indicator: { bg_color: 0x33E6C8, bg_opa: COVER }
+        - label: { text: "Calm", text_font: small_font, text_color: 0xFFFFFF, align: TOP_LEFT, x: 16, y: 196 }
+        - bar:
+            id: bar_calm
+            x: 16
+            y: 216
+            width: 288
+            height: 16
+            min_value: 0
+            max_value: 100
+            value: 0
+            indicator: { bg_color: 0x7bb0ff, bg_opa: COVER }
 
 script:
   # After ~25s the alert image goes away and the face comes back.
@@ -610,6 +997,13 @@ script:
       - if:
           condition: { lvgl.page.is_showing: page_image }
           then: [ { lvgl.page.show: page_face } ]
+  # A wellness tip auto-hides after ~12s (the speech bubble goes back to the face).
+  - id: tip_timeout
+    mode: restart
+    then:
+      - delay: 12s
+      - globals.set: { id: g_tip, value: "false" }
+      - script.execute: render_face
   # Set both eyes to a shape: width / height / corner-radius / vertical offset.
   # (Eyes are align:CENTER, so size changes keep them centred — no x math needed.)
   - id: set_eyes
@@ -691,6 +1085,24 @@ script:
             - number.set:
                 id: servo_x_angle
                 value: !lambda 'float v = id(servo_x_angle).state - 12; return v < -164 ? -164 : v;'
+  # A gentle up-down "yes" nod (agree / acknowledge / greet). PITCH via n_head_pitch (158..260).
+  - id: head_nod
+    mode: restart
+    then:
+      - if:
+          condition: { lambda: 'return id(sw_move).state && !std::isnan(id(n_head_pitch).state);' }
+          then:
+            - number.set:
+                id: n_head_pitch
+                value: !lambda 'float v = id(n_head_pitch).state + 12; return v > 260 ? 260 : v;'
+            - delay: 350ms
+            - number.set:
+                id: n_head_pitch
+                value: !lambda 'float v = id(n_head_pitch).state - 24; return v < 158 ? 158 : v;'
+            - delay: 350ms
+            - number.set:
+                id: n_head_pitch
+                value: !lambda 'float v = id(n_head_pitch).state + 12; return v > 260 ? 260 : v;'
   # ── MOOD LEDs — flash an emotion colour for ~2.5s, then put the LEDs back ──────
   - id: led_flash
     mode: restart
@@ -775,6 +1187,11 @@ script:
       - lvgl.label.update:
           id: lbl_priv
           text: !lambda 'return id(sw_privacy).state ? std::string("PRIVACY") : std::string("");'
+      # speech bubble — visible while listening / speaking / showing a wellness tip
+      - if:
+          condition: { lambda: 'return id(g_listen) || id(g_talk) || id(g_tip);' }
+          then: [ { lvgl.widget.show: speech_bubble } ]
+          else: [ { lvgl.widget.hide: speech_bubble } ]
       # zzz drifts while sleeping
       - lvgl.label.update:
           id: lbl_zzz
@@ -890,8 +1307,9 @@ script:
       - if: { condition: { lambda: 'return id(g_card) == 1;' }, then: [ { lvgl.page.show: page_card1 } ] }
       - if: { condition: { lambda: 'return id(g_card) == 2;' }, then: [ { lvgl.page.show: page_card2 } ] }
       - if: { condition: { lambda: 'return id(g_card) == 3;' }, then: [ { lvgl.page.show: page_card3 } ] }
-      - if: { condition: { lambda: 'return id(g_card) == 4;' }, then: [ { lvgl.page.show: page_play } ] }
-      - if: { condition: { lambda: 'return id(g_card) <= 0 || id(g_card) > 4;' }, then: [ { lvgl.page.show: page_face } ] }
+      - if: { condition: { lambda: 'return id(g_card) == 4;' }, then: [ { lvgl.page.show: page_games } ] }
+      - if: { condition: { lambda: 'return id(g_card) == 5;' }, then: [ { lvgl.page.show: page_vitals } ] }
+      - if: { condition: { lambda: 'return id(g_card) <= 0 || id(g_card) > 5;' }, then: [ { lvgl.page.show: page_face } ] }
   # Greet: someone approached → wake up + a happy face + perk the head up.
   # (Skipped at night and in focus mode — do-not-disturb.)
   - id: greet
@@ -906,6 +1324,8 @@ script:
             - select.set: { id: robot_mode, option: awake }
             - delay: 400ms
             - script.execute: { id: head_nudge, dx: 0, dy: 8 }   # perks up at you
+            - delay: 500ms
+            - script.execute: head_nod                            # …and nods hello 👋
   # Identify: flash the LEDs cyan 3× + a happy face, so you can find/confirm the robot.
   - id: identify
     then:
@@ -953,7 +1373,137 @@ script:
                 blue: !lambda 'return id(led_b);'
           else:
             - light.turn_off: stackchan_light_bar
-
+  # ── GAME: Reaction — red → (random wait) → green; tap to see your ms ──────────
+  - id: react_start
+    mode: restart
+    then:
+      - globals.set: { id: g_react, value: "0" }
+      - lvgl.widget.update: { id: react_pad, bg_color: 0x8a1c1c }
+      - lvgl.label.update: { id: react_txt, text: "WAIT..." }
+      - delay: !lambda 'return 1200 + (uint32_t)(random_float() * 2800.0f);'
+      - if:
+          condition:
+            and:
+              - lambda: 'return id(g_react) == 0;'
+              - lvgl.page.is_showing: page_react
+          then:
+            - globals.set: { id: g_react, value: "1" }
+            - globals.set: { id: g_react_t, value: !lambda 'return (long) millis();' }
+            - lvgl.widget.update: { id: react_pad, bg_color: 0x14713a }
+            - lvgl.label.update: { id: react_txt, text: "TAP!" }
+  - id: react_tap
+    then:
+      - if:
+          condition: { lambda: 'return id(g_react) == 1;' }   # GREEN → measure
+          then:
+            - globals.set: { id: g_react, value: "2" }
+            - lvgl.widget.update: { id: react_pad, bg_color: 0x123a5a }
+            - lvgl.label.update:
+                id: react_txt
+                text: !lambda |-
+                  long ms = (long) millis() - id(g_react_t);
+                  char b[28]; snprintf(b, sizeof(b), "%ld ms\n(tap to retry)", ms);
+                  return std::string(b);
+          else:
+            - if:
+                condition: { lambda: 'return id(g_react) == 0;' }   # RED → jumped the gun
+                then:
+                  - globals.set: { id: g_react, value: "2" }
+                  - lvgl.widget.update: { id: react_pad, bg_color: 0x123a5a }
+                  - lvgl.label.update: { id: react_txt, text: "too soon!\n(tap to retry)" }
+                else:                                              # result → play again
+                  - script.execute: react_start
+  # ── GAME: Simon — grow-and-repeat the colour sequence ────────────────────────
+  - id: simon_new
+    then:
+      - globals.set: { id: g_slen, value: "0" }
+      - script.execute: simon_add
+  - id: simon_add            # add one random step, then replay the whole sequence
+    then:
+      - lambda: |-
+          if (id(g_slen) < 16) { id(g_sq)[id(g_slen)] = (int)(random_float() * 4.0f); id(g_slen) += 1; }
+      - globals.set: { id: g_sipos, value: "0" }
+      - globals.set: { id: g_saccept, value: "false" }
+      - script.execute: simon_play
+  - id: simon_play
+    mode: restart
+    then:
+      - globals.set: { id: g_spi, value: "0" }
+      - lvgl.label.update: { id: simon_msg, text: "WATCH" }
+      - delay: 600ms
+      - repeat:
+          count: !lambda 'return id(g_slen);'
+          then:
+            - script.execute: { id: simon_flash, q: !lambda 'return id(g_sq)[id(g_spi)];' }
+            - delay: 520ms
+            - globals.set: { id: g_spi, value: !lambda 'return id(g_spi) + 1;' }
+      - globals.set: { id: g_saccept, value: "true" }
+      - lvgl.label.update: { id: simon_msg, text: "YOUR TURN" }
+  - id: simon_flash          # briefly light quadrant q, then restore all four
+    parameters:
+      q: int
+    then:
+      - if: { condition: { lambda: 'return q == 0;' }, then: [ { lvgl.widget.update: { id: sq0, bg_color: 0x5dffa0 } } ] }
+      - if: { condition: { lambda: 'return q == 1;' }, then: [ { lvgl.widget.update: { id: sq1, bg_color: 0xff7b7b } } ] }
+      - if: { condition: { lambda: 'return q == 2;' }, then: [ { lvgl.widget.update: { id: sq2, bg_color: 0x7bb0ff } } ] }
+      - if: { condition: { lambda: 'return q == 3;' }, then: [ { lvgl.widget.update: { id: sq3, bg_color: 0xffe680 } } ] }
+      - delay: 300ms
+      - lvgl.widget.update: { id: sq0, bg_color: 0x1f6b3a }
+      - lvgl.widget.update: { id: sq1, bg_color: 0x6b1f1f }
+      - lvgl.widget.update: { id: sq2, bg_color: 0x1f3a6b }
+      - lvgl.widget.update: { id: sq3, bg_color: 0x6b5f1f }
+  - id: simon_tap
+    parameters:
+      tap: int
+    then:
+      - if:
+          condition: { lambda: 'return id(g_saccept);' }   # ignore taps during playback
+          then:
+            - script.execute: { id: simon_flash, q: !lambda 'return tap;' }
+            - if:
+                condition: { lambda: 'return id(g_sq)[id(g_sipos)] == tap;' }   # right one
+                then:
+                  - globals.set: { id: g_sipos, value: !lambda 'return id(g_sipos) + 1;' }
+                  - if:
+                      condition: { lambda: 'return id(g_sipos) >= id(g_slen);' }   # round done
+                      then:
+                        - globals.set: { id: g_saccept, value: "false" }
+                        - lvgl.label.update: { id: simon_msg, text: "GOOD!" }
+                        - delay: 700ms
+                        - if:
+                            condition:
+                              lvgl.page.is_showing: page_simon
+                            then:
+                              - script.execute: simon_add
+                else:                                                        # wrong → game over
+                  - globals.set: { id: g_saccept, value: "false" }
+                  - lvgl.label.update:
+                      id: simon_msg
+                      text: !lambda |-
+                        char b[28]; snprintf(b, sizeof(b), "OOPS!  score %d", id(g_slen) - 1);
+                        return std::string(b);
+  # ── GAME: Rock-Paper-Scissors — the robot nods when it wins, shakes when it loses
+  - id: rps_play
+    parameters:
+      me: int          # 0 rock · 1 paper · 2 scissors
+    then:
+      - globals.set: { id: g_rps_bot, value: !lambda 'return (int)(random_float() * 3.0f);' }
+      - globals.set:
+          id: g_rps_out
+          value: !lambda |-
+            int bot = id(g_rps_bot);
+            if (me == bot) return 0;                 // tie
+            if ((me + 1) % 3 == bot) return 2;       // robot beats you
+            return 1;                                // you beat the robot
+      - lvgl.label.update:
+          id: rps_msg
+          text: !lambda |-
+            const char* n[] = {"Rock", "Paper", "Scissors"};
+            const char* v[] = {"Tie!", "You win!", "I win!"};
+            char b[52]; snprintf(b, sizeof(b), "You: %s   Me: %s\n%s", n[me], n[id(g_rps_bot)], v[id(g_rps_out)]);
+            return std::string(b);
+      - if: { condition: { lambda: 'return id(g_rps_out) == 2;' }, then: [ { script.execute: head_nod } ] }
+      - if: { condition: { lambda: 'return id(g_rps_out) == 1;' }, then: [ { script.execute: head_shake } ] }
 select:
   - platform: template
     name: "Face"
@@ -1088,7 +1638,7 @@ select:
             - delay: 4s
             # settle into awake — unless the user already switched mode meanwhile
             - if:
-                condition: { lambda: 'return id(robot_mode).state == std::string("morning");' }
+                condition: { lambda: 'return id(robot_mode).current_option() == std::string("morning");' }
                 then:
                   - select.set: { id: robot_mode, option: awake }
 
@@ -1113,11 +1663,12 @@ interval:
           condition: { lambda: 'return id(g_sleep) || id(g_talk) || id(g_saver);' }
           then: [ { script.execute: render_face } ]
   # "Alive" looking-around: the whole face glances to a random spot every few seconds —
-  # only when fully awake (not screensaver/sleep/busy).
-  - interval: 6s
+  # only when fully awake (not screensaver/sleep/busy). Calmer cadence (9s) so the head
+  # isn't constantly swinging — combine with a narrower yaw range in the dravix Setup page.
+  - interval: 9s
     then:
       - if:
-          condition: { lambda: 'return id(sw_drift).state && !id(g_sleep) && !id(g_saver) && !id(g_busy) && !id(g_night) && !id(g_focus);' }
+          condition: { lambda: 'return id(sw_drift).state && !id(g_sleep) && !id(g_saver) && !id(g_busy) && !id(g_night) && !id(g_focus) && !id(g_quiet);' }
           then:
             - lvgl.widget.update:
                 id: face_box
@@ -1129,12 +1680,12 @@ interval:
           condition:
             lambda: |-
               return id(sw_move).state && id(sw_drift).state && !id(g_sleep) && !id(g_saver)
-                     && !id(g_busy) && !id(g_night) && !id(g_focus) && !id(g_voice)
-                     && !std::isnan(id(servo_x_angle).state) && random_float() < 0.25;
+                     && !id(g_busy) && !id(g_night) && !id(g_focus) && !id(g_quiet) && !id(g_voice)
+                     && !std::isnan(id(servo_x_angle).state) && random_float() < 0.10;
           then:
             - number.set:
                 id: servo_x_angle
-                value: !lambda 'return random_float() * 28.0f - 14.0f;'   # always within ±14 of centre
+                value: !lambda 'return random_float() * 20.0f - 10.0f;'   # always within ±10 of centre
       # ...and drift back to centre half the time, so it doesn't wander off.
       - if:
           condition: { lambda: 'return id(sw_drift).state && !id(g_sleep) && !id(g_saver) && random_float() < 0.5;' }
@@ -1144,59 +1695,6 @@ interval:
   # Refresh the status labels + the dynamic card labels (from the text slots dravix writes).
   - interval: 5s
     then:
-      - lvgl.label.update:
-          id: lbl_time
-          text: !lambda |-
-            auto t = id(dravix_time).now();
-            if (!t.is_valid()) return std::string("--:--");
-            char b[8]; snprintf(b, sizeof(b), "%02d:%02d", t.hour, t.minute);
-            return std::string(b);
-      - lvgl.label.update:
-          id: lbl_date
-          text: !lambda |-
-            auto t = id(dravix_time).now();
-            if (!t.is_valid()) return std::string("");
-            char b[16]; snprintf(b, sizeof(b), "%02d/%02d", t.day_of_month, t.month);
-            return std::string(b);
-      - lvgl.label.update:
-          id: lbl_wifi
-          text: !lambda |-
-            char b[20]; snprintf(b, sizeof(b), "WiFi %d dB", (int) id(wifi_db).state);
-            return std::string(b);
-      - lvgl.label.update:
-          id: lbl_ip
-          text: !lambda 'return "IP " + id(ip_txt).state;'
-      - lvgl.label.update:
-          id: lbl_up
-          text: !lambda |-
-            int s = (int) id(up_sec).state;
-            char b[24]; snprintf(b, sizeof(b), "Up %dh %dm", s / 3600, (s % 3600) / 60);
-            return std::string(b);
-      # Battery: % + remaining mAh (500mAh cell) + bar + estimated time left (~200mA draw).
-      - lvgl.label.update:
-          id: lbl_batt
-          text_color: !lambda |-
-            return (id(ha_batt).has_state() && id(ha_batt).state < 20)
-                ? lv_color_hex(0xFF5555) : lv_color_hex(0x5dffa0);
-          text: !lambda |-
-            if (!id(ha_batt).has_state()) return std::string("Batt --");
-            int mah = (int)(id(ha_batt).state * 500.0f / 100.0f);
-            char b[32]; snprintf(b, sizeof(b), "Batt %.0f%%  ~%d mAh", id(ha_batt).state, mah);
-            return std::string(b);
-      - lvgl.bar.update:
-          id: bar_batt
-          value: !lambda 'return id(ha_batt).has_state() ? (int) id(ha_batt).state : 0;'
-      - lvgl.label.update:
-          id: lbl_est
-          text: !lambda |-
-            char b[40];
-            if (id(ha_batt).has_state()) {
-              float hours = (id(ha_batt).state * 500.0f / 100.0f) / 200.0f;  // ~200mA typical
-              snprintf(b, sizeof(b), "~%.1f h left  ·  %s", hours, id(robot_mode).state.c_str());
-            } else {
-              snprintf(b, sizeof(b), "%s", id(robot_mode).state.c_str());
-            }
-            return std::string(b);
       # Soft clock on the screensaver (empty otherwise).
       - lvgl.label.update:
           id: lbl_clock
@@ -1221,6 +1719,48 @@ interval:
       - lvgl.label.update: { id: lbl_c2_body,  text: !lambda 'return id(t_c2_body).state;' }
       - lvgl.label.update: { id: lbl_c3_title, text: !lambda 'return id(t_c3_title).state;' }
       - lvgl.label.update: { id: lbl_c3_body,  text: !lambda 'return id(t_c3_body).state;' }
+      # ── status-bar overlay (compact time · date · battery · wifi) ──
+      - lvgl.label.update:
+          id: sb_time
+          text: !lambda |-
+            auto t = id(dravix_time).now();
+            if (!t.is_valid()) return std::string("--:--");
+            char b[8]; snprintf(b, sizeof(b), "%02d:%02d", t.hour, t.minute);
+            return std::string(b);
+      - lvgl.label.update:
+          id: sb_date
+          text: !lambda |-
+            auto t = id(dravix_time).now();
+            if (!t.is_valid()) return std::string("");
+            char b[16]; snprintf(b, sizeof(b), "%02d/%02d", t.day_of_month, t.month);
+            return std::string(b);
+      - lvgl.label.update:
+          id: sb_batt
+          text: !lambda |-
+            if (!id(ha_batt).has_state()) return std::string("--%");
+            char b[8]; snprintf(b, sizeof(b), "%.0f%%", id(ha_batt).state);
+            return std::string(b);
+      - lvgl.bar.update:
+          id: sb_bat_f
+          value: !lambda 'return id(ha_batt).has_state() ? (int) id(ha_batt).state : 0;'
+      # WiFi signal → reveal more bars as it gets stronger
+      - if:
+          condition: { lambda: 'return id(wifi_db).state < -78;' }
+          then: [ { lvgl.widget.hide: sb_w2 } ]
+          else: [ { lvgl.widget.show: sb_w2 } ]
+      - if:
+          condition: { lambda: 'return id(wifi_db).state < -68;' }
+          then: [ { lvgl.widget.hide: sb_w3 } ]
+          else: [ { lvgl.widget.show: sb_w3 } ]
+      - if:
+          condition: { lambda: 'return id(wifi_db).state < -58;' }
+          then: [ { lvgl.widget.hide: sb_w4 } ]
+          else: [ { lvgl.widget.show: sb_w4 } ]
+      # vitals bars (dravix pushes the 0-100 values into the number entities)
+      - lvgl.bar.update: { id: bar_energy, value: !lambda 'return (int) id(n_vital_energy).state;' }
+      - lvgl.bar.update: { id: bar_food,   value: !lambda 'return (int) id(n_vital_food).state;' }
+      - lvgl.bar.update: { id: bar_fun,    value: !lambda 'return (int) id(n_vital_fun).state;' }
+      - lvgl.bar.update: { id: bar_calm,   value: !lambda 'return (int) id(n_vital_calm).state;' }
 
 # ── Manual SWIPE detection (ESPHome LVGL has no built-in gesture) ────────────────
 touchscreen:
@@ -1286,7 +1826,7 @@ touchscreen:
               int dx = id(sw_x1) - id(sw_x0), dy = id(sw_y1) - id(sw_y0);
               int adx = dx < 0 ? -dx : dx, ady = dy < 0 ? -dy : dy;
               return !id(sw_sleep) && ady > adx && dy > 40;
-          then: [ { lvgl.page.show: page_status } ]
+          then: [ { lvgl.widget.show: statusbar } ]   # slim overlay, not a full page
       # swipe UP → face (home)
       - if:
           condition:
@@ -1296,6 +1836,7 @@ touchscreen:
               return !id(sw_sleep) && ady > adx && dy < -40;
           then:
             - globals.set: { id: g_card, value: "0" }
+            - lvgl.widget.hide: statusbar
             - lvgl.page.show: page_face
       # swipe LEFT → next screen (face → c1 → c2 → c3 → game → face)
       - if:
@@ -1305,7 +1846,8 @@ touchscreen:
               int adx = dx < 0 ? -dx : dx, ady = dy < 0 ? -dy : dy;
               return !id(sw_sleep) && adx >= ady && dx < -40;
           then:
-            - globals.set: { id: g_card, value: !lambda 'return (id(g_card) + 1) % 5;' }
+            - globals.set: { id: g_card, value: !lambda 'return (id(g_card) + 1) % 6;' }
+            - lvgl.widget.hide: statusbar
             - script.execute: show_card
       # swipe RIGHT → previous screen
       - if:
@@ -1315,7 +1857,8 @@ touchscreen:
               int adx = dx < 0 ? -dx : dx, ady = dy < 0 ? -dy : dy;
               return !id(sw_sleep) && adx >= ady && dx > 40;
           then:
-            - globals.set: { id: g_card, value: !lambda 'return (id(g_card) + 4) % 5;' }
+            - globals.set: { id: g_card, value: !lambda 'return (id(g_card) + 5) % 6;' }
+            - lvgl.widget.hide: statusbar
             - script.execute: show_card
 
 # ── Wake word "Okay, Nabu" (on-device) ──────────────────────────────────────────
@@ -1356,6 +1899,7 @@ voice_assistant:
     - select.set: { id: robot_mode, option: awake }
     - globals.set: { id: g_listen, value: "true" }
     - globals.set: { id: g_voice, value: "true" }
+    - lvgl.label.update: { id: speech_txt, text: "Listening..." }
     - lvgl.page.show: page_face
     - globals.set: { id: g_card, value: "0" }
     - script.execute: leds_yellow
@@ -1367,6 +1911,7 @@ voice_assistant:
     # AI is speaking → "talking" mouth face, stays YELLOW the whole turn (listen + speak).
     - lambda: 'lv_disp_trig_activity(NULL);'
     - text_sensor.template.publish: { id: st_reply, state: !lambda 'return x;' }
+    - lvgl.label.update: { id: speech_txt, text: !lambda 'return x;' }   # show what the AI says
     - globals.set: { id: g_listen, value: "false" }
     - globals.set: { id: g_talk, value: "true" }
     - script.execute: leds_yellow

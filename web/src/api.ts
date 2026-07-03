@@ -91,3 +91,12 @@ export interface ScreenTimers {
   screensaver_min: number | null;
   sleep_min: number | null;
 }
+
+export interface Vitals {
+  energy: number;
+  food: number;
+  fun: number;
+  calm: number;
+  lowest: string;
+  nudges: boolean;
+}

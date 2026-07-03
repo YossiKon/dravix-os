@@ -1,20 +1,23 @@
-// דרביקס — שלט רחוק לרובוט. 4 טאבים: בית · מסכים · מזגן · הגדרות.
+// Dravix — remote control for the robot. Tabs: home · screens · life · climate · settings.
 import { useCallback, useEffect, useState } from "react";
 import { apiGet } from "./api";
 import type { HAEntity, Health, RobotConfig } from "./api";
 import { HomePage } from "./pages/Home";
 import { ScreensPage } from "./pages/Screens";
+import { VitalsPage } from "./pages/Vitals";
 import { ClimatePage } from "./pages/Climate";
 import { SettingsPage } from "./pages/Settings";
 import { Toaster } from "./ui";
+import { useI18n } from "./i18n";
 
-type Tab = "home" | "screens" | "climate" | "settings";
+type Tab = "home" | "screens" | "vitals" | "climate" | "settings";
 
-const TABS: { id: Tab; he: string; icon: string }[] = [
-  { id: "home", he: "בית", icon: "🏠" },
-  { id: "screens", he: "מסכים", icon: "🗂" },
-  { id: "climate", he: "מזגן", icon: "❄" },
-  { id: "settings", he: "הגדרות", icon: "⚙" },
+const TABS: { id: Tab; he: string; en: string; icon: string }[] = [
+  { id: "home", he: "בית", en: "Home", icon: "🏠" },
+  { id: "screens", he: "מסכים", en: "Screens", icon: "🗂" },
+  { id: "vitals", he: "חיים", en: "Life", icon: "💗" },
+  { id: "climate", he: "מזגן", en: "Climate", icon: "❄" },
+  { id: "settings", he: "הגדרות", en: "Settings", icon: "⚙" },
 ];
 
 function tabFromHash(): Tab {
@@ -23,6 +26,7 @@ function tabFromHash(): Tab {
 }
 
 export default function App() {
+  const { tr, lang, setLang } = useI18n();
   const [tab, setTab] = useState<Tab>(tabFromHash);
   const [config, setConfig] = useState<RobotConfig | null>(null);
   const [entities, setEntities] = useState<HAEntity[]>([]);
@@ -43,9 +47,9 @@ export default function App() {
     return () => window.removeEventListener("hashchange", onHash);
   }, [refreshConfig]);
 
-  function go(t: Tab) {
-    window.location.hash = `#/${t}`;
-    setTab(t);
+  function go(next: Tab) {
+    window.location.hash = `#/${next}`;
+    setTab(next);
   }
 
   return (
@@ -53,21 +57,33 @@ export default function App() {
       {/* header */}
       <header className="flex items-center justify-between px-4 pb-1 pt-4">
         <h1 className="font-display text-2xl">
-          דרביקס
+          {tr("דרביקס", "Dravix")}
           <span dir="ltr" className="ms-2 font-mono text-xs text-mute">
             dravix-os
           </span>
         </h1>
-        <span
-          className={`inline-block h-2.5 w-2.5 rounded-full ${config?.online ? "bg-green" : "bg-red"}`}
-          title={config?.online ? "מחובר" : "לא מחובר"}
-        />
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            className="rounded-full border border-line bg-card2 px-2.5 py-1 text-xs text-mute transition active:scale-95"
+            onClick={() => setLang(lang === "he" ? "en" : "he")}
+            aria-label="Switch language"
+            title={lang === "he" ? "English" : "עברית"}
+          >
+            {lang === "he" ? "EN" : "עב"}
+          </button>
+          <span
+            className={`inline-block h-2.5 w-2.5 rounded-full ${config?.online ? "bg-green" : "bg-red"}`}
+            title={config?.online ? tr("מחובר", "Connected") : tr("לא מחובר", "Offline")}
+          />
+        </div>
       </header>
 
       {/* page */}
       <main className="px-4 pb-28 pt-2">
         {tab === "home" && <HomePage config={config} />}
         {tab === "screens" && <ScreensPage entities={entities} />}
+        {tab === "vitals" && <VitalsPage />}
         {tab === "climate" && <ClimatePage entities={entities} />}
         {tab === "settings" && (
           <SettingsPage config={config} entities={entities} version={version} onConfigChanged={refreshConfig} />
@@ -80,18 +96,18 @@ export default function App() {
         style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
       >
         <div className="mx-auto flex max-w-xl">
-          {TABS.map((t) => (
+          {TABS.map((tb) => (
             <button
-              key={t.id}
-              onClick={() => go(t.id)}
+              key={tb.id}
+              onClick={() => go(tb.id)}
               className={`flex flex-1 flex-col items-center gap-0.5 py-2.5 text-xs transition ${
-                tab === t.id ? "text-teal" : "text-mute"
+                tab === tb.id ? "text-teal" : "text-mute"
               }`}
             >
-              <span className={`text-xl leading-none ${tab === t.id ? "" : "grayscale opacity-70"}`}>{t.icon}</span>
-              {t.he}
+              <span className={`text-xl leading-none ${tab === tb.id ? "" : "grayscale opacity-70"}`}>{tb.icon}</span>
+              {lang === "en" ? tb.en : tb.he}
               <span
-                className={`mt-0.5 h-1 w-8 rounded-full transition ${tab === t.id ? "bg-teal" : "bg-transparent"}`}
+                className={`mt-0.5 h-1 w-8 rounded-full transition ${tab === tb.id ? "bg-teal" : "bg-transparent"}`}
               />
             </button>
           ))}

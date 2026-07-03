@@ -1,21 +1,28 @@
-// מזגן — בחירת ישות climate ושליטה: טמפ׳ יעד + מצב פעולה.
+// Climate — pick a climate entity and control it: target temp + hvac mode.
 import { useCallback, useEffect, useState } from "react";
 import { apiGet, apiSend } from "../api";
 import type { ClimateState, HAEntity } from "../api";
 import { EntityPicker } from "../components/EntityPicker";
 import { Section, Spinner, toastErr } from "../ui";
+import { useI18n } from "../i18n";
 
-const MODE_HE: Record<string, string> = {
-  off: "כבוי",
-  cool: "קירור",
-  heat: "חימום",
-  heat_cool: "אוטומטי",
-  auto: "אוטומטי",
-  dry: "ייבוש",
-  fan_only: "מאוורר",
+const MODES: Record<string, { he: string; en: string }> = {
+  off: { he: "כבוי", en: "Off" },
+  cool: { he: "קירור", en: "Cool" },
+  heat: { he: "חימום", en: "Heat" },
+  heat_cool: { he: "אוטומטי", en: "Auto" },
+  auto: { he: "אוטומטי", en: "Auto" },
+  dry: { he: "ייבוש", en: "Dry" },
+  fan_only: { he: "מאוורר", en: "Fan" },
 };
 
 export function ClimatePage(props: { entities: HAEntity[] }) {
+  const { tr, lang } = useI18n();
+  const modeLabel = (m: string) => {
+    const o = MODES[m];
+    return o ? (lang === "en" ? o.en : o.he) : m;
+  };
+
   const [entity, setEntity] = useState("");
   const [st, setSt] = useState<ClimateState | null>(null);
   const [busy, setBusy] = useState(false);
@@ -104,28 +111,28 @@ export function ClimatePage(props: { entities: HAEntity[] }) {
 
   return (
     <div className="space-y-4">
-      <Section title="איזה מזגן?">
+      <Section title={tr("איזה מזגן?", "Which AC?")}>
         <EntityPicker
           entities={props.entities}
           domains={["climate"]}
           value={entity}
           onChange={(id) => void choose(id)}
-          placeholder="בחר מזגן…"
+          placeholder={tr("בחר מזגן…", "Pick an AC…")}
         />
       </Section>
 
       {entity && st && (
-        <Section title="שליטה" delay={70}>
+        <Section title={tr("שליטה", "Control")} delay={70}>
           {/* current + target */}
           <div className="mb-4 flex items-center justify-around">
             <div className="text-center">
-              <div className="text-sm text-mute">בבית עכשיו</div>
+              <div className="text-sm text-mute">{tr("בבית עכשיו", "Current")}</div>
               <div className="font-display text-4xl">
                 {st.current_temperature != null ? `${st.current_temperature}°` : "—"}
               </div>
             </div>
             <div className="text-center">
-              <div className="text-sm text-mute">יעד</div>
+              <div className="text-sm text-mute">{tr("יעד", "Target")}</div>
               <div className="font-display text-4xl text-teal">{target != null ? `${target}°` : "—"}</div>
             </div>
           </div>
@@ -155,7 +162,7 @@ export function ClimatePage(props: { entities: HAEntity[] }) {
                 disabled={busy}
                 onClick={() => void setMode(m)}
               >
-                {MODE_HE[m] ?? m}
+                {modeLabel(m)}
               </button>
             ))}
             {busy && <Spinner />}
@@ -165,17 +172,22 @@ export function ClimatePage(props: { entities: HAEntity[] }) {
 
       {entity && !st && failed && (
         <div className="card animate-rise">
-          <p className="mb-3 text-red">לא הצלחתי לקרוא את מצב המזגן.</p>
+          <p className="mb-3 text-red">{tr("לא הצלחתי לקרוא את מצב המזגן.", "Couldn't read the AC state.")}</p>
           <button className="btn w-full" onClick={() => void refresh(entity, false)}>
-            ↻ נסה שוב
+            {tr("↻ נסה שוב", "↻ Retry")}
           </button>
         </div>
       )}
       {entity && !st && !failed && (
-        <div className="card animate-rise text-mute">טוען את מצב המזגן…</div>
+        <div className="card animate-rise text-mute">{tr("טוען את מצב המזגן…", "Loading AC state…")}</div>
       )}
       {!entity && loadedCfg && (
-        <div className="card animate-rise text-mute">בחר מזגן מהרשימה כדי לשלוט בו מכאן ומכרטיסי הרובוט.</div>
+        <div className="card animate-rise text-mute">
+          {tr(
+            "בחר מזגן מהרשימה כדי לשלוט בו מכאן ומכרטיסי הרובוט.",
+            "Pick an AC from the list to control it here and from the robot's cards.",
+          )}
+        </div>
       )}
     </div>
   );

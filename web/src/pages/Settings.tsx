@@ -1,47 +1,50 @@
-// הגדרות — חיבור לרובוט, מיפוי ישויות, התנהגות, כיול ראש, טיימרים, בינה.
+// Settings — robot connection, entity mapping, behaviour, head calibration, timers, AI.
 import { useEffect, useMemo, useState } from "react";
 import { apiGet, apiSend } from "../api";
 import type { AppConfig, HAEntity, RobotConfig, ScreenTimers } from "../api";
 import { EntityPicker } from "../components/EntityPicker";
 import { Section, Toggle, toast, toastErr } from "../ui";
+import { useI18n } from "../i18n";
 
-// Hebrew labels for the robot's behaviour switches (matched by entity object_id suffix).
-const BEHAVIOR_HE: [string, string][] = [
-  ["greet_on_approach", "ברכה כשמישהו מתקרב"],
-  ["sleep_when_dark", "שינה כשחשוך בחדר"],
-  ["touch_reaction", "תגובה לליטוף"],
-  ["speaking_leds", "לדים צהובים בשיחה"],
-  ["random_blink", "מצמוץ טבעי"],
-  ["idle_head_drift", "מבט/תנועה עצמאית"],
-  ["tap_face_to_talk", "הקשה על הפרצוף = דיבור"],
-  ["body_language", "שפת גוף (תנועות ראש)"],
-  ["mood_leds", "לדים לפי רגש"],
+type Bi = { he: string; en: string };
+
+// Labels for the robot's behaviour switches (matched by entity object_id suffix).
+const BEHAVIORS: { suffix: string; he: string; en: string }[] = [
+  { suffix: "greet_on_approach", he: "ברכה כשמישהו מתקרב", en: "Greet on approach" },
+  { suffix: "sleep_when_dark", he: "שינה כשחשוך בחדר", en: "Sleep when the room is dark" },
+  { suffix: "touch_reaction", he: "תגובה לליטוף", en: "React to petting" },
+  { suffix: "speaking_leds", he: "לדים צהובים בשיחה", en: "Amber LEDs while talking" },
+  { suffix: "random_blink", he: "מצמוץ טבעי", en: "Natural blinking" },
+  { suffix: "idle_head_drift", he: "מבט/תנועה עצמאית", en: "Idle glances / motion" },
+  { suffix: "tap_face_to_talk", he: "הקשה על הפרצוף = דיבור", en: "Tap face to talk" },
+  { suffix: "body_language", he: "שפת גוף (תנועות ראש)", en: "Body language (head moves)" },
+  { suffix: "mood_leds", he: "לדים לפי רגש", en: "Mood LEDs" },
 ];
 
-// Hebrew labels for the entity roles (falls back to the server's English label).
-const ROLE_HE: Record<string, string> = {
-  face_select: "פרצוף (Face select)",
-  head_yaw: "ראש — ימינה / שמאלה",
-  head_pitch: "ראש — למעלה / למטה",
-  media_player: "רמקול (להקראה)",
-  tts_engine: "קול — מנוע דיבור",
-  led_light: "פס הלדים",
-  camera: "מצלמה",
-  screensaver_number: "טיימר שומר מסך (דקות)",
-  sleep_number: "טיימר שינה (דקות)",
-  mode_select: "מצב (ער / שינה)",
-  state_sensor: "מצב חי (State)",
-  heard_sensor: "מה שמע (Last heard)",
-  reply_sensor: "מה ענה (Last reply)",
-  image_url_text: "הצגת תמונה (Show image URL)",
-  privacy_switch: "מצב פרטיות (Privacy)",
+// Labels for the entity roles (falls back to the server's English label).
+const ROLES: Record<string, Bi> = {
+  face_select: { he: "פרצוף (Face select)", en: "Face (select)" },
+  head_yaw: { he: "ראש — ימינה / שמאלה", en: "Head — left / right" },
+  head_pitch: { he: "ראש — למעלה / למטה", en: "Head — up / down" },
+  media_player: { he: "רמקול (להקראה)", en: "Speaker (for TTS)" },
+  tts_engine: { he: "קול — מנוע דיבור", en: "Voice — TTS engine" },
+  led_light: { he: "פס הלדים", en: "LED bar" },
+  camera: { he: "מצלמה", en: "Camera" },
+  screensaver_number: { he: "טיימר שומר מסך (דקות)", en: "Screensaver timer (min)" },
+  sleep_number: { he: "טיימר שינה (דקות)", en: "Sleep timer (min)" },
+  mode_select: { he: "מצב (ער / שינה)", en: "Mode (awake / sleep)" },
+  state_sensor: { he: "מצב חי (State)", en: "Live state (State sensor)" },
+  heard_sensor: { he: "מה שמע (Last heard)", en: "Last heard" },
+  reply_sensor: { he: "מה ענה (Last reply)", en: "Last reply" },
+  image_url_text: { he: "הצגת תמונה (Show image URL)", en: "Show image URL" },
+  privacy_switch: { he: "מצב פרטיות (Privacy)", en: "Privacy mode" },
 };
 
-const PROVIDER_HE: Record<string, string> = {
-  ha_assist: "העוזר של Home Assistant",
-  claude: "Claude",
-  openai: "OpenAI",
-  ollama: "Ollama (מקומי)",
+const PROVIDERS: Record<string, Bi> = {
+  ha_assist: { he: "העוזר של Home Assistant", en: "Home Assistant Assist" },
+  claude: { he: "Claude", en: "Claude" },
+  openai: { he: "OpenAI", en: "OpenAI" },
+  ollama: { he: "Ollama (מקומי)", en: "Ollama (local)" },
 };
 
 export function SettingsPage(props: {
@@ -50,6 +53,9 @@ export function SettingsPage(props: {
   version: string;
   onConfigChanged: () => void;
 }) {
+  const { tr, lang } = useI18n();
+  const pick = (o: Bi | undefined, fb: string) => (o ? (lang === "en" ? o.en : o.he) : fb);
+
   const cfg = props.config;
   const [entities, setEntities] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
@@ -75,9 +81,9 @@ export function SettingsPage(props: {
 
   const behaviors = useMemo(() => {
     if (!robotPrefix) return [];
-    return BEHAVIOR_HE.flatMap(([suffix, he]) => {
-      const ent = switches.find((s) => s.entity_id === `switch.${robotPrefix}_${suffix}`);
-      return ent ? [{ ...ent, he }] : [];
+    return BEHAVIORS.flatMap((b) => {
+      const ent = switches.find((s) => s.entity_id === `switch.${robotPrefix}_${b.suffix}`);
+      return ent ? [{ ...ent, he: b.he, en: b.en }] : [];
     });
   }, [switches, robotPrefix]);
 
@@ -113,7 +119,7 @@ export function SettingsPage(props: {
     try {
       const res = await apiSend<RobotConfig>("/api/robot/config", "PUT", { entities });
       if (res.error) toast(res.error, "err");
-      else toast("החיבורים נשמרו והרובוט חובר מחדש");
+      else toast(tr("החיבורים נשמרו והרובוט חובר מחדש", "Mapping saved — robot reconnected"));
       props.onConfigChanged();
     } catch (e) {
       toastErr(e);
@@ -148,7 +154,7 @@ export function SettingsPage(props: {
   async function resetCalibration() {
     try {
       await apiSend("/api/robot/config", "PUT", { calibration: {} });
-      toast("הכיול אופס");
+      toast(tr("הכיול אופס", "Calibration reset"));
       props.onConfigChanged();
     } catch (e) {
       toastErr(e);
@@ -161,7 +167,7 @@ export function SettingsPage(props: {
         screensaver_min: timers.saver === "" ? null : Number(timers.saver),
         sleep_min: timers.sleep === "" ? null : Number(timers.sleep),
       });
-      toast("הטיימרים עודכנו על הרובוט");
+      toast(tr("הטיימרים עודכנו על הרובוט", "Timers updated on the robot"));
     } catch (e) {
       toastErr(e);
     }
@@ -190,15 +196,15 @@ export function SettingsPage(props: {
     }
   }
 
-  if (!cfg) return <div className="card animate-rise text-mute">טוען הגדרות…</div>;
+  if (!cfg) return <div className="card animate-rise text-mute">{tr("טוען הגדרות…", "Loading settings…")}</div>;
 
   return (
     <div className="space-y-4">
       {/* ── status ── */}
-      <Section title="חיבור לרובוט">
+      <Section title={tr("חיבור לרובוט", "Robot connection")}>
         <div className="mb-3 flex items-center gap-2">
           <span className={`inline-block h-2.5 w-2.5 rounded-full ${cfg.online ? "bg-green" : "bg-red"}`} />
-          <span>{cfg.online ? "מחובר" : "לא מחובר"}</span>
+          <span>{cfg.online ? tr("מחובר", "Connected") : tr("לא מחובר", "Offline")}</span>
           <span dir="ltr" className="ms-auto font-mono text-xs text-mute">
             v{props.version}
           </span>
@@ -215,19 +221,24 @@ export function SettingsPage(props: {
               className={`chip ${cfg.driver === d ? "chip-on" : ""}`}
               onClick={() => void setDriver(d)}
             >
-              {d === "ha" ? "Home Assistant" : d === "mock" ? "דמה (בדיקות)" : "MCP"}
+              {d === "ha" ? "Home Assistant" : d === "mock" ? tr("דמה (בדיקות)", "Mock (testing)") : "MCP"}
             </button>
           ))}
         </div>
       </Section>
 
       {/* ── entity mapping ── */}
-      <Section title="חיבור ישויות" delay={60}>
-        <p className="mb-3 text-sm text-mute">איזה ישות Home Assistant ממלאת כל תפקיד אצל הרובוט. אפשר להשאיר ריק מה שאין.</p>
+      <Section title={tr("חיבור ישויות", "Entity mapping")} delay={60}>
+        <p className="mb-3 text-sm text-mute">
+          {tr(
+            "איזה ישות Home Assistant ממלאת כל תפקיד אצל הרובוט. אפשר להשאיר ריק מה שאין.",
+            "Which Home Assistant entity fills each robot role. Leave blank anything you don't have.",
+          )}
+        </p>
         <div className="space-y-3">
           {cfg.roles.map((role) => (
             <div key={role.key}>
-              <label className="lbl">{ROLE_HE[role.key] ?? role.label}</label>
+              <label className="lbl">{pick(ROLES[role.key], role.label)}</label>
               <EntityPicker
                 entities={props.entities}
                 domains={role.domains}
@@ -245,18 +256,18 @@ export function SettingsPage(props: {
           ))}
         </div>
         <button className="btn btn-primary mt-4 w-full" disabled={saving} onClick={() => void saveEntities()}>
-          {saving ? "שומר…" : "💾 שמור חיבורים"}
+          {saving ? tr("שומר…", "Saving…") : tr("💾 שמור חיבורים", "💾 Save mapping")}
         </button>
       </Section>
 
       {/* ── behaviour toggles (the robot's on-device switches) ── */}
       {behaviors.length > 0 && (
-        <Section title="התנהגות הרובוט" delay={90}>
+        <Section title={tr("התנהגות הרובוט", "Robot behaviour")} delay={90}>
           <div className="space-y-2">
             {behaviors.map((b) => (
               <Toggle
                 key={b.entity_id}
-                label={b.he}
+                label={lang === "en" ? b.en : b.he}
                 on={b.state === "on"}
                 onChange={(v) => void flipBehavior(b.entity_id, v)}
               />
@@ -266,32 +277,35 @@ export function SettingsPage(props: {
       )}
 
       {/* ── head calibration ── */}
-      <Section title="כיול ראש" delay={120}>
+      <Section title={tr("כיול ראש", "Head calibration")} delay={120}>
         <p className="mb-3 text-sm text-mute">
-          אם הראש זז הפוך — הפעל היפוך לציר המתאים. ״קבע כ׳ישר׳״ נמצא בדף הבית, ליד הג׳ויסטיק.
+          {tr(
+            "אם הראש זז הפוך — הפעל היפוך לציר המתאים. ״קבע כ׳ישר׳״ נמצא בדף הבית, ליד הג׳ויסטיק.",
+            "If the head moves the wrong way, flip the matching axis. 'Set as straight' is on the Home tab, next to the joystick.",
+          )}
         </p>
         <div className="space-y-2">
           <Toggle
-            label="היפוך ימינה/שמאלה"
+            label={tr("היפוך ימינה/שמאלה", "Invert left/right")}
             on={Boolean(cfg.calibration.yaw?.invert)}
             onChange={(v) => void setInvert("yaw", v)}
           />
           <Toggle
-            label="היפוך למעלה/למטה"
+            label={tr("היפוך למעלה/למטה", "Invert up/down")}
             on={Boolean(cfg.calibration.pitch?.invert)}
             onChange={(v) => void setInvert("pitch", v)}
           />
           <button className="btn btn-danger w-full" onClick={() => void resetCalibration()}>
-            ↺ איפוס כיול
+            {tr("↺ איפוס כיול", "↺ Reset calibration")}
           </button>
         </div>
       </Section>
 
       {/* ── timers ── */}
-      <Section title="שומר מסך ושינה" delay={180}>
+      <Section title={tr("שומר מסך ושינה", "Screensaver & sleep")} delay={180}>
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className="lbl">שומר מסך אחרי (דק׳)</label>
+            <label className="lbl">{tr("שומר מסך אחרי (דק׳)", "Screensaver after (min)")}</label>
             <input
               type="number"
               inputMode="numeric"
@@ -301,7 +315,7 @@ export function SettingsPage(props: {
             />
           </div>
           <div>
-            <label className="lbl">שינה אחרי (דק׳)</label>
+            <label className="lbl">{tr("שינה אחרי (דק׳)", "Sleep after (min)")}</label>
             <input
               type="number"
               inputMode="numeric"
@@ -312,13 +326,13 @@ export function SettingsPage(props: {
           </div>
         </div>
         <button className="btn mt-3 w-full" onClick={() => void saveTimers()}>
-          💾 עדכן טיימרים
+          {tr("💾 עדכן טיימרים", "💾 Update timers")}
         </button>
       </Section>
 
       {/* ── AI + behaviour ── */}
-      <Section title="בינה והתנהגות" delay={240}>
-        <label className="lbl">ספק הבינה המלאכותית</label>
+      <Section title={tr("בינה והתנהגות", "AI & behaviour")} delay={240}>
+        <label className="lbl">{tr("ספק הבינה המלאכותית", "AI provider")}</label>
         <div className="mb-3 flex flex-wrap gap-2">
           {(app?.providers ?? []).map((p) => (
             <button
@@ -326,15 +340,17 @@ export function SettingsPage(props: {
               className={`chip ${app?.ai_provider === p ? "chip-on" : ""}`}
               onClick={() => void setProvider(p)}
             >
-              {PROVIDER_HE[p] ?? p}
+              {pick(PROVIDERS[p], p)}
             </button>
           ))}
         </div>
         {app && !app.ai_available && (
-          <p className="mb-3 text-xs text-amber">ספק הבינה לא זמין כרגע — בדוק את ההגדרות שלו.</p>
+          <p className="mb-3 text-xs text-amber">
+            {tr("ספק הבינה לא זמין כרגע — בדוק את ההגדרות שלו.", "The AI provider is unavailable — check its settings.")}
+          </p>
         )}
         <Toggle
-          label="תנועת ראש עצמאית (כשהוא משועמם)"
+          label={tr("תנועת ראש עצמאית (כשהוא משועמם)", "Autonomous head motion (when bored)")}
           on={Boolean(app?.store.idle_motion ?? true)}
           onChange={(v) => void setIdle(v)}
         />

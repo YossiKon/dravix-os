@@ -1,162 +1,254 @@
 # dravix-os
 
-A custom "OS layer" for the **M5Stack StackChan** desktop robot.
+<p align="center">
+  <img src="docs/dravix-robot.svg" alt="dravix-os — the StackChan pet face" width="680">
+</p>
 
-dravix-os does **not** replace the robot's original firmware. The stock firmware (app,
-camera head-tracking, dance, security/guard, agent mode) stays **100% intact** and keeps
-receiving M5Stack OTA updates. dravix-os is a **companion brain** that runs next to your
-Home Assistant and drives the robot from the outside — adding custom *modes*, a *web
-dashboard*, a pluggable *AI router*, and deep *smart-home* integration.
+<p align="center">
+  <b>A local-first companion layer for the M5Stack StackChan desk robot — delivered as a Home Assistant add-on.</b>
+</p>
+
+dravix-os turns the StackChan into a little desk creature you fully own. You re-flash the robot to
+custom **dravix ESPHome firmware** — a drawn animated pet face, petting, voice, camera, LEDs, a
+games arcade and a *real life* (needs it takes care of) — which exposes every part of the hardware
+to Home Assistant as ordinary entities. The dravix add-on then drives it through those entities,
+adding custom **modes**, a **mobile dashboard**, a persistent **personality**, a pluggable **AI
+brain**, and deep **smart-home** integration. Everything runs on your own hardware; nothing phones
+home.
 
 ```
-┌─────────────────────────┐        ┌──────────────────────────────────────────┐
-│   Robot (CoreS3)         │        │     Proxmox host (always on)              │
-│   stock firmware — kept! │        │  ┌─────────────┐   ┌────────────────────┐ │
-│   face · servos · audio  │◄──────►│  │  HA (VM)    │◄─►│  dravix-os (LXC)   │ │
-│   camera · touch · LEDs  │  MCP   │  │ Assist + MCP│   │  core + dashboard  │ │
-└─────────────────────────┘        │  └─────────────┘   └────────────────────┘ │
-        the body                    └──────────────────────────────────────────┘
-                                            the brain + control panel
+┌──────────────────────────────┐   ESPHome   ┌──────────────────────────────────────────────┐
+│  StackChan · M5 CoreS3        │   native    │       Home Assistant  (your always-on host)   │
+│  ── custom dravix ESPHome ──  │   API       │  ┌────────────────┐   ┌────────────────────┐  │
+│  drawn pet face · head servos │◄───────────►│  │    HA core     │◄─►│  dravix-os add-on  │  │
+│  mic · speaker · touch        │             │  │  entities +    │   │  dashboard · modes │  │
+│  camera · LEDs · battery      │             │  │  Assist        │   │  personality · AI  │  │
+└──────────────────────────────┘             │  └────────────────┘   │  MCP server        │  │
+            the body                          │                       └────────────────────┘  │
+                                              └──────────────────────────────────────────────┘
+                                                        the brain + control panel
 ```
 
-## Why a companion OS (and not a firmware fork)
+The robot joins Home Assistant over the ESPHome native API; the dravix add-on runs inside HA and
+talks to HA core over REST/WebSocket. There is no cloud in the loop.
 
-The CoreS3 is an ESP32-S3 microcontroller — it physically cannot host an LLM, speech
-recognition, or a real management UI. Even today, the robot's "intelligence" already runs
-off-device (M5Stack cloud / phone app / Home Assistant). So dravix-os puts the custom brain
-where it belongs — on an always-on host — and talks to the robot over the interfaces it
-already exposes.
+## 🧭 Core principles
 
-Concretely: the robot exposes an **MCP server at a URL**. Home Assistant connects to it as
-an MCP client today. dravix-os connects to that **same MCP URL** to control the robot, to
-**Home Assistant's MCP server** to control the smart home, and exposes **its own MCP
-server** so any agent (e.g. Claude) can drive modes + robot + home.
+1. **Local-first.** dravix-os runs fully on your box. `local_only` (default on) refuses cloud AI
+   providers, and nothing talks to a vendor cloud. See [docs/local-only.md](docs/local-only.md).
+2. **Everything is pluggable.** Robot drivers, AI providers and modes are swappable behind clean
+   interfaces (the [Device Abstraction Layer](docs/architecture.md)). Higher layers only ever see
+   the `RobotController` facade, so *how* the robot is reached can change without touching modes,
+   AI or the dashboard.
+3. **Capability-guarded.** Modes check `robot.supports(...)` before acting, so behaviour degrades
+   gracefully across backends.
 
-## Core principles
+## 🚀 Getting started
 
-1. **Layer, not fork.** We never edit the stock firmware. Upstream M5Stack updates flow to
-   the robot untouched. `m5stack/StackChan` is tracked under `vendor/` for reference only.
-2. **Everything is pluggable.** Robot drivers, AI providers, and modes are all swappable
-   plugins behind clean interfaces (the [Device Abstraction Layer](docs/architecture.md)).
-3. **Preserve + extend.** The dashboard manages both the original behaviors *and* the new
-   ones, without harming the originals.
+**You'll need:** an M5Stack **StackChan (CoreS3)**, a running **Home Assistant** with the official
+**ESPHome** add-on installed, and a **USB-C** cable.
 
-## Repository layout
+1. **Install the add-on.** In Home Assistant → **Settings → Add-ons → Add-on Store → ⋮ →
+   Repositories**, add `https://github.com/YossiKon/dravix-os`, then install **dravix-os**. HA
+   pulls a prebuilt image from GHCR — nothing compiles on your box.
 
-| Path | What |
-|------|------|
-| `core/` | The dravix-os service (Python / FastAPI): DAL, mode engine, AI router, MCP client+server, REST API |
-| `core/scripts/discover.py` | **Run this first** — probes your robot's MCP URL + HA and writes a capability report |
-| `plugins/` | Drop-in modes/behaviors (example included) |
-| `web/` | Management dashboard (React) — *Phase 2* |
-| `deploy/` | Dockerfile, docker-compose, Proxmox LXC setup |
-| `vendor/` | Upstream `m5stack/StackChan` tracking (reference only) |
-| `docs/` | Architecture, setup guides, generated capability report |
+2. 🛡️ **Back up the robot's original firmware — do this before flashing anything.** It makes a
+   byte-for-byte snapshot of the robot exactly as it is today that you can always restore. Follow
+   **Step 0 — Back up the original firmware** in
+   [docs/esphome-local-control.md](docs/esphome-local-control.md).
 
-## Quick start (dev)
+3. **Flash the dravix ESPHome firmware.** In the ESPHome Builder, **Validate** then flash
+   [`deploy/esphome/stackchan-dravix.yaml`](deploy/esphome/stackchan-dravix.yaml). The robot joins
+   Wi-Fi and appears in HA as a device with entities (face, head servos, media player, LEDs,
+   camera, touch, vitals). Full walkthrough — flashing, first-boot tuning, entity ids —
+   [docs/esphome-local-control.md](docs/esphome-local-control.md).
 
-```bash
-cd core
-python -m venv .venv && . .venv/bin/activate   # Windows: .venv\Scripts\activate
-pip install -e .
+4. **Point dravix at the entities.** Open the add-on → **Configuration**. Leave `robot_driver: ha`
+   and fill in the entity ids HA created — `robot_entity_face`, `robot_entity_head_yaw`,
+   `robot_entity_head_pitch`, `robot_entity_media_player`, `robot_entity_light`,
+   `robot_entity_camera` — plus your HA connection details. **Save → Restart.**
 
-cp ../.env.example ../.env                      # then fill in robot + HA details
-python -m dravix                                # starts the service on :8800
-```
+5. **Open the dashboard.** Click **Open Web UI** on the add-on page (or browse to
+   `http://<home-assistant>:8800`). Map the **Live state** (`sensor.*_state`) and **Mode**
+   (`select.*_mode`) entities, calibrate the head per-axis, and you're live.
 
-Open http://localhost:8800 for the status page.
+> **Tip:** mapping the **Live state** + **Mode** entities is what lets the life system stay silent
+> in focus/sleep and put the robot to sleep on its own — don't skip it.
 
-Before anything talks to the real robot, run discovery:
+Reversible at any time: re-flash your backup (or the stock firmware via M5Burner) and the robot is
+back to how it was.
 
-```bash
-python scripts/discover.py        # writes docs/capability-report.md
-```
+> No robot yet? You can still run and explore everything against the built-in **mock** driver —
+> see the **Development** section below.
 
-## Modes (plugins)
+## 🤖 What the robot does (custom firmware)
 
-Modes are drop-in plugins under `plugins/`. Shipping now:
+Re-flashing to the dravix ESPHome firmware makes the StackChan act alive while staying fully
+controllable from Home Assistant:
+
+- **A drawn animated pet face** — two big eyes that blink, look around, squint when happy and widen
+  when listening, pink cheeks and an animated mouth (a desk creature, not a text face). Every
+  expression carries its own mood-LED colour and head pose — sad droops, doubt tilts, angry shakes,
+  happy nods.
+- **Petting** — touch the head and the sensors fire → pink LEDs, a nuzzle-up and a happy wiggle.
+  This also feeds dravix's mood and its **fun/calm** needs.
+- **7 on-device modes** — `awake · morning · focus · quiet · night · busy · sleep`, each changing
+  the face, LEDs, volume and autonomous behaviour (set from HA or the dashboard). `morning` plays a
+  little sunrise scene; `quiet` lowers the speaker; `night` dims everything.
+- **Voice** — an on-device wake word, **"Okay, Nabu"**, hands off to HA Assist for STT/LLM/TTS; the
+  face follows along (listening → speaking) and the live state, last-heard and last-reply text
+  stream to the dashboard.
+- **Speech bubble** — a bubble by the mouth shows what it's hearing and the AI's reply (Hebrew or
+  English), with clear *listening* / *speaking* states.
+- **A games arcade** — a **Games** menu on the robot's screen: **Catch Me** (tap the runaway dot),
+  **Reaction** (a reflex speed test in milliseconds), **Simon** (the growing colour-sequence memory
+  game), **Rock-Paper-Scissors** (it nods when it wins) and **Dice**.
+- **A swipe UI** — swipe **down** for a slim status-bar overlay (Wi-Fi · battery · clock · date),
+  and **left/right** through 3 **dynamic cards** (you choose the HA entities on each, from the
+  dashboard), the **Games** arcade and the **Vitals** page — plus a full-screen alert-image page for
+  Frigate / doorbell snapshots.
+- **Privacy mode** — kills the microphone on-device (wake word + voice pipeline stopped) and shows a
+  red **PRIVACY** badge; dravix additionally blocks the camera stream/snapshot.
+- **Head calibration** — the head servos are driven and calibrated per-axis from the dashboard.
+- **Battery** — level plus estimated time-left, shown on the status bar.
+
+## 💗 A robot with a life
+
+dravix gives the StackChan real **needs**, like a little Tamagotchi — **⚡ energy · 🍎 food ·
+😄 fun · 🧘 calm**, each 0–100, shown as live bars both on the robot's own **VITALS** screen and on
+the dashboard. They drift down over time and you top them up — **feed · rest · play · calm** — with
+real feedback (it "eats", yawns, wiggles, LEDs). Petting and talking to it feed the needs too.
+
+- **It looks after itself.** When a need bottoms out, the robot acts on its own — goes to sleep
+  until it's rested and wakes back up, feeds itself, cheers itself up.
+- **Wellness nudges for you.** While you work next to it, the robot reminds *you* to take care of
+  yourself — eye breaks (the **20-20-20** rule), stand up and move (~every 30 min), hydrate,
+  posture — appearing on its screen with a little wiggle so you notice. Toggle them from the
+  dashboard.
+- **A hard do-not-disturb rule.** In `focus`, `quiet`, `night`, `busy` and `sleep`, the life system
+  and the nudges go **completely silent** — no autonomy, no reminders, nothing on-screen. Needs
+  still tick down quietly in the background, but the robot does nothing on its own until it's back
+  to `awake`.
+
+## 📱 Web dashboard
+
+The add-on ships a **Hebrew-first, RTL, mobile-friendly** dashboard: a live mirror of the robot's
+face, chat with memory, mode switching, games & emotes, a head joystick, the privacy toggle, a
+camera view, the dynamic-cards editor, the **Vitals** page (feed · rest · play · calm + the wellness
+toggle), climate control, and entity mapping + per-axis head calibration.
+
+|  Home  |  Screens  |  Settings  |
+|:------:|:---------:|:----------:|
+| ![Home dashboard](dravix-home.png) | ![Screens editor](dravix-screens.png) | ![Settings](dravix-settings.png) |
+| Face, modes, chat, games | Choose each card's entities | Entity mapping & calibration |
+
+## 🧩 Modes (plugins)
+
+Beyond the on-device firmware modes above, dravix runs **plugin modes** — orchestration behaviours
+that combine the robot, the AI router and Home Assistant. Foreground modes are mutually exclusive;
+ambient modes run alongside them.
 
 | Mode | Kind | What it does |
 |------|------|--------------|
-| `focus` | foreground | Calm work companion — quiet face, dim LEDs |
-| `pomodoro` | foreground | Work/break timer; announces phases, colors the LEDs |
-| `companion` | foreground | Chatty buddy; greets via the AI router, emotes from the reply's tone |
-| `guard` | foreground | Desk sentry; reacts to HA motion/presence events with an alert |
-| `dnd` | foreground | Do Not Disturb / meeting mode — calm busy face, stays quiet |
-| `dance` | foreground | A little head-bob + LED color cycle |
-| `frigate_watch` | foreground | On a Frigate detection, shows that camera on the robot's screen |
-| `ambient_idle` | ambient | Subtle glances/blinks so the robot never looks frozen |
-| `daynight` | ambient | Sleepy face + warm dim LEDs at night, neutral by day |
+| `focus` | foreground | Calm work companion — quiet face, dim LEDs, gentle reactions while you work. |
+| `pomodoro` | foreground | Work/break timer; announces phase changes and shows time on the face & LEDs. |
+| `companion` | foreground | Chatty desk buddy; greets via the AI router and emotes from the reply's tone. |
+| `guard` | foreground | Desk sentry; reacts to Home Assistant motion/presence/door events with an alert. |
+| `dnd` | foreground | Do Not Disturb / meeting mode — calm "busy" face, dim LEDs, stays quiet. |
+| `dance` | foreground | A little dance — bobs the head through a sequence and cycles the LED colours. |
+| `frigate_watch` | foreground | On a Frigate detection, shows that camera on the robot's screen. |
+| `follow` | foreground | Head tracks a person in real time from Frigate detections — off-device, no load on the robot. See [docs/frigate.md](docs/frigate.md). |
+| `ambient_idle` | ambient | Subtle glances and blinks so the robot never looks frozen. |
+| `daynight` | ambient | Sleepy face + warm dim LEDs at night, neutral by day. |
 
-Add your own by creating `plugins/<name>/plugin.yaml` + a `Mode` subclass — full guide in
-[docs/plugins.md](docs/plugins.md). Foreground modes are mutually exclusive; ambient modes run
-alongside. Per-mode config, enable/disable, and the AI provider are editable at runtime via the
-`/api/config/*` endpoints and persist to `data/store.json` (no redeploy).
+Add your own by dropping a `plugins/<name>/plugin.yaml` + a `Mode` subclass — full guide in
+[docs/plugins.md](docs/plugins.md). Per-mode config, enable/disable and the AI provider are all
+editable at runtime via the `/api/config/*` endpoints and persist across restarts (no redeploy).
 
-## Drive it from an AI agent (MCP server)
+## 🎭 Personality (the "desk robot" bit)
 
-dravix-os exposes its **own** MCP server so any MCP client (Claude Desktop/Code, etc.) can
-control the robot + modes:
+Inspired by EMO / Vector. A persistent **mood** (valence / arousal / affection) drifts over time,
+reacts to being talked to, petted, motion and night, and shows on the robot's face. It survives
+restarts. Plus a library of named **emotes** (happy, love, fistbump, curious, eat, yawn, calm, yes/
+no…), a no-code **reactions** engine (event → action rules) and an **announce** endpoint. Full
+guide: [docs/personality.md](docs/personality.md).
+
+```bash
+curl localhost:8800/api/vitals                                       # energy/food/fun/calm
+curl -X POST localhost:8800/api/vitals/action -d '{"action":"feed"}' # feed it
+curl -X POST localhost:8800/api/robot/interact -d '{"kind":"pet"}'   # pet it
+curl -X POST localhost:8800/api/robot/emote    -d '{"name":"fistbump"}'
+curl -X POST localhost:8800/api/timer -d '{"seconds":300,"label":"tea"}'   # timers + daily schedule
+```
+
+## 🧠 Switch the AI brain
+
+The AI router is pluggable. The default provider is **Home Assistant Assist** (your host already
+runs STT/LLM/TTS). Set the add-on's `ai_provider` (or `DRAVIX_AI_PROVIDER`) to switch —
+`ha_assist | claude | openai | ollama` — with the matching `DRAVIX_*_MODEL` (see `.env.example`).
+Replies may start with an emotion tag like `(happy)`, which dravix parses to drive the face
+automatically.
+
+## 🔌 Drive it from an AI agent (MCP server)
+
+dravix-os exposes its **own** MCP server, so any MCP client (Claude Desktop / Code, etc.) can drive
+the robot, modes and your home through one surface:
 
 ```bash
 cd core && python -m dravix.mcpserver      # stdio MCP server
 ```
 
-Tools: `robot_say`, `robot_set_face`, `robot_move_head`, `robot_set_leds`, `list_modes`,
-`activate_mode`, `deactivate_mode`, `get_status`, and `chat` (when an AI provider is set).
+Tools include robot control (`robot_say`, `robot_set_face`, `robot_move_head`, `robot_set_leds`),
+mode control (`list_modes`, `activate_mode`, `deactivate_mode`, `get_status`), AI `chat`, and a full
+Home Assistant control suite (entities, services, scenes, lights, climate, media, locks, covers,
+fans, alarm, vacuum) plus weather / agenda / memory helpers.
 
-## Personality (the "desk robot" bit)
+## 📷 Cameras & Frigate
 
-Inspired by EMO / Vector. A persistent **mood** (valence/arousal/affection) drifts over time,
-reacts to being talked to / petted / motion / night, and **shows on the robot's face when idle**
-(a foreground mode keeps the face while active). It survives restarts. Plus a library of named
-**emotes** (happy, love, fistbump, curious, yes/no…) and a no-code **reactions** engine (event →
-action rules) and an **announce** endpoint. Full guide: [docs/personality.md](docs/personality.md).
+dravix-os integrates with **Frigate** both ways, all on your LAN:
+
+- **Show a Frigate camera on the robot's screen** — on a person/motion/door detection, the robot
+  displays that camera and looks alert (the `frigate_watch` mode).
+- **Feed the robot's own camera into Frigate** — dravix re-serves it as a standard HTTP camera that
+  Frigate can run detection on.
+- **Follow mode** — with the robot's camera tracked in Frigate, the `follow` mode makes the head
+  track a person in real time, entirely off-device.
+
+See [docs/frigate.md](docs/frigate.md). For copy-paste Home Assistant `rest_command`s and
+automations, see [docs/home-assistant.md](docs/home-assistant.md).
+
+## 🛠 Development
+
+No robot or Home Assistant required — the **mock** driver logs calls instead of moving real
+hardware, so you can develop the dashboard, modes and AI fully offline. It's the default driver.
 
 ```bash
-curl localhost:8800/api/mood                                   # current mood
-curl -X POST localhost:8800/api/robot/interact -d '{"kind":"pet"}'   # pet it
-curl -X POST localhost:8800/api/robot/emote   -d '{"name":"fistbump"}'
-curl -X POST localhost:8800/api/timer -d '{"seconds":300,"label":"tea"}'   # timers + daily schedule
+cd core
+python -m venv .venv && . .venv/bin/activate   # Windows: .venv\Scripts\activate
+pip install -e ".[dev]"
+python -m dravix                # runs on :8800 with the mock driver — no robot/HA needed
+python -m pytest -q             # offline test suite
 ```
 
-## Local-first & cameras
-
-dravix-os runs **fully local** — `DRAVIX_LOCAL_ONLY=true` (default) refuses cloud AI providers,
-and nothing phones home (no M5Stack/other cloud). See [docs/local-only.md](docs/local-only.md).
-
-It also integrates with **Frigate** both ways — show a Frigate camera on the robot's screen, and
-re-serve the robot's own camera as an HTTP camera Frigate can detect on. See
-[docs/frigate.md](docs/frigate.md).
-
-**Easy Home Assistant integration** — copy-paste `rest_command`s + automations (announce, notify,
-agenda, run a routine, show a camera) and the built-in HA event bridge. See
-[docs/home-assistant.md](docs/home-assistant.md).
-
-## Switch the AI brain
-
-The AI router is pluggable. Default is **Home Assistant Assist** (your host already runs it).
-Set `DRAVIX_AI_PROVIDER` to switch — `ha_assist | claude | openai | ollama` — and the
-matching `DRAVIX_*_MODEL` (see `.env.example`). For a robot that chats a lot, `claude-haiku-4-5`
-(fast/cheap) or `claude-sonnet-4-6` (balanced) are good Claude picks. Replies may start with an
-emotion tag like `(happy)` — dravix parses it to drive the face automatically.
-
-## Status
-
-- **Phase 0–1 (foundation)** ✅ — runnable core, Device Abstraction Layer (MCP / HA / mock
-  drivers), capability discovery, deploy scaffolding.
-- **Phase 2–3** ✅ — mode engine with ambient + tick scheduling, 5 modes, live WebSocket event
-  stream, persona/emotion parsing, and a React dashboard (`web/`).
-- **Phase 4** ✅ — pluggable AI router (HA Assist + Claude + OpenAI + Ollama) and the dravix
-  MCP server.
-- **Phase 5** ◑ — Home Assistant **event bridge** (motion/presence/door → `guard` & reactions)
-  built; rich automations next.
-- **Phase 6** ◑ — extension SDK: persistent store, runtime config API, plugin docs, CI.
-- **Next (needs hardware)** — point the `mcp` driver at the real robot: run discovery, then we
-  finalize the mapping and prove face/head/speech on the physical StackChan.
+Configure the real driver + entities via `.env` (see `.env.example`) for local runs, or via the
+add-on **Configuration** when deployed. The React dashboard lives in `web/` (`npm run dev`, proxies
+the API to the Python core on :8800).
 
 **Backup / restore** all your config (personas, routines, memories, schedule, reactions, voices):
 `GET /api/export` downloads it, `POST /api/import` restores it.
 
-Everything above is verified end-to-end on the mock driver. See
-[docs/architecture.md](docs/architecture.md) for the full roadmap.
+## 🗂 Repository layout
+
+| Path | What |
+|------|------|
+| `core/` | The dravix service (Python / FastAPI): DAL + drivers, mode engine, AI router, personality, vitals, MCP client + server, REST/WebSocket API |
+| `plugins/` | Drop-in modes — each a `plugin.yaml` + a `Mode` subclass |
+| `web/` | The React / Vite dashboard (Hebrew RTL), built into the add-on image |
+| `deploy/esphome/stackchan-dravix.yaml` | The custom StackChan **ESPHome firmware** |
+| `deploy/` | Dockerfile + packaging for the add-on image |
+| `dravix_os/` | The Home Assistant **add-on** wrapper (`config.yaml`, `run.sh`) |
+| `docs/` | Setup guides, architecture, ESPHome flashing, Frigate |
+| `vendor/` | Upstream `m5stack/StackChan` — reference only, never patched |
+
+See [docs/architecture.md](docs/architecture.md) for the layered design and Device Abstraction
+Layer in detail.

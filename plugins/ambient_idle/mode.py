@@ -22,11 +22,16 @@ class AmbientIdleMode(Mode):
         self._span = float(self.ctx.config.get("glance_yaw", 0.35))
 
     async def tick(self) -> None:
+        robot = self.ctx.robot
+        # Master switch for ALL of dravix's autonomous idle life (head AND face). Off ⇒ the
+        # robot stays put — e.g. so the on-device firmware, which glances on its own and
+        # correctly freezes in sleep/focus/quiet, is the only thing that ever moves it.
+        if not getattr(robot, "idle_motion", True):
+            return
         self._n += 1
         if self._n % self._every != 0:
             return
-        robot = self.ctx.robot
-        if robot.supports(CAP_HEAD) and getattr(robot, "idle_motion", True):
+        if robot.supports(CAP_HEAD):
             yaw = random.uniform(-self._span, self._span)
             pitch = random.uniform(-self._span / 3, self._span / 3)
             await robot.move_head(round(yaw, 1), round(pitch, 1), speed=0.3)

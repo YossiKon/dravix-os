@@ -80,3 +80,62 @@ MJPEG stream, we can proxy that directly instead (one driver change once discove
 stream URL). On the mock driver these endpoints return `503` (no real frames) — by design.
 
 All of this stays on your LAN: robot → dravix-os → Frigate → Home Assistant.
+
+---
+
+## 3. Follow mode — real-time head tracking
+
+Once the robot's own camera is tracked in Frigate (section 2 above), dravix can make the
+**robot's head follow a person in real time**. dravix asks Frigate where the person is in the
+robot's camera frame and nudges the head to re-centre them — a small P-controller running on the
+normalised `move_head(-1..1)` facade.
+
+All the vision work stays on the **Frigate host**; the ESP32 only receives head commands. So this
+adds **no load to the robot** (no extra CPU, no reboots) — the tracking is entirely off-device.
+
+It's a **foreground plugin mode** called `follow`. Activate it from the dashboard (Modes) or the
+API. Point it at the Frigate camera that sees you (the robot's own camera, re-served in section 2)
+and give it your Frigate base URL:
+
+```bash
+# configure, then activate
+curl -X PUT localhost:8800/api/config/modes/follow \
+  -H 'content-type: application/json' \
+  -d '{"config":{"camera":"stackchan","label":"person","frigate_url":"http://<frigate>:5000"}}'
+curl -X POST localhost:8800/api/modes/follow/activate
+```
+
+(`frigate_url` falls back to `DRAVIX_FRIGATE_URL` if left blank.) When it loses you for
+`lost_timeout` seconds it eases the head back to centre (`recenter_when_lost`).
+
+**Requires a real, movable head** — i.e. the `ha` driver against the ESPHome firmware (`CAP_HEAD`).
+On the mock driver, or any backend without a head, `follow` just logs a warning and does nothing.
+
+### Tuning (live, no redeploy)
+
+Every knob is a per-mode config value, editable at runtime via `PUT /api/config/modes/follow` — so
+you can tune it live from the dashboard while watching the robot:
+
+```bash
+curl -X PUT localhost:8800/api/config/modes/follow \
+  -H 'content-type: application/json' \
+  -d '{"config":{"gain_yaw":0.5,"gain_pitch":0.4,"deadzone":0.12,"invert_yaw":false,"update_hz":2.0}}'
+```
+
+| Knob | What it does |
+|------|--------------|
+| `gain_yaw` / `gain_pitch` | How hard the head turns/tilts toward you (the P gains). |
+| `deadzone` | Ignore small offsets so it doesn't jitter (fraction of the half-frame). |
+| `invert_yaw` / `invert_pitch` | Flip if it moves the wrong way. |
+| `update_hz` | Tracking updates per second. |
+| `camera` / `label` / `frigate_url` | Which Frigate camera, what to follow, and where Frigate lives. |
+
+> **On smoothness:** the robot's servo bus is capped at roughly **2 Hz**, so `update_hz` above ~2
+> doesn't help — the result is *smooth with a slight lag, not instant*. That's expected.
+
+> **Matching your Frigate version:** the detection box is read from Frigate's event data, and its
+> shape varies between versions. If tracking is offset or inverted, check `box_format`
+> (`xywh` vs `xyxy`) and the `frame_w` / `frame_h` you tell dravix the detector runs at.
+
+See [`plugins/follow/plugin.yaml`](../plugins/follow/plugin.yaml) for the full, commented list of
+config options (including `max_step`, `speed`, `lost_timeout` and `recenter_when_lost`).

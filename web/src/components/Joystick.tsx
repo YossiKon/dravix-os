@@ -1,8 +1,10 @@
 // Head joystick — drag anywhere on the pad; the command is sent ONCE, on release
 // (the serial servo bus hates being flooded). Up = pitch +1, right = yaw +1.
 import { useRef, useState } from "react";
+import { useI18n } from "../i18n";
 
 export function Joystick(props: { onRelease: (yaw: number, pitch: number) => void }) {
+  const { tr } = useI18n();
   const pad = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState<{ x: number; y: number } | null>(null); // -1..1, screen coords
 
@@ -39,8 +41,8 @@ export function Joystick(props: { onRelease: (yaw: number, pitch: number) => voi
       <div className="pointer-events-none absolute inset-y-0 left-1/2 w-px bg-line" />
       <div className="pointer-events-none absolute left-1/2 top-1/2 h-16 w-16 -translate-x-1/2 -translate-y-1/2 rounded-full border border-line" />
       {/* labels */}
-      <span className="pointer-events-none absolute left-1/2 top-2 -translate-x-1/2 text-xs text-mute">למעלה</span>
-      <span className="pointer-events-none absolute bottom-2 left-1/2 -translate-x-1/2 text-xs text-mute">למטה</span>
+      <span className="pointer-events-none absolute left-1/2 top-2 -translate-x-1/2 text-xs text-mute">{tr("למעלה", "Up")}</span>
+      <span className="pointer-events-none absolute bottom-2 left-1/2 -translate-x-1/2 text-xs text-mute">{tr("למטה", "Down")}</span>
       {/* thumb */}
       <div
         className={`pointer-events-none absolute h-14 w-14 rounded-full border-2 transition-colors ${

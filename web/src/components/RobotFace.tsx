@@ -1,22 +1,24 @@
 // The hero: a live mirror of the robot — same face glyphs, same LED behaviour.
 import { useEffect, useState } from "react";
+import type { Lang } from "../i18n";
 
-const STATE_HE: Record<string, string> = {
-  awake: "ער",
-  listening: "מקשיב…",
-  speaking: "מדבר…",
-  screensaver: "שומר מסך",
-  sleep: "ישן",
-  busy: "עסוק",
-  morning: "בוקר טוב",
-  night: "מצב לילה",
-  focus: "מרוכז",
-  quiet: "מצב שקט",
+const STATE: Record<string, { he: string; en: string }> = {
+  awake: { he: "ער", en: "Awake" },
+  listening: { he: "מקשיב…", en: "Listening…" },
+  speaking: { he: "מדבר…", en: "Speaking…" },
+  screensaver: { he: "שומר מסך", en: "Screensaver" },
+  sleep: { he: "ישן", en: "Asleep" },
+  busy: { he: "עסוק", en: "Busy" },
+  morning: { he: "בוקר טוב", en: "Good morning" },
+  night: { he: "מצב לילה", en: "Night" },
+  focus: { he: "מרוכז", en: "Focus" },
+  quiet: { he: "מצב שקט", en: "Quiet" },
 };
 
-export function stateLabel(state: string | null): string {
-  if (!state) return "לא ידוע";
-  return STATE_HE[state] ?? state;
+export function stateLabel(state: string | null, lang: Lang): string {
+  if (!state) return lang === "en" ? "Unknown" : "לא ידוע";
+  const s = STATE[state];
+  return s ? (lang === "en" ? s.en : s.he) : state;
 }
 
 export function RobotFace(props: { state: string | null; online: boolean }) {

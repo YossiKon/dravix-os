@@ -1,0 +1,51 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 440" width="900" height="440" role="img" aria-label="dravix-os — the StackChan pet face on its screen">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#0b1119"/>
+      <stop offset="1" stop-color="#05080b"/>
+    </linearGradient>
+    <radialGradient id="halo" cx="50%" cy="46%" r="52%">
+      <stop offset="0" stop-color="#33E6C8" stop-opacity="0.20"/>
+      <stop offset="1" stop-color="#33E6C8" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="glow" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="7" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+
+  <rect width="900" height="440" fill="url(#bg)"/>
+  <rect width="900" height="440" fill="url(#halo)"/>
+
+  <!-- the robot's CoreS3 screen (4:3), showing the drawn pet face -->
+  <g transform="translate(250,52)">
+    <rect x="-10" y="-10" width="420" height="340" rx="32" fill="#0e141c" stroke="#1c2634" stroke-width="2"/>
+    <rect width="400" height="320" rx="24" fill="#05080b" stroke="#33E6C8" stroke-width="3"/>
+
+    <!-- status-bar hint: wifi bars · clock · battery -->
+    <g opacity="0.85">
+      <rect x="18" y="18" width="4" height="7"  rx="1" fill="#33E6C8"/>
+      <rect x="25" y="14" width="4" height="11" rx="1" fill="#33E6C8"/>
+      <rect x="32" y="10" width="4" height="15" rx="1" fill="#33E6C8"/>
+      <rect x="39" y="6"  width="4" height="19" rx="1" fill="#33E6C8"/>
+      <text x="200" y="23" font-family="Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="16" fill="#8b96a4" text-anchor="middle">20:20</text>
+      <rect x="330" y="9" width="34" height="16" rx="3" fill="none" stroke="#5dffa0" stroke-width="2"/>
+      <rect x="333" y="12" width="22" height="10" rx="1" fill="#5dffa0"/>
+      <rect x="365" y="13" width="3"  height="8"  rx="1" fill="#5dffa0"/>
+    </g>
+
+    <!-- eyes -->
+    <g filter="url(#glow)">
+      <rect x="99"  y="104" width="86" height="86" rx="30" fill="#33E6C8"/>
+      <rect x="215" y="104" width="86" height="86" rx="30" fill="#33E6C8"/>
+    </g>
+    <!-- cheeks -->
+    <ellipse cx="142" cy="214" rx="20" ry="8" fill="#FF9EB5"/>
+    <ellipse cx="258" cy="214" rx="20" ry="8" fill="#FF9EB5"/>
+    <!-- a gentle smile -->
+    <path d="M168 226 q32 26 64 0" fill="none" stroke="#33E6C8" stroke-width="9" stroke-linecap="round"/>
+  </g>
+
+  <!-- wordmark -->
+  <text x="450" y="414" font-family="Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="26" font-weight="700" fill="#e8edf2" text-anchor="middle">dravix-os<tspan fill="#33E6C8"> · </tspan><tspan font-weight="400" fill="#8b96a4" font-size="18">your StackChan, fully local</tspan></text>
+</svg>

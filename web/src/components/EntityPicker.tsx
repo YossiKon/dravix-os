@@ -1,6 +1,7 @@
 // A searchable Home Assistant entity picker (big touch targets, works well on phones).
 import { useMemo, useState } from "react";
 import type { HAEntity } from "../api";
+import { useI18n } from "../i18n";
 
 export function EntityPicker(props: {
   entities: HAEntity[];
@@ -9,6 +10,7 @@ export function EntityPicker(props: {
   onChange: (entityId: string) => void;
   placeholder?: string;
 }) {
+  const { tr } = useI18n();
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
 
@@ -41,7 +43,7 @@ export function EntityPicker(props: {
             </span>
           </span>
         ) : (
-          <span className="text-mute">{props.placeholder ?? "בחר ישות…"}</span>
+          <span className="text-mute">{props.placeholder ?? tr("בחר ישות…", "Select an entity…")}</span>
         )}
         <span className="text-mute">{open ? "▲" : "▼"}</span>
       </button>
@@ -51,7 +53,7 @@ export function EntityPicker(props: {
           <input
             autoFocus
             className="w-full border-b border-line bg-card2 px-4 py-3 text-ink outline-none placeholder:text-mute"
-            placeholder="חיפוש…"
+            placeholder={tr("חיפוש…", "Search…")}
             value={q}
             onChange={(e) => setQ(e.target.value)}
           />
@@ -65,7 +67,7 @@ export function EntityPicker(props: {
                   setOpen(false);
                 }}
               >
-                ✕ נקה בחירה
+                ✕ {tr("נקה בחירה", "Clear selection")}
               </button>
             )}
             {pool.map((e) => (
@@ -87,7 +89,7 @@ export function EntityPicker(props: {
                 </div>
               </button>
             ))}
-            {pool.length === 0 && <div className="px-4 py-3 text-mute">אין תוצאות</div>}
+            {pool.length === 0 && <div className="px-4 py-3 text-mute">{tr("אין תוצאות", "No results")}</div>}
           </div>
         </div>
       )}

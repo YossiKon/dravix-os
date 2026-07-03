@@ -1,30 +1,33 @@
-// דף הבית — הכל בשביל לתפעל את הרובוט: מצב חי, שינה/ערות, צ׳אט, משחקים, ראש, פרצוף, לדים.
+// Home — everything to operate the robot: live state, sleep/wake, chat, games, head, face, LEDs.
 import { useCallback, useEffect, useRef, useState } from "react";
 import { apiGet, apiSend } from "../api";
 import type { Live, RobotConfig } from "../api";
 import { RobotFace, stateLabel } from "../components/RobotFace";
 import { Joystick } from "../components/Joystick";
 import { Section, Spinner, toast, toastErr } from "../ui";
+import { useI18n } from "../i18n";
 
-const GAME_HE: Record<string, string> = {
-  dice: "🎲 קובייה",
-  coin: "🪙 מטבע",
-  "8ball": "🎱 כדור הקסם",
-  joke: "😂 בדיחה",
-  fortune: "🔮 צפה עתיד",
+type Bi = { he: string; en: string };
+
+const GAMES: Record<string, Bi> = {
+  dice: { he: "🎲 קובייה", en: "🎲 Dice" },
+  coin: { he: "🪙 מטבע", en: "🪙 Coin flip" },
+  "8ball": { he: "🎱 כדור הקסם", en: "🎱 Magic 8-ball" },
+  joke: { he: "😂 בדיחה", en: "😂 Joke" },
+  fortune: { he: "🔮 צפה עתיד", en: "🔮 Fortune" },
 };
 
-const EMOTE_HE: Record<string, string> = {
-  happy: "🕺 ריקוד",
-  love: "💗 אהבה",
-  surprised: "😮 הפתעה",
-  yes: "👍 כן",
-  no: "👎 לא",
-  curious: "🧐 סקרן",
-  fistbump: "👊 כיף",
-  wake: "🌅 התעוררות",
-  sad: "🥺 עצוב",
-  sleepy: "🥱 מנומנם",
+const EMOTES: Record<string, Bi> = {
+  happy: { he: "🕺 ריקוד", en: "🕺 Dance" },
+  love: { he: "💗 אהבה", en: "💗 Love" },
+  surprised: { he: "😮 הפתעה", en: "😮 Surprise" },
+  yes: { he: "👍 כן", en: "👍 Yes" },
+  no: { he: "👎 לא", en: "👎 No" },
+  curious: { he: "🧐 סקרן", en: "🧐 Curious" },
+  fistbump: { he: "👊 כיף", en: "👊 Fist bump" },
+  wake: { he: "🌅 התעוררות", en: "🌅 Wake up" },
+  sad: { he: "🥺 עצוב", en: "🥺 Sad" },
+  sleepy: { he: "🥱 מנומנם", en: "🥱 Sleepy" },
 };
 
 interface ChatMsg {
@@ -32,36 +35,40 @@ interface ChatMsg {
   text: string;
 }
 
-const MODES: { id: string; he: string; icon: string }[] = [
-  { id: "awake", he: "ער", icon: "☀" },
-  { id: "morning", he: "בוקר", icon: "🌅" },
-  { id: "focus", he: "מרוכז", icon: "🎯" },
-  { id: "quiet", he: "שקט", icon: "🤫" },
-  { id: "night", he: "לילה", icon: "🌌" },
-  { id: "sleep", he: "שינה", icon: "😴" },
+const MODES: { id: string; he: string; en: string; icon: string }[] = [
+  { id: "awake", he: "ער", en: "Awake", icon: "☀" },
+  { id: "morning", he: "בוקר", en: "Morning", icon: "🌅" },
+  { id: "focus", he: "מרוכז", en: "Focus", icon: "🎯" },
+  { id: "quiet", he: "שקט", en: "Quiet", icon: "🤫" },
+  { id: "night", he: "לילה", en: "Night", icon: "🌌" },
+  { id: "sleep", he: "שינה", en: "Sleep", icon: "😴" },
 ];
 
-const FACES: { name: string; glyph: string; he: string }[] = [
-  { name: "neutral", glyph: "o_o", he: "רגיל" },
-  { name: "happy", glyph: "^_^", he: "שמח" },
-  { name: "sad", glyph: "T_T", he: "עצוב" },
-  { name: "angry", glyph: ">_<", he: "כועס" },
-  { name: "sleepy", glyph: "u_u", he: "עייף" },
-  { name: "doubt", glyph: "o_O", he: "מסופק" },
+const FACES: { name: string; glyph: string; he: string; en: string }[] = [
+  { name: "neutral", glyph: "o_o", he: "רגיל", en: "Neutral" },
+  { name: "happy", glyph: "^_^", he: "שמח", en: "Happy" },
+  { name: "sad", glyph: "T_T", he: "עצוב", en: "Sad" },
+  { name: "angry", glyph: ">_<", he: "כועס", en: "Angry" },
+  { name: "sleepy", glyph: "u_u", he: "עייף", en: "Sleepy" },
+  { name: "doubt", glyph: "o_O", he: "מסופק", en: "Doubt" },
 ];
 
-const LED_COLORS: { name: string; css: string; he: string }[] = [
-  { name: "red", css: "#ff5a52", he: "אדום" },
-  { name: "orange", css: "#ff9440", he: "כתום" },
-  { name: "yellow", css: "#ffc23d", he: "צהוב" },
-  { name: "green", css: "#5ad674", he: "ירוק" },
-  { name: "cyan", css: "#2ee6c8", he: "טורקיז" },
-  { name: "blue", css: "#4d9bff", he: "כחול" },
-  { name: "purple", css: "#a86bff", he: "סגול" },
-  { name: "white", css: "#f2f2f2", he: "לבן" },
+const LED_COLORS: { name: string; css: string; he: string; en: string }[] = [
+  { name: "red", css: "#ff5a52", he: "אדום", en: "Red" },
+  { name: "orange", css: "#ff9440", he: "כתום", en: "Orange" },
+  { name: "yellow", css: "#ffc23d", he: "צהוב", en: "Yellow" },
+  { name: "green", css: "#5ad674", he: "ירוק", en: "Green" },
+  { name: "cyan", css: "#2ee6c8", he: "טורקיז", en: "Cyan" },
+  { name: "blue", css: "#4d9bff", he: "כחול", en: "Blue" },
+  { name: "purple", css: "#a86bff", he: "סגול", en: "Purple" },
+  { name: "white", css: "#f2f2f2", he: "לבן", en: "White" },
 ];
 
 export function HomePage(props: { config: RobotConfig | null }) {
+  const { tr, lang } = useI18n();
+  const L = (o: Bi) => (lang === "en" ? o.en : o.he);
+  const pick = (o: Bi | undefined, fb: string) => (o ? L(o) : fb);
+
   const [live, setLive] = useState<Live | null>(null);
   const [text, setText] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
@@ -93,7 +100,11 @@ export function HomePage(props: { config: RobotConfig | null }) {
       await apiSend("/api/robot/privacy", "PUT", { private: next });
       setPrivacy((p) => ({ ...p, private: next }));
       if (next) setCamOn(false);
-      toast(next ? "מצב פרטיות פועל — מצלמה ומיקרופון כבויים 🔒" : "מצב פרטיות כובה");
+      toast(
+        next
+          ? tr("מצב פרטיות פועל — מצלמה ומיקרופון כבויים 🔒", "Privacy on — camera & mic off 🔒")
+          : tr("מצב פרטיות כובה", "Privacy off"),
+      );
     } catch (e) {
       toastErr(e);
     }
@@ -138,14 +149,14 @@ export function HomePage(props: { config: RobotConfig | null }) {
 
   // Send a chat message to the HA Assist AI (keeps the conversation id = memory).
   async function ask() {
-    const t = text.trim();
-    if (!t) return;
-    setMsgs((m) => [...m, { role: "user", text: t }]);
+    const q = text.trim();
+    if (!q) return;
+    setMsgs((m) => [...m, { role: "user", text: q }]);
     setText("");
     setBusy("ask");
     try {
       const r = await apiSend<{ text: string; conversation_id: string | null }>("/api/ai/chat", "POST", {
-        text: t,
+        text: q,
         conversation_id: convId,
         speak,
       });
@@ -186,14 +197,14 @@ export function HomePage(props: { config: RobotConfig | null }) {
                 online ? (state === "sleep" ? "bg-mute" : "bg-green animate-breathe") : "bg-red"
               }`}
             />
-            {online ? (state ? stateLabel(state) : "מחובר") : "לא מחובר"}
+            {online ? (state ? stateLabel(state, lang) : tr("מחובר", "Connected")) : tr("לא מחובר", "Offline")}
           </span>
           {privacy.supported && (
             <button
               className={`chip ${privacy.private ? "border-red/60 bg-red/15 text-red" : ""}`}
               onClick={() => void togglePrivacy()}
             >
-              {privacy.private ? "🔒 פרטיות פועלת" : "🔓 מצב פרטיות"}
+              {privacy.private ? tr("🔒 פרטיות פועלת", "🔒 Privacy on") : tr("🔓 מצב פרטיות", "🔓 Privacy")}
             </button>
           )}
         </div>
@@ -206,7 +217,7 @@ export function HomePage(props: { config: RobotConfig | null }) {
               disabled={busy !== null}
               onClick={() => void run(`mode-${m.id}`, () => apiSend("/api/robot/mode", "POST", { mode: m.id }))}
             >
-              {m.icon} {m.he}
+              {m.icon} {L(m)}
             </button>
           ))}
         </div>
@@ -215,13 +226,13 @@ export function HomePage(props: { config: RobotConfig | null }) {
           <div className="mt-3 space-y-2">
             {live?.heard && (
               <div className="me-8 rounded-2xl rounded-tr-md border border-line bg-card2 px-4 py-2 text-sm">
-                <span className="text-mute">שמעתי: </span>
+                <span className="text-mute">{tr("שמעתי: ", "Heard: ")}</span>
                 {live.heard}
               </div>
             )}
             {live?.reply && (
               <div className="ms-8 rounded-2xl rounded-tl-md border border-teal/30 bg-teal/10 px-4 py-2 text-sm">
-                <span className="text-teal/70">עניתי: </span>
+                <span className="text-teal/70">{tr("עניתי: ", "Replied: ")}</span>
                 {live.reply}
               </div>
             )}
@@ -230,7 +241,7 @@ export function HomePage(props: { config: RobotConfig | null }) {
       </div>
 
       {/* ── chat with the HA Assist AI ── */}
-      <Section title="דבר איתו" delay={60}>
+      <Section title={tr("דבר איתו", "Talk to it")} delay={60}>
         {msgs.length > 0 && (
           <div ref={chatRef} className="mb-3 max-h-72 space-y-2 overflow-y-auto pe-1">
             {msgs.map((m, i) =>
@@ -248,7 +259,7 @@ export function HomePage(props: { config: RobotConfig | null }) {
         )}
         <textarea
           className="inp min-h-20 resize-none"
-          placeholder="שאל אותו כל דבר — הוא זוכר את השיחה…"
+          placeholder={tr("שאל אותו כל דבר — הוא זוכר את השיחה…", "Ask it anything — it remembers the conversation…")}
           value={text}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={(e) => {
@@ -260,7 +271,7 @@ export function HomePage(props: { config: RobotConfig | null }) {
         />
         <div className="mt-3 flex flex-wrap items-center gap-2">
           <button className="btn btn-amber flex-1" disabled={!text.trim() || busy !== null} onClick={() => void ask()}>
-            {busy === "ask" ? <Spinner /> : "🤖"} שלח לבינה
+            {busy === "ask" ? <Spinner /> : "🤖"} {tr("שלח לבינה", "Send to AI")}
           </button>
           <button
             className="btn"
@@ -269,13 +280,13 @@ export function HomePage(props: { config: RobotConfig | null }) {
               void run("say", async () => {
                 await apiSend("/api/robot/say", "POST", { text });
                 setText("");
-              }, "הרובוט מקריא 📢")
+              }, tr("הרובוט מקריא 📢", "Reading aloud 📢"))
             }
           >
-            📢 הקרא
+            {tr("📢 הקרא", "📢 Read aloud")}
           </button>
           <button className={`chip ${speak ? "chip-on" : ""}`} onClick={() => setSpeak((v) => !v)}>
-            🔊 שידבר בקול
+            {tr("🔊 שידבר בקול", "🔊 Speak aloud")}
           </button>
           {msgs.length > 0 && (
             <button
@@ -285,24 +296,24 @@ export function HomePage(props: { config: RobotConfig | null }) {
                 setConvId(null);
               }}
             >
-              🗑 שיחה חדשה
+              {tr("🗑 שיחה חדשה", "🗑 New chat")}
             </button>
           )}
         </div>
       </Section>
 
       {/* ── games + tricks ── */}
-      <Section title="משחקים וקטעים" delay={90}>
-        <label className="lbl">משחקים (הוא עונה בקול + על המסך)</label>
+      <Section title={tr("משחקים וקטעים", "Games & tricks")} delay={90}>
+        <label className="lbl">{tr("משחקים (הוא עונה בקול + על המסך)", "Games (answers by voice + on screen)")}</label>
         <div className="mb-3 flex flex-wrap gap-2">
           {games.map((g) => (
             <button key={g} className="chip" disabled={busy !== null} onClick={() => void playGame(g)}>
-              {GAME_HE[g] ?? g}
+              {pick(GAMES[g], g)}
             </button>
           ))}
-          {games.length === 0 && <span className="text-sm text-mute">טוען…</span>}
+          {games.length === 0 && <span className="text-sm text-mute">{tr("טוען…", "Loading…")}</span>}
         </div>
-        <label className="lbl">קטעים (תנועה + פרצוף + לדים)</label>
+        <label className="lbl">{tr("קטעים (תנועה + פרצוף + לדים)", "Tricks (motion + face + LEDs)")}</label>
         <div className="flex flex-wrap gap-2">
           {emotes.map((e) => (
             <button
@@ -311,15 +322,15 @@ export function HomePage(props: { config: RobotConfig | null }) {
               disabled={busy !== null}
               onClick={() => void run("emote", () => apiSend("/api/robot/emote", "POST", { name: e }))}
             >
-              {EMOTE_HE[e] ?? e}
+              {pick(EMOTES[e], e)}
             </button>
           ))}
-          {emotes.length === 0 && <span className="text-sm text-mute">טוען…</span>}
+          {emotes.length === 0 && <span className="text-sm text-mute">{tr("טוען…", "Loading…")}</span>}
         </div>
       </Section>
 
       {/* ── head ── */}
-      <Section title="הזזת ראש" delay={120}>
+      <Section title={tr("הזזת ראש", "Move the head")} delay={120}>
         <Joystick
           onRelease={(yaw, pitch) =>
             void run("head", () => apiSend("/api/robot/head", "POST", { yaw, pitch, speed: 0.6 }))
@@ -331,23 +342,28 @@ export function HomePage(props: { config: RobotConfig | null }) {
             disabled={busy !== null}
             onClick={() => void run("center", () => apiSend("/api/robot/head", "POST", { yaw: 0, pitch: 0, speed: 0.5 }))}
           >
-            ⊙ למרכז
+            {tr("⊙ למרכז", "⊙ Center")}
           </button>
           <button
             className="btn"
             disabled={busy !== null}
             onClick={() =>
-              void run("home", () => apiSend("/api/robot/head/home", "POST"), "המיקום הנוכחי נקבע כ׳ישר׳")
+              void run("home", () => apiSend("/api/robot/head/home", "POST"), tr("המיקום הנוכחי נקבע כ׳ישר׳", "Current position set as 'straight'"))
             }
           >
-            ⌖ קבע כ׳ישר׳
+            {tr("⌖ קבע כ׳ישר׳", "⌖ Set as 'straight'")}
           </button>
         </div>
-        <p className="mt-2 text-xs text-mute">גרור על המשטח ושחרר — הראש יזוז לשם. ״קבע כ׳ישר׳״ = כיול: קודם יישר את הראש עם היד.</p>
+        <p className="mt-2 text-xs text-mute">
+          {tr(
+            "גרור על המשטח ושחרר — הראש יזוז לשם. ״קבע כ׳ישר׳״ = כיול: קודם יישר את הראש עם היד.",
+            "Drag on the pad and release — the head moves there. 'Set as straight' = calibrate: line the head up by hand first.",
+          )}
+        </p>
       </Section>
 
       {/* ── face ── */}
-      <Section title="פרצוף" delay={180}>
+      <Section title={tr("פרצוף", "Face")} delay={180}>
         <div className="grid grid-cols-3 gap-2">
           {FACES.map((f) => (
             <button
@@ -359,20 +375,20 @@ export function HomePage(props: { config: RobotConfig | null }) {
               <span dir="ltr" className="font-mono text-lg text-teal">
                 {f.glyph}
               </span>
-              <span className="text-xs text-mute">{f.he}</span>
+              <span className="text-xs text-mute">{L(f)}</span>
             </button>
           ))}
         </div>
       </Section>
 
       {/* ── LEDs ── */}
-      <Section title="לדים" delay={240}>
+      <Section title={tr("לדים", "LEDs")} delay={240}>
         <div className="flex flex-wrap items-center gap-2.5">
           {LED_COLORS.map((c) => (
             <button
               key={c.name}
-              title={c.he}
-              aria-label={c.he}
+              title={L(c)}
+              aria-label={L(c)}
               className="h-12 w-12 rounded-full border-2 border-line-2 transition active:scale-90"
               style={{ background: c.css }}
               disabled={busy !== null}
@@ -384,36 +400,37 @@ export function HomePage(props: { config: RobotConfig | null }) {
             disabled={busy !== null}
             onClick={() => void run("ledoff", () => apiSend("/api/robot/leds", "POST", { color: "off", brightness: 0 }))}
           >
-            ⏻ כבוי
+            {tr("⏻ כבוי", "⏻ Off")}
           </button>
         </div>
       </Section>
 
       {/* ── robot camera (only when a camera is mapped) ── */}
       {(props.config?.capabilities ?? []).includes("take_photo") && (
-        <Section title="מצלמה" delay={300}>
+        <Section title={tr("מצלמה", "Camera")} delay={300}>
           {privacy.private ? (
             <p className="rounded-2xl border border-red/30 bg-red/10 p-3 text-sm text-red">
-              🔒 מצב פרטיות פועל — המצלמה חסומה לגמרי (גם ל-Frigate).
+              {tr("🔒 מצב פרטיות פועל — המצלמה חסומה לגמרי (גם ל-Frigate).", "🔒 Privacy on — the camera is fully blocked (even for Frigate).")}
             </p>
           ) : camOn ? (
             <>
               <img
                 src="/camera/robot/stream.mjpeg"
-                alt="מצלמת הרובוט"
+                alt={tr("מצלמת הרובוט", "Robot camera")}
                 className="w-full rounded-2xl border border-line bg-black"
               />
               <button className="btn mt-3 w-full" onClick={() => setCamOn(false)}>
-                ⏹ עצור צפייה
+                {tr("⏹ עצור צפייה", "⏹ Stop")}
               </button>
             </>
           ) : (
             <button className="btn btn-primary w-full" onClick={() => setCamOn(true)}>
-              🎥 צפה דרך העיניים של הרובוט
+              {tr("🎥 צפה דרך העיניים של הרובוט", "🎥 See through the robot's eyes")}
             </button>
           )}
           <p className="mt-2 text-xs text-mute">
-            אותו זרם משמש גם את Frigate לזיהוי אנשים: <span dir="ltr" className="font-mono">/camera/robot/stream.mjpeg</span>
+            {tr("אותו זרם משמש גם את Frigate לזיהוי אנשים:", "The same stream feeds Frigate's person detection:")}{" "}
+            <span dir="ltr" className="font-mono">/camera/robot/stream.mjpeg</span>
           </p>
         </Section>
       )}

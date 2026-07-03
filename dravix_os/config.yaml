@@ -1,5 +1,5 @@
 name: dravix-os
-version: "0.0.35"
+version: "0.0.38"
 slug: dravix_os
 description: Companion OS for the M5Stack StackChan robot (local-first)
 url: https://github.com/YossiKon/dravix-os
@@ -17,9 +17,9 @@ ports_description:
 webui: "http://[HOST]:[PORT:8800]"
 # Add-on options → DRAVIX_* env (see run.sh). Persistent state lives in /data.
 options:
-  # How dravix controls the robot:
-  #   mock = test (no robot)   ha = local control via HA/ESPHome entities   mcp = robot MCP URL
-  robot_driver: mock
+  # dravix controls the robot through Home Assistant entities exposed by the custom
+  # dravix ESPHome firmware on the StackChan (see docs/esphome-local-control.md).
+  robot_driver: ha
   # When robot_driver=ha, the StackChan ESPHome entity ids (leave blank what you don't have):
   robot_entity_face: ""          # select.* — expression (neutral|happy|sad|angry|sleepy|doubt)
   robot_entity_head_yaw: ""      # number.* — head left/right
@@ -28,22 +28,16 @@ options:
   robot_entity_tts: ""           # tts.* — your HA TTS engine (e.g. tts.piper) for speech
   robot_entity_light: ""         # light.* — the LED bar
   robot_entity_camera: ""        # camera.* — the robot camera
-  # The xiaozhi access point (cloud): gives the robot's AI dravix + HA tools by voice.
-  xiaozhi_mcp_url: ""
-  robot_mcp_url: ""
-  robot_mcp_transport: auto
   ha_url: "http://homeassistant:8123"
   ha_token: ""
   ai_provider: ha_assist
-  idle_motion: true              # false = robot's head stops moving on its own
+  idle_motion: false             # dravix's own idle glances; OFF by default — the firmware glances on its own and freezes in sleep/focus/quiet (on = double motion)
   local_only: true
   frigate_url: ""
   frigate_camera: ""
   log_level: INFO
 schema:
-  # The xiaozhi MCP接入点 (gives the robot's AI dravix + HA tools by voice).
-  xiaozhi_mcp_url: "str?"
-  robot_driver: "list(mock|ha|mcp)"
+  robot_driver: "list(ha)"
   robot_entity_face: "str?"
   robot_entity_head_yaw: "str?"
   robot_entity_head_pitch: "str?"
@@ -51,8 +45,6 @@ schema:
   robot_entity_tts: "str?"
   robot_entity_light: "str?"
   robot_entity_camera: "str?"
-  robot_mcp_url: "str?"
-  robot_mcp_transport: "list(auto|streamable_http|sse|websocket)"
   ha_url: str
   ha_token: "str?"
   ai_provider: "list(ha_assist|claude|openai|ollama)"

@@ -37,6 +37,8 @@ _DEFAULTS: dict[str, Any] = {
     "robot_entities": {},  # {face_select, head_yaw, head_pitch, media_player, tts_engine,
     #                         led_light, camera, screensaver_number, sleep_number, mode_select}
     "head_calibration": {},  # {yaw:{center,min,max,invert}, pitch:{center,min,max,invert}}
+    "vitals": {},  # {energy, food, fun, calm} 0-100 + bookkeeping — the "life" needs, kept across restarts
+    "nudges_enabled": True,  # wellness tips (rest/hydrate/eye-break) for the person working nearby
 }
 
 
@@ -71,7 +73,7 @@ class Store:
             "ai_provider", "mode_overrides", "disabled_modes", "reactions", "schedule",
             "personas", "active_persona", "memories", "routines", "voice", "voices", "inbox",
             "screens", "robot_driver", "robot_entities", "head_calibration",
-            "climate_entity",
+            "climate_entity", "vitals", "nudges_enabled",
         )
         for key in keys:
             if key in patch:
@@ -124,8 +126,8 @@ class Store:
         self._data["voice"] = voice
         self.save()
 
-    def idle_motion(self) -> bool:
-        return bool(self._data.get("idle_motion", True))
+    def idle_motion(self, default: bool = True) -> bool:
+        return bool(self._data.get("idle_motion", default))
 
     def set_idle_motion(self, enabled: bool) -> None:
         self._data["idle_motion"] = bool(enabled)
@@ -207,6 +209,20 @@ class Store:
 
     def set_mood(self, mood: dict[str, Any]) -> None:
         self._data["mood"] = mood
+        self.save()
+
+    def vitals(self) -> dict[str, Any]:
+        return dict(self._data.get("vitals", {}))
+
+    def set_vitals(self, vitals: dict[str, Any]) -> None:
+        self._data["vitals"] = vitals
+        self.save()
+
+    def nudges_enabled(self) -> bool:
+        return bool(self._data.get("nudges_enabled", True))
+
+    def set_nudges_enabled(self, enabled: bool) -> None:
+        self._data["nudges_enabled"] = bool(enabled)
         self.save()
 
     # ── typed helpers ──────────────────────────────────────────────────────────

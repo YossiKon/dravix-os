@@ -50,7 +50,9 @@ class Settings(BaseSettings):
 
     # When False, the robot stops its automatic idle head movement (the ambient glances).
     # Manual control + commanded movements still work. Toggle live from the dashboard too.
-    idle_motion: bool = True
+    idle_motion: bool = False  # dravix's own idle glances; off by default — the ESPHome firmware
+    # already glances on its own (and correctly freezes in sleep/focus/quiet), so leaving dravix's
+    # idle motion off avoids two systems fighting over the head. Turn on for the mock/other backends.
 
     # Pet reaction: when petted, tilt the head up (pleased) then return after a hold.
     pet_head_raise: float = 30.0  # degrees up on a pet (0 disables the head-lift)
