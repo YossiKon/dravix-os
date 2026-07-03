@@ -18,15 +18,15 @@
 #    (pick any older tag from the repo's Releases page), press Install, done.
 # ════════════════════════════════════════════════════════════════════════════════
 
-# ── Wi-Fi — YOUR network ──────────────────────────────────────────────────────────
-# The values live in your ESPHome secrets.yaml (the SECRETS button, top-right of the
-# ESPHome dashboard):    wifi_ssid: "MyHomeWifi"
-#                        wifi_password: "my-password"
-# Prefer writing them right here instead? Replace the !secret lines with plain strings:
-#                        ssid: "MyHomeWifi"
+# ── Wi-Fi — YOUR network (edit these two lines!) ──────────────────────────────────
+# Simplest: write your network name + password right here.
+# Using the ESPHome SECRETS file instead (button top-right of the dashboard)? Put
+#     wifi_ssid: "MyHomeWifi"
+#     wifi_password: "my-password"
+# there, and replace the two values below with:  !secret wifi_ssid  /  !secret wifi_password
 wifi:
-  ssid: !secret wifi_ssid
-  password: !secret wifi_password
+  ssid: "YOUR-WIFI-NAME"
+  password: "YOUR-WIFI-PASSWORD"
 
 substitutions:
   # ── identity ──────────────────────────────────────────────────────────────────
