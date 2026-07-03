@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.0.41
+
+- **English is now the default everywhere** (open-source ready): the dashboard opens in
+  English (Hebrew auto-selected for Hebrew browsers, and the header toggle switches live),
+  wellness tips default to English, and the add-on has a `language: en|he` option.
+- **The robot's default name is "Dravix"** — shown in the header and known to the AI;
+  rename it any time in Settings. An explicit name overrides a persona's, the default
+  doesn't.
+
 ## 0.0.40
 
 - **isLocal — master local-only switch** (Settings): when ON, only local things run —

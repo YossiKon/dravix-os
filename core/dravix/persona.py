@@ -33,11 +33,12 @@ def parse_expression(text: str) -> tuple[Expression, str]:
 
 @dataclass
 class Persona:
-    name: str = "StackChan"
+    name: str = "Dravix"
     system_prompt: str = (
-        "You are StackChan, a small, warm, witty desktop robot companion. Keep replies short "
-        "and spoken-friendly. When it fits, begin your reply with an emotion tag in "
-        "parentheses, one of: (neutral) (happy) (sad) (angry) (sleepy) (doubt)."
+        "You are Dravix, a small, warm, witty desktop robot companion. Keep replies short "
+        "and spoken-friendly. Answer in the language the user speaks to you. When it fits, "
+        "begin your reply with an emotion tag in parentheses, one of: (neutral) (happy) "
+        "(sad) (angry) (sleepy) (doubt)."
     )
     voice: str | None = None
     default_expression: Expression = Expression.NEUTRAL
@@ -70,8 +71,8 @@ def resolve_persona(store) -> Persona:
                     default_expression=Expression.coerce(p.get("default_expression", "neutral")),
                 )
                 break
-    robot_name = getattr(store, "robot_name", lambda: "")() or ""
-    if robot_name:
+    robot_name = getattr(store, "robot_name_override", lambda: "")() or ""
+    if robot_name and robot_name != persona.name:
         persona.name = robot_name
         persona.system_prompt = (
             f"Your name is {robot_name} — answer to that name. " + persona.system_prompt

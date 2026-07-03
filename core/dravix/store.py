@@ -165,8 +165,13 @@ class Store:
         self.save()
 
     def robot_name(self) -> str:
-        """The robot's user-chosen name ("" = use the default branding)."""
-        return str(self._data.get("robot_name") or "")
+        """The robot's name — "Dravix" unless the user renamed it in the dashboard."""
+        return str(self._data.get("robot_name") or "Dravix")
+
+    def robot_name_override(self) -> str:
+        """The raw user-set name ("" when never set). Personas only bend to an EXPLICIT
+        name — the built-in default must not rename a custom persona."""
+        return str(self._data.get("robot_name") or "").strip()
 
     def set_robot_name(self, name: str | None) -> None:
         self._data["robot_name"] = (name or "").strip()

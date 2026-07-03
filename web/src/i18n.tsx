@@ -12,19 +12,19 @@ interface LangState {
 }
 
 const STORAGE_KEY = "dravix_lang";
-const LangContext = createContext<LangState>({ lang: "he", setLang: () => undefined });
+const LangContext = createContext<LangState>({ lang: "en", setLang: () => undefined });
 
 function initialLang(): Lang {
   try {
     const saved = localStorage.getItem(STORAGE_KEY);
     if (saved === "he" || saved === "en") return saved;
-    // First visit: Hebrew browsers get Hebrew, everyone else gets English.
+    // First visit: Hebrew browsers get Hebrew; ENGLISH is the default for everyone else.
     const nav = typeof navigator !== "undefined" ? navigator.language : "";
-    if (nav && !nav.toLowerCase().startsWith("he")) return "en";
+    if (nav && nav.toLowerCase().startsWith("he")) return "he";
   } catch {
     /* localStorage may be unavailable */
   }
-  return "he";
+  return "en";
 }
 
 export function LangProvider(props: { children: ReactNode }) {

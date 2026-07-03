@@ -28,6 +28,7 @@ if [ -z "$DRAVIX_HA_TOKEN" ] && [ -n "$SUPERVISOR_TOKEN" ]; then
   export DRAVIX_HA_URL="http://supervisor/core"
 fi
 export DRAVIX_AI_PROVIDER="$(opt ai_provider)"
+export DRAVIX_LANG="$(opt language)"
 export DRAVIX_IDLE_MOTION="$(opt idle_motion)"
 export DRAVIX_LOCAL_ONLY="$(opt local_only)"
 export DRAVIX_FRIGATE_URL="$(opt frigate_url)"

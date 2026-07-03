@@ -9,7 +9,7 @@ from dravix.store import Store
 
 def test_resolve_persona_default_and_active(tmp_path):
     s = Store(tmp_path / "s.json")
-    assert resolve_persona(s).name == "StackChan"  # built-in default when none active
+    assert resolve_persona(s).name == "Dravix"  # built-in default when none active
     s.set_personas([
         {"name": "Grumpy", "system_prompt": "Be terse and grumpy.", "default_expression": "doubt"}
     ])
