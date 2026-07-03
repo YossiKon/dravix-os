@@ -6,6 +6,13 @@
 #  IT ACTS ALIVE: petting the head → pink LEDs + nuzzle-up + happy wiggle · every
 #  expression has a mood LED colour + a head pose (sad droops, doubt tilts, angry shakes)
 #  · it glances around with its head · going to sleep the head droops, waking it rises.
+#  ALL 3 TOUCH ZONES: 1+2 = pet (pink nuzzle) · 3 (back) = TICKLE (giggly wiggle).
+#  OFFICIAL ESP-NOW REMOTE supported: joystick drives the head, button B = talk toggle
+#  (set the remote's channel to your router's Wi-Fi channel). PARTY button = desk disco.
+#  REAL power metering (INA226): the status bar shows true W / mA / time-left; battery %
+#  falls back to the LiPo voltage curve when no battery sensor exists. Servo pitch is
+#  clamped to M5Stack's recommended 5-85° operating range.
+#  ARCADE (swipe to GAMES): Catch Me · Reaction · Simon · R-P-S · FLAPPY · Party.
 #  Switches: "Body language" = autonomous head moves · "Mood LEDs" = emotion colours.
 #  States:  awake = WHITE bg + dark eyes  ·  listening = BIG eyes + YELLOW LEDs
 #           screensaver = dim, face+blink, NO drift  ·  sleep = closed eyes + zzz, black
@@ -63,6 +70,9 @@ esp32:
       # relocating them frees tens of KB of internal heap, which is exactly what the added LVGL
       # pages/widgets were starving (the resets are an internal-RAM out-of-memory, not the games).
       CONFIG_SPIRAM_TRY_ALLOCATE_WIFI_LWIP: "y"
+      # Also route TLS / encryption (mbedTLS) buffers to PSRAM — these are big and only needed
+      # during secure connections, so they don't belong in the scarce internal RAM either.
+      CONFIG_MBEDTLS_EXTERNAL_MEM_ALLOC: "y"
 
 logger:
 
@@ -82,6 +92,45 @@ captive_portal:
 # Lets the robot DOWNLOAD images (Frigate person snapshots, any camera) to its screen.
 http_request:
   verify_ssl: false
+
+# ── The OFFICIAL StackChan remote (ESP-NOW joystick) ─────────────────────────────
+# Packet (reverse-engineered from m5stack/StackChan remote/code): 8 bytes inside the
+# espressif esp-now-lib frame — [id][yaw:int16 LE ±1280][pitch:int16 LE 0..900]
+# [speed:int16 = 600][btnB]. We find it at ANY offset by its speed==600 signature, so
+# the lib's wrapper version doesn't matter. yaw→servo_x (±164), pitch→n_head_pitch
+# (your 158..260 scale), btnB press → talk toggle (like tapping the face).
+# IMPORTANT: on the remote's setup screen set its Wi-Fi CHANNEL to your router's
+# channel (ESP-NOW must share the robot's Wi-Fi channel).
+espnow:
+  auto_add_peer: true
+  on_broadcast:
+    - lambda: |-
+        for (int off = 0; off + 8 <= (int) size; off++) {
+          if (data[off + 5] != 0x58 || data[off + 6] != 0x02) continue;  // speed == 600
+          int16_t yaw, pitch;
+          memcpy(&yaw, data + off + 1, 2);
+          memcpy(&pitch, data + off + 3, 2);
+          if (yaw < -1280 || yaw > 1280 || pitch < 0 || pitch > 900) continue;
+          id(g_rc_yaw)   = yaw * 164.0f / 1280.0f;
+          id(g_rc_pitch) = 158.0f + pitch * 102.0f / 900.0f;
+          id(g_rc_btn)   = data[off + 7];
+          id(g_rc_fresh) = true;
+          break;
+        }
+  on_unknown_peer:
+    - lambda: |-
+        for (int off = 0; off + 8 <= (int) size; off++) {
+          if (data[off + 5] != 0x58 || data[off + 6] != 0x02) continue;  // speed == 600
+          int16_t yaw, pitch;
+          memcpy(&yaw, data + off + 1, 2);
+          memcpy(&pitch, data + off + 3, 2);
+          if (yaw < -1280 || yaw > 1280 || pitch < 0 || pitch > 900) continue;
+          id(g_rc_yaw)   = yaw * 164.0f / 1280.0f;
+          id(g_rc_pitch) = 158.0f + pitch * 102.0f / 900.0f;
+          id(g_rc_btn)   = data[off + 7];
+          id(g_rc_fresh) = true;
+          break;
+        }
 
 # The downloadable image for the ALERT page. Setting the "Show image URL" text entity
 # (from HA automations / the dravix add-on) fetches the URL and shows it full-screen for
@@ -161,7 +210,22 @@ globals:
   - { id: sw_sleep, type: bool, restore_value: false, initial_value: "false" }
   - { id: g_card,   type: int,  restore_value: false, initial_value: "0" }
   - { id: g_score,  type: int,  restore_value: false, initial_value: "0" }   # catch-me game score
+  - { id: g_pn,     type: int,  restore_value: false, initial_value: "0" }   # party sway alternator
+  # official ESP-NOW remote state (latest parsed packet + throttling)
+  - { id: g_rc_yaw,   type: float, restore_value: false, initial_value: "0" }     # target yaw (servo scale)
+  - { id: g_rc_pitch, type: float, restore_value: false, initial_value: "165" }   # target pitch (158..260)
+  - { id: g_rc_btn,   type: int,   restore_value: false, initial_value: "0" }
+  - { id: g_rc_prev,  type: int,   restore_value: false, initial_value: "0" }
+  - { id: g_rc_fresh, type: bool,  restore_value: false, initial_value: "false" }
+  - { id: g_rc_busy,  type: bool,  restore_value: false, initial_value: "false" }
   - { id: g_tms,    type: long, restore_value: false, initial_value: "0" }   # touch-press start (ms)
+  # flappy game state
+  - { id: fb_y,     type: float, restore_value: false, initial_value: "110" }  # bird y (px)
+  - { id: fb_vy,    type: float, restore_value: false, initial_value: "0" }    # bird velocity
+  - { id: fb_px,    type: int,   restore_value: false, initial_value: "340" }  # pipe x (px)
+  - { id: fb_gap,   type: int,   restore_value: false, initial_value: "90" }   # pipe gap top y
+  - { id: fb_score, type: int,   restore_value: false, initial_value: "0" }
+  - { id: fb_alive, type: bool,  restore_value: false, initial_value: "false" }
   # mood-flash bookkeeping + head pose memory
   - { id: g_flash, type: bool,  restore_value: false, initial_value: "false" }   # a mood LED flash is active
   - { id: g_pitch_saved, type: float, restore_value: false, initial_value: "-1" }  # pitch before sleep-droop
@@ -214,10 +278,35 @@ sensor:
     update_interval: 30s
   - platform: uptime
     id: up_sec
-  # Robot battery %, imported from HA. Fix the entity_id if yours differs.
+  # Robot battery %, imported from HA (may not exist on every flash — see battery_pct below).
   - platform: homeassistant
     id: ha_batt
     entity_id: sensor.dravix_battery_level
+  # REAL power metering — the BSP exposes the INA226 battery monitor to HA. Current is in A,
+  # power in W, bus voltage in V. These make the status page show true consumption + a true
+  # time-left instead of a guess.
+  - platform: homeassistant
+    id: ha_curr
+    entity_id: sensor.dravix_ina226_current
+  - platform: homeassistant
+    id: ha_pow
+    entity_id: sensor.dravix_ina226_power
+  - platform: homeassistant
+    id: ha_volt
+    entity_id: sensor.dravix_ina226_bus_voltage
+  # Battery % with a fallback: use the HA battery sensor when it exists, else derive the
+  # percentage from the LiPo bus voltage (3.30V=0% … 4.15V=100% — the useful 1S window).
+  - platform: template
+    id: battery_pct
+    internal: true
+    update_interval: 15s
+    lambda: |-
+      if (id(ha_batt).has_state()) return id(ha_batt).state;
+      if (id(ha_volt).has_state()) {
+        float p = (id(ha_volt).state - 3.30f) / (4.15f - 3.30f) * 100.0f;
+        return p < 0 ? 0 : (p > 100 ? 100 : p);
+      }
+      return NAN;
   # Proximity — the robot notices you approach and perks up (greets). The BSP exposes the
   # ltr_als_ps proximity as "Proximity counts". Tune the 150/80 thresholds to taste.
   - platform: homeassistant
@@ -285,6 +374,40 @@ text_sensor:
           then:
             - globals.set: { id: g_pet, value: "true" }
             - script.execute: pet_react
+      - if:
+          condition: { lambda: 'return x == "No touch";' }
+          then:
+            - globals.set: { id: g_pet, value: "false" }
+  # TOUCH ZONE 2 (middle of the head) — also petting.
+  - platform: homeassistant
+    id: ha_touch2
+    entity_id: sensor.dravix_touch_sensor_2
+    on_value:
+      - if:
+          condition:
+            lambda: |-
+              return x != "No touch" && x != "unknown" && x != "unavailable" && x != ""
+                     && !id(g_pet) && id(sw_touch).state;
+          then:
+            - globals.set: { id: g_pet, value: "true" }
+            - script.execute: pet_react
+      - if:
+          condition: { lambda: 'return x == "No touch";' }
+          then:
+            - globals.set: { id: g_pet, value: "false" }
+  # TOUCH ZONE 3 (back of the head) — a TICKLE: giggly wiggle instead of a calm pet.
+  - platform: homeassistant
+    id: ha_touch3
+    entity_id: sensor.dravix_touch_sensor_3
+    on_value:
+      - if:
+          condition:
+            lambda: |-
+              return x != "No touch" && x != "unknown" && x != "unavailable" && x != ""
+                     && !id(g_pet) && id(sw_touch).state;
+          then:
+            - globals.set: { id: g_pet, value: "true" }
+            - script.execute: tickle
       - if:
           condition: { lambda: 'return x == "No touch";' }
           then:
@@ -440,7 +563,11 @@ number:
     set_action:
       - number.set:
           id: servo_y_angle
-          value: !lambda 'return (x - 158.0f) * 90.0f / 102.0f;'   # 158..260 → 0..90
+          # 158..260 → 0..90, then clamped to 5..85 — M5Stack's recommended vertical
+          # operating range (protects the servo from grinding at the mechanical stops).
+          value: !lambda |-
+            float a = (x - 158.0f) * 90.0f / 102.0f;
+            return a < 5.0f ? 5.0f : (a > 85.0f ? 85.0f : a);
   # ── VITALS bars — dravix writes these 0-100; page_vitals draws them as bars ──
   - { platform: template, name: "Vital energy", id: n_vital_energy, optimistic: true, min_value: 0, max_value: 100, step: 1, initial_value: 80 }
   - { platform: template, name: "Vital food",   id: n_vital_food,   optimistic: true, min_value: 0, max_value: 100, step: 1, initial_value: 80 }
@@ -454,6 +581,13 @@ button:
     id: btn_identify
     on_press:
       - script.execute: identify
+  # PARTY — a 8-second desk disco (colour-cycling LEDs + head sways). Press from HA,
+  # an automation, or the dravix dashboard.
+  - platform: template
+    name: "Party"
+    id: btn_party
+    on_press:
+      - script.execute: party
   - platform: restart
     name: "Reboot"
     id: btn_reboot
@@ -517,7 +651,7 @@ lvgl:
           x: 0
           y: 0
           width: 320
-          height: 40
+          height: 62
           radius: 0
           bg_color: 0x05080b
           bg_opa: COVER
@@ -526,16 +660,18 @@ lvgl:
           hidden: true
           scrollbar_mode: "OFF"
           widgets:
+            # row 2 — REAL power draw from the INA226 (watts · mA · true time left)
+            - label: { id: sb_power, text: "", text_font: small_font, text_color: 0x8b96a4, align: TOP_LEFT, x: 12, y: 38 }
             # WiFi — 4 ascending signal bars (upper bars hidden as the signal drops)
             - obj: { id: sb_w1, x: 12, y: 24, width: 4, height: 6,  radius: 1, bg_color: 0x33E6C8, bg_opa: COVER, border_width: 0 }
             - obj: { id: sb_w2, x: 18, y: 20, width: 4, height: 10, radius: 1, bg_color: 0x33E6C8, bg_opa: COVER, border_width: 0 }
             - obj: { id: sb_w3, x: 24, y: 16, width: 4, height: 14, radius: 1, bg_color: 0x33E6C8, bg_opa: COVER, border_width: 0 }
             - obj: { id: sb_w4, x: 30, y: 12, width: 4, height: 18, radius: 1, bg_color: 0x33E6C8, bg_opa: COVER, border_width: 0 }
-            # Clock + date — SMALL font, vertically centred (LEFT_MID) so nothing is clipped
-            - label: { id: sb_time, text: "--:--", text_font: small_font, text_color: 0xFFFFFF, align: LEFT_MID, x: 60,  y: 0 }
-            - label: { id: sb_date, text: "",      text_font: small_font, text_color: 0x8b96a4, align: LEFT_MID, x: 132, y: 0 }
+            # Clock + date — SMALL font, on the first row (y centred within the top 40px)
+            - label: { id: sb_time, text: "--:--", text_font: small_font, text_color: 0xFFFFFF, align: TOP_LEFT, x: 60,  y: 11 }
+            - label: { id: sb_date, text: "",      text_font: small_font, text_color: 0x8b96a4, align: TOP_LEFT, x: 132, y: 11 }
             # Battery — % label + outline + fill + nub (right side)
-            - label: { id: sb_batt, text: "--%", text_font: small_font, text_color: 0x5dffa0, align: LEFT_MID, x: 196, y: 0 }
+            - label: { id: sb_batt, text: "--%", text_font: small_font, text_color: 0x5dffa0, align: TOP_LEFT, x: 196, y: 11 }
             - obj: { id: sb_bat_o, x: 244, y: 12, width: 34, height: 16, radius: 2, bg_opa: TRANSP, border_color: 0xFFFFFF, border_width: 2 }
             - bar:
                 id: sb_bat_f
@@ -775,13 +911,13 @@ lvgl:
       bg_color: 0x05080b
       bg_opa: COVER
       widgets:
-        - label: { text: "GAMES", text_font: title_font, styles: accent_txt, align: TOP_MID, y: 8 }
+        - label: { text: "GAMES", text_font: title_font, styles: accent_txt, align: TOP_MID, y: 4 }
         - button:
             id: btn_g_catch
             x: 22
-            y: 56
+            y: 40
             width: 132
-            height: 66
+            height: 60
             radius: 12
             bg_color: 0x14324a
             widgets:
@@ -793,9 +929,9 @@ lvgl:
         - button:
             id: btn_g_react
             x: 166
-            y: 56
+            y: 40
             width: 132
-            height: 66
+            height: 60
             radius: 12
             bg_color: 0x14324a
             widgets:
@@ -806,9 +942,9 @@ lvgl:
         - button:
             id: btn_g_simon
             x: 22
-            y: 132
+            y: 106
             width: 132
-            height: 66
+            height: 60
             radius: 12
             bg_color: 0x14324a
             widgets:
@@ -819,9 +955,9 @@ lvgl:
         - button:
             id: btn_g_rps
             x: 166
-            y: 132
+            y: 106
             width: 132
-            height: 66
+            height: 60
             radius: 12
             bg_color: 0x14324a
             widgets:
@@ -829,6 +965,96 @@ lvgl:
             on_click:
               - lvgl.label.update: { id: rps_msg, text: "Pick one!" }
               - lvgl.page.show: page_rps
+        - button:
+            id: btn_g_flappy
+            x: 22
+            y: 172
+            width: 132
+            height: 60
+            radius: 12
+            bg_color: 0x14324a
+            widgets:
+              - label: { text: "FLAPPY", text_font: text_font, text_color: 0xFFFFFF, align: CENTER }
+            on_click:
+              - lambda: 'id(fb_alive) = false; id(fb_y) = 110.0f; id(fb_vy) = 0.0f; id(fb_px) = 340; id(fb_score) = 0;'
+              - lvgl.label.update: { id: fb_lbl, text: "TAP!" }
+              - lvgl.label.update: { id: fb_sc, text: "0" }
+              - lvgl.page.show: page_flappy
+        - button:
+            id: btn_g_party
+            x: 166
+            y: 172
+            width: 132
+            height: 60
+            radius: 12
+            bg_color: 0x3a2a10
+            widgets:
+              - label: { text: "PARTY!", text_font: text_font, text_color: 0xFFC23D, align: CENTER }
+            on_click:
+              - script.execute: party
+    # ── FLAPPY — tap to flap, slip through the pipe gaps (the official has one too) ──
+    - id: page_flappy
+      bg_color: 0x0a1420
+      bg_opa: COVER
+      scrollable: false
+      scrollbar_mode: "OFF"
+      widgets:
+        # the pipe pair (one, recycled right→left; the gap moves each pass)
+        - obj: { id: fb_top, x: 340, y: 0,   width: 34, height: 90,  radius: 4, bg_color: 0x2ea35c, bg_opa: COVER, border_width: 0 }
+        - obj: { id: fb_bot, x: 340, y: 170, width: 34, height: 240, radius: 4, bg_color: 0x2ea35c, bg_opa: COVER, border_width: 0 }
+        # the bird — a little teal creature, of course
+        - obj:
+            id: fb_bird
+            x: 60
+            y: 110
+            width: 26
+            height: 26
+            radius: 13
+            bg_color: 0x33E6C8
+            bg_opa: COVER
+            border_width: 0
+            widgets:
+              - label: { text: "o", text_font: small_font, text_color: 0x0a1420, align: CENTER }
+        # full-screen tap catcher (transparent, drawn above the playfield): tap = flap / start
+        - button:
+            id: fb_tapzone
+            x: 0
+            y: 0
+            width: 320
+            height: 240
+            radius: 0
+            bg_opa: TRANSP
+            border_width: 0
+            shadow_width: 0
+            on_click:
+              - if:
+                  condition: { lambda: 'return id(fb_alive);' }
+                  then:
+                    - lambda: 'id(fb_vy) = -5.5f;'   # flap!
+                  else:
+                    - lambda: |-
+                        id(fb_alive) = true; id(fb_score) = 0;
+                        id(fb_y) = 110.0f; id(fb_vy) = -5.5f; id(fb_px) = 340;
+                    - lvgl.label.update: { id: fb_lbl, text: "" }
+                    - lvgl.label.update: { id: fb_sc, text: "0" }
+        # HUD on top of the tap zone (labels don't block clicks)
+        - label: { id: fb_lbl, text: "TAP!", text_font: title_font, styles: accent_txt, align: TOP_MID, y: 6 }
+        - label: { id: fb_sc,  text: "0",    text_font: title_font, text_color: 0xFFFFFF, align: TOP_RIGHT, x: -10, y: 6 }
+        # back to the menu (drawn after the tap zone so it stays clickable)
+        - button:
+            id: fb_back
+            x: 6
+            y: 6
+            width: 52
+            height: 28
+            radius: 8
+            bg_color: 0x05080b
+            widgets:
+              - label: { text: "<", text_font: text_font, text_color: 0x33E6C8, align: CENTER }
+            on_click:
+              - lambda: 'id(fb_alive) = false;'
+              - globals.set: { id: g_card, value: "4" }
+              - lvgl.page.show: page_games
     # ── REACTION — wait for GREEN, then tap as fast as you can (shows your ms) ─────
     - id: page_react
       bg_color: 0x000000
@@ -1158,6 +1384,66 @@ script:
       - script.execute: { id: head_nudge, dx: 0, dy: 12 }         # nuzzle up into your hand
       - delay: 900ms
       - script.execute: head_shake                                # happy little wiggle
+  # ── TICKLE (touch zone 3, back of the head) — giggly, faster than a calm pet ──
+  - id: tickle
+    mode: restart
+    then:
+      - lambda: 'lv_disp_trig_activity(NULL);'
+      - select.set: { id: robot_mode, option: awake }
+      - globals.set: { id: g_expr, value: "1" }     # happy (cheeks show)
+      - globals.set: { id: g_card, value: "0" }
+      - lvgl.page.show: page_face
+      - script.execute: render_face
+      - script.execute: { id: led_flash, r: 20, g: 100, b: 60 }   # giggly green
+      - script.execute: head_shake                                # wiggle!
+      - delay: 900ms
+      - script.execute: head_shake                                # ...and again
+  # ── PARTY — a little disco: colour-cycling LEDs + head sways, then back to normal ──
+  - id: party
+    mode: restart
+    then:
+      - lambda: 'lv_disp_trig_activity(NULL);'
+      - select.set: { id: robot_mode, option: awake }
+      - globals.set: { id: g_expr, value: "1" }
+      - globals.set: { id: g_card, value: "0" }
+      - lvgl.page.show: page_face
+      - script.execute: render_face
+      # remember the LEDs (same guard pattern as identify)
+      - if:
+          condition: { lambda: 'return !id(g_voice);' }
+          then:
+            - lambda: |-
+                auto v = id(stackchan_light_bar).current_values;
+                id(led_on)  = v.is_on();
+                id(led_bri) = v.get_brightness();
+                id(led_r)   = v.get_red();
+                id(led_g)   = v.get_green();
+                id(led_b)   = v.get_blue();
+      - repeat:
+          count: 12
+          then:
+            - light.turn_on:
+                id: stackchan_light_bar
+                brightness: 100%
+                red: !lambda 'return random_float();'
+                green: !lambda 'return random_float();'
+                blue: !lambda 'return random_float();'
+            - if:
+                condition: { lambda: 'return id(sw_move).state && !std::isnan(id(servo_x_angle).state);' }
+                then:
+                  - number.set:
+                      id: servo_x_angle
+                      value: !lambda 'id(g_pn)++; return (id(g_pn) % 2) ? 20.0f : -20.0f;'
+            - delay: 620ms
+      # settle: head back to centre, LEDs back to how they were
+      - if:
+          condition: { lambda: 'return id(sw_move).state;' }
+          then:
+            - number.set: { id: servo_x_angle, value: "0" }
+      - if:
+          condition: { lambda: 'return !id(g_voice);' }
+          then:
+            - script.execute: restore_leds
   # Redraw the pet face from the current state.
   - id: render_face
     then:
@@ -1643,6 +1929,73 @@ select:
                   - select.set: { id: robot_mode, option: awake }
 
 interval:
+  # OFFICIAL REMOTE — apply the freshest joystick packet, throttled to ~3Hz so the
+  # SCS9009 serial bus never sees back-to-back writes. Button B = talk toggle.
+  - interval: 150ms
+    then:
+      - if:
+          condition: { lambda: 'return id(g_rc_fresh) && !id(g_rc_busy) && !id(g_sleep);' }
+          then:
+            - lambda: |-
+                id(g_rc_fresh) = false;
+                id(g_rc_busy) = true;
+                lv_disp_trig_activity(NULL);
+            # button B rising edge → toggle the voice assistant (privacy-respecting)
+            - if:
+                condition: { lambda: 'return id(g_rc_btn) != 0 && id(g_rc_prev) == 0;' }
+                then:
+                  - if:
+                      condition: { lambda: 'return id(g_voice);' }
+                      then:
+                        - voice_assistant.stop
+                      else:
+                        - if:
+                            condition: { switch.is_off: sw_privacy }
+                            then: [ voice_assistant.start ]
+            - lambda: 'id(g_rc_prev) = id(g_rc_btn);'
+            - number.set:
+                id: servo_x_angle
+                value: !lambda 'return id(g_rc_yaw);'
+            - delay: 140ms
+            - number.set:
+                id: n_head_pitch
+                value: !lambda 'return id(g_rc_pitch);'
+            - lambda: 'id(g_rc_busy) = false;'
+  # FLAPPY physics — ~11 fps is plenty for a 320px playfield. Only ticks while the
+  # game page is showing AND a run is alive; otherwise this is a single cheap check.
+  - interval: 90ms
+    then:
+      - if:
+          condition:
+            and:
+              - lvgl.page.is_showing: page_flappy
+              - lambda: 'return id(fb_alive);'
+          then:
+            - lambda: |-
+                id(fb_vy) += 0.9f;                                  // gravity
+                if (id(fb_vy) > 7.0f) id(fb_vy) = 7.0f;
+                id(fb_y) += id(fb_vy);
+                id(fb_px) -= 6;                                     // pipe scrolls left
+                if (id(fb_px) < -40) {                              // passed → recycle + score
+                  id(fb_px) = 330;
+                  id(fb_gap) = 40 + (int)(random_float() * 100.0f); // gap top: 40..140 (gap = 84px)
+                  id(fb_score) += 1;
+                }
+                // collision: bird box x 60..86; pipes at fb_px..fb_px+34; gap fb_gap..fb_gap+84
+                bool hit = (id(fb_y) < 34.0f) || (id(fb_y) > 214.0f);
+                if (id(fb_px) < 86 && id(fb_px) + 34 > 60) {
+                  if (id(fb_y) < id(fb_gap) || id(fb_y) + 26.0f > id(fb_gap) + 84.0f) hit = true;
+                }
+                if (hit) id(fb_alive) = false;
+            - lvgl.widget.update: { id: fb_bird, y: !lambda 'return (int) id(fb_y);' }
+            - lvgl.widget.update: { id: fb_top, x: !lambda 'return id(fb_px);', height: !lambda 'return id(fb_gap);' }
+            - lvgl.widget.update: { id: fb_bot, x: !lambda 'return id(fb_px);', y: !lambda 'return id(fb_gap) + 84;' }
+            - lvgl.label.update: { id: fb_sc, text: !lambda 'char b[8]; snprintf(b, sizeof(b), "%d", id(fb_score)); return std::string(b);' }
+            - if:
+                condition: { lambda: 'return !id(fb_alive);' }
+                then:
+                  - lvgl.label.update: { id: fb_lbl, text: "GAME OVER" }
+                  - script.execute: head_shake
   # Random blink (never while sleeping / listening / talking).
   - interval: 1s
     then:
@@ -1708,8 +2061,8 @@ interval:
       - lvgl.label.update:
           id: lbl_face_batt
           text: !lambda |-
-            if (id(ha_batt).has_state() && id(ha_batt).state < 20) {
-              char b[12]; snprintf(b, sizeof(b), "%.0f%%", id(ha_batt).state);
+            if (id(battery_pct).has_state() && id(battery_pct).state < 20) {
+              char b[12]; snprintf(b, sizeof(b), "%.0f%%", id(battery_pct).state);
               return std::string(b);
             }
             return std::string("");
@@ -1737,12 +2090,28 @@ interval:
       - lvgl.label.update:
           id: sb_batt
           text: !lambda |-
-            if (!id(ha_batt).has_state()) return std::string("--%");
-            char b[8]; snprintf(b, sizeof(b), "%.0f%%", id(ha_batt).state);
+            if (!id(battery_pct).has_state()) return std::string("--%");
+            char b[8]; snprintf(b, sizeof(b), "%.0f%%", id(battery_pct).state);
             return std::string(b);
       - lvgl.bar.update:
           id: sb_bat_f
-          value: !lambda 'return id(ha_batt).has_state() ? (int) id(ha_batt).state : 0;'
+          value: !lambda 'return id(battery_pct).has_state() ? (int) id(battery_pct).state : 0;'
+      # row 2 — REAL consumption from the INA226 (+ true time-left from the actual draw)
+      - lvgl.label.update:
+          id: sb_power
+          text: !lambda |-
+            if (!id(ha_curr).has_state() && !id(ha_pow).has_state())
+              return std::string("");
+            char b[48];
+            float ma = id(ha_curr).has_state() ? fabsf(id(ha_curr).state) * 1000.0f : 0.0f;
+            float w  = id(ha_pow).has_state()  ? fabsf(id(ha_pow).state)           : 0.0f;
+            if (id(battery_pct).has_state() && ma > 20.0f) {
+              float hours = (id(battery_pct).state * 500.0f / 100.0f) / ma;   // 500mAh cell
+              snprintf(b, sizeof(b), "%.2fW  %.0fmA  ~%.1fh left", w, ma, hours);
+            } else {
+              snprintf(b, sizeof(b), "%.2fW  %.0fmA", w, ma);
+            }
+            return std::string(b);
       # WiFi signal → reveal more bars as it gets stronger
       - if:
           condition: { lambda: 'return id(wifi_db).state < -78;' }
