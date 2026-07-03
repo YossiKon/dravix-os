@@ -118,3 +118,11 @@ class Settings(BaseSettings):
 @lru_cache
 def get_settings() -> Settings:
     return Settings()
+
+
+def security_dir() -> pathlib.Path:
+    """Where the security mode stores its snapshots — persistent add-on storage,
+    day-folders (YYYY-MM-DD/HHMMSS.jpg). Shared by the mode and the /api/security routes."""
+    s = get_settings()
+    base = pathlib.Path(s.data_dir) if s.data_dir else DATA_DIR
+    return base / "security"

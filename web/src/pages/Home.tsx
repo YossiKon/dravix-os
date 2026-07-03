@@ -1,7 +1,7 @@
 // Home — everything to operate the robot: live state, sleep/wake, chat, games, head, face, LEDs.
 import { useCallback, useEffect, useRef, useState } from "react";
 import { apiGet, apiSend } from "../api";
-import type { Live, RobotConfig } from "../api";
+import type { Live, RobotConfig, SecurityInfo } from "../api";
 import { RobotFace, stateLabel } from "../components/RobotFace";
 import { Joystick } from "../components/Joystick";
 import { Section, Spinner, toast, toastErr } from "../ui";
@@ -89,6 +89,11 @@ export function HomePage(props: { config: RobotConfig | null }) {
     supported: false,
     private: false,
   });
+  // security mode: armed state + how many snapshots are stored (null = not loaded yet)
+  const [sec, setSec] = useState<SecurityInfo | null>(null);
+
+  const refreshSecurity = () =>
+    apiGet<SecurityInfo>("/api/security/photos?limit=1").then(setSec).catch(() => undefined);
 
   useEffect(() => {
     apiGet<{ games: string[] }>("/api/fun")
@@ -100,7 +105,23 @@ export function HomePage(props: { config: RobotConfig | null }) {
       .catch(() => undefined)
       .finally(() => setEmotesSettled(true));
     apiGet<{ supported: boolean; private: boolean }>("/api/robot/privacy").then(setPrivacy).catch(() => undefined);
+    void refreshSecurity();
   }, []);
+
+  async function toggleSecurity() {
+    try {
+      if (sec?.armed) await apiSend("/api/modes/deactivate", "POST", {});
+      else await apiSend("/api/modes/security/activate", "POST", {});
+      await refreshSecurity();
+      toast(
+        sec?.armed
+          ? tr("מצב אבטחה כבוי", "Security disarmed")
+          : tr("🛡 מצב אבטחה דרוך — מצלם ומסייר", "🛡 Security armed — snapping & patrolling"),
+      );
+    } catch (e) {
+      toastErr(e);
+    }
+  }
 
   async function togglePrivacy() {
     const next = !privacy.private;
@@ -467,6 +488,46 @@ export function HomePage(props: { config: RobotConfig | null }) {
             )}{" "}
             <span dir="ltr" className="font-mono">/camera/robot/stream.mjpeg</span>
           </p>
+        </Section>
+      )}
+
+      {/* ── security mode — arm the robot as a little guard camera ── */}
+      {(props.config?.capabilities ?? []).includes("take_photo") && sec && (
+        <Section title={tr("🛡 אבטחה", "🛡 Security")} delay={330}>
+          <p className="mb-3 text-sm text-mute">
+            {tr(
+              "כשדרוך: שומר תמונה כל כמה שניות, מסייר עם הראש כל כמה דקות, ואפשר לצפות ולכוון אותו בלייב מכאן (גם מרחוק, דרך הגישה של Home Assistant).",
+              "When armed: saves a frame every few seconds, patrols with its head every few minutes, and you can watch & steer live from here (remotely too, via Home Assistant's remote access).",
+            )}
+          </p>
+          <button
+            className={`btn w-full ${sec.armed ? "btn-danger" : "btn-primary"}`}
+            onClick={() => void toggleSecurity()}
+          >
+            {sec.armed ? tr("⏹ כבה מצב אבטחה", "⏹ Disarm") : tr("🛡 הפעל מצב אבטחה", "🛡 Arm security mode")}
+          </button>
+          {sec.total > 0 && (
+            <div className="mt-3 flex items-center gap-3">
+              {sec.photos[0] && (
+                <img
+                  src={`/api/security/photo/${sec.photos[0].day}/${sec.photos[0].name}`}
+                  alt={tr("התמונה האחרונה", "Latest snapshot")}
+                  className="h-16 w-24 rounded-xl border border-line object-cover"
+                />
+              )}
+              <p className="text-xs text-mute">
+                {tr(`${sec.total} תמונות שמורות`, `${sec.total} snapshots saved`)}
+                {sec.photos[0] && (
+                  <>
+                    {" · "}
+                    <span dir="ltr" className="font-mono">
+                      {sec.photos[0].day} {sec.photos[0].name.replace(".jpg", "")}
+                    </span>
+                  </>
+                )}
+              </p>
+            </div>
+          )}
         </Section>
       )}
     </div>

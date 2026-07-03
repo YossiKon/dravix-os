@@ -89,6 +89,12 @@ export interface AppConfig {
   store: { idle_motion?: boolean } & Record<string, unknown>;
 }
 
+export interface SecurityInfo {
+  armed: boolean;
+  total: number;
+  photos: { day: string; name: string; size: number }[];
+}
+
 export interface Updates {
   addon_version: string;
   addon_latest: string | null;

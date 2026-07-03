@@ -39,7 +39,7 @@ substitutions:
   # publishes it to HA ("Firmware version" sensor); the dravix dashboard compares it
   # with the version bundled in the add-on and shows "firmware update available".
   # (Maintainers: bump this on every firmware change. Users: don't touch.)
-  fw_version: "4"
+  fw_version: "5"
   # The ESPHome node name (mDNS hostname + the default entity prefix on a fresh flash).
   # Change it only if you run MORE THAN ONE robot — each needs a unique name. NOTE:
   # changing it on an already-adopted robot registers a NEW device in HA.
@@ -321,10 +321,23 @@ sensor:
     update_interval: 30s
   - platform: uptime
     id: up_sec
-  # Robot battery %, imported from HA (may not exist on every flash — see battery_pct below).
-  - platform: homeassistant
-    id: ha_batt
-    entity_id: sensor.${ha_prefix}_battery_level
+  # ── THE REAL BATTERY GAUGE — the same source the ORIGINAL StackChan firmware uses:
+  #    the AXP2101 power-management chip's own fuel gauge + true charging status. The
+  #    BSP already drives this chip (it powers the whole board); we just read it.
+  - platform: axp2101
+    axp2101_id: axp2101_pmu
+    id: axp_meta
+    internal: true
+    update_interval: 30s
+    battery_level:
+      name: "Battery level"
+      id: axp_batt
+    battery_voltage:
+      id: axp_volt
+      internal: true
+    battery_charging:
+      name: "Battery charging"
+      id: axp_chg
   # REAL power metering — the BSP exposes the INA226 battery monitor to HA. Current is in A,
   # power in W, bus voltage in V. These make the status page show true consumption + a true
   # time-left instead of a guess.
@@ -355,12 +368,19 @@ sensor:
     accuracy_decimals: 0
     update_interval: 15s
     lambda: |-
-      if (id(ha_batt).has_state()) return id(ha_batt).state;
+      // true charging state straight from the PMU; INA current-sign only as a fallback
+      float amps = id(ha_curr).has_state() ? id(ha_curr).state : 0.0f;
+      bool charging = id(axp_chg).has_state() ? id(axp_chg).state
+                                              : ((amps * ${ina_sign}) < -0.02f);
+      id(g_batt_chg) = charging;
+      // the PMU's own fuel gauge is the best number there is — use it when it's sane
+      if (id(axp_batt).has_state() && !std::isnan(id(axp_batt).state)
+          && id(axp_batt).state > 0.0f && id(axp_batt).state <= 100.0f) {
+        return id(axp_batt).state;
+      }
+      // fallback: the model below (load-sag compensated voltage through the LiPo curve)
       if (!id(ha_volt).has_state()) return NAN;
       float v = id(ha_volt).state;
-      float amps = id(ha_curr).has_state() ? id(ha_curr).state : 0.0f;
-      bool charging = (amps * ${ina_sign}) < -0.02f;   // >20mA flowing INTO the cell
-      id(g_batt_chg) = charging;
       // open-circuit voltage: discharging sags (add I·R back), charging is pulled high
       float voc = charging ? v - fabsf(amps) * ${batt_r_int}f
                            : v + fabsf(amps) * ${batt_r_int}f;

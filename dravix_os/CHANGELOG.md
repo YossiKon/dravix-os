@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.0.46
+
+- **The battery number is now the REAL one** (firmware v5): read straight from the
+  AXP2101 power chip's own fuel gauge — the exact same source the original StackChan
+  firmware uses — plus a true hardware charging flag (no more guessing from current
+  direction). The load-compensated LiPo model from 0.0.45 stays as the automatic
+  fallback. New HA entities: `Battery level` and `Battery charging`.
+- **NEW Security mode** 🛡: arm it from the dashboard (Home → Security) and the robot
+  becomes a guard camera — saves a snapshot every few seconds to the add-on's storage
+  (browse via `/api/security/photos`), patrols with its head every few minutes, and
+  stays fully steerable with live view from the dashboard — including remotely through
+  Home Assistant's remote access. Day-folders auto-prune (default 7 days); everything
+  stays on your box.
+
 ## 0.0.45
 
 - **An honest battery gauge** (firmware v4). The % now comes from a real battery model,

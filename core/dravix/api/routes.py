@@ -629,6 +629,45 @@ async def set_local_only(body: LocalOnlyBody, request: Request):
     return await apply_local_only(request.app.state, body.enabled)
 
 
+# ── security mode — browse the saved snapshots ────────────────────────────────
+_SEC_DAY_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+_SEC_FILE_RE = re.compile(r"^\d{6}\.jpg$")
+
+
+@router.get("/api/security/photos")
+async def security_photos(request: Request, limit: int = 24):
+    """The newest snapshots the security mode saved (+ whether it's armed right now)."""
+    from ..config import security_dir
+
+    root = security_dir()
+    photos: list[dict] = []
+    total = 0
+    if root.exists():
+        for day in sorted((d for d in root.iterdir() if d.is_dir()), reverse=True):
+            if not _SEC_DAY_RE.match(day.name):
+                continue
+            files = sorted((f for f in day.iterdir() if _SEC_FILE_RE.match(f.name)), reverse=True)
+            total += len(files)
+            for f in files:
+                if len(photos) < max(1, min(200, limit)):
+                    photos.append({"day": day.name, "name": f.name, "size": f.stat().st_size})
+    armed = _engine(request).is_active("security")
+    return {"armed": armed, "total": total, "photos": photos}
+
+
+@router.get("/api/security/photo/{day}/{name}")
+async def security_photo(day: str, name: str):
+    """Serve one saved snapshot. The path parts are strictly validated — no traversal."""
+    from ..config import security_dir
+
+    if not _SEC_DAY_RE.match(day) or not _SEC_FILE_RE.match(name):
+        raise HTTPException(status_code=400, detail="bad photo path")
+    path = security_dir() / day / name
+    if not path.is_file():
+        raise HTTPException(status_code=404, detail="no such photo")
+    return Response(content=path.read_bytes(), media_type="image/jpeg")
+
+
 class RobotNameBody(BaseModel):
     name: str = ""
 

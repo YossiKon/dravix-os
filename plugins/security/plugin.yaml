@@ -1,0 +1,11 @@
+name: security
+description: Guard mode — periodic camera snapshots saved on the server, a slow head patrol, and live remote view/steering from the dashboard.
+kind: foreground
+entrypoint: mode:SecurityMode
+enabled: true
+config:
+  snapshot_every_s: 10     # save a frame this often
+  patrol_every_min: 3      # sweep the head this often (0 = no patrol)
+  patrol_span: 0.7         # how far left/right the sweep goes (0..1 of full travel)
+  keep_days: 7             # delete day-folders older than this
+  announce: false          # say "Security armed" when entering the mode
