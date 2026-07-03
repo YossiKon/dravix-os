@@ -1,0 +1,26 @@
+# ════════════════════════════════════════════════════════════════════════════════
+#  dravix-os · StackChan — the git-tracked flavor
+#
+#  Put THIS tiny file in your ESPHome add-on as the robot's config (instead of the big
+#  one). It pulls the real firmware straight from the dravix-os repo at build time, so
+#  UPDATING THE FIRMWARE = the repo updated → you press Install. No copy-pasting.
+#
+#  · secrets (wifi_ssid / wifi_password) stay in YOUR ESPHome secrets.yaml, as usual.
+#  · pick how you track the repo with `ref:`:
+#       ref: main                 → always the latest (refresh: 0s re-checks every build)
+#       ref: <a tag or commit>    → pinned; bump it yourself when you want to update
+#  · to override any tuning knob, uncomment `substitutions:` — local values WIN over
+#    the ones in the repo file (see the substitutions block there for the full list).
+# ════════════════════════════════════════════════════════════════════════════════
+
+# substitutions:
+#   ha_prefix: "dravix"        # your robot's HA entity prefix (fresh flash = "stackchan")
+#   battery_mah: "500"
+#   prox_near: "150"
+
+packages:
+  dravix_firmware:
+    url: https://github.com/YossiKon/dravix-os
+    files: [deploy/esphome/stackchan-dravix.yaml]
+    ref: main
+    refresh: 0s   # re-check the repo on every build, so Install always ships the latest
