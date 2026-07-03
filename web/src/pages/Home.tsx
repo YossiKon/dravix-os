@@ -215,6 +215,14 @@ export function HomePage(props: { config: RobotConfig | null }) {
             />
             {online ? (state ? stateLabel(state, lang) : tr("מחובר", "Connected")) : tr("לא מחובר", "Offline")}
           </span>
+          {live?.battery != null && (
+            <span
+              className={`chip ${live.battery < 20 ? "border-red/60 text-red" : ""}`}
+              title={tr("סוללת הרובוט", "Robot battery")}
+            >
+              🔋 {live.battery}%
+            </span>
+          )}
           {privacy.supported && (
             <button
               className={`chip ${privacy.private ? "border-red/60 bg-red/15 text-red" : ""}`}

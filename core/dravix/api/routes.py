@@ -232,6 +232,7 @@ ROBOT_ENTITY_ROLES = [
     {"key": "image_url_text", "label": "Show-image URL (text)", "domains": ["text"]},
     {"key": "privacy_switch", "label": "Privacy mode (switch)", "domains": ["switch"]},
     {"key": "islocal_switch", "label": "Local-only (switch)", "domains": ["switch"]},
+    {"key": "battery_sensor", "label": "Battery % (sensor)", "domains": ["sensor"]},
 ]
 _ROLE_KEYS = {r["key"] for r in ROBOT_ENTITY_ROLES}
 
@@ -432,11 +433,16 @@ async def robot_live(request: Request):
     drv = request.app.state.robot.driver
     reader = getattr(drv, "get_text", None)
     if reader is None:
-        return {"supported": False, "state": None, "heard": None, "reply": None}
-    state, heard, reply = await asyncio.gather(
-        reader("state_sensor"), reader("heard_sensor"), reader("reply_sensor")
+        return {"supported": False, "state": None, "heard": None, "reply": None, "battery": None}
+    state, heard, reply, battery = await asyncio.gather(
+        reader("state_sensor"), reader("heard_sensor"), reader("reply_sensor"),
+        reader("battery_sensor"),
     )
-    return {"supported": True, "state": state, "heard": heard, "reply": reply}
+    try:
+        battery = round(float(battery)) if battery not in (None, "", "unknown", "unavailable") else None
+    except (TypeError, ValueError):
+        battery = None
+    return {"supported": True, "state": state, "heard": heard, "reply": reply, "battery": battery}
 
 
 @router.get("/api/robot/screen")

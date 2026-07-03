@@ -39,7 +39,7 @@ substitutions:
   # publishes it to HA ("Firmware version" sensor); the dravix dashboard compares it
   # with the version bundled in the add-on and shows "firmware update available".
   # (Maintainers: bump this on every firmware change. Users: don't touch.)
-  fw_version: "3"
+  fw_version: "4"
   # The ESPHome node name (mDNS hostname + the default entity prefix on a fresh flash).
   # Change it only if you run MORE THAN ONE robot — each needs a unique name. NOTE:
   # changing it on an already-adopted robot registers a NEW device in HA.
@@ -56,13 +56,13 @@ substitutions:
   # where re-registered entities get an "<area>_<device>" prefix. A prefix that does
   # not exist is harmless; leave equal to ha_prefix when unsure.
   ha_prefix_alt: "dravix"
-  # Battery — a property of the StackChan HARDWARE, not a per-person setting (same kit,
-  # same cell): capacity for the time-left estimate + the LiPo voltage window used to
-  # derive % when no battery_level sensor exists. Only change if you physically swapped
-  # the battery for a different one.
-  battery_mah: "500"
-  batt_v_empty: "3.30"
-  batt_v_full: "4.15"
+  # Battery — properties of the StackChan HARDWARE, not per-person settings (same kit,
+  # same cell). Only change if you physically swapped the battery.
+  battery_mah: "500"    # capacity, for the time-left estimate
+  batt_r_int: "0.15"    # cell+wiring internal resistance (Ω) — used to undo load sag
+  # INA226 sign convention: 1 = positive current while DISCHARGING (flip to -1 if your
+  # board reports it inverted — the ⚡ charging flag will tell you immediately).
+  ina_sign: "1"
   # Presence + room-light thresholds (tune without touching any lambda):
   prox_near: "150"   # proximity counts above this = someone came close → greet
   prox_far: "80"     # …and below this = they moved away
@@ -266,6 +266,9 @@ globals:
   - { id: fb_gap,   type: int,   restore_value: false, initial_value: "90" }   # pipe gap top y
   - { id: fb_score, type: int,   restore_value: false, initial_value: "0" }
   - { id: fb_alive, type: bool,  restore_value: false, initial_value: "false" }
+  # battery engine (see battery_pct): smoothed open-circuit voltage + charging flag
+  - { id: g_batt_v_filt, type: float, restore_value: false, initial_value: "-1" }
+  - { id: g_batt_chg,    type: bool,  restore_value: false, initial_value: "false" }
   # mood-flash bookkeeping + head pose memory
   - { id: g_flash, type: bool,  restore_value: false, initial_value: "false" }   # a mood LED flash is active
   - { id: g_pitch_saved, type: float, restore_value: false, initial_value: "-1" }  # pitch before sleep-droop
@@ -334,19 +337,50 @@ sensor:
   - platform: homeassistant
     id: ha_volt
     entity_id: sensor.${ha_prefix}_ina226_bus_voltage
-  # Battery % with a fallback: use the HA battery sensor when it exists, else derive the
-  # percentage from the LiPo bus voltage (empty…full window from the substitutions).
+  # ── BATTERY % — a real estimate, not a straight line ─────────────────────────────
+  # Voltage→% the honest way: (1) undo the LOAD SAG — a LiPo's terminal voltage drops
+  # I·R under load, so a servo move used to "drop" the battery a few % (the INA226 gives
+  # us the true current, so we can reconstruct the open-circuit voltage); (2) smooth it
+  # (EMA) so single noisy reads can't jump the number; (3) map through the REAL 1S LiPo
+  # discharge curve — it has a long flat plateau around 3.75-3.9V where a linear formula
+  # is wrong by 10-20%; (4) flag CHARGING (current flowing in) — while charging the
+  # voltage lies high, so the status bar shows ⚡ instead of a time-left.
+  # A native HA battery_level sensor still wins when it exists.
   - platform: template
     id: battery_pct
-    internal: true
+    name: "Battery"
+    device_class: battery
+    unit_of_measurement: "%"
+    state_class: measurement
+    accuracy_decimals: 0
     update_interval: 15s
     lambda: |-
       if (id(ha_batt).has_state()) return id(ha_batt).state;
-      if (id(ha_volt).has_state()) {
-        float p = (id(ha_volt).state - ${batt_v_empty}f) / (${batt_v_full}f - ${batt_v_empty}f) * 100.0f;
-        return p < 0 ? 0 : (p > 100 ? 100 : p);
+      if (!id(ha_volt).has_state()) return NAN;
+      float v = id(ha_volt).state;
+      float amps = id(ha_curr).has_state() ? id(ha_curr).state : 0.0f;
+      bool charging = (amps * ${ina_sign}) < -0.02f;   // >20mA flowing INTO the cell
+      id(g_batt_chg) = charging;
+      // open-circuit voltage: discharging sags (add I·R back), charging is pulled high
+      float voc = charging ? v - fabsf(amps) * ${batt_r_int}f
+                           : v + fabsf(amps) * ${batt_r_int}f;
+      // exponential smoothing (α=0.25 per 15s tick ≈ settles in ~1 min)
+      if (id(g_batt_v_filt) < 0.0f) id(g_batt_v_filt) = voc;
+      id(g_batt_v_filt) += 0.25f * (voc - id(g_batt_v_filt));
+      float vf = id(g_batt_v_filt);
+      // the standard 1S LiPo state-of-charge curve (piecewise-linear interpolation)
+      static const float VT[] = {3.27f,3.61f,3.69f,3.71f,3.73f,3.75f,3.77f,3.79f,3.80f,
+                                 3.82f,3.84f,3.85f,3.87f,3.91f,3.95f,3.98f,4.02f,4.08f,
+                                 4.11f,4.15f,4.20f};
+      static const float PT[] = {0,5,10,15,20,25,30,35,40,45,50,55,60,65,70,75,80,85,90,95,100};
+      if (vf <= VT[0])  return 0.0f;
+      if (vf >= VT[20]) return 100.0f;
+      for (int k = 1; k <= 20; k++) {
+        if (vf <= VT[k]) {
+          return PT[k-1] + (PT[k] - PT[k-1]) * (vf - VT[k-1]) / (VT[k] - VT[k-1]);
+        }
       }
-      return NAN;
+      return 100.0f;
   # Proximity — the robot notices you approach and perks up (greets). The BSP exposes the
   # ltr_als_ps proximity as "Proximity counts". Thresholds live in the substitutions block.
   - platform: homeassistant
@@ -2139,11 +2173,11 @@ interval:
             if (!t.is_valid()) return std::string("");
             char b[8]; snprintf(b, sizeof(b), "%02d:%02d", t.hour, t.minute);
             return std::string(b);
-      # Low-battery badge on the face page (empty = hidden).
+      # Low-battery badge on the face page (empty = hidden; silent while charging).
       - lvgl.label.update:
           id: lbl_face_batt
           text: !lambda |-
-            if (id(battery_pct).has_state() && id(battery_pct).state < 20) {
+            if (!id(g_batt_chg) && id(battery_pct).has_state() && id(battery_pct).state < 20) {
               char b[12]; snprintf(b, sizeof(b), "%.0f%%", id(battery_pct).state);
               return std::string(b);
             }
@@ -2173,8 +2207,18 @@ interval:
           id: sb_batt
           text: !lambda |-
             if (!id(battery_pct).has_state()) return std::string("--%");
-            char b[8]; snprintf(b, sizeof(b), "%.0f%%", id(battery_pct).state);
+            char b[10];
+            snprintf(b, sizeof(b), "%.0f%%%s", id(battery_pct).state, id(g_batt_chg) ? "+" : "");
             return std::string(b);
+      # battery label colour tells the story at a glance: charging=cyan · low=red · ok=green
+      - if:
+          condition: { lambda: 'return id(g_batt_chg);' }
+          then: [ { lvgl.label.update: { id: sb_batt, text_color: 0x33E6C8 } } ]
+          else:
+            - if:
+                condition: { lambda: 'return id(battery_pct).has_state() && id(battery_pct).state < 20;' }
+                then: [ { lvgl.label.update: { id: sb_batt, text_color: 0xE05555 } } ]
+                else: [ { lvgl.label.update: { id: sb_batt, text_color: 0x5dffa0 } } ]
       - lvgl.bar.update:
           id: sb_bat_f
           value: !lambda 'return id(battery_pct).has_state() ? (int) id(battery_pct).state : 0;'
@@ -2187,7 +2231,10 @@ interval:
             char b[48];
             float ma = id(ha_curr).has_state() ? fabsf(id(ha_curr).state) * 1000.0f : 0.0f;
             float w  = id(ha_pow).has_state()  ? fabsf(id(ha_pow).state)           : 0.0f;
-            if (id(battery_pct).has_state() && ma > 20.0f) {
+            if (id(g_batt_chg)) {
+              // a "time-left" while charging would be a lie — the charger pulls the voltage up
+              snprintf(b, sizeof(b), "%.2fW  %.0fmA  charging", w, ma);
+            } else if (id(battery_pct).has_state() && ma > 20.0f) {
               float hours = (id(battery_pct).state * ${battery_mah}.0f / 100.0f) / ma;   // pack size from substitutions
               snprintf(b, sizeof(b), "%.2fW  %.0fmA  ~%.1fh left", w, ma, hours);
             } else {

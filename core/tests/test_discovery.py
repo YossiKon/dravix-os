@@ -17,6 +17,7 @@ def test_discovery_full_robot():
         "camera.dravix_camera", "sensor.dravix_state", "sensor.kitchen_state",
         "sensor.dravix_last_heard", "sensor.dravix_last_reply",
         "text.dravix_show_image_url", "switch.dravix_privacy_mode",
+        "sensor.dravix_battery", "sensor.phone_battery", "sensor.door_lock_battery",
         "tts.piper",
     ))
     assert found["face_select"] == "select.dravix_face"
@@ -32,6 +33,8 @@ def test_discovery_full_robot():
     assert found["screensaver_number"] == "number.dravix_screensaver_after_min"
     assert found["sleep_number"] == "number.dravix_sleep_after_min"
     assert found["tts_engine"] == "tts.piper"
+    # battery is anchored to the robot's prefix — the phone/door batteries must not match
+    assert found["battery_sensor"] == "sensor.dravix_battery"
 
 
 def test_discovery_renamed_prefix():

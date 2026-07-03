@@ -52,6 +52,7 @@ export interface Live {
   state: string | null;
   heard: string | null;
   reply: string | null;
+  battery: number | null;
 }
 
 export interface HAEntity {

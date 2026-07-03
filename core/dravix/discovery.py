@@ -39,6 +39,8 @@ _ROLES: dict[str, tuple[str, tuple[str, ...], bool]] = {
     "image_url_text": ("text", ("show_image_url",), False),
     "privacy_switch": ("switch", ("privacy_mode",), False),
     "islocal_switch": ("switch", ("local_only",), False),
+    # anchored — half the house has *_battery sensors; only the robot's prefix counts
+    "battery_sensor": ("sensor", ("battery",), True),
     "screensaver_number": ("number", ("screensaver_after_min",), False),
     "sleep_number": ("number", ("sleep_after_min",), False),
 }

@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "dravix-os"
-version = "0.0.44"
+version = "0.0.45"
 description = "Companion OS layer for the M5Stack StackChan robot"
 readme = "../README.md"
 requires-python = ">=3.11"

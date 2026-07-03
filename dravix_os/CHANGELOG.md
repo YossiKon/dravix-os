@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.0.45
+
+- **An honest battery gauge** (firmware v4). The % now comes from a real battery model,
+  not a straight line: load-sag compensation using the INA226's live current (a servo
+  move no longer "drops" the battery), exponential smoothing, the true 1S-LiPo discharge
+  curve (that long flat 3.8V plateau), and charging detection. While charging the status
+  bar shows `%+` in cyan and says "charging" instead of a made-up time-left; low battery
+  turns the label red.
+- The good estimate is now a proper HA sensor (`Battery`, device-class battery) — visible
+  in HA, auto-discovered by dravix, and shown as a 🔋 chip on the dashboard Home tab
+  (red under 20%).
+
 ## 0.0.44
 
 - **Everything personal is now a local knob** (firmware v3): device name (run several
