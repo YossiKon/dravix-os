@@ -18,7 +18,7 @@ log = get_logger("dal")
 
 
 class Expression(str, Enum):
-    """Canonical emotions (mirrors m5stack-avatar's expression set)."""
+    """Canonical emotions (mirrors m5stack-avatar's expression set + its decorators)."""
 
     NEUTRAL = "neutral"
     HAPPY = "happy"
@@ -26,6 +26,8 @@ class Expression(str, Enum):
     ANGRY = "angry"
     SLEEPY = "sleepy"
     DOUBT = "doubt"
+    LOVE = "love"
+    DIZZY = "dizzy"
 
     @classmethod
     def coerce(cls, value: "Expression | str") -> "Expression":

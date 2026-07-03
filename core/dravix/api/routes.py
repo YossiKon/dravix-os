@@ -629,6 +629,30 @@ async def set_local_only(body: LocalOnlyBody, request: Request):
     return await apply_local_only(request.app.state, body.enabled)
 
 
+class LedsEffectBody(BaseModel):
+    effect: str  # one of the light bar's effect names, or "None" to stop
+
+
+@router.post("/api/robot/leds/effect")
+async def robot_leds_effect(body: LedsEffectBody, request: Request):
+    """Run one of the LED bar's built-in animated effects (BSP: Random / Rainbow /
+    Twinkle) — or "None" to stop. Uses the auto-discovered light entity."""
+    s = request.app.state
+    if s.ha is None:
+        raise HTTPException(status_code=503, detail="Home Assistant not configured")
+    eid = _effective_entities(request).get("led_light")
+    if not eid:
+        raise HTTPException(status_code=404, detail="no LED light discovered")
+    data: dict = {"entity_id": eid, "effect": body.effect}
+    if body.effect != "None":
+        data["brightness_pct"] = 70
+    try:
+        await s.ha.call_service("light", "turn_on", data)
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=502, detail=f"effect failed: {exc}") from exc
+    return {"ok": True, "effect": body.effect}
+
+
 # ── security mode — browse the saved snapshots ────────────────────────────────
 _SEC_DAY_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 _SEC_FILE_RE = re.compile(r"^\d{6}\.jpg$")

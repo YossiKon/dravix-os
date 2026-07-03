@@ -39,7 +39,7 @@ substitutions:
   # publishes it to HA ("Firmware version" sensor); the dravix dashboard compares it
   # with the version bundled in the add-on and shows "firmware update available".
   # (Maintainers: bump this on every firmware change. Users: don't touch.)
-  fw_version: "5"
+  fw_version: "6"
   # The ESPHome node name (mDNS hostname + the default entity prefix on a fresh flash).
   # Change it only if you run MORE THAN ONE robot — each needs a unique name. NOTE:
   # changing it on an already-adopted robot registers a NEW device in HA.
@@ -166,6 +166,20 @@ espnow:
           id(g_rc_fresh) = true;
           break;
         }
+
+# ── IR AWARENESS — the robot has an infrared RECEIVER (BSP). When anyone uses a TV/AC
+# remote in the room it notices and glances over, curious. (The BSP also gives it an IR
+# TRANSMITTER + a ready "Default AC" climate entity + an IR proxy — the robot doubles as
+# a Home Assistant IR blaster out of the box; nothing to configure here.)
+# (the BSP declares the receiver as a single mapping — package maps DEEP-MERGE, so these
+# triggers are added onto the BSP's ir_rx without redefining its pin)
+remote_receiver:
+  on_nec:
+    then: [ { script.execute: ir_glance } ]
+  on_samsung:
+    then: [ { script.execute: ir_glance } ]
+  on_coolix:
+    then: [ { script.execute: ir_glance } ]
 
 # The downloadable image for the ALERT page. Setting the "Show image URL" text entity
 # (from HA automations / the dravix add-on) fetches the URL and shows it full-screen for
@@ -885,6 +899,13 @@ lvgl:
               - obj: { id: cheek_l, align: CENTER, x: -58, y: 42, width: 28, height: 10, radius: 5,  bg_color: 0xFF9EB5, bg_opa: COVER, border_width: 0, hidden: true }
               - obj: { id: cheek_r, align: CENTER, x: 58,  y: 42, width: 28, height: 10, radius: 5,  bg_color: 0xFF9EB5, bg_opa: COVER, border_width: 0, hidden: true }
               - obj: { id: mouth,   align: CENTER, x: 0,   y: 64, width: 40, height: 8,  radius: 4,  bg_color: 0x33E6C8, bg_opa: COVER, border_width: 0 }
+              # ── decorators (ported from the original avatar): angry BROWS (slanted
+              #    lines above the eyes), a SWEAT drop (busy), and X-eyes (dizzy) ──
+              - line: { id: brow_l, points: ["70, 58", "128, 76"], line_width: 7, line_color: 0x14181d, line_rounded: true, hidden: true }
+              - line: { id: brow_r, points: ["192, 76", "250, 58"], line_width: 7, line_color: 0x14181d, line_rounded: true, hidden: true }
+              - obj: { id: sweat, align: CENTER, x: 100, y: -60, width: 14, height: 20, radius: 7, bg_color: 0x57c8ff, bg_opa: COVER, border_width: 0, hidden: true }
+              - label: { id: dz_l, align: CENTER, x: -58, y: -6, text: "x", text_font: big_font, text_color: 0x14181d, hidden: true }
+              - label: { id: dz_r, align: CENTER, x: 58,  y: -6, text: "x", text_font: big_font, text_color: 0x14181d, hidden: true }
         # zzz while sleeping
         - label:
             id: lbl_zzz
@@ -1520,6 +1541,26 @@ script:
       - script.execute: { id: head_nudge, dx: 0, dy: 12 }         # nuzzle up into your hand
       - delay: 900ms
       - script.execute: head_shake                                # happy little wiggle
+  # ── IR GLANCE — someone pressed a TV/AC remote: glance over, quizzical, then back.
+  #    mode: single + the trailing delay = fires at most once per ~20s, and never
+  #    interrupts sleep / screensaver / calm modes.
+  - id: ir_glance
+    mode: single
+    then:
+      - if:
+          condition:
+            lambda: |-
+              return !id(g_sleep) && !id(g_saver) && !id(g_night) && !id(g_focus)
+                     && !id(g_quiet) && !id(g_voice) && id(sw_drift).state;
+          then:
+            - lvgl.widget.update: { id: face_box, x: 22, y: -4 }
+            - globals.set: { id: g_expr, value: "5" }        # quizzical
+            - script.execute: render_face
+            - delay: 1600ms
+            - lvgl.widget.update: { id: face_box, x: 0, y: 0 }
+            - globals.set: { id: g_expr, value: "0" }
+            - script.execute: render_face
+      - delay: 20s
   # ── TICKLE (touch zone 3, back of the head) — giggly, faster than a calm pet ──
   - id: tickle
     mode: restart
@@ -1555,15 +1596,15 @@ script:
                 id(led_r)   = v.get_red();
                 id(led_g)   = v.get_green();
                 id(led_b)   = v.get_blue();
+      # the light bar has REAL animated effects built in (BSP) — run the rainbow
+      # while the head sways, instead of hand-rolled colour flips
+      - light.turn_on:
+          id: stackchan_light_bar
+          brightness: 100%
+          effect: "Rainbow Effect With Custom Values"
       - repeat:
           count: 12
           then:
-            - light.turn_on:
-                id: stackchan_light_bar
-                brightness: 100%
-                red: !lambda 'return random_float();'
-                green: !lambda 'return random_float();'
-                blue: !lambda 'return random_float();'
             - if:
                 condition: { lambda: 'return id(sw_move).state && !std::isnan(id(servo_x_angle).state);' }
                 then:
@@ -1571,11 +1612,12 @@ script:
                       id: servo_x_angle
                       value: !lambda 'id(g_pn)++; return (id(g_pn) % 2) ? 20.0f : -20.0f;'
             - delay: 620ms
-      # settle: head back to centre, LEDs back to how they were
+      # settle: head back to centre, effect off, LEDs back to how they were
       - if:
           condition: { lambda: 'return id(sw_move).state;' }
           then:
             - number.set: { id: servo_x_angle, value: "0" }
+      - light.turn_on: { id: stackchan_light_bar, effect: "None" }
       - if:
           condition: { lambda: 'return !id(g_voice);' }
           then:
@@ -1621,12 +1663,12 @@ script:
             if (!id(g_sleep)) return std::string("");
             const char* z[] = {"z", "z z", "z z z", ""};
             return std::string(z[id(g_anim) % 4]);
-      # pink cheeks only on a happy idle face (and greet)
+      # pink cheeks on a happy or in-love idle face (and greet)
       - if:
           condition:
             lambda: |-
               return !id(g_sleep) && !id(g_listen) && !id(g_talk) && !id(g_blink)
-                     && !id(g_saver) && !id(g_focus) && id(g_expr) == 1;
+                     && !id(g_saver) && !id(g_focus) && (id(g_expr) == 1 || id(g_expr) == 6);
           then: [ { lvgl.widget.show: cheek_l }, { lvgl.widget.show: cheek_r } ]
           else: [ { lvgl.widget.hide: cheek_l }, { lvgl.widget.hide: cheek_r } ]
       - if:
@@ -1682,36 +1724,69 @@ script:
           condition: { lambda: 'return !id(g_sleep) && !id(g_blink) && !id(g_listen) && !id(g_talk) && !id(g_saver) && !id(g_focus);' }
           then:
             - if:  # neutral
-                condition: { lambda: 'return id(g_expr) % 6 == 0;' }
+                condition: { lambda: 'return id(g_expr) == 0;' }
                 then:
                   - script.execute: { id: set_eyes, w: 64, h: 64, r: 22, dy: 0 }
                   - script.execute: { id: set_mouth, w: 40, h: 8, r: 4, dy: 64 }
             - if:  # happy — squinted "^^" eyes, wide smile, cheeks
-                condition: { lambda: 'return id(g_expr) % 6 == 1;' }
+                condition: { lambda: 'return id(g_expr) == 1;' }
                 then:
                   - script.execute: { id: set_eyes, w: 70, h: 26, r: 13, dy: -6 }
                   - script.execute: { id: set_mouth, w: 86, h: 10, r: 5, dy: 58 }
             - if:  # sad — droopy small eyes, tiny low mouth
-                condition: { lambda: 'return id(g_expr) % 6 == 2;' }
+                condition: { lambda: 'return id(g_expr) == 2;' }
                 then:
                   - script.execute: { id: set_eyes, w: 52, h: 38, r: 15, dy: 10 }
                   - script.execute: { id: set_mouth, w: 26, h: 8, r: 4, dy: 70 }
             - if:  # angry — narrowed sharp eyes
-                condition: { lambda: 'return id(g_expr) % 6 == 3;' }
+                condition: { lambda: 'return id(g_expr) == 3;' }
                 then:
                   - script.execute: { id: set_eyes, w: 70, h: 22, r: 7, dy: -2 }
                   - script.execute: { id: set_mouth, w: 48, h: 8, r: 4, dy: 64 }
             - if:  # sleepy — heavy lids
-                condition: { lambda: 'return id(g_expr) % 6 == 4;' }
+                condition: { lambda: 'return id(g_expr) == 4;' }
                 then:
                   - script.execute: { id: set_eyes, w: 64, h: 14, r: 7, dy: 8 }
                   - script.execute: { id: set_mouth, w: 34, h: 8, r: 4, dy: 66 }
             - if:  # doubt — one raised eye, one squinted (asymmetric!)
-                condition: { lambda: 'return id(g_expr) % 6 == 5;' }
+                condition: { lambda: 'return id(g_expr) == 5;' }
                 then:
                   - script.execute: { id: set_eyes, w: 64, h: 64, r: 22, dy: 0 }
                   - lvgl.widget.update: { id: eye_r, height: 30, y: 6 }
                   - script.execute: { id: set_mouth, w: 30, h: 8, r: 4, dy: 66 }
+            - if:  # LOVE — big soft PINK eyes, blushing cheeks, wide smile
+                condition: { lambda: 'return id(g_expr) == 6;' }
+                then:
+                  - script.execute: { id: set_eyes, w: 72, h: 66, r: 30, dy: -2 }
+                  - lvgl.widget.update: { id: eye_l, bg_color: 0xFF5C8A }
+                  - lvgl.widget.update: { id: eye_r, bg_color: 0xFF5C8A }
+                  - script.execute: { id: set_mouth, w: 80, h: 10, r: 5, dy: 58 }
+            - if:  # DIZZY — the eyes become little x-es (just been spun around)
+                condition: { lambda: 'return id(g_expr) == 7;' }
+                then:
+                  - script.execute: { id: set_eyes, w: 8, h: 8, r: 4, dy: 0 }   # eyes shrink away
+                  - script.execute: { id: set_mouth, w: 22, h: 8, r: 4, dy: 68 }
+      # ── decorators (original-avatar style): brows on angry · x-eyes on dizzy ·
+      #    a sweat drop while busy. Shown only on an idle face; hidden in every
+      #    other state so they never linger.
+      - if:
+          condition:
+            lambda: |-
+              return !id(g_sleep) && !id(g_listen) && !id(g_talk) && !id(g_blink)
+                     && !id(g_saver) && !id(g_focus) && id(g_expr) == 3;
+          then: [ { lvgl.widget.show: brow_l }, { lvgl.widget.show: brow_r } ]
+          else: [ { lvgl.widget.hide: brow_l }, { lvgl.widget.hide: brow_r } ]
+      - if:
+          condition:
+            lambda: |-
+              return !id(g_sleep) && !id(g_listen) && !id(g_talk) && !id(g_blink)
+                     && !id(g_saver) && !id(g_focus) && id(g_expr) == 7;
+          then: [ { lvgl.widget.show: dz_l }, { lvgl.widget.show: dz_r } ]
+          else: [ { lvgl.widget.hide: dz_l }, { lvgl.widget.hide: dz_r } ]
+      - if:
+          condition: { lambda: 'return id(g_busy) && !id(g_sleep) && !id(g_saver);' }
+          then: [ { lvgl.widget.show: sweat } ]
+          else: [ { lvgl.widget.hide: sweat } ]
       # Publish the live state to HA (only when it actually changed).
       - lambda: |-
           std::string s = id(g_sleep)  ? "sleep"
@@ -1931,7 +2006,7 @@ select:
     name: "Face"
     id: robot_face
     optimistic: true
-    options: [neutral, happy, sad, angry, sleepy, doubt]
+    options: [neutral, happy, sad, angry, sleepy, doubt, love, dizzy]
     initial_option: neutral
     set_action:
       - globals.set:
@@ -1942,6 +2017,8 @@ select:
             else if (x == "angry") return 3;
             else if (x == "sleepy") return 4;
             else if (x == "doubt") return 5;
+            else if (x == "love") return 6;
+            else if (x == "dizzy") return 7;
             return 0;
       - script.execute: render_face
       # Every emotion also has a LED colour + body language:
@@ -1970,6 +2047,16 @@ select:
           then:
             - script.execute: { id: led_flash, r: 60, g: 0, b: 100 }    # purple
             - script.execute: { id: head_nudge, dx: 14, dy: 0 }         # quizzical side-glance
+      - if:
+          condition: { lambda: 'return x == "love";' }
+          then:
+            - script.execute: { id: led_flash, r: 100, g: 20, b: 45 }   # warm pink
+            - script.execute: head_nod                                   # an adoring little nod
+      - if:
+          condition: { lambda: 'return x == "dizzy";' }
+          then:
+            - script.execute: { id: led_flash, r: 55, g: 25, b: 100 }   # woozy violet
+            - script.execute: head_shake                                 # shakes it off
   # The ONE place a mode is applied — every mode path goes through this select, so
   # Home Assistant + the dravix dashboard always show the true mode.
   #   awake   ער — bright, full behaviour
@@ -2004,6 +2091,20 @@ select:
       - globals.set: { id: g_quiet, value: !lambda 'return x == std::string("quiet");' }
       - globals.set: { id: g_saver, value: "false" }
       - script.execute: render_face
+      # GRACEFUL MOTION — the serial-bus servos take a speed setting (the BSP exposes
+      # it; the official remote drives them at 600). Calm modes get slow, gentle moves.
+      - number.set:
+          id: servo_x_speed
+          value: !lambda |-
+            return (x == std::string("night") || x == std::string("quiet")
+                    || x == std::string("focus")) ? 300.0f : 600.0f;
+      - delay: 350ms   # SCS9009 bus spacing
+      - number.set:
+          id: servo_y_speed
+          value: !lambda |-
+            return (x == std::string("night") || x == std::string("quiet")
+                    || x == std::string("focus")) ? 300.0f : 600.0f;
+      - delay: 350ms
       # per-mode screen + body
       - if:
           condition: { lambda: 'return x == std::string("sleep");' }

@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.0.47
+
+Mined the original StackChan firmware + the M5Stack BSP for unused hardware — and
+wired all of it in (firmware v6):
+
+- **The robot is an IR blaster**: the BSP ships an infrared transmitter + a ready
+  "Default AC" climate entity + an IR proxy for Home Assistant — pick
+  `climate.*_default_ac` in the dashboard's Climate tab and the ROBOT controls your AC.
+  And with the IR **receiver**, the robot now notices when anyone uses a TV/AC remote
+  in the room and glances over, curious (throttled, never in calm modes).
+- **Two new expressions** (ported from the original avatar's decorators): **in love**
+  (pink eyes + blush + adoring nod) and **dizzy** (x_x eyes + a shake) — plus real
+  **angry eyebrows** and a **sweat drop** while busy.
+- **Real LED animations**: Party now runs the light bar's built-in rainbow effect, and
+  the dashboard's LED section gained effect buttons — Rainbow / Twinkle / Random / Stop.
+- **Graceful motion**: calm modes (night/quiet/focus) slow the head servos to gentle,
+  quiet moves; normal speed everywhere else.
+
 ## 0.0.46
 
 - **The battery number is now the REAL one** (firmware v5): read straight from the

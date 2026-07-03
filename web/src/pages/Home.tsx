@@ -51,6 +51,8 @@ const FACES: { name: string; glyph: string; he: string; en: string }[] = [
   { name: "angry", glyph: ">_<", he: "כועס", en: "Angry" },
   { name: "sleepy", glyph: "u_u", he: "עייף", en: "Sleepy" },
   { name: "doubt", glyph: "o_O", he: "מסופק", en: "Doubt" },
+  { name: "love", glyph: "♥_♥", he: "מאוהב", en: "In love" },
+  { name: "dizzy", glyph: "x_x", he: "מסוחרר", en: "Dizzy" },
 ];
 
 const LED_COLORS: { name: string; css: string; he: string; en: string }[] = [
@@ -455,6 +457,26 @@ export function HomePage(props: { config: RobotConfig | null }) {
           >
             {tr("⏻ כבוי", "⏻ Off")}
           </button>
+        </div>
+        {/* the LED bar's built-in animated effects (run on-device) */}
+        <div className="mt-3 flex flex-wrap gap-2">
+          {(
+            [
+              { he: "🌈 קשת", en: "🌈 Rainbow", effect: "Rainbow Effect With Custom Values" },
+              { he: "✨ נצנוץ", en: "✨ Twinkle", effect: "Twinkle Effect With Custom Values" },
+              { he: "🎲 אקראי", en: "🎲 Random", effect: "Random" },
+              { he: "⏹ עצור", en: "⏹ Stop", effect: "None" },
+            ] as const
+          ).map((e) => (
+            <button
+              key={e.effect}
+              className="chip"
+              disabled={busy !== null}
+              onClick={() => void run("ledfx", () => apiSend("/api/robot/leds/effect", "POST", { effect: e.effect }))}
+            >
+              {tr(e.he, e.en)}
+            </button>
+          ))}
         </div>
       </Section>
 
