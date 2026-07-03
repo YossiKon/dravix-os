@@ -57,23 +57,22 @@ talks to HA core over REST/WebSocket. There is no cloud in the loop.
    **Step 0 — Back up the original firmware** in
    [docs/esphome-local-control.md](docs/esphome-local-control.md).
 
-3. **Flash the dravix ESPHome firmware.** In the ESPHome Builder, **Validate** then flash
-   [`deploy/esphome/stackchan-dravix.yaml`](deploy/esphome/stackchan-dravix.yaml). The robot joins
-   Wi-Fi and appears in HA as a device with entities (face, head servos, media player, LEDs,
-   camera, touch, vitals). Full walkthrough — flashing, first-boot tuning, entity ids —
-   [docs/esphome-local-control.md](docs/esphome-local-control.md).
+3. **Flash the dravix ESPHome firmware.** The easy way: create a new device in the ESPHome
+   Builder and paste the ~10-line
+   [`deploy/esphome/stackchan-from-git.yaml`](deploy/esphome/stackchan-from-git.yaml) — it pulls
+   the real firmware from this repo at build time, so future firmware updates are just
+   **Install** again. (Prefer a frozen copy? Flash
+   [`deploy/esphome/stackchan-dravix.yaml`](deploy/esphome/stackchan-dravix.yaml) directly —
+   the `substitutions:` block at its top is the only part you may want to tune.) Full
+   walkthrough: [docs/esphome-local-control.md](docs/esphome-local-control.md).
 
-4. **Point dravix at the entities.** Open the add-on → **Configuration**. Leave `robot_driver: ha`
-   and fill in the entity ids HA created — `robot_entity_face`, `robot_entity_head_yaw`,
-   `robot_entity_head_pitch`, `robot_entity_media_player`, `robot_entity_light`,
-   `robot_entity_camera` — plus your HA connection details. **Save → Restart.**
+4. **Start the add-on.** No configuration needed: it authenticates to Home Assistant by itself
+   (Supervisor token) and **auto-discovers every robot entity** — face, head servos, mode,
+   speaker, LEDs, camera, sensors. **Start** it, that's all.
 
 5. **Open the dashboard.** Click **Open Web UI** on the add-on page (or browse to
-   `http://<home-assistant>:8800`). Map the **Live state** (`sensor.*_state`) and **Mode**
-   (`select.*_mode`) entities, calibrate the head per-axis, and you're live.
-
-> **Tip:** mapping the **Live state** + **Mode** entities is what lets the life system stay silent
-> in focus/sleep and put the robot to sleep on its own — don't skip it.
+   `http://<home-assistant>:8800`). Settings shows what was auto-detected (read-only), the
+   header has a live English/עברית toggle, and you can name your robot. You're live.
 
 Reversible at any time: re-flash your backup (or the stock firmware via M5Burner) and the robot is
 back to how it was.
