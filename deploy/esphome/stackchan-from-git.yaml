@@ -5,21 +5,46 @@
 #  one). It pulls the real firmware straight from the dravix-os repo at build time, so
 #  UPDATING THE FIRMWARE = the repo updated → you press Install. No copy-pasting.
 #
-#  · secrets (wifi_ssid / wifi_password) stay in YOUR ESPHome secrets.yaml, as usual.
+#  EVERYTHING PERSONAL LIVES HERE (or in your secrets), never in the repo file:
+#  · Wi-Fi: put wifi_ssid / wifi_password in your ESPHome secrets.yaml, as usual.
+#  · Every per-person knob is a substitution below — uncomment what you need; local
+#    values WIN over the repo's defaults.
+#
 #  · pick how you track the repo with `ref:`:
 #       ref: main                 → always the latest (refresh: 0s re-checks every build)
 #       ref: <a tag or commit>    → pinned; bump it yourself when you want to update
 #  · ROLLBACK — new firmware misbehaving? Every release is tagged: set for example
-#       ref: v0.0.41
+#       ref: v0.0.42
 #    (pick any older tag from the repo's Releases page), press Install, done.
-#  · to override any tuning knob, uncomment `substitutions:` — local values WIN over
-#    the ones in the repo file (see the substitutions block there for the full list).
 # ════════════════════════════════════════════════════════════════════════════════
 
-# substitutions:
-#   ha_prefix: "dravix"        # your robot's HA entity prefix (fresh flash = "stackchan")
-#   battery_mah: "500"
-#   prox_near: "150"
+substitutions:
+  # ── identity ──────────────────────────────────────────────────────────────────
+  # Running more than one robot? Give each a unique node name (mDNS + fresh-flash
+  # entity prefix). Changing this on an adopted robot registers a NEW device in HA.
+  # device_name: "stackchan"
+  # friendly_name: "stackchan"
+  # The entity-id prefix HA gave the robot's sensors. Fresh flash = the device_name;
+  # if you renamed the device in HA (the dravix convention is "Dravix"), put that here.
+  ha_prefix: "dravix"
+  # A second prefix that is ALSO listened on (covers HA's "<area>_<device>" rename
+  # quirk). Harmless if it doesn't exist; leave equal to ha_prefix when unsure.
+  # ha_prefix_alt: "dravix"
+
+  # ── voice ─────────────────────────────────────────────────────────────────────
+  # The on-device wake word (any micro_wake_word model name).
+  # wake_word_model: "okay_nabu"
+
+  # ── battery (for the status-bar % and time-left) ──────────────────────────────
+  # battery_mah: "500"        # your pack's capacity
+  # batt_v_empty: "3.30"      # LiPo voltage read as 0%
+  # batt_v_full: "4.15"       # …and as 100%
+
+  # ── room thresholds (greet-on-approach + sleep-when-dark) ─────────────────────
+  # prox_near: "150"          # proximity counts above this = someone came close
+  # prox_far: "80"            # …and below this = they left
+  # lux_dark: "5"             # lux below this = room went dark → sleep
+  # lux_bright: "30"          # lux above this = light came back → wake
 
 packages:
   dravix_firmware:

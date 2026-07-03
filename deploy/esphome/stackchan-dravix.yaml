@@ -39,7 +39,14 @@ substitutions:
   # publishes it to HA ("Firmware version" sensor); the dravix dashboard compares it
   # with the version bundled in the add-on and shows "firmware update available".
   # (Maintainers: bump this on every firmware change. Users: don't touch.)
-  fw_version: "2"
+  fw_version: "3"
+  # The ESPHome node name (mDNS hostname + the default entity prefix on a fresh flash).
+  # Change it only if you run MORE THAN ONE robot — each needs a unique name. NOTE:
+  # changing it on an already-adopted robot registers a NEW device in HA.
+  device_name: "stackchan"
+  friendly_name: "stackchan"
+  # The on-device wake word (see the micro_wake_word docs for available models).
+  wake_word_model: "okay_nabu"
   # The entity-id prefix HA gave the robot's own sensors (battery, touch, proximity…).
   # dravix-os convention: rename the device to "Dravix" in HA (Settings → Devices →
   # rename → let HA update the entity ids) and keep this as "dravix". A FRESH flash
@@ -61,8 +68,8 @@ substitutions:
   lux_bright: "30"   # lux above this = light came back → wake
 
 esphome:
-  name: stackchan
-  friendly_name: stackchan
+  name: ${device_name}
+  friendly_name: ${friendly_name}
   # LIST form on purpose: package lists CONCATENATE, so the BSP's own on_boot automations
   # (RTC clock read + restoring the servos' calibration offsets!) are kept. A mapping here
   # would silently REPLACE them — and the head would boot uncalibrated every time.
@@ -111,7 +118,7 @@ wifi:
   ssid: !secret wifi_ssid
   password: !secret wifi_password
   ap:
-    ssid: "stackchan Fallback Hotspot"
+    ssid: "${device_name} Fallback Hotspot"
 
 captive_portal:
 
@@ -2309,7 +2316,7 @@ touchscreen:
 micro_wake_word:
   microphone: i2s_mic
   models:
-    - model: okay_nabu           # say "Okay, Nabu" to wake it
+    - model: ${wake_word_model}   # default: say "Okay, Nabu" to wake it
   on_wake_word_detected:
     - voice_assistant.start
 
