@@ -45,11 +45,6 @@ substitutions:
   # The on-device wake word (any micro_wake_word model name).
   # wake_word_model: "okay_nabu"
 
-  # ── battery (for the status-bar % and time-left) ──────────────────────────────
-  # battery_mah: "500"        # your pack's capacity
-  # batt_v_empty: "3.30"      # LiPo voltage read as 0%
-  # batt_v_full: "4.15"       # …and as 100%
-
   # ── room thresholds (greet-on-approach + sleep-when-dark) ─────────────────────
   # prox_near: "150"          # proximity counts above this = someone came close
   # prox_far: "80"            # …and below this = they left

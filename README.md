@@ -72,7 +72,7 @@ Follow **Step 0 — Back up the original firmware** in
 3. Edit the two **Wi-Fi lines** at the top (`ssid:` / `password:` — your home network).
    That tiny file is the only thing that ever lives in your ESPHome: it pulls the real firmware
    from this repo on every build, so **firmware updates = press Install again**. All personal
-   tuning (device name, wake word, battery, thresholds) is right there as commented lines.
+   tuning (device name, wake word, room thresholds) is right there as commented lines.
 
 ### Step 2 · First flash (USB, once)
 

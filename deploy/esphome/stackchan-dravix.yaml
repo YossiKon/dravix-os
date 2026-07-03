@@ -56,8 +56,10 @@ substitutions:
   # where re-registered entities get an "<area>_<device>" prefix. A prefix that does
   # not exist is harmless; leave equal to ha_prefix when unsure.
   ha_prefix_alt: "dravix"
-  # Battery: pack capacity (mAh) for the time-left estimate, and the LiPo voltage
-  # window used to derive % when no battery_level sensor exists (1S cell defaults).
+  # Battery — a property of the StackChan HARDWARE, not a per-person setting (same kit,
+  # same cell): capacity for the time-left estimate + the LiPo voltage window used to
+  # derive % when no battery_level sensor exists. Only change if you physically swapped
+  # the battery for a different one.
   battery_mah: "500"
   batt_v_empty: "3.30"
   batt_v_full: "4.15"
