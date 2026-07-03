@@ -20,7 +20,8 @@ class PomodoroMode(Mode):
         self._work_s = float(self.ctx.config.get("work_minutes", 25)) * 60
         self._break_s = float(self.ctx.config.get("break_minutes", 5)) * 60
         self._deadline = time.monotonic() + self._work_s
-        await self._announce_phase("Let's focus. 25 minutes, starting now.")
+        minutes = f"{self._work_s / 60:g}"  # announce the CONFIGURED length, not a fixed 25
+        await self._announce_phase(f"Let's focus. {minutes} minutes, starting now.")
 
     async def on_exit(self) -> None:
         if self.ctx.robot.supports(CAP_FACE):

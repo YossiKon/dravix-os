@@ -33,11 +33,15 @@ export function RobotFace(props: { state: string | null; online: boolean }) {
   }, []);
   useEffect(() => {
     if (state !== "awake" && state !== null) return;
+    let unblink: ReturnType<typeof setTimeout> | undefined;
     const t = setInterval(() => {
       setBlink(true);
-      setTimeout(() => setBlink(false), 160);
+      unblink = setTimeout(() => setBlink(false), 160);
     }, 3800);
-    return () => clearInterval(t);
+    return () => {
+      clearInterval(t);
+      if (unblink !== undefined) clearTimeout(unblink);
+    };
   }, [state]);
 
   let glyph = "o_o";

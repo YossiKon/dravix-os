@@ -23,12 +23,18 @@ export function toastErr(e: unknown): void {
 export function Toaster() {
   const [items, setItems] = useState<ToastMsg[]>([]);
   useEffect(() => {
+    const timers = new Set<ReturnType<typeof setTimeout>>();
     push = (t) => {
       setItems((cur) => [...cur, t]);
-      setTimeout(() => setItems((cur) => cur.filter((x) => x.id !== t.id)), 3500);
+      const id = setTimeout(() => {
+        timers.delete(id);
+        setItems((cur) => cur.filter((x) => x.id !== t.id));
+      }, 3500);
+      timers.add(id);
     };
     return () => {
       push = null;
+      timers.forEach(clearTimeout);
     };
   }, []);
   return (

@@ -56,11 +56,9 @@ export function ScreensPage(props: { entities: HAEntity[] }) {
   return (
     <div className="space-y-4">
       <p className="animate-rise text-sm text-mute">
-        {tr("מחליקים ", "Swipe ")}
-        <b className="text-soft">{tr("ימינה / שמאלה", "left / right")}</b>
         {tr(
-          ` על מסך הרובוט כדי לעבור בין 3 כרטיסים. כאן בוחרים מה יופיע על כל אחד (עד ${MAX_PER_CARD} ישויות לכרטיס).`,
-          ` on the robot's screen to move between the 3 cards. Here you pick what appears on each (up to ${MAX_PER_CARD} entities per card).`,
+          `מחליקים ימינה / שמאלה על מסך הרובוט כדי לעבור בין 3 כרטיסים. כאן בוחרים מה יופיע על כל אחד (עד ${MAX_PER_CARD} ישויות לכרטיס).`,
+          `Swipe left / right on the robot's screen to move between the 3 cards. Here you pick what appears on each (up to ${MAX_PER_CARD} entities per card).`,
         )}
       </p>
       {cards.map((card, i) => (

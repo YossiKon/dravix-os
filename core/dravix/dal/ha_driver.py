@@ -103,17 +103,36 @@ class HARobotDriver(RobotDriver):
             "select", "select_option", {"entity_id": sel, "option": mode}
         )
 
+    async def mode_options(self) -> list[str] | None:
+        """The mode select's REAL options (from its HA attributes), or None if unknown —
+        lets the API report what the firmware actually accepts instead of a guessed set."""
+        sel = self._entities.get("mode_select")
+        if not sel:
+            return None
+        try:
+            attrs = (await self._ha.get_state(sel)).get("attributes", {})
+        except Exception:  # noqa: BLE001 — unknown, fall back to the static set
+            return None
+        opts = attrs.get("options")
+        return [str(o) for o in opts] if isinstance(opts, list) and opts else None
+
     async def _num_range(
         self, entity_id: str
     ) -> tuple[float | None, float | None, float | None]:
-        """Return (min, max, step) for a number entity, cached (from its HA attributes)."""
+        """Return (min, max, step) for a number entity (from its HA attributes).
+
+        Only a SUCCESSFUL lookup (real min/max) is cached — a robot that's offline/unavailable
+        must not poison the cache with (None, None, None), or the head would stay dead after
+        it comes back online. Failed lookups are simply retried on the next call."""
         meta = self._num_meta.get(entity_id)
-        if meta is None:
-            try:
-                attrs = (await self._ha.get_state(entity_id)).get("attributes", {})
-                meta = (attrs.get("min"), attrs.get("max"), attrs.get("step"))
-            except Exception:  # noqa: BLE001 — best effort; use the raw value
-                meta = (None, None, None)
+        if meta is not None:
+            return meta
+        try:
+            attrs = (await self._ha.get_state(entity_id)).get("attributes", {})
+            meta = (attrs.get("min"), attrs.get("max"), attrs.get("step"))
+        except Exception:  # noqa: BLE001 — best effort; use the raw value
+            return (None, None, None)
+        if meta[0] is not None and meta[1] is not None:
             self._num_meta[entity_id] = meta
         return meta
 
@@ -252,11 +271,13 @@ class HARobotDriver(RobotDriver):
                 "assist_satellite.* to enable speech"
             )
         # tts.speak: entity_id = the TTS engine, media_player_entity_id = the speaker.
-        await self._ha.call_service(
-            "tts",
-            "speak",
-            {"entity_id": engine, "media_player_entity_id": media, "message": text},
-        )
+        data: dict[str, Any] = {
+            "entity_id": engine, "media_player_entity_id": media, "message": text,
+        }
+        if voice:
+            # tts.speak forwards engine options; piper/cloud/... pick the voice from here.
+            data["options"] = {"voice": voice}
+        await self._ha.call_service("tts", "speak", data)
 
     async def set_leds(self, color: str, brightness: float = 1.0) -> None:
         light = self._entities.get("led_light")

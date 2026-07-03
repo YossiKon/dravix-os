@@ -1,21 +1,23 @@
 # The Mamad Pack — the robot as a work-room / security-room companion
 
-The robot lives on the desk in a work+gaming room that is also the apartment's mamad
-(reinforced security room). Everything below is **HA automations only — no reflash needed**
+For desks that live in a work/gaming room which doubles as the apartment's mamad
+(reinforced security room — common in Israeli homes). Everything below is
+**HA automations only — no reflash needed**
 (uses the entities the dravix firmware already exposes: `select.dravix_mode`,
 `sensor.dravix_state`, `light.dravix_stackchan_light_bar`, `text.dravix_show_image_url`).
 
-First add these helpers to `configuration.yaml` (once):
+First add these helpers to `configuration.yaml` (once) — replace `<DRAVIX_HOST>` with the
+address of the machine running the dravix-os add-on/service (e.g. your HA host's IP):
 
 ```yaml
 rest_command:
   dravix_announce:
-    url: "http://192.168.50.134:8800/api/announce"
+    url: "http://<DRAVIX_HOST>:8800/api/announce"
     method: post
     content_type: application/json
     payload: '{"text": "{{ text }}", "expression": "{{ expression | default(''neutral'') }}"}'
   dravix_emote:
-    url: "http://192.168.50.134:8800/api/robot/emote"
+    url: "http://<DRAVIX_HOST>:8800/api/robot/emote"
     method: post
     content_type: application/json
     payload: '{"name": "{{ name }}"}'

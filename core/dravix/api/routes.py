@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import asyncio
+import re
+from urllib.parse import urlparse
 
 import httpx
 from fastapi import APIRouter, HTTPException, Request, WebSocket, WebSocketDisconnect
@@ -154,13 +156,33 @@ async def robot_leds(body: LedsBody, request: Request):
 _ROBOT_MODES = {"awake", "morning", "focus", "quiet", "night", "busy", "sleep"}
 
 
+async def _mode_options(drv) -> list[str] | None:
+    """The mode select's REAL options when the driver can report them (HA), else None."""
+    getter = getattr(drv, "mode_options", None)
+    if getter is None:
+        return None
+    try:
+        return await getter()
+    except Exception:  # noqa: BLE001 — unknown, fall back to the static set
+        return None
+
+
 @router.post("/api/robot/mode")
 async def set_robot_mode(body: ModeBody, request: Request):
     """Put the robot to sleep / wake it via its HA ``mode_select`` entity."""
     mode = body.mode.strip().lower()
-    if mode not in _ROBOT_MODES:
-        raise HTTPException(status_code=400, detail=f"unknown mode {body.mode!r}")
     drv = request.app.state.robot.driver
+    # Validate against what the firmware ACTUALLY accepts (the select's options attribute)
+    # when readable; the static set is only the fallback for backends that can't report it.
+    options = await _mode_options(drv)
+    if options is not None:
+        if mode not in options:
+            raise HTTPException(
+                status_code=400,
+                detail=f"unknown mode {body.mode!r} — available: {', '.join(options)}",
+            )
+    elif mode not in _ROBOT_MODES:
+        raise HTTPException(status_code=400, detail=f"unknown mode {body.mode!r}")
     setter = getattr(drv, "set_mode", None)
     if setter is None:
         raise HTTPException(status_code=409, detail="active backend has no mode control")
@@ -169,6 +191,12 @@ async def set_robot_mode(body: ModeBody, request: Request):
     except NotImplementedError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     except Exception as exc:  # noqa: BLE001
+        options = await _mode_options(drv)
+        if options:
+            raise HTTPException(
+                status_code=400,
+                detail=f"mode {mode!r} was rejected — available: {', '.join(options)}",
+            ) from exc
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     return {"ok": True, "mode": mode}
 
@@ -235,6 +263,7 @@ def _robot_config_payload(request: Request) -> dict:
         "online": st.online,
         "last_error": getattr(st, "last_error", "") or "",
         "ha_configured": s.ha is not None,
+        "robot_name": s.store.robot_name(),
     }
 
 
@@ -548,6 +577,21 @@ async def get_config(request: Request):
     }
 
 
+class RobotNameBody(BaseModel):
+    name: str = ""
+
+
+@router.put("/api/config/robot_name")
+async def set_robot_name(body: RobotNameBody, request: Request):
+    """Name the robot. Shows in the dashboard header and is fed to the AI persona
+    ("your name is …"), so it answers to the name. Empty = default branding."""
+    name = body.name.strip()
+    if len(name) > 40:
+        raise HTTPException(status_code=400, detail="name too long (max 40 chars)")
+    request.app.state.store.set_robot_name(name)
+    return {"robot_name": name}
+
+
 @router.put("/api/config/ai_provider")
 async def set_ai_provider(body: AIProviderBody, request: Request):
     request.app.state.store.set_ai_provider(body.provider)
@@ -586,12 +630,38 @@ class FrigateShowBody(BaseModel):
     alert: bool = False
 
 
+# SSRF guards: a Frigate camera is a bare name; a HA camera is camera.<object_id>. Anything
+# else (path tricks, spaces, schemes) is rejected before it reaches a URL or the HA proxy.
+_CAMERA_NAME_RE = re.compile(r"^[A-Za-z0-9_-]+$")
+_CAMERA_ENTITY_RE = re.compile(r"^camera\.[A-Za-z0-9_]+$")
+_MAX_IMAGE_BYTES = 5 * 1024 * 1024  # cap server-side fetches of user-supplied URLs
+
+
+async def _fetch_image(url: str) -> bytes:
+    """Fetch a user-supplied image URL with a short timeout + a hard size cap."""
+    buf = bytearray()
+    async with httpx.AsyncClient(timeout=5.0, follow_redirects=False) as c:
+        try:
+            async with c.stream("GET", url) as r:
+                r.raise_for_status()
+                async for chunk in r.aiter_bytes():
+                    buf.extend(chunk)
+                    if len(buf) > _MAX_IMAGE_BYTES:
+                        raise HTTPException(status_code=400, detail="image too large (max 5 MB)")
+        except httpx.HTTPError as exc:
+            raise HTTPException(status_code=502, detail=f"fetch failed: {exc}") from exc
+    return bytes(buf)
+
+
 @router.post("/api/robot/show_image")
 async def robot_show_image(body: ShowImageBody, request: Request):
     """Display an image URL on the robot's screen.
 
     Preferred path: the robot downloads the URL itself (the firmware's Show-image slot).
-    Fallback: fetch here and push the bytes (MCP driver)."""
+    Fallback: fetch here (size-capped) and push the bytes (MCP driver)."""
+    # Empty is allowed only for the firmware slot (it means "back to the face").
+    if body.url and urlparse(body.url).scheme.lower() not in ("http", "https"):
+        raise HTTPException(status_code=400, detail="url must be http(s)")
     shower = getattr(request.app.state.robot.driver, "show_image_url", None)
     if shower is not None:
         try:
@@ -601,14 +671,9 @@ async def robot_show_image(body: ShowImageBody, request: Request):
             pass  # role not mapped — fall through to the bytes path
         except Exception as exc:  # noqa: BLE001
             raise HTTPException(status_code=502, detail=str(exc)) from exc
-    async with httpx.AsyncClient(timeout=10.0) as c:
-        try:
-            r = await c.get(body.url)
-            r.raise_for_status()
-        except httpx.HTTPError as exc:
-            raise HTTPException(status_code=502, detail=f"fetch failed: {exc}") from exc
-    await _guard(_robot(request).show_image(r.content))
-    return {"ok": True, "bytes": len(r.content)}
+    img = await _fetch_image(body.url)
+    await _guard(_robot(request).show_image(img))
+    return {"ok": True, "bytes": len(img)}
 
 
 @router.get("/api/frigate/cameras")
@@ -629,6 +694,11 @@ async def frigate_show(body: FrigateShowBody, request: Request):
     camera = body.camera or s.settings.frigate_camera
     if not camera:
         raise HTTPException(status_code=400, detail="no camera given and DRAVIX_FRIGATE_CAMERA is empty")
+    if not (_CAMERA_NAME_RE.fullmatch(camera) or _CAMERA_ENTITY_RE.fullmatch(camera)):
+        raise HTTPException(
+            status_code=400,
+            detail="invalid camera — use a Frigate camera name or a camera.* entity id",
+        )
     shown = False
     shower = getattr(s.robot.driver, "show_image_url", None)
     frigate_base = (s.settings.frigate_url or "").rstrip("/")
@@ -1145,6 +1215,9 @@ async def export_store(request: Request):
 
 @router.post("/api/import")
 async def import_store(body: ImportBody, request: Request):
+    bad = request.app.state.store.validate_patch(body.store)
+    if bad:
+        raise HTTPException(status_code=400, detail="invalid keys: " + ", ".join(bad))
     request.app.state.store.update(body.store)  # only known keys are applied
     _rebuild_ai(request)
     _refresh_voice(request)

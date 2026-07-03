@@ -10,7 +10,6 @@ on:
       - "core/**"
       - "web/**"
       - "plugins/**"
-      - "docs/**"
       - "dravix_os/**"
       - "deploy/addon.Dockerfile"
       - ".github/workflows/addon-image.yml"
@@ -30,8 +29,12 @@ jobs:
         run: |
           v=$(sed -nE 's/^version:[[:space:]]*"?([^"]+)"?.*/\1/p' dravix_os/config.yaml | head -n1)
           echo "version=$v" >> "$GITHUB_OUTPUT"
+          # Forks build into their own namespace automatically (GHCR owner = repo owner).
+          echo "owner=${GITHUB_REPOSITORY_OWNER,,}" >> "$GITHUB_OUTPUT"
           echo "Add-on version: $v"
 
+      # aarch64 covers Raspberry Pi / HA Yellow / most HA installs; amd64 covers NUC/VM.
+      - uses: docker/setup-qemu-action@v3
       - uses: docker/setup-buildx-action@v3
 
       - name: Log in to GHCR
@@ -41,7 +44,6 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # The user's HA runs on a Proxmox VM (amd64). Build amd64 natively (fast, reliable).
       - name: Build & push amd64 image
         uses: docker/build-push-action@v6
         with:
@@ -52,5 +54,18 @@ jobs:
           build-args: |
             DRAVIX_VERSION=${{ steps.ver.outputs.version }}
           tags: |
-            ghcr.io/yossikon/dravix-os-amd64:${{ steps.ver.outputs.version }}
-            ghcr.io/yossikon/dravix-os-amd64:latest
+            ghcr.io/${{ steps.ver.outputs.owner }}/dravix-os-amd64:${{ steps.ver.outputs.version }}
+            ghcr.io/${{ steps.ver.outputs.owner }}/dravix-os-amd64:latest
+
+      - name: Build & push aarch64 image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: deploy/addon.Dockerfile
+          platforms: linux/arm64
+          push: true
+          build-args: |
+            DRAVIX_VERSION=${{ steps.ver.outputs.version }}
+          tags: |
+            ghcr.io/${{ steps.ver.outputs.owner }}/dravix-os-aarch64:${{ steps.ver.outputs.version }}
+            ghcr.io/${{ steps.ver.outputs.owner }}/dravix-os-aarch64:latest

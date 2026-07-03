@@ -23,6 +23,7 @@ def build_server(
     mood: Any | None = None,
     weather_entity: str = "",
     include_robot_control: bool = True,
+    expose_risky_tools: bool | None = None,
 ):
     """Build the dravix MCP server.
 
@@ -30,8 +31,17 @@ def build_server(
     when the robot driver is ``mock`` (e.g. the cloud/xiaozhi bridge) so the robot's AI isn't
     offered tools that can't actually move the hardware. The HA / weather / agenda / memory /
     fun tools below work regardless and are the useful set over the cloud.
+
+    ``expose_risky_tools`` gates the dangerous HA tools (the generic service call, lock/
+    unlock, alarm disarm) — off by default (DRAVIX_EXPOSE_RISKY_TOOLS) so a compromised /
+    over-eager cloud bridge can't unlock the house. None = read the setting.
     """
     from mcp.server.fastmcp import FastMCP  # lazy import
+
+    if expose_risky_tools is None:
+        from ..config import get_settings
+
+        expose_risky_tools = get_settings().expose_risky_tools
 
     mcp = FastMCP("dravix-os")
 
@@ -58,8 +68,18 @@ def build_server(
 
         @mcp.tool()
         async def robot_move_head(yaw: float, pitch: float, speed: float = 1.0) -> str:
-            """Aim the robot's head. yaw -180..180, pitch -90..90, speed 0..1."""
-            return await _guard(controller.move_head(yaw, pitch, speed))
+            """Aim the robot's head. yaw and pitch are NORMALISED -1..1 (0 = look straight,
+            +1 = full right / full up), speed 0..1. Values beyond 1 are treated as degrees
+            (yaw -180..180, pitch -90..90) and scaled."""
+
+            def _norm(value: float, degrees_full_scale: float) -> float:
+                if abs(value) > 1.0:  # the model sent degrees — map onto the -1..1 facade
+                    value = value / degrees_full_scale
+                return max(-1.0, min(1.0, value))
+
+            return await _guard(
+                controller.move_head(_norm(yaw, 180.0), _norm(pitch, 90.0), speed)
+            )
 
         @mcp.tool()
         async def robot_set_leds(color: str, brightness: float = 1.0) -> str:
@@ -149,27 +169,31 @@ def build_server(
             except Exception as exc:  # noqa: BLE001
                 return f"error: {exc}"
 
-        @mcp.tool()
-        async def home_assistant_call_service(
-            domain: str, service: str, entity_id: str = "", data_json: str = ""
-        ) -> str:
-            """Call a Home Assistant service to control devices. Examples:
-            domain=light service=turn_on entity_id=light.kitchen;
-            domain=cover service=close_cover entity_id=cover.garage.
-            data_json is optional extra JSON service data (e.g. {"brightness_pct": 50})."""
-            data: dict[str, Any] = {}
-            if entity_id:
-                data["entity_id"] = entity_id
-            if data_json:
+        # Risky: the generic service call can do ANYTHING (unlock, disarm, delete). Only
+        # registered when DRAVIX_EXPOSE_RISKY_TOOLS is on — e.g. never on the cloud bridge.
+        if expose_risky_tools:
+
+            @mcp.tool()
+            async def home_assistant_call_service(
+                domain: str, service: str, entity_id: str = "", data_json: str = ""
+            ) -> str:
+                """Call a Home Assistant service to control devices. Examples:
+                domain=light service=turn_on entity_id=light.kitchen;
+                domain=cover service=close_cover entity_id=cover.garage.
+                data_json is optional extra JSON service data (e.g. {"brightness_pct": 50})."""
+                data: dict[str, Any] = {}
+                if entity_id:
+                    data["entity_id"] = entity_id
+                if data_json:
+                    try:
+                        data.update(json.loads(data_json))
+                    except Exception:  # noqa: BLE001 — ignore bad extra data
+                        pass
                 try:
-                    data.update(json.loads(data_json))
-                except Exception:  # noqa: BLE001 — ignore bad extra data
-                    pass
-            try:
-                await ha.call_service(domain, service, data)
-                return "ok"
-            except Exception as exc:  # noqa: BLE001
-                return f"error: {exc}"
+                    await ha.call_service(domain, service, data)
+                    return "ok"
+                except Exception as exc:  # noqa: BLE001
+                    return f"error: {exc}"
 
         @mcp.tool()
         async def home_assistant_assist(command: str) -> str:
@@ -278,12 +302,16 @@ def build_server(
             except Exception as exc:  # noqa: BLE001
                 return f"error: {exc}"
 
-        @mcp.tool()
-        async def home_assistant_lock(entity_id: str, action: str = "lock") -> str:
-            """Lock or unlock a door. action = lock | unlock. entity_id like lock.front_door."""
-            if action not in ("lock", "unlock"):
-                return "unknown action (use lock|unlock)"
-            return await _svc("lock", action, entity_id)
+        # Risky: unlocking doors from a cloud-reachable tool is opt-in only.
+        if expose_risky_tools:
+
+            @mcp.tool()
+            async def home_assistant_lock(entity_id: str, action: str = "lock") -> str:
+                """Lock or unlock a door. action = lock | unlock.
+                entity_id like lock.front_door."""
+                if action not in ("lock", "unlock"):
+                    return "unknown action (use lock|unlock)"
+                return await _svc("lock", action, entity_id)
 
         @mcp.tool()
         async def home_assistant_cover(entity_id: str, action: str) -> str:
@@ -304,13 +332,16 @@ def build_server(
 
         @mcp.tool()
         async def home_assistant_alarm(entity_id: str, action: str) -> str:
-            """Arm or disarm a security alarm. action = arm_home | arm_away | disarm.
-            entity_id like alarm_control_panel.home."""
+            """Arm (or, when allowed, disarm) a security alarm. action = arm_home |
+            arm_away | disarm. entity_id like alarm_control_panel.home."""
             svc = {
                 "arm_home": "alarm_arm_home", "arm_away": "alarm_arm_away", "disarm": "alarm_disarm",
             }.get(action)
             if not svc:
                 return "unknown action (use arm_home|arm_away|disarm)"
+            if action == "disarm" and not expose_risky_tools:
+                # Risky: disarming from a cloud-reachable tool is opt-in only.
+                return "disarm is disabled (set DRAVIX_EXPOSE_RISKY_TOOLS=true to allow it)"
             return await _svc("alarm_control_panel", svc, entity_id)
 
         @mcp.tool()

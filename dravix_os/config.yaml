@@ -1,14 +1,18 @@
 name: dravix-os
-version: "0.0.38"
+version: "0.0.39"
 slug: dravix_os
 description: Companion OS for the M5Stack StackChan robot (local-first)
 url: https://github.com/YossiKon/dravix-os
 # Pull a prebuilt image from GHCR (built by GitHub Actions) instead of building on
-# the user's box. HA replaces {arch}; CI publishes dravix-os-amd64:<version>.
+# the user's box. HA replaces {arch}; CI publishes dravix-os-{amd64,aarch64}:<version>.
 image: ghcr.io/yossikon/dravix-os-{arch}
 arch:
   - amd64
+  - aarch64
 init: false
+# Lets the add-on reach the HA API with the Supervisor's own token — so a fresh install
+# needs NO manually created long-lived token (run.sh falls back to SUPERVISOR_TOKEN).
+homeassistant_api: true
 # The web dashboard + API, plus an "Open Web UI" button on the add-on page.
 ports:
   8800/tcp: 8800
@@ -28,6 +32,8 @@ options:
   robot_entity_tts: ""           # tts.* — your HA TTS engine (e.g. tts.piper) for speech
   robot_entity_light: ""         # light.* — the LED bar
   robot_entity_camera: ""        # camera.* — the robot camera
+  # Leave BOTH blank for zero-config: the add-on then talks to HA through the
+  # supervisor proxy with its own token. Fill them only for a non-standard setup.
   ha_url: "http://homeassistant:8123"
   ha_token: ""
   ai_provider: ha_assist

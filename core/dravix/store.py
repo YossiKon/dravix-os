@@ -39,7 +39,19 @@ _DEFAULTS: dict[str, Any] = {
     "head_calibration": {},  # {yaw:{center,min,max,invert}, pitch:{center,min,max,invert}}
     "vitals": {},  # {energy, food, fun, calm} 0-100 + bookkeeping — the "life" needs, kept across restarts
     "nudges_enabled": True,  # wellness tips (rest/hydrate/eye-break) for the person working nearby
+    "language": None,  # tips/UI language (en|he); None = the env default (DRAVIX_LANG)
+    "wellness_tips": [],  # custom wellness tip texts; non-empty list replaces the built-ins
 }
+
+# Keys ``update()`` (and /api/import) may write. Everything else in a patch is rejected.
+# Includes "mood"/"idle_motion" so an /api/export round-trips cleanly through /api/import.
+_UPDATABLE_KEYS = (
+    "ai_provider", "mode_overrides", "disabled_modes", "reactions", "schedule",
+    "personas", "active_persona", "memories", "routines", "voice", "voices", "inbox",
+    "screens", "robot_driver", "robot_entities", "head_calibration",
+    "climate_entity", "vitals", "nudges_enabled", "language", "wellness_tips",
+    "mood", "idle_motion", "robot_name",
+)
 
 
 class Store:
@@ -69,16 +81,35 @@ class Store:
         return json.loads(json.dumps(self._data))  # defensive copy
 
     def update(self, patch: dict[str, Any]) -> None:
-        keys = (
-            "ai_provider", "mode_overrides", "disabled_modes", "reactions", "schedule",
-            "personas", "active_persona", "memories", "routines", "voice", "voices", "inbox",
-            "screens", "robot_driver", "robot_entities", "head_calibration",
-            "climate_entity", "vitals", "nudges_enabled",
-        )
-        for key in keys:
+        for key in _UPDATABLE_KEYS:
             if key in patch:
                 self._data[key] = patch[key]
         self.save()
+
+    def validate_patch(self, patch: dict[str, Any]) -> list[str]:
+        """Return the bad keys in an ``update()`` patch (unknown key, or a value whose type
+        doesn't match the key's current/default shape — lists stay lists, dicts dicts,
+        scalars scalar). An empty result means the patch is safe to apply."""
+        bad: list[str] = []
+        for key, value in patch.items():
+            if key not in _UPDATABLE_KEYS:
+                bad.append(f"{key} (unknown key)")
+                continue
+            ref = self._data.get(key)
+            if ref is None:
+                ref = _DEFAULTS.get(key)
+            if isinstance(ref, bool):
+                ok = isinstance(value, bool)
+            elif isinstance(ref, list):
+                ok = isinstance(value, list)
+            elif isinstance(ref, dict):
+                ok = isinstance(value, dict)
+            else:  # a scalar slot (str / number / nullable)
+                ok = not isinstance(value, (list, dict))
+            if not ok:
+                expected = type(ref).__name__ if ref is not None else "scalar"
+                bad.append(f"{key} (expected {expected})")
+        return bad
 
     def personas(self) -> list[dict[str, Any]]:
         return list(self._data.get("personas", []))
@@ -117,6 +148,14 @@ class Store:
 
     def set_routines(self, routines: list[dict[str, Any]]) -> None:
         self._data["routines"] = routines
+        self.save()
+
+    def robot_name(self) -> str:
+        """The robot's user-chosen name ("" = use the default branding)."""
+        return str(self._data.get("robot_name") or "")
+
+    def set_robot_name(self, name: str | None) -> None:
+        self._data["robot_name"] = (name or "").strip()
         self.save()
 
     def voice(self) -> str | None:
@@ -224,6 +263,18 @@ class Store:
     def set_nudges_enabled(self, enabled: bool) -> None:
         self._data["nudges_enabled"] = bool(enabled)
         self.save()
+
+    def language(self) -> str | None:
+        return self._data.get("language")
+
+    def set_language(self, language: str | None) -> None:
+        self._data["language"] = language or None
+        self.save()
+
+    def wellness_tips(self) -> list[str]:
+        """Custom wellness tip texts; a non-empty list replaces the built-in tips as-is."""
+        tips = self._data.get("wellness_tips") or []
+        return [t for t in tips if isinstance(t, str) and t.strip()]
 
     # ── typed helpers ──────────────────────────────────────────────────────────
     def ai_provider(self) -> str | None:

@@ -1,6 +1,9 @@
-# Home Assistant add-on image for dravix-os.
-# Self-contained: clones the repo (so plugins/ + web are present), builds the dashboard,
-# installs the core package, and runs via run.sh (which reads HA add-on options from /data).
+# Home Assistant add-on image for dravix-os — the LOCAL-BUILD fallback only.
+# Normal installs never use this file: config.yaml sets `image:` so HA pulls the CI-built
+# image (deploy/addon.Dockerfile). This path is used only if you remove `image:` to build
+# on the HA box itself — and because the HA builder gets just this folder as context, it
+# must clone the sources. FORKS: point DRAVIX_REPO/DRAVIX_REF at YOUR repo, or your build
+# will silently ship the upstream code instead of your checkout.
 #
 # IMPORTANT: the `git clone` layers are cache-busted by BUILD_VERSION (passed by the HA
 # supervisor = the add-on version). Without this, Docker reuses the FIRST build's cached

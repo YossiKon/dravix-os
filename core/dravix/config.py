@@ -36,12 +36,24 @@ class Settings(BaseSettings):
     port: int = 8800
     log_level: str = "INFO"
     data_dir: str = ""  # runtime state dir (store.json); blank = repo data/
+    # Optional API auth: when non-empty, every /api/* and /camera/* request (except
+    # /api/health) must carry this token (Authorization: Bearer, X-API-Token, or ?token=).
+    api_token: str = ""
+    # Language for the built-in wellness tips (en | he). The store key `language` overrides.
+    language: str = Field(
+        "en", validation_alias=AliasChoices("DRAVIX_LANG", "DRAVIX_LANGUAGE")
+    )
 
     # Robot (StackChan)
     robot_driver: str = "mock"  # mcp | ha | mock
     robot_mcp_url: str = ""
     robot_mcp_transport: str = "auto"  # auto | streamable_http | sse | websocket
     robot_mcp_token: str = ""
+
+    # When False (default), the MCP server (incl. the xiaozhi cloud bridge) hides the risky
+    # tools: the generic HA service call, lock/unlock, and alarm disarm. Read-only + robot +
+    # benign tools stay available either way.
+    expose_risky_tools: bool = False
 
     # xiaozhi MCP接入点 (access point): dravix connects here as an MCP *server* and exposes
     # its tools to the robot's AI (the robot can then control HA / run dravix features by

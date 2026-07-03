@@ -8,7 +8,7 @@ from dravix.screens import ScreenPusher
 
 # The card slots carry whatever device prefix HA gave them (this one was renamed) —
 # the pusher must DISCOVER them by suffix, not assume "text.dravix_...".
-PREFIX = "text.mmd_room_dravix"
+PREFIX = "text.study_room_dravix"
 
 
 class _FakeHA:

@@ -51,17 +51,29 @@ def resolve_voice(store) -> str | None:
 
 
 def resolve_persona(store) -> Persona:
-    """Return the active persona from the store, or the built-in default."""
+    """Return the active persona from the store, or the built-in default.
+
+    A user-chosen robot name (store ``robot_name``) overlays whichever persona is active:
+    the AI is told that's its name, without losing the persona's character prompt.
+    """
     if store is None:
         return Persona()
+    persona = Persona()
     name = store.active_persona()
     if name:
         for p in store.personas():
             if p.get("name") == name:
-                return Persona(
+                persona = Persona(
                     name=p.get("name", "StackChan"),
                     system_prompt=p.get("system_prompt") or Persona().system_prompt,
                     voice=p.get("voice"),
                     default_expression=Expression.coerce(p.get("default_expression", "neutral")),
                 )
-    return Persona()
+                break
+    robot_name = getattr(store, "robot_name", lambda: "")() or ""
+    if robot_name:
+        persona.name = robot_name
+        persona.system_prompt = (
+            f"Your name is {robot_name} — answer to that name. " + persona.system_prompt
+        )
+    return persona

@@ -28,10 +28,23 @@ class _FakeController:
 
 
 async def test_build_server_exposes_ha_tools_when_configured():
-    mcp = build_server(_FakeController(), engine=None, ai=None, ha=_FakeHA())
+    mcp = build_server(
+        _FakeController(), engine=None, ai=None, ha=_FakeHA(), expose_risky_tools=False
+    )
     names = {t.name for t in await mcp.list_tools()}
     assert {"home_assistant_list_entities", "home_assistant_get_state",
-            "home_assistant_call_service"} <= names
+            "home_assistant_assist", "home_assistant_toggle"} <= names
+    # The risky tools stay hidden by default (DRAVIX_EXPOSE_RISKY_TOOLS=false).
+    assert "home_assistant_call_service" not in names
+    assert "home_assistant_lock" not in names
+
+
+async def test_build_server_exposes_risky_tools_when_enabled():
+    mcp = build_server(
+        _FakeController(), engine=None, ai=None, ha=_FakeHA(), expose_risky_tools=True
+    )
+    names = {t.name for t in await mcp.list_tools()}
+    assert {"home_assistant_call_service", "home_assistant_lock"} <= names
 
 
 async def test_build_server_omits_ha_tools_without_ha():

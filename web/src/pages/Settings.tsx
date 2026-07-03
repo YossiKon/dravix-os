@@ -62,16 +62,7 @@ export function SettingsPage(props: {
   const [timers, setTimers] = useState<{ saver: string; sleep: string }>({ saver: "", sleep: "" });
   const [app, setApp] = useState<AppConfig | null>(null);
   const [switches, setSwitches] = useState<HAEntity[]>([]);
-
-  // the robot's entity prefix, derived from any mapped entity (e.g. select.dravix_mode → "dravix")
-  const robotPrefix = useMemo(() => {
-    for (const id of Object.values(cfg?.entities ?? {})) {
-      const obj = id.split(".")[1];
-      const p = obj?.split("_")[0];
-      if (p) return p;
-    }
-    return "";
-  }, [cfg]);
+  const [robotName, setRobotName] = useState<string | null>(null); // null = not user-edited yet
 
   useEffect(() => {
     apiGet<{ entities: HAEntity[] }>("/api/ha/entities?domains=switch")
@@ -79,13 +70,19 @@ export function SettingsPage(props: {
       .catch(() => undefined);
   }, []);
 
+  // Match each behaviour switch by object_id SUFFIX (switch.<anything>_greet_on_approach or
+  // switch.greet_on_approach) — prefix-agnostic, so any device name works. Shortest wins on ties.
   const behaviors = useMemo(() => {
-    if (!robotPrefix) return [];
     return BEHAVIORS.flatMap((b) => {
-      const ent = switches.find((s) => s.entity_id === `switch.${robotPrefix}_${b.suffix}`);
-      return ent ? [{ ...ent, he: b.he, en: b.en }] : [];
+      const candidates = switches.filter((s) => {
+        const obj = s.entity_id.split(".")[1] ?? "";
+        return obj === b.suffix || obj.endsWith(`_${b.suffix}`);
+      });
+      if (candidates.length === 0) return [];
+      const ent = candidates.reduce((best, s) => (s.entity_id.length < best.entity_id.length ? s : best));
+      return [{ ...ent, he: b.he, en: b.en }];
     });
-  }, [switches, robotPrefix]);
+  }, [switches]);
 
   async function flipBehavior(entityId: string, on: boolean) {
     try {
@@ -196,6 +193,16 @@ export function SettingsPage(props: {
     }
   }
 
+  async function saveRobotName() {
+    try {
+      await apiSend("/api/config/robot_name", "PUT", { name: (robotName ?? "").trim() });
+      toast(tr("השם נשמר — הרובוט יענה לשם הזה", "Name saved — the robot answers to it"));
+      props.onConfigChanged(); // the header picks the new name up from /api/robot/config
+    } catch (e) {
+      toastErr(e);
+    }
+  }
+
   if (!cfg) return <div className="card animate-rise text-mute">{tr("טוען הגדרות…", "Loading settings…")}</div>;
 
   return (
@@ -224,6 +231,28 @@ export function SettingsPage(props: {
               {d === "ha" ? "Home Assistant" : d === "mock" ? tr("דמה (בדיקות)", "Mock (testing)") : "MCP"}
             </button>
           ))}
+        </div>
+      </Section>
+
+      {/* ── robot name ── */}
+      <Section title={tr("שם הרובוט", "Robot name")} delay={40}>
+        <p className="mb-3 text-sm text-mute">
+          {tr(
+            "תנו לו שם — הוא יופיע למעלה, וה-AI יידע שכך קוראים לו ויענה לשם.",
+            "Give it a name — shown in the header, and the AI knows it's called that.",
+          )}
+        </p>
+        <div className="flex gap-2">
+          <input
+            className="inp flex-1"
+            maxLength={40}
+            placeholder={tr("למשל: צ'יפי", "e.g. Chippy")}
+            value={robotName ?? cfg.robot_name ?? ""}
+            onChange={(e) => setRobotName(e.target.value)}
+          />
+          <button className="btn btn-primary" disabled={robotName === null} onClick={() => void saveRobotName()}>
+            {tr("שמור", "Save")}
+          </button>
         </div>
       </Section>
 

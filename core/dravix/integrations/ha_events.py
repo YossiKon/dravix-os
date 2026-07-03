@@ -61,19 +61,21 @@ def map_state_changed(
             return explicit_map[eid], {"entity_id": eid, "state": state}
         return None
 
-    domain = eid.split(".", 1)[0] if "." in eid else ""
+    domain, _, object_id = eid.partition(".")
     if domain == "binary_sensor" and became_active:
         device_class = (new.get("attributes") or {}).get("device_class")
         event_type = _DEVICE_CLASS_EVENT.get(device_class or "")
         if event_type:
             return event_type, {"entity_id": eid, "device_class": device_class}
-        # The robot's head/touch zone → treat as a pet (the mood engine loves it).
-        if "head" in eid or "touch" in eid:
+        # The robot's dedicated touch zone → treat as a pet (the mood engine loves it).
+        # Deliberately narrow ("touch_sensor" in the object_id) — a loose "head"/"touch"
+        # substring also matched things like binary_sensor.bathroom_overhead_motion.
+        if "touch_sensor" in object_id:
             return "touch.pet", {"entity_id": eid}
 
     # StackChan capacitive touch zones are *text* sensors: "No touch" -> "LOW"/"MEDIUM"/"HIGH".
     # Fire a pet when one transitions from no-touch to touched.
-    if domain == "sensor" and "touch" in eid:
+    if domain == "sensor" and "touch_sensor" in object_id:
         if state not in _NO_TOUCH and (old.get("state") in _NO_TOUCH):
             return "touch.pet", {"entity_id": eid, "state": state}
     return None

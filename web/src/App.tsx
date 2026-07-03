@@ -37,14 +37,36 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    refreshConfig();
-    apiGet<Health>("/api/health").then((h) => setVersion(h.version)).catch(() => undefined);
-    apiGet<{ entities: HAEntity[] }>("/api/ha/entities")
-      .then((r) => setEntities(r.entities))
-      .catch(() => undefined);
+    // Entities can fail while HA is still starting — remember and retry (next poll / focus).
+    let entitiesOk = false;
+    const fetchEntities = () => {
+      if (entitiesOk) return;
+      apiGet<{ entities: HAEntity[] }>("/api/ha/entities")
+        .then((r) => {
+          entitiesOk = true;
+          setEntities(r.entities);
+        })
+        .catch(() => undefined);
+    };
+    const tick = () => {
+      refreshConfig();
+      apiGet<Health>("/api/health").then((h) => setVersion(h.version)).catch(() => undefined);
+      fetchEntities();
+    };
+    tick();
+    // Re-poll while visible so the online dot reflects reality, not just page load.
+    const t = setInterval(() => {
+      if (document.visibilityState === "visible") tick();
+    }, 10000);
+    const onFocus = () => fetchEntities();
+    window.addEventListener("focus", onFocus);
     const onHash = () => setTab(tabFromHash());
     window.addEventListener("hashchange", onHash);
-    return () => window.removeEventListener("hashchange", onHash);
+    return () => {
+      clearInterval(t);
+      window.removeEventListener("focus", onFocus);
+      window.removeEventListener("hashchange", onHash);
+    };
   }, [refreshConfig]);
 
   function go(next: Tab) {
@@ -57,7 +79,7 @@ export default function App() {
       {/* header */}
       <header className="flex items-center justify-between px-4 pb-1 pt-4">
         <h1 className="font-display text-2xl">
-          {tr("דרביקס", "Dravix")}
+          {config?.robot_name || tr("דרביקס", "Dravix")}
           <span dir="ltr" className="ms-2 font-mono text-xs text-mute">
             dravix-os
           </span>

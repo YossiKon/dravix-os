@@ -21,6 +21,12 @@ export DRAVIX_DATA_DIR="/data"
 export DRAVIX_LOG_LEVEL="$(opt log_level)"
 export DRAVIX_HA_URL="$(opt ha_url)"
 export DRAVIX_HA_TOKEN="$(opt ha_token)"
+# Zero-config default: when no token was pasted, use the Supervisor-provided token and
+# talk to HA through the supervisor proxy (config.yaml declares homeassistant_api: true).
+if [ -z "$DRAVIX_HA_TOKEN" ] && [ -n "$SUPERVISOR_TOKEN" ]; then
+  export DRAVIX_HA_TOKEN="$SUPERVISOR_TOKEN"
+  export DRAVIX_HA_URL="http://supervisor/core"
+fi
 export DRAVIX_AI_PROVIDER="$(opt ai_provider)"
 export DRAVIX_IDLE_MOTION="$(opt idle_motion)"
 export DRAVIX_LOCAL_ONLY="$(opt local_only)"

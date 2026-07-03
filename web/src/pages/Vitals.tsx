@@ -23,9 +23,15 @@ export function VitalsPage() {
   const { tr, lang } = useI18n();
   const [v, setV] = useState<Vitals | null>(null);
   const [busy, setBusy] = useState("");
+  const [failed, setFailed] = useState(false);
 
   const refresh = useCallback(() => {
-    apiGet<Vitals>("/api/vitals").then(setV).catch(() => undefined);
+    apiGet<Vitals>("/api/vitals")
+      .then((res) => {
+        setV(res);
+        setFailed(false);
+      })
+      .catch(() => setFailed(true));
   }, []);
 
   useEffect(() => {
@@ -62,27 +68,34 @@ export function VitalsPage() {
   return (
     <div className="space-y-4">
       <Section title={tr("החיים של הרובוט 💗", "The robot's life 💗")}>
-        <div className="space-y-3">
-          {NEEDS.map((n) => {
-            const val = v ? Number(v[n.key]) : 0;
-            return (
-              <div key={n.key}>
-                <div className="mb-1 flex items-center justify-between text-sm">
-                  <span>
-                    {n.icon} {lang === "en" ? n.en : n.he}
-                  </span>
-                  <span className="font-mono text-mute">{val}%</span>
+        {failed && !v ? (
+          // The API is unreachable — an honest "offline" beats bars stuck at 0%.
+          <p className="rounded-2xl border border-red/30 bg-red/10 p-3 text-sm text-red">
+            {tr("לא זמין — אין חיבור לשירות.", "Offline — can't reach the service.")}
+          </p>
+        ) : (
+          <div className="space-y-3">
+            {NEEDS.map((n) => {
+              const val = v ? Number(v[n.key]) : 0;
+              return (
+                <div key={n.key}>
+                  <div className="mb-1 flex items-center justify-between text-sm">
+                    <span>
+                      {n.icon} {lang === "en" ? n.en : n.he}
+                    </span>
+                    <span className="font-mono text-mute">{val}%</span>
+                  </div>
+                  <div className="h-3 overflow-hidden rounded-full bg-line">
+                    <div
+                      className="h-full rounded-full transition-all"
+                      style={{ width: `${val}%`, background: n.color }}
+                    />
+                  </div>
                 </div>
-                <div className="h-3 overflow-hidden rounded-full bg-line">
-                  <div
-                    className="h-full rounded-full transition-all"
-                    style={{ width: `${val}%`, background: n.color }}
-                  />
-                </div>
-              </div>
-            );
-          })}
-        </div>
+              );
+            })}
+          </div>
+        )}
       </Section>
 
       <Section title={tr("טיפול", "Care")} delay={60}>

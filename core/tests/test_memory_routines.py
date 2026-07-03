@@ -12,12 +12,12 @@ from dravix.store import Store
 
 def test_store_memories(tmp_path):
     s = Store(tmp_path / "s.json")
-    m = s.add_memory("My name is Yossi")
-    assert m["id"] and m["text"] == "My name is Yossi"
+    m = s.add_memory("My name is Dana")
+    assert m["id"] and m["text"] == "My name is Dana"
     assert len(s.memories()) == 1
-    assert "Yossi" in build_memory_context(s)
+    assert "Dana" in build_memory_context(s)
     # persists
-    assert Store(tmp_path / "s.json").memories()[0]["text"] == "My name is Yossi"
+    assert Store(tmp_path / "s.json").memories()[0]["text"] == "My name is Dana"
     assert s.remove_memory(m["id"]) is True
     assert s.remove_memory("nope") is False
     assert build_memory_context(s) == ""

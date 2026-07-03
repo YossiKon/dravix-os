@@ -10,6 +10,9 @@
     "lint": "tsc -b --noEmit"
   },
   "dependencies": {
+    "@fontsource/heebo": "^5.2.8",
+    "@fontsource/ibm-plex-mono": "^5.2.7",
+    "@fontsource/secular-one": "^5.2.8",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },

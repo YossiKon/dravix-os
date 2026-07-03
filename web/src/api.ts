@@ -9,7 +9,7 @@ async function unwrap<T>(r: Response): Promise<T> {
     } catch {
       /* not json */
     }
-    throw new Error(detail || `שגיאה ${r.status}`);
+    throw new Error(detail || `HTTP ${r.status}`);
   }
   return (await r.json()) as T;
 }
@@ -43,6 +43,7 @@ export interface RobotConfig {
   online: boolean;
   last_error: string;
   ha_configured: boolean;
+  robot_name?: string;
   error?: string | null;
 }
 

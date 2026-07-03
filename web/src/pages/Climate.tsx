@@ -1,5 +1,5 @@
 // Climate — pick a climate entity and control it: target temp + hvac mode.
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { apiGet, apiSend } from "../api";
 import type { ClimateState, HAEntity } from "../api";
 import { EntityPicker } from "../components/EntityPicker";
@@ -38,16 +38,24 @@ export function ClimatePage(props: { entities: HAEntity[] }) {
   }, []);
 
   const [failed, setFailed] = useState(false);
+  // Request sequence — a slow poll that resolves after a newer request (or an
+  // optimistic set) must not overwrite the fresher state.
+  const seqRef = useRef(0);
 
   const refresh = useCallback(async (ent: string, background: boolean) => {
     if (!ent) {
+      seqRef.current += 1;
       setSt(null);
       return;
     }
+    const seq = ++seqRef.current;
     try {
-      setSt(await apiGet<ClimateState>(`/api/climate/state?entity_id=${encodeURIComponent(ent)}`));
+      const next = await apiGet<ClimateState>(`/api/climate/state?entity_id=${encodeURIComponent(ent)}`);
+      if (seq !== seqRef.current) return; // a newer request already answered
+      setSt(next);
       setFailed(false);
     } catch (e) {
+      if (seq !== seqRef.current) return;
       // Background polls stay quiet and keep the last known state; only a
       // user-initiated load (choosing an entity) surfaces the error.
       if (!background) {
@@ -85,6 +93,7 @@ export function ClimatePage(props: { entities: HAEntity[] }) {
     setBusy(true);
     try {
       await apiSend("/api/climate/set", "POST", { entity_id: entity, temperature: next });
+      seqRef.current += 1; // invalidate any in-flight poll — it predates this set
       setSt((cur) => (cur ? { ...cur, temperature: next } : cur));
     } catch (e) {
       toastErr(e);
@@ -98,6 +107,7 @@ export function ClimatePage(props: { entities: HAEntity[] }) {
     setBusy(true);
     try {
       await apiSend("/api/climate/set", "POST", { entity_id: entity, hvac_mode: mode });
+      seqRef.current += 1; // invalidate any in-flight poll — it predates this set
       setSt((cur) => (cur ? { ...cur, state: mode } : cur));
     } catch (e) {
       toastErr(e);
@@ -141,14 +151,14 @@ export function ClimatePage(props: { entities: HAEntity[] }) {
             <button
               className="btn text-2xl"
               disabled={busy || target == null}
-              onClick={() => target != null && void setTemp(Math.max(st.min_temp ?? 16, target - step))}
+              onClick={() => target != null && void setTemp(st.min_temp != null ? Math.max(st.min_temp, target - step) : target - step)}
             >
               −
             </button>
             <button
               className="btn text-2xl"
               disabled={busy || target == null}
-              onClick={() => target != null && void setTemp(Math.min(st.max_temp ?? 30, target + step))}
+              onClick={() => target != null && void setTemp(st.max_temp != null ? Math.min(st.max_temp, target + step) : target + step)}
             >
               ＋
             </button>

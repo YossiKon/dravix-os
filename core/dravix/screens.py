@@ -2,7 +2,7 @@
 
 The ESPHome firmware exposes six generic ``text`` entities (a title + a body per card),
 named ``card{1,2,3}_title`` / ``card{1,2,3}_body``. Their FULL entity ids depend on how the
-device is named in HA (e.g. ``text.dravix_card1_title`` vs ``text.mmd_room_dravix_card1_title``
+device is named in HA (e.g. ``text.dravix_card1_title`` vs ``text.study_room_dravix_card1_title``
 after a rename), so the slots are DISCOVERED from HA by their unique object-id suffix rather
 than hard-coded. The body is rendered multi-line, lines split on ``"\n"``. This pusher polls
 HA every ``interval`` seconds, reads the entities the user picked (per card, in the store),

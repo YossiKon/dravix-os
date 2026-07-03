@@ -80,7 +80,10 @@ class ReactionEngine:
         try:
             while True:
                 event = await q.get()
-                await self.handle(event)
+                try:
+                    await self.handle(event)
+                except Exception as exc:  # noqa: BLE001 — one bad rule must never kill the pump
+                    log.warning("reaction handling failed for %s: %s", event.type, exc)
         except asyncio.CancelledError:
             raise
         finally:

@@ -20,6 +20,9 @@ import asyncio
 import time
 from typing import TYPE_CHECKING, Any
 
+import httpx
+
+from .config import get_settings
 from .emotes import play_emote
 from .events import Event, EventBus
 from .logging import get_logger
@@ -32,9 +35,10 @@ if TYPE_CHECKING:
 
 log = get_logger("vitals")
 
-# Modes where the engine may act on its own. Anything else (focus/quiet/night/busy/sleep/
-# screensaver/listening/speaking) = stay silent. None/"" = unknown backend (mock) → allow.
-_ACTIVE_MODES = {"awake", "morning"}
+# Modes where the engine must stay SILENT (do-not-disturb). Any other/unknown state counts
+# as active, so a new firmware mode never mutes the robot by accident. None/"" = unknown
+# backend (mock) → allow.
+_QUIET_MODES = {"sleep", "night", "screensaver", "quiet", "focus", "busy"}
 
 # Decay in points PER HOUR while awake (tunable). energy instead REFILLS while asleep.
 _DECAY_PER_H = {"energy": 22.0, "food": 16.0, "fun": 28.0, "calm": 30.0}
@@ -54,17 +58,39 @@ _NEED_NUDGES: dict[str, dict[str, float]] = {
     "ha.motion": {"calm": -4},
 }
 
-# Wellness nudges — {key: (every_minutes, tip_text)}. Intervals are the well-known desk-work
-# guidance: 20-20-20 (eyes), Cornell 20-8-2 (stand/move ~every 30m), posture, hydration, stretch.
-# Tips are short Hebrew so they fit the on-screen bubble.
-_NUDGES: dict[str, tuple[float, str]] = {
-    "eyes":    (20.0, "מנוחה לעיניים — הבט 20 שניות למרחק"),
-    "move":    (30.0, "קום וזוז 2 דקות"),
-    "posture": (45.0, "בדוק יציבה — שב זקוף"),
-    "water":   (60.0, "כדאי לשתות קצת מים"),
-    "stretch": (90.0, "זמן למתיחה ונשימה עמוקה"),
+# Wellness nudges — key -> every_minutes. Intervals are the well-known desk-work guidance:
+# 20-20-20 (eyes), Cornell 20-8-2 (stand/move ~every 30m), posture, hydration, stretch.
+_NUDGE_INTERVALS_MIN: dict[str, float] = {
+    "eyes": 20.0, "move": 30.0, "posture": 45.0, "water": 60.0, "stretch": 90.0,
+}
+# Tip texts per language (short, so they fit the on-screen bubble). Picked by the store's
+# `language` override, else DRAVIX_LANG. The store's `wellness_tips` list replaces them all.
+_NUDGE_TEXTS: dict[str, dict[str, str]] = {
+    "en": {
+        "eyes":    "Eye break — look 20 seconds into the distance",
+        "move":    "Stand up and move for 2 minutes",
+        "posture": "Posture check — sit up straight",
+        "water":   "Time to drink some water",
+        "stretch": "Time for a stretch and a deep breath",
+    },
+    "he": {
+        "eyes":    "מנוחה לעיניים — הבט 20 שניות למרחק",
+        "move":    "קום וזוז 2 דקות",
+        "posture": "בדוק יציבה — שב זקוף",
+        "water":   "כדאי לשתות קצת מים",
+        "stretch": "זמן למתיחה ונשימה עמוקה",
+    },
 }
 _NUDGE_MIN_SPACING_S = 240.0  # never fire two tips within 4 minutes of each other
+
+
+def _entity_missing(exc: Exception) -> bool:
+    """True when a service call failed because the entity no longer exists (robot re-flashed /
+    renamed) — the caller should drop its cached entity ids and re-resolve."""
+    if isinstance(exc, httpx.HTTPStatusError):
+        return exc.response.status_code in (400, 404)
+    msg = str(exc).lower()
+    return "not found" in msg or "not_found" in msg
 
 
 def _clamp(x: float, lo: float = 0.0, hi: float = 100.0) -> float:
@@ -157,7 +183,7 @@ class VitalsEngine:
         """True when the robot may act on its own. Unknown mode (mock/no state sensor) → allow."""
         if mode is None or mode == "":
             return True
-        return mode in _ACTIVE_MODES
+        return mode.strip().lower() not in _QUIET_MODES
 
     async def _mode(self) -> str | None:
         getter = getattr(self._robot.driver, "get_text", None)
@@ -282,14 +308,38 @@ class VitalsEngine:
             states = await self._ha.states()
         except Exception:  # noqa: BLE001
             return
+        # Match the vitals bars PRECISELY: a number whose object_id ends in _vital_<need>
+        # (or is bare vital_<need>), then derive the device prefix from the first match so
+        # the tip slot is resolved on the SAME device (<prefix>_tip / bare "tip") — not just
+        # any text.*_tip in the house.
+        found: dict[str, str] = {}
+        prefix: str | None = None
         for s in states:
             eid = s.get("entity_id", "")
-            if eid.startswith("number.") and "_vital_" in eid:
-                for need in ("energy", "food", "fun", "calm"):
-                    if eid.endswith("_vital_" + need):
-                        self._num_entities[need] = eid
-            elif eid.startswith("text.") and eid.endswith("_tip"):
+            if not eid.startswith("number."):
+                continue
+            object_id = eid.split(".", 1)[1]
+            for need in ("energy", "food", "fun", "calm"):
+                suffix = f"vital_{need}"
+                if object_id == suffix or object_id.endswith("_" + suffix):
+                    found.setdefault(need, eid)
+                    if prefix is None:
+                        prefix = object_id[: -len(suffix)].rstrip("_")
+        if not found:
+            return
+        self._num_entities = found
+        tip_object = f"{prefix}_tip" if prefix else "tip"
+        for s in states:
+            eid = s.get("entity_id", "")
+            if eid.startswith("text.") and eid.split(".", 1)[1] == tip_object:
                 self._tip_entity = eid
+                break
+
+    def _reset_entity_cache(self) -> None:
+        """Forget the resolved entities (they vanished) — the next tick re-resolves."""
+        self._num_entities = {}
+        self._tip_entity = None
+        self._pushed = {}
 
     async def _push_bars(self) -> None:
         if self._ha is None:
@@ -303,8 +353,28 @@ class VitalsEngine:
             try:
                 await self._ha.call_service("number", "set_value", {"entity_id": ent, "value": v})
                 self._pushed[need] = v
-            except Exception:  # noqa: BLE001
-                pass
+            except Exception as exc:  # noqa: BLE001
+                if _entity_missing(exc):
+                    self._reset_entity_cache()
+                    return
+
+    def _nudges(self) -> dict[str, tuple[float, str]]:
+        """The active tip set — {key: (every_minutes, text)}.
+
+        The store's ``wellness_tips`` (a non-empty list of strings) replaces the built-ins
+        as-is, cycling through the default intervals. Otherwise the built-in tips are used
+        in the configured language (store ``language`` override, else DRAVIX_LANG)."""
+        intervals = list(_NUDGE_INTERVALS_MIN.values())
+        custom = self._store.wellness_tips() if self._store is not None else []
+        if custom:
+            return {
+                f"tip{i}": (intervals[i % len(intervals)], text)
+                for i, text in enumerate(custom)
+            }
+        lang = (self._store.language() if self._store is not None else None) or \
+            get_settings().language
+        texts = _NUDGE_TEXTS.get((lang or "en").strip().lower(), _NUDGE_TEXTS["en"])
+        return {k: (_NUDGE_INTERVALS_MIN[k], texts[k]) for k in _NUDGE_INTERVALS_MIN}
 
     async def _nudge_ticker(self) -> None:
         try:
@@ -319,7 +389,7 @@ class VitalsEngine:
                 if now - self._nudge_last_any < _NUDGE_MIN_SPACING_S:
                     continue
                 due: tuple[str, str] | None = None
-                for key, (every_min, text) in _NUDGES.items():
+                for key, (every_min, text) in self._nudges().items():
                     last = self._nudge_last.get(key, self._start_mono)
                     if now - last >= every_min * 60.0:
                         due = (key, text)
@@ -341,7 +411,8 @@ class VitalsEngine:
                     await self._ha.call_service(
                         "text", "set_value", {"entity_id": self._tip_entity, "value": text}
                     )
-                except Exception:  # noqa: BLE001
-                    pass
+                except Exception as exc:  # noqa: BLE001
+                    if _entity_missing(exc):
+                        self._reset_entity_cache()
         await self._emote("nudge", gated=True)   # a little wiggle so you notice
         await self._bus.publish("vitals.nudge", text=text)

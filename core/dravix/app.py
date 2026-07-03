@@ -5,10 +5,12 @@ Builds and connects all the pieces (config → event bus → HA client → robot
 """
 from __future__ import annotations
 
+import secrets
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from . import __version__
@@ -78,7 +80,17 @@ async def lifespan(app: FastAPI):
     frigate = Frigate(ha, settings.frigate_url)
 
     # Robot driver + controller (dashboard picks in the store win over env defaults).
-    driver = build_robot_driver(settings, store, ha)
+    # A driver that can't even be *built* (bad config, missing HA, ...) must not stop the
+    # dashboard from booting — fall back to the mock driver and surface the error in /api/status.
+    driver_error = ""
+    try:
+        driver = build_robot_driver(settings, store, ha)
+    except Exception as exc:  # noqa: BLE001 — degrade to mock, surface in status
+        from .dal.mock_driver import MockDriver
+
+        driver_error = str(exc)
+        log.error("robot driver build failed: %s — falling back to the mock driver", exc)
+        driver = MockDriver()
     controller = RobotController(driver, bus, runtime.robot)
     controller.default_voice = resolve_voice(store)  # active persona/override TTS voice
     # The dashboard toggle (persisted in the store) wins; the add-on/env value is the default
@@ -91,6 +103,8 @@ async def lifespan(app: FastAPI):
         runtime.robot.online = False
         runtime.robot.last_error = str(exc)
         log.error("robot connect failed (%s): %s", settings.robot_driver, exc)
+    if driver_error:
+        runtime.robot.last_error = driver_error  # the build failure is the root cause
 
     # AI provider (optional — honors the store override, else the env default).
     ai = None
@@ -153,7 +167,8 @@ async def lifespan(app: FastAPI):
 
         # The robot body tools only work with a real driver; over the cloud the driver is
         # mock, so omit them and serve the useful set (HA / weather / agenda / memory / fun).
-        _include_robot = settings.robot_driver != "mock"
+        # Use the store-merged driver — same pick build_robot_driver made above.
+        _include_robot = (store.robot_driver() or settings.robot_driver).lower() != "mock"
         xiaozhi = XiaoZhiBridge(
             settings.xiaozhi_mcp_url,
             lambda: build_server(
@@ -207,6 +222,31 @@ async def lifespan(app: FastAPI):
 
 def create_app() -> FastAPI:
     app = FastAPI(title="dravix-os", version=__version__, lifespan=lifespan)
+
+    @app.middleware("http")
+    async def api_token_auth(request: Request, call_next):
+        """Optional shared-token auth (DRAVIX_API_TOKEN). When the token is empty (the
+        default) this is a no-op. When set, every /api/* and /camera/* request must carry
+        it — via ``Authorization: Bearer``, ``X-API-Token``, or ``?token=``. /api/health
+        stays open for probes."""
+        settings = getattr(request.app.state, "settings", None) or get_settings()
+        token = settings.api_token
+        path = request.url.path
+        if token and path != "/api/health" and (
+            path.startswith("/api/") or path.startswith("/camera/")
+        ):
+            auth = request.headers.get("authorization", "")
+            supplied = auth[len("Bearer "):].strip() if auth.lower().startswith("bearer ") else ""
+            supplied = (
+                supplied
+                or request.headers.get("x-api-token", "")
+                or request.query_params.get("token", "")
+            )
+            if not secrets.compare_digest(supplied.encode(), token.encode()):
+                return JSONResponse(
+                    {"detail": "missing or invalid API token"}, status_code=401
+                )
+        return await call_next(request)
 
     from .api.routes import router  # imported here to avoid a circular import
 

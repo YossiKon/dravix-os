@@ -77,9 +77,11 @@ export function HomePage(props: { config: RobotConfig | null }) {
   const [convId, setConvId] = useState<string | null>(null);
   const [speak, setSpeak] = useState(true);
   const chatRef = useRef<HTMLDivElement>(null);
-  // games + emotes offered by the core
+  // games + emotes offered by the core ("settled" = the fetch finished, even if empty/failed)
   const [games, setGames] = useState<string[]>([]);
   const [emotes, setEmotes] = useState<string[]>([]);
+  const [gamesSettled, setGamesSettled] = useState(false);
+  const [emotesSettled, setEmotesSettled] = useState(false);
   // live view through the robot's camera (off by default — saves bandwidth)
   const [camOn, setCamOn] = useState(false);
   // privacy mode: camera blocked + on-device mic off
@@ -89,8 +91,14 @@ export function HomePage(props: { config: RobotConfig | null }) {
   });
 
   useEffect(() => {
-    apiGet<{ games: string[] }>("/api/fun").then((r) => setGames(r.games)).catch(() => undefined);
-    apiGet<{ emotes: string[] }>("/api/emotes").then((r) => setEmotes(r.emotes)).catch(() => undefined);
+    apiGet<{ games: string[] }>("/api/fun")
+      .then((r) => setGames(r.games))
+      .catch(() => undefined)
+      .finally(() => setGamesSettled(true));
+    apiGet<{ emotes: string[] }>("/api/emotes")
+      .then((r) => setEmotes(r.emotes))
+      .catch(() => undefined)
+      .finally(() => setEmotesSettled(true));
     apiGet<{ supported: boolean; private: boolean }>("/api/robot/privacy").then(setPrivacy).catch(() => undefined);
   }, []);
 
@@ -117,13 +125,18 @@ export function HomePage(props: { config: RobotConfig | null }) {
   // Poll the robot's live state (published by the firmware) every 2.5s while visible.
   useEffect(() => {
     let stop = false;
+    let misses = 0;
     async function tick() {
       if (document.visibilityState === "visible") {
         try {
           const l = await apiGet<Live>("/api/robot/live");
+          misses = 0;
           if (!stop) setLive(l);
         } catch {
-          /* keep the last known state */
+          // Keep the last known state through a blip, but after 3 straight
+          // misses admit the robot is gone and show the offline face.
+          misses += 1;
+          if (misses >= 3 && !stop) setLive(null);
         }
       }
     }
@@ -164,6 +177,9 @@ export function HomePage(props: { config: RobotConfig | null }) {
       setMsgs((m) => [...m, { role: "bot", text: r.text }]);
     } catch (e) {
       toastErr(e);
+      // Failed — put the question back in the input and drop its bubble, so nothing is lost.
+      setMsgs((m) => (m.length && m[m.length - 1]?.role === "user" ? m.slice(0, -1) : m));
+      setText((cur) => cur || q);
     } finally {
       setBusy(null);
     }
@@ -311,7 +327,11 @@ export function HomePage(props: { config: RobotConfig | null }) {
               {pick(GAMES[g], g)}
             </button>
           ))}
-          {games.length === 0 && <span className="text-sm text-mute">{tr("טוען…", "Loading…")}</span>}
+          {games.length === 0 && (
+            <span className="text-sm text-mute">
+              {gamesSettled ? tr("אין משחקים זמינים", "No games available") : tr("טוען…", "Loading…")}
+            </span>
+          )}
         </div>
         <label className="lbl">{tr("קטעים (תנועה + פרצוף + לדים)", "Tricks (motion + face + LEDs)")}</label>
         <div className="flex flex-wrap gap-2">
@@ -325,7 +345,11 @@ export function HomePage(props: { config: RobotConfig | null }) {
               {pick(EMOTES[e], e)}
             </button>
           ))}
-          {emotes.length === 0 && <span className="text-sm text-mute">{tr("טוען…", "Loading…")}</span>}
+          {emotes.length === 0 && (
+            <span className="text-sm text-mute">
+              {emotesSettled ? tr("אין קטעים זמינים", "No tricks available") : tr("טוען…", "Loading…")}
+            </span>
+          )}
         </div>
       </Section>
 
@@ -410,7 +434,7 @@ export function HomePage(props: { config: RobotConfig | null }) {
         <Section title={tr("מצלמה", "Camera")} delay={300}>
           {privacy.private ? (
             <p className="rounded-2xl border border-red/30 bg-red/10 p-3 text-sm text-red">
-              {tr("🔒 מצב פרטיות פועל — המצלמה חסומה לגמרי (גם ל-Frigate).", "🔒 Privacy on — the camera is fully blocked (even for Frigate).")}
+              {tr("🔒 מצב פרטיות פועל — המצלמה חסומה לגמרי (גם לכלים חיצוניים).", "🔒 Privacy on — the camera is fully blocked (external tools too).")}
             </p>
           ) : camOn ? (
             <>
@@ -429,7 +453,10 @@ export function HomePage(props: { config: RobotConfig | null }) {
             </button>
           )}
           <p className="mt-2 text-xs text-mute">
-            {tr("אותו זרם משמש גם את Frigate לזיהוי אנשים:", "The same stream feeds Frigate's person detection:")}{" "}
+            {tr(
+              "אותו זרם זמין לכל NVR או כלי לזיהוי אנשים (למשל Frigate):",
+              "The same stream is available to any NVR or person-detection tool (e.g. Frigate):",
+            )}{" "}
             <span dir="ltr" className="font-mono">/camera/robot/stream.mjpeg</span>
           </p>
         </Section>

@@ -26,8 +26,15 @@ def test_no_fire_when_already_active():
 
 
 def test_head_touch_maps_to_pet():
-    out = map_state_changed(_changed("binary_sensor.stackchan_head_touch", "off", "on"))
-    assert out == ("touch.pet", {"entity_id": "binary_sensor.stackchan_head_touch"})
+    out = map_state_changed(_changed("binary_sensor.stackchan_touch_sensor_head", "off", "on"))
+    assert out == ("touch.pet", {"entity_id": "binary_sensor.stackchan_touch_sensor_head"})
+
+
+def test_loose_head_or_touch_names_do_not_map():
+    # Only a real "*touch_sensor*" object_id counts — not any entity with "head"/"touch" in it.
+    assert map_state_changed(_changed("binary_sensor.bathroom_overhead_motion", "off", "on")) is None
+    assert map_state_changed(_changed("binary_sensor.door_touched", "off", "on")) is None
+    assert map_state_changed(_changed("sensor.kitchen_touchpad", "No touch", "HIGH")) is None
 
 
 def test_stackchan_text_touch_sensor_maps_to_pet():
