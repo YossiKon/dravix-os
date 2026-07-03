@@ -43,42 +43,138 @@ talks to HA core over REST/WebSocket. There is no cloud in the loop.
 3. **Capability-guarded.** Modes check `robot.supports(...)` before acting, so behaviour degrades
    gracefully across backends.
 
-## 🚀 Getting started
+## 🚀 From a stock robot to alive — the complete walkthrough
 
-**You'll need:** an M5Stack **StackChan (CoreS3)**, a running **Home Assistant** with the official
-**ESPHome** add-on installed, and a **USB-C** cable.
+Every step, from a factory StackChan to a living desk creature. Nothing here requires prior
+ESPHome experience.
 
-1. **Install the add-on.** In Home Assistant → **Settings → Add-ons → Add-on Store → ⋮ →
-   Repositories**, add `https://github.com/YossiKon/dravix-os`, then install **dravix-os**. HA
-   pulls a prebuilt image from GHCR — nothing compiles on your box.
+**What you'll need**
 
-2. 🛡️ **Back up the robot's original firmware — do this before flashing anything.** It makes a
-   byte-for-byte snapshot of the robot exactly as it is today that you can always restore. Follow
-   **Step 0 — Back up the original firmware** in
-   [docs/esphome-local-control.md](docs/esphome-local-control.md).
+| | Item | Notes |
+|---|------|-------|
+| 🤖 | M5Stack **StackChan (CoreS3)** | the robot |
+| 🏠 | **Home Assistant** running on an always-on box | any install type with add-on support |
+| 🧩 | The official **ESPHome Device Builder** add-on | Settings → Add-ons → Add-on Store → ESPHome |
+| 🔌 | A **USB-C cable** | needed once, for the first flash; updates are OTA afterwards |
 
-3. **Flash the dravix ESPHome firmware.** The easy way: create a new device in the ESPHome
-   Builder and paste the ~10-line
-   [`deploy/esphome/stackchan-from-git.yaml`](deploy/esphome/stackchan-from-git.yaml) — it pulls
-   the real firmware from this repo at build time, so future firmware updates are just
-   **Install** again. (Prefer a frozen copy? Flash
-   [`deploy/esphome/stackchan-dravix.yaml`](deploy/esphome/stackchan-dravix.yaml) directly —
-   the `substitutions:` block at its top is the only part you may want to tune.) Full
-   walkthrough: [docs/esphome-local-control.md](docs/esphome-local-control.md).
+### Step 0 · 🛡️ Back up the original firmware (5 min, do NOT skip)
 
-4. **Start the add-on.** No configuration needed: it authenticates to Home Assistant by itself
-   (Supervisor token) and **auto-discovers every robot entity** — face, head servos, mode,
-   speaker, LEDs, camera, sensors. **Start** it, that's all.
+A byte-for-byte snapshot of the robot exactly as it left the factory — you can always go back.
+Follow **Step 0 — Back up the original firmware** in
+[docs/esphome-local-control.md](docs/esphome-local-control.md) (one `esptool read_flash` command).
 
-5. **Open the dashboard.** Click **Open Web UI** on the add-on page (or browse to
-   `http://<home-assistant>:8800`). Settings shows what was auto-detected (read-only), the
-   header has a live English/עברית toggle, and you can name your robot. You're live.
+### Step 1 · Create the robot's ESPHome config (the tiny git file)
 
-Reversible at any time: re-flash your backup (or the stock firmware via M5Burner) and the robot is
-back to how it was.
+1. Open the **ESPHome Device Builder** → **+ New Device** → give it a name (e.g. `stackchan`) →
+   **Skip** the wizard's install step.
+2. Click **Edit** on the new device and replace ALL of its YAML with the ~40-line
+   [`deploy/esphome/stackchan-from-git.yaml`](deploy/esphome/stackchan-from-git.yaml).
+3. Edit the two **Wi-Fi lines** at the top (`ssid:` / `password:` — your home network).
+   That tiny file is the only thing that ever lives in your ESPHome: it pulls the real firmware
+   from this repo on every build, so **firmware updates = press Install again**. All personal
+   tuning (device name, wake word, battery, thresholds) is right there as commented lines.
+
+### Step 2 · First flash (USB, once)
+
+Plug the robot into the computer with USB-C → in the device's ⋮ menu pick **Install → Plug into
+this computer** → choose the serial port. The first build takes a while (it compiles a wake-word
+model); after it finishes the robot boots with the dravix pet face and joins your Wi-Fi. Every
+future update is wireless (**Install → Wirelessly**).
+
+### Step 3 · Adopt it in Home Assistant
+
+HA discovers the new ESPHome device automatically (**Settings → Devices & Services** → the
+discovered `stackchan` → **Configure**). Then one recommended tweak: **rename the device to
+`Dravix`** (open the device page → ✏️ → rename → let HA update the entity ids). That matches the
+firmware's default entity prefix. Prefer keeping the name `stackchan`? Then set
+`ha_prefix: "stackchan"` in the tiny file instead.
+
+### Step 4 · Install the dravix-os add-on
+
+**Settings → Add-ons → Add-on Store → ⋮ → Repositories** → add
+`https://github.com/YossiKon/dravix-os` → install **dravix-os** → **Start**. That's the whole
+configuration: it authenticates to HA by itself (Supervisor token) and **auto-discovers every
+robot entity** — face, head servos, mode, speaker, LEDs, camera, sensors. Nothing to map.
+
+### Step 5 · Open the dashboard and say hi
+
+Click **Open Web UI** on the add-on page (or `http://<home-assistant>:8800`). You'll see the live
+face, the language toggle (English default, עברית built-in), and in **Settings** — the
+auto-detected wiring (read-only), your robot's name, and the master **Local-only** switch.
+Pet the robot's head. It will like that.
+
+### Updating & rolling back
+
+| | How |
+|---|-----|
+| **Update the firmware** | ESPHome → **Install** (the tiny file pulls the latest from the repo) |
+| **Update the add-on** | HA shows the update automatically (Settings → Add-ons) — with a changelog |
+| **Know something's new** | Dashboard → Settings → **Updates** card compares versions for both |
+| **Roll back firmware** | In the tiny file set `ref: v0.0.43` (any tag from [Releases](https://github.com/YossiKon/dravix-os/releases)) → Install |
+| **Roll back the add-on** | Every version's image is kept — revert the version in `dravix_os/config.yaml` |
+| **Go back to factory** | Re-flash your Step-0 backup (or stock firmware via M5Burner) |
 
 > No robot yet? You can still run and explore everything against the built-in **mock** driver —
 > see the **Development** section below.
+
+## 🎮 Everyday use — the cheat sheet
+
+Everything is done by touching the robot, talking to it, or from the dashboard:
+
+| You do | The robot does |
+|--------|----------------|
+| Say **"Okay, Nabu"** | Wakes and listens (big eyes, yellow LEDs) → answers via HA Assist, reply shown in its speech bubble |
+| **Tap the face** | Starts a voice conversation (tap again to stop) |
+| **Long-press the face** (1.2 s) | Goes to sleep instantly |
+| **Pet the head** (front / middle zones) | Pink LEDs, nuzzles up into your hand, happy wiggle |
+| **Tickle the back of the head** | Green flash + giggly double-wiggle |
+| **Walk up close** | Notices you and greets — perks up and nods hello |
+| Room goes **dark / bright** | Falls asleep / wakes up (toggleable) |
+| **Swipe ⬇** | Status bar: clock · date · Wi-Fi bars · battery % · real power draw + time-left · **LOCAL** button |
+| **Swipe ⬅ / ➡** | Cycles: face → card 1 → card 2 → card 3 → **GAMES** → **VITALS** |
+| **Swipe ⬆** | Back to the face |
+| **LOCAL** button (on the status bar) | Toggles local-only mode — nothing in or out of your LAN |
+| The **official ESP-NOW remote** | Joystick steers the head; button **B** = talk (set the remote's channel to your router's Wi-Fi channel) |
+
+## ✨ What's inside — feature map
+
+**On the robot** (the dravix ESPHome firmware):
+
+| Feature | What it is | How to use / turn on |
+|---------|-----------|----------------------|
+| 🐣 Pet face | Drawn animated eyes/cheeks/mouth — blinks, looks around, squints when happy | Always on; expressions via HA `select` / dashboard / the AI's emotion tags |
+| 🎭 7 modes | `awake · morning · focus · quiet · night · busy · sleep` — each changes face, LEDs, volume, behaviour | Mode chips on the dashboard Home tab, or the `Mode` select in HA |
+| 🗣️ Voice + speech bubble | On-device wake word → HA Assist (STT/LLM/TTS); bubble shows what it heard and answered | "Okay, Nabu" or tap the face; swap the wake word in the tiny file |
+| 🕹️ Games arcade | **Catch Me · Reaction · Simon · Rock-Paper-Scissors · Flappy · Party** | Swipe to **GAMES**, tap a game (Party also has an HA button) |
+| 💗 Vitals screen | The robot's live needs as bars (energy/food/fun/calm) | Swipe to **VITALS**; care actions on the dashboard **Life** tab |
+| 🗂 3 dynamic cards | Any HA entities you pick, shown on the robot's screen | Dashboard → **Screens**: pick entities per card |
+| 🔒 Privacy mode | Mic dead on-device + camera endpoints blocked; red PRIVACY badge | Toggle on the dashboard Home tab or the HA switch |
+| 🏠 Local-only (isLocal) | *Your* master choice: everything stays inside the home network | **LOCAL** button on the robot, dashboard Settings, or the HA switch — all synced |
+| 🔋 Real power metering | True W / mA / time-left from the INA226, battery % with voltage fallback | Swipe ⬇ — it's on the status bar |
+| 🎮 Official remote | The M5Stack StackChan ESP-NOW joystick remote | Just use it (match its channel to your router's) |
+| 🖼 Alert images | Any camera/Frigate snapshot full-screen on the robot | Set the `Show image URL` text entity (automations) or dashboard camera actions |
+| 🧭 Behaviour toggles | Greet-on-approach, sleep-when-dark, blink, idle glances, mood LEDs, tap-to-talk… | Dashboard → Settings → **Robot behaviour** |
+| 🆔 Identify / Party / Reboot | Find-my-robot flash · desk disco · restart | HA buttons (also exposed on the dashboard) |
+| 📟 Firmware version | The robot reports which firmware it runs | Automatic — feeds the Updates card |
+
+**In the add-on** (the dravix service + dashboard):
+
+| Feature | What it is | Where |
+|---------|-----------|-------|
+| 🪞 Live face mirror | The robot's face, state and speech mirrored in the browser | **Home** |
+| 💬 Chat with memory | Talk to the robot by text; it remembers facts you tell it | **Home** |
+| 🕹 Joystick + faces + LEDs | Manual head control, expression picker, LED colours | **Home** |
+| 📸 Camera view | The robot's camera (blocked while privacy is on) | **Home** |
+| 🗂 Cards editor | Choose the HA entities for the robot's 3 screens | **Screens** |
+| 💗 Life system | Needs bars, feed/rest/play/calm actions, wellness-nudge toggle | **Life** |
+| ❄ Climate | Control your AC from the same app | **Climate** |
+| 🤖 Robot name | Name it anything — the AI answers to that name | **Settings** |
+| 🏠 Local-only master switch | The isLocal choice with a plain-language explanation | **Settings** |
+| 🔌 Auto-wired entities | What discovery found, read-only — nothing to fill in | **Settings** |
+| 🎚 Calibration + timers | Per-axis head invert/centre, screensaver/sleep minutes | **Settings** |
+| 🧠 AI provider | HA Assist (default) / Claude / OpenAI / Ollama | **Settings** |
+| ⬆️ Updates card | Add-on + firmware versions vs latest, with rollback recipe | **Settings** |
+| 🌐 Language | English default, Hebrew built-in, one-file recipe for more | header toggle |
 
 ## 🤖 What the robot does (custom firmware)
 
@@ -101,11 +197,12 @@ controllable from Home Assistant:
   English), with clear *listening* / *speaking* states.
 - **A games arcade** — a **Games** menu on the robot's screen: **Catch Me** (tap the runaway dot),
   **Reaction** (a reflex speed test in milliseconds), **Simon** (the growing colour-sequence memory
-  game), **Rock-Paper-Scissors** (it nods when it wins) and **Dice**.
-- **A swipe UI** — swipe **down** for a slim status-bar overlay (Wi-Fi · battery · clock · date),
-  and **left/right** through 3 **dynamic cards** (you choose the HA entities on each, from the
-  dashboard), the **Games** arcade and the **Vitals** page — plus a full-screen alert-image page for
-  Frigate / doorbell snapshots.
+  game), **Rock-Paper-Scissors** (it nods when it wins), **Flappy** (slip through the pipes) and
+  **Party** (a desk disco).
+- **A swipe UI** — swipe **down** for a slim status-bar overlay (Wi-Fi · battery · clock · date ·
+  real power draw + time-left · the **LOCAL** button), and **left/right** through 3 **dynamic
+  cards** (you choose the HA entities on each, from the dashboard), the **Games** arcade and the
+  **Vitals** page — plus a full-screen alert-image page for Frigate / doorbell snapshots.
 - **Privacy mode** — kills the microphone on-device (wake word + voice pipeline stopped) and shows a
   red **PRIVACY** badge; dravix additionally blocks the camera stream/snapshot.
 - **Head calibration** — the head servos are driven and calibrated per-axis from the dashboard.
@@ -131,7 +228,7 @@ real feedback (it "eats", yawns, wiggles, LEDs). Petting and talking to it feed 
 
 ## 📱 Web dashboard
 
-The add-on ships a **Hebrew-first, RTL, mobile-friendly** dashboard: a live mirror of the robot's
+The add-on ships a **bilingual (English default · עברית RTL built-in), mobile-friendly** dashboard: a live mirror of the robot's
 face, chat with memory, mode switching, games & emotes, a head joystick, the privacy toggle, a
 camera view, the dynamic-cards editor, the **Vitals** page (feed · rest · play · calm + the wellness
 toggle), climate control, and entity mapping + per-axis head calibration.
