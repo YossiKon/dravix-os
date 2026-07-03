@@ -35,6 +35,11 @@
 
 # ── FIT TO YOUR SETUP — the only block most people ever edit ─────────────────────
 substitutions:
+  # FIRMWARE VERSION — bumped whenever this file meaningfully changes. The robot
+  # publishes it to HA ("Firmware version" sensor); the dravix dashboard compares it
+  # with the version bundled in the add-on and shows "firmware update available".
+  # (Maintainers: bump this on every firmware change. Users: don't touch.)
+  fw_version: "1"
   # The entity-id prefix HA gave the robot's own sensors (battery, touch, proximity…).
   # dravix-os convention: rename the device to "Dravix" in HA (Settings → Devices →
   # rename → let HA update the entity ids) and keep this as "dravix". A FRESH flash
@@ -443,6 +448,12 @@ text_sensor:
       id: ip_txt
     ssid:
       id: ssid_txt
+  # Which firmware revision is running — the dashboard uses this for "update available".
+  - platform: template
+    name: "Firmware version"
+    id: st_fw_version
+    lambda: 'return std::string("${fw_version}");'
+    update_interval: 6h
   # Live robot state for HA + the dravix dashboard: awake/listening/speaking/screensaver/sleep.
   - platform: template
     name: "State"

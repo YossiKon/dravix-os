@@ -2,7 +2,7 @@
 // AUTO-DISCOVERED by the core (discovery.py) — shown here read-only, nothing to fill in.
 import { useEffect, useMemo, useState } from "react";
 import { apiGet, apiSend } from "../api";
-import type { AppConfig, HAEntity, RobotConfig, ScreenTimers } from "../api";
+import type { AppConfig, HAEntity, RobotConfig, ScreenTimers, Updates } from "../api";
 import { Section, Toggle, toast, toastErr } from "../ui";
 import { useI18n } from "../i18n";
 
@@ -53,14 +53,15 @@ export function SettingsPage(props: {
   version: string;
   onConfigChanged: () => void;
 }) {
-  const { tr, lang } = useI18n();
-  const pick = (o: Bi | undefined, fb: string) => (o ? (lang === "en" ? o.en : o.he) : fb);
+  const { tr } = useI18n();
+  const pick = (o: Bi | undefined, fb: string) => (o ? tr(o.he, o.en) : fb);
 
   const cfg = props.config;
   const [timers, setTimers] = useState<{ saver: string; sleep: string }>({ saver: "", sleep: "" });
   const [app, setApp] = useState<AppConfig | null>(null);
   const [switches, setSwitches] = useState<HAEntity[]>([]);
   const [robotName, setRobotName] = useState<string | null>(null); // null = not user-edited yet
+  const [updates, setUpdates] = useState<Updates | null>(null);
 
   useEffect(() => {
     apiGet<{ entities: HAEntity[] }>("/api/ha/entities?domains=switch")
@@ -103,6 +104,7 @@ export function SettingsPage(props: {
       )
       .catch(() => undefined);
     apiGet<AppConfig>("/api/config").then(setApp).catch(toastErr);
+    apiGet<Updates>("/api/updates").then(setUpdates).catch(() => undefined);
   }, []);
 
   async function setDriver(driver: string) {
@@ -250,6 +252,58 @@ export function SettingsPage(props: {
         </div>
       </Section>
 
+      {/* ── updates — add-on + robot firmware versions, with rollback hints ── */}
+      {updates && (
+        <Section title={tr("עדכונים", "Updates")} delay={45}>
+          <div className="space-y-1.5 text-sm">
+            <div className="flex items-center justify-between gap-2">
+              <span>{tr("תוסף dravix-os", "dravix-os add-on")}</span>
+              <span dir="ltr" className="font-mono text-xs">
+                v{updates.addon_version}
+                {updates.addon_update && updates.addon_latest ? ` → v${updates.addon_latest}` : ""}
+              </span>
+            </div>
+            {updates.addon_update && (
+              <p className="text-xs text-amber">
+                {tr(
+                  "גרסה חדשה זמינה — עדכן ב-Home Assistant: הגדרות ← תוספים ← dravix-os.",
+                  "A new version is available — update in Home Assistant: Settings → Add-ons → dravix-os.",
+                )}
+              </p>
+            )}
+            <div className="flex items-center justify-between gap-2">
+              <span>{tr("קושחת הרובוט", "Robot firmware")}</span>
+              <span dir="ltr" className="font-mono text-xs">
+                {updates.fw_robot ?? "?"}
+                {updates.fw_update && updates.fw_bundled ? ` → ${updates.fw_bundled}` : ""}
+              </span>
+            </div>
+            {updates.fw_update && (
+              <p className="text-xs text-amber">
+                {tr(
+                  "קושחה חדשה זמינה — פתח את ESPHome ולחץ Install (עם קובץ ה-git זה הכול).",
+                  "New firmware available — open ESPHome and press Install (with the git stub that's all).",
+                )}
+              </p>
+            )}
+            {!updates.fw_robot && (
+              <p className="text-xs text-mute">
+                {tr(
+                  "הרובוט לא מדווח גרסת קושחה (כבוי, או קושחה מלפני מנגנון הגרסאות).",
+                  "The robot isn't reporting a firmware version (off, or pre-versioning firmware).",
+                )}
+              </p>
+            )}
+            <p className="text-xs text-mute">
+              {tr(
+                "חזרה לגרסה קודמת: בקובץ ה-ESPHome קבע ref: v<גרסה> מעמוד ה-Releases ולחץ Install.",
+                "Rollback: in the ESPHome stub set ref: v<version> from the Releases page and press Install.",
+              )}
+            </p>
+          </div>
+        </Section>
+      )}
+
       {/* ── isLocal — the master local-only flag ── */}
       <Section title={tr("🏠 מקומי בלבד (isLocal)", "🏠 Local only (isLocal)")} delay={50}>
         <p className="mb-3 text-sm text-mute">
@@ -297,7 +351,7 @@ export function SettingsPage(props: {
             {behaviors.map((b) => (
               <Toggle
                 key={b.entity_id}
-                label={lang === "en" ? b.en : b.he}
+                label={tr(b.he, b.en)}
                 on={b.state === "on"}
                 onChange={(v) => void flipBehavior(b.entity_id, v)}
               />

@@ -1,5 +1,6 @@
 // The hero: a live mirror of the robot — same face glyphs, same LED behaviour.
 import { useEffect, useState } from "react";
+import { biPick } from "../i18n";
 import type { Lang } from "../i18n";
 
 const STATE: Record<string, { he: string; en: string }> = {
@@ -16,9 +17,9 @@ const STATE: Record<string, { he: string; en: string }> = {
 };
 
 export function stateLabel(state: string | null, lang: Lang): string {
-  if (!state) return lang === "en" ? "Unknown" : "לא ידוע";
+  if (!state) return biPick(lang, "לא ידוע", "Unknown");
   const s = STATE[state];
-  return s ? (lang === "en" ? s.en : s.he) : state;
+  return s ? biPick(lang, s.he, s.en) : state;
 }
 
 export function RobotFace(props: { state: string | null; online: boolean }) {

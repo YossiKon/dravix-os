@@ -89,6 +89,16 @@ export interface AppConfig {
   store: { idle_motion?: boolean } & Record<string, unknown>;
 }
 
+export interface Updates {
+  addon_version: string;
+  addon_latest: string | null;
+  addon_update: boolean;
+  fw_bundled: string | null;
+  fw_robot: string | null;
+  fw_update: boolean;
+  checked_online: boolean;
+}
+
 export interface ScreenTimers {
   supported: boolean;
   screensaver_min: number | null;

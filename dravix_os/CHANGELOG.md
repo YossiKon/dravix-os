@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.0.42
+
+- **Releases + rollback**: every version now gets a git tag (`v0.0.42`) and a GitHub
+  Release automatically. Firmware rollback = point the ESPHome stub's `ref:` at an older
+  tag and press Install; add-on rollback = revert the version (all images stay on GHCR).
+- **Update visibility**: the firmware now publishes its version to HA, and Settings shows
+  an **Updates** card — add-on version vs the newest release, robot firmware vs the
+  firmware this release ships — with plain instructions (and no internet calls while
+  isLocal is on).
+- **i18n built to grow**: languages live in one registry; adding a language is one
+  dictionary file (`web/src/locales/TEMPLATE.example.ts`) + one registry line — the
+  header button cycles through all of them. Core tips likewise take new languages with
+  a single dict entry.
+
 ## 0.0.41
 
 - **English is now the default everywhere** (open-source ready): the dashboard opens in

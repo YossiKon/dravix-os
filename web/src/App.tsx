@@ -26,7 +26,7 @@ function tabFromHash(): Tab {
 }
 
 export default function App() {
-  const { tr, lang, setLang } = useI18n();
+  const { tr, setLang, nextLang } = useI18n();
   const [tab, setTab] = useState<Tab>(tabFromHash);
   const [config, setConfig] = useState<RobotConfig | null>(null);
   const [entities, setEntities] = useState<HAEntity[]>([]);
@@ -88,11 +88,11 @@ export default function App() {
           <button
             type="button"
             className="rounded-full border border-line bg-card2 px-2.5 py-1 text-xs text-mute transition active:scale-95"
-            onClick={() => setLang(lang === "he" ? "en" : "he")}
+            onClick={() => setLang(nextLang.code)}
             aria-label="Switch language"
-            title={lang === "he" ? "English" : "עברית"}
+            title={nextLang.label}
           >
-            {lang === "he" ? "EN" : "עב"}
+            {nextLang.short}
           </button>
           <span
             className={`inline-block h-2.5 w-2.5 rounded-full ${config?.online ? "bg-green" : "bg-red"}`}
@@ -127,7 +127,7 @@ export default function App() {
               }`}
             >
               <span className={`text-xl leading-none ${tab === tb.id ? "" : "grayscale opacity-70"}`}>{tb.icon}</span>
-              {lang === "en" ? tb.en : tb.he}
+              {tr(tb.he, tb.en)}
               <span
                 className={`mt-0.5 h-1 w-8 rounded-full transition ${tab === tb.id ? "bg-teal" : "bg-transparent"}`}
               />

@@ -596,6 +596,17 @@ async def get_config(request: Request):
     }
 
 
+@router.get("/api/updates")
+async def get_updates(request: Request):
+    """Version report for the dashboard: add-on vs the newest release, and the firmware
+    the robot runs vs the firmware this release ships. Never calls the internet while
+    the master isLocal flag is on."""
+    from ..updates import update_report
+
+    s = request.app.state
+    return await update_report(s.ha, allow_network=not _local_only(request))
+
+
 class LocalOnlyBody(BaseModel):
     enabled: bool | None = None  # None = follow the add-on/env default again
 

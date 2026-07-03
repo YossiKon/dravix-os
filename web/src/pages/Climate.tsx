@@ -17,10 +17,10 @@ const MODES: Record<string, { he: string; en: string }> = {
 };
 
 export function ClimatePage(props: { entities: HAEntity[] }) {
-  const { tr, lang } = useI18n();
+  const { tr } = useI18n();
   const modeLabel = (m: string) => {
     const o = MODES[m];
-    return o ? (lang === "en" ? o.en : o.he) : m;
+    return o ? tr(o.he, o.en) : m;
   };
 
   const [entity, setEntity] = useState("");

@@ -20,7 +20,7 @@ const ACTIONS: { action: string; he: string; en: string; okHe: string; okEn: str
 ];
 
 export function VitalsPage() {
-  const { tr, lang } = useI18n();
+  const { tr } = useI18n();
   const [v, setV] = useState<Vitals | null>(null);
   const [busy, setBusy] = useState("");
   const [failed, setFailed] = useState(false);
@@ -81,7 +81,7 @@ export function VitalsPage() {
                 <div key={n.key}>
                   <div className="mb-1 flex items-center justify-between text-sm">
                     <span>
-                      {n.icon} {lang === "en" ? n.en : n.he}
+                      {n.icon} {tr(n.he, n.en)}
                     </span>
                     <span className="font-mono text-mute">{val}%</span>
                   </div>
@@ -105,9 +105,9 @@ export function VitalsPage() {
               key={a.action}
               className="btn"
               disabled={busy === a.action}
-              onClick={() => void act(a.action, lang === "en" ? a.okEn : a.okHe)}
+              onClick={() => void act(a.action, tr(a.okHe, a.okEn))}
             >
-              {lang === "en" ? a.en : a.he}
+              {tr(a.he, a.en)}
             </button>
           ))}
         </div>

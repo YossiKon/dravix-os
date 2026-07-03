@@ -66,7 +66,7 @@ const LED_COLORS: { name: string; css: string; he: string; en: string }[] = [
 
 export function HomePage(props: { config: RobotConfig | null }) {
   const { tr, lang } = useI18n();
-  const L = (o: Bi) => (lang === "en" ? o.en : o.he);
+  const L = (o: Bi) => tr(o.he, o.en);
   const pick = (o: Bi | undefined, fb: string) => (o ? L(o) : fb);
 
   const [live, setLive] = useState<Live | null>(null);

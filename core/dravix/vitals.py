@@ -65,6 +65,7 @@ _NUDGE_INTERVALS_MIN: dict[str, float] = {
 }
 # Tip texts per language (short, so they fit the on-screen bubble). Picked by the store's
 # `language` override, else DRAVIX_LANG. The store's `wellness_tips` list replaces them all.
+# ADDING A LANGUAGE = add one entry here (same keys); unknown codes fall back to "en".
 _NUDGE_TEXTS: dict[str, dict[str, str]] = {
     "en": {
         "eyes":    "Eye break — look 20 seconds into the distance",

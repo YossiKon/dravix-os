@@ -9,6 +9,9 @@
 #  · pick how you track the repo with `ref:`:
 #       ref: main                 → always the latest (refresh: 0s re-checks every build)
 #       ref: <a tag or commit>    → pinned; bump it yourself when you want to update
+#  · ROLLBACK — new firmware misbehaving? Every release is tagged: set for example
+#       ref: v0.0.41
+#    (pick any older tag from the repo's Releases page), press Install, done.
 #  · to override any tuning knob, uncomment `substitutions:` — local values WIN over
 #    the ones in the repo file (see the substitutions block there for the full list).
 # ════════════════════════════════════════════════════════════════════════════════

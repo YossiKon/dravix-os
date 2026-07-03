@@ -1,0 +1,62 @@
+name: Tag & release versions
+
+# Every add-on version bump gets a git tag (v<version>) + a GitHub Release whose body is
+# that version's CHANGELOG section. The tags are the ROLLBACK anchors:
+#   · firmware — point the ESPHome stub's `ref:` at any older tag and press Install
+#   · add-on   — GHCR keeps every dravix-os-<arch>:<version> image; revert the version
+#                in dravix_os/config.yaml (or `git revert` the bump) and HA offers the
+#                older version as an "update"
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "dravix_os/config.yaml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Read version
+        id: ver
+        run: |
+          v=$(sed -nE 's/^version:[[:space:]]*"?([^"]+)"?.*/\1/p' dravix_os/config.yaml | head -n1)
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+          echo "Version: $v"
+
+      - name: Skip if the tag already exists
+        id: exists
+        run: |
+          if git ls-remote --tags origin "refs/tags/v${{ steps.ver.outputs.version }}" | grep -q .; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "Tag v${{ steps.ver.outputs.version }} already exists — nothing to do."
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Extract this version's changelog section
+        if: steps.exists.outputs.exists == 'false'
+        run: |
+          awk -v ver="${{ steps.ver.outputs.version }}" '
+            $0 ~ "^## " ver "$" {grab=1; next}
+            grab && /^## / {exit}
+            grab {print}
+          ' dravix_os/CHANGELOG.md > /tmp/notes.md
+          [ -s /tmp/notes.md ] || echo "Release ${{ steps.ver.outputs.version }}." > /tmp/notes.md
+          cat /tmp/notes.md
+
+      - name: Create tag + release
+        if: steps.exists.outputs.exists == 'false'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "v${{ steps.ver.outputs.version }}" \
+            --target "$GITHUB_SHA" \
+            --title "v${{ steps.ver.outputs.version }}" \
+            --notes-file /tmp/notes.md
