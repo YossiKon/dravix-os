@@ -1,8 +1,8 @@
-// Settings — robot connection, entity mapping, behaviour, head calibration, timers, AI.
+// Settings — robot connection, behaviour, head calibration, timers, AI. Entity wiring is
+// AUTO-DISCOVERED by the core (discovery.py) — shown here read-only, nothing to fill in.
 import { useEffect, useMemo, useState } from "react";
 import { apiGet, apiSend } from "../api";
 import type { AppConfig, HAEntity, RobotConfig, ScreenTimers } from "../api";
-import { EntityPicker } from "../components/EntityPicker";
 import { Section, Toggle, toast, toastErr } from "../ui";
 import { useI18n } from "../i18n";
 
@@ -57,8 +57,6 @@ export function SettingsPage(props: {
   const pick = (o: Bi | undefined, fb: string) => (o ? (lang === "en" ? o.en : o.he) : fb);
 
   const cfg = props.config;
-  const [entities, setEntities] = useState<Record<string, string>>({});
-  const [saving, setSaving] = useState(false);
   const [timers, setTimers] = useState<{ saver: string; sleep: string }>({ saver: "", sleep: "" });
   const [app, setApp] = useState<AppConfig | null>(null);
   const [switches, setSwitches] = useState<HAEntity[]>([]);
@@ -96,10 +94,6 @@ export function SettingsPage(props: {
   }
 
   useEffect(() => {
-    if (cfg) setEntities(cfg.entities);
-  }, [cfg]);
-
-  useEffect(() => {
     apiGet<ScreenTimers>("/api/robot/screen")
       .then((t) =>
         setTimers({
@@ -110,20 +104,6 @@ export function SettingsPage(props: {
       .catch(() => undefined);
     apiGet<AppConfig>("/api/config").then(setApp).catch(toastErr);
   }, []);
-
-  async function saveEntities() {
-    setSaving(true);
-    try {
-      const res = await apiSend<RobotConfig>("/api/robot/config", "PUT", { entities });
-      if (res.error) toast(res.error, "err");
-      else toast(tr("החיבורים נשמרו והרובוט חובר מחדש", "Mapping saved — robot reconnected"));
-      props.onConfigChanged();
-    } catch (e) {
-      toastErr(e);
-    } finally {
-      setSaving(false);
-    }
-  }
 
   async function setDriver(driver: string) {
     try {
@@ -193,6 +173,20 @@ export function SettingsPage(props: {
     }
   }
 
+  async function setLocalOnly(enabled: boolean) {
+    try {
+      const r = await apiSend<{ local_only: boolean; ai_available: boolean; error: string | null }>(
+        "/api/config/local_only",
+        "PUT",
+        { enabled },
+      );
+      if (r.error) toast(r.error, "err");
+      setApp((cur) => (cur ? { ...cur, local_only: r.local_only, ai_available: r.ai_available } : cur));
+    } catch (e) {
+      toastErr(e);
+    }
+  }
+
   async function saveRobotName() {
     try {
       await apiSend("/api/config/robot_name", "PUT", { name: (robotName ?? "").trim() });
@@ -256,37 +250,44 @@ export function SettingsPage(props: {
         </div>
       </Section>
 
-      {/* ── entity mapping ── */}
-      <Section title={tr("חיבור ישויות", "Entity mapping")} delay={60}>
+      {/* ── isLocal — the master local-only flag ── */}
+      <Section title={tr("🏠 מקומי בלבד (isLocal)", "🏠 Local only (isLocal)")} delay={50}>
         <p className="mb-3 text-sm text-mute">
           {tr(
-            "איזה ישות Home Assistant ממלאת כל תפקיד אצל הרובוט. אפשר להשאיר ריק מה שאין.",
-            "Which Home Assistant entity fills each robot role. Leave blank anything you don't have.",
+            "כשהמתג דלוק — רק דברים מקומיים מאושרים: בינה בענן חסומה, החיבור לענן מתנתק, ותמונות רק מכתובות ברשת הביתית. כשהוא כבוי — הכל רגיל.",
+            "When ON, only local things are allowed: cloud AI is blocked, the cloud bridge disconnects, and images load only from LAN addresses. When OFF, everything works normally.",
           )}
         </p>
-        <div className="space-y-3">
-          {cfg.roles.map((role) => (
-            <div key={role.key}>
-              <label className="lbl">{pick(ROLES[role.key], role.label)}</label>
-              <EntityPicker
-                entities={props.entities}
-                domains={role.domains}
-                value={entities[role.key] ?? ""}
-                onChange={(id) =>
-                  setEntities((cur) => {
-                    const next = { ...cur };
-                    if (id) next[role.key] = id;
-                    else delete next[role.key];
-                    return next;
-                  })
-                }
-              />
-            </div>
-          ))}
+        <Toggle
+          label={tr("מצב מקומי בלבד", "Local-only mode")}
+          on={Boolean(app?.local_only)}
+          onChange={(v) => void setLocalOnly(v)}
+        />
+      </Section>
+
+      {/* ── entity wiring — auto-discovered, read-only ── */}
+      <Section title={tr("חיבור ישויות — אוטומטי", "Entity wiring — automatic")} delay={60}>
+        <p className="mb-3 text-sm text-mute">
+          {tr(
+            "דרביקס מזהה לבד את כל ישויות הרובוט ב-Home Assistant — אין מה למלא. זה מה שנמצא:",
+            "dravix auto-detects all the robot's Home Assistant entities — nothing to fill in. Found:",
+          )}
+        </p>
+        <div className="space-y-1.5">
+          {cfg.roles.map((role) => {
+            const found = cfg.entities[role.key];
+            return (
+              <div key={role.key} className="flex items-center justify-between gap-2 text-sm">
+                <span className={found ? "" : "text-mute"}>{pick(ROLES[role.key], role.label)}</span>
+                {found ? (
+                  <span dir="ltr" className="truncate font-mono text-xs text-teal">{found}</span>
+                ) : (
+                  <span className="text-xs text-mute">{tr("לא נמצא", "not found")}</span>
+                )}
+              </div>
+            );
+          })}
         </div>
-        <button className="btn btn-primary mt-4 w-full" disabled={saving} onClick={() => void saveEntities()}>
-          {saving ? tr("שומר…", "Saving…") : tr("💾 שמור חיבורים", "💾 Save mapping")}
-        </button>
       </Section>
 
       {/* ── behaviour toggles (the robot's on-device switches) ── */}

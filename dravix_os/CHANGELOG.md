@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.0.40
+
+- **isLocal — master local-only switch** (Settings): when ON, only local things run —
+  cloud AI providers are blocked, the cloud MCP bridge disconnects, and robot images
+  load only from LAN addresses. When OFF everything behaves normally. Applied live,
+  no restart, and it overrides the add-on's `local_only` option both ways.
+- **Zero-setup entity wiring**: the robot's Home Assistant entities (face, head, mode,
+  privacy, speaker, camera, sensors, timers…) are now AUTO-DISCOVERED by suffix — the
+  Settings page shows what was found, read-only. Nothing to fill in, works with any
+  device name or a renamed device.
+
 ## 0.0.39
 
 - **Zero-config install**: the add-on now uses the Supervisor's own HA token when no

@@ -42,20 +42,27 @@ def build_ai(settings: Settings, store: Store, ha: HomeAssistant | None):
     from .persona import resolve_persona
 
     provider = store.ai_provider() or settings.ai_provider
-    merged = settings.model_copy(update={"ai_provider": provider})
+    # The dashboard's master isLocal flag overrides the env default, both ways.
+    merged = settings.model_copy(
+        update={"ai_provider": provider, "local_only": store.local_only(settings.local_only)}
+    )
     return build_provider(merged, ha, system=resolve_persona(store).system_prompt)
 
 
-def build_robot_driver(settings: Settings, store: Store, ha: HomeAssistant | None):
-    """Build the robot driver, letting dashboard picks (driver type + HA entities + head
-    calibration, saved in the store) override the add-on/env defaults."""
+def build_robot_driver(
+    settings: Settings, store: Store, ha: HomeAssistant | None,
+    discovered: dict[str, str] | None = None,
+):
+    """Build the robot driver. Entity roles are AUTO-DISCOVERED from HA (``discovered``,
+    see discovery.py) — explicit add-on/env options and anything saved in the store still
+    override, but a fresh install needs zero manual mapping."""
     driver_name = (store.robot_driver() or settings.robot_driver).lower()
     if driver_name == "ha":
         from .dal.ha_driver import HARobotDriver
 
         if ha is None:
             raise ValueError("the 'ha' driver needs Home Assistant — set ha_url + ha_token")
-        entities = {**settings.ha_robot_entities, **store.robot_entities()}
+        entities = {**(discovered or {}), **settings.ha_robot_entities, **store.robot_entities()}
         entities = {k: v for k, v in entities.items() if v}
         return HARobotDriver(ha=ha, entities=entities, calibration=store.head_calibration())
     merged = settings.model_copy(update={"robot_driver": driver_name})
@@ -79,12 +86,20 @@ async def lifespan(app: FastAPI):
         ha = HomeAssistant(settings.ha_url, settings.ha_token)
     frigate = Frigate(ha, settings.frigate_url)
 
+    # AUTO-DISCOVER the robot's entities (suffix-anchored, prefix-agnostic) — the user
+    # never hand-maps entities; explicit env/store values still override the discovery.
+    discovered: dict[str, str] = {}
+    if ha is not None:
+        from .discovery import discover_robot_entities
+
+        discovered = await discover_robot_entities(ha)
+
     # Robot driver + controller (dashboard picks in the store win over env defaults).
     # A driver that can't even be *built* (bad config, missing HA, ...) must not stop the
     # dashboard from booting — fall back to the mock driver and surface the error in /api/status.
     driver_error = ""
     try:
-        driver = build_robot_driver(settings, store, ha)
+        driver = build_robot_driver(settings, store, ha, discovered=discovered)
     except Exception as exc:  # noqa: BLE001 — degrade to mock, surface in status
         from .dal.mock_driver import MockDriver
 
@@ -162,7 +177,9 @@ async def lifespan(app: FastAPI):
     # xiaozhi bridge: expose dravix's MCP tools to the robot's AI (the robot can control
     # HA / run dravix features by voice). dravix is the MCP *server* on this connection.
     xiaozhi: XiaoZhiBridge | None = None
-    if settings.xiaozhi_mcp_url:
+    # The cloud bridge respects the master isLocal flag (the dashboard can flip it at
+    # runtime — /api/config/local_only stops/starts the bridge accordingly).
+    if settings.xiaozhi_mcp_url and not store.local_only(settings.local_only):
         from .mcpserver.server import build_server
 
         # The robot body tools only work with a real driver; over the cloud the driver is
@@ -182,6 +199,7 @@ async def lifespan(app: FastAPI):
     app.state.settings = settings
     app.state.bus = bus
     app.state.store = store
+    app.state.discovered_entities = discovered
     app.state.runtime = runtime
     app.state.ha = ha
     app.state.robot = controller
@@ -201,8 +219,10 @@ async def lifespan(app: FastAPI):
         yield
     finally:
         log.info("shutting down dravix-os")
-        if xiaozhi is not None:
-            await xiaozhi.stop()
+        # read the CURRENT bridge from app.state — /api/config/local_only may have
+        # stopped/replaced the one this scope created.
+        if getattr(app.state, "xiaozhi", None) is not None:
+            await app.state.xiaozhi.stop()
         if ha_bridge is not None:
             await ha_bridge.stop()
         await screen_pusher.stop()

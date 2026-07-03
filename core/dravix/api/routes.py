@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import ipaddress
 import re
 from urllib.parse import urlparse
 
@@ -246,8 +247,10 @@ class ScreenBody(BaseModel):
 
 
 def _effective_entities(request: Request) -> dict[str, str]:
+    # discovery fills everything automatically; explicit env/store values still override
     s = request.app.state
-    return {**s.settings.ha_robot_entities, **s.store.robot_entities()}
+    discovered = getattr(s, "discovered_entities", None) or {}
+    return {**discovered, **s.settings.ha_robot_entities, **s.store.robot_entities()}
 
 
 def _robot_config_payload(request: Request) -> dict:
@@ -271,7 +274,16 @@ async def _apply_robot_config(request: Request) -> str | None:
     """Rebuild the driver from the merged config and reconnect. Returns an error string or None."""
     s = request.app.state
     try:
-        driver = build_robot_driver(s.settings, s.store, s.ha)
+        # refresh the auto-discovery too — a reconnect is exactly when new entities appear
+        # (first flash, device rename, robot back online)
+        if s.ha is not None:
+            from ..discovery import discover_robot_entities
+
+            s.discovered_entities = await discover_robot_entities(s.ha)
+        driver = build_robot_driver(
+            s.settings, s.store, s.ha,
+            discovered=getattr(s, "discovered_entities", None),
+        )
         await s.robot.reconnect_with(driver)
     except Exception as exc:  # noqa: BLE001 — surface as a field, don't 500
         s.robot.state.online = False
@@ -564,6 +576,12 @@ def _known_mode(request: Request, name: str) -> bool:
     return any(m["name"] == name for m in _engine(request).list_modes())
 
 
+def _local_only(request: Request) -> bool:
+    """The EFFECTIVE master isLocal flag (dashboard override, else the add-on/env default)."""
+    s = request.app.state
+    return s.store.local_only(s.settings.local_only)
+
+
 @router.get("/api/config")
 async def get_config(request: Request):
     s = request.app.state
@@ -572,8 +590,54 @@ async def get_config(request: Request):
         "ai_provider": s.runtime.ai_provider,
         "ai_available": s.ai is not None,
         "providers": ["ha_assist", "claude", "openai", "ollama"],
-        "local_only": s.settings.local_only,
+        "local_only": _local_only(request),
+        "local_only_override": s.store.local_only_override(),
         "cloud_providers": ["claude", "openai"],
+    }
+
+
+class LocalOnlyBody(BaseModel):
+    enabled: bool | None = None  # None = follow the add-on/env default again
+
+
+@router.put("/api/config/local_only")
+async def set_local_only(body: LocalOnlyBody, request: Request):
+    """The MASTER isLocal flag. ON = only local things run: cloud AI providers are blocked,
+    the cloud MCP bridge is disconnected, and external (non-LAN) image URLs are rejected.
+    OFF = everything behaves normally. Applied immediately — no restart."""
+    s = request.app.state
+    s.store.set_local_only(body.enabled)
+    effective = _local_only(request)
+    # 1 · the cloud MCP bridge follows the flag, live
+    bridge_error: str | None = None
+    try:
+        if effective and getattr(s, "xiaozhi", None) is not None:
+            await s.xiaozhi.stop()
+            s.xiaozhi = None
+        elif not effective and getattr(s, "xiaozhi", None) is None and s.settings.xiaozhi_mcp_url:
+            from ..integrations.xiaozhi_bridge import XiaoZhiBridge
+            from ..mcpserver.server import build_server
+
+            include_robot = (s.store.robot_driver() or s.settings.robot_driver).lower() != "mock"
+            s.xiaozhi = XiaoZhiBridge(
+                s.settings.xiaozhi_mcp_url,
+                lambda: build_server(
+                    s.robot, s.engine, s.ai, ha=s.ha, store=s.store, mood=s.mood,
+                    weather_entity=s.settings.weather_entity,
+                    include_robot_control=include_robot,
+                ),
+            )
+            await s.xiaozhi.start()
+    except Exception as exc:  # noqa: BLE001 — surface, don't 500 (the flag itself was saved)
+        bridge_error = str(exc)
+    # 2 · cloud AI providers are (un)blocked by rebuilding against the new flag
+    ai_error = _rebuild_ai(request)
+    return {
+        "local_only": effective,
+        "local_only_override": s.store.local_only_override(),
+        "ai_available": s.ai is not None,
+        "cloud_bridge_connected": getattr(s, "xiaozhi", None) is not None,
+        "error": ai_error or bridge_error,
     }
 
 
@@ -637,6 +701,19 @@ _CAMERA_ENTITY_RE = re.compile(r"^camera\.[A-Za-z0-9_]+$")
 _MAX_IMAGE_BYTES = 5 * 1024 * 1024  # cap server-side fetches of user-supplied URLs
 
 
+def _is_local_host(host: str) -> bool:
+    """True for LAN-ish hosts: private/loopback IPs, .local/.lan names, bare hostnames."""
+    if not host:
+        return False
+    h = host.lower().strip("[]")  # tolerate bracketed IPv6
+    if h == "localhost" or h.endswith(".local") or h.endswith(".lan") or "." not in h:
+        return True
+    try:
+        return ipaddress.ip_address(h).is_private or ipaddress.ip_address(h).is_loopback
+    except ValueError:
+        return False  # a public DNS name
+
+
 async def _fetch_image(url: str) -> bytes:
     """Fetch a user-supplied image URL with a short timeout + a hard size cap."""
     buf = bytearray()
@@ -662,6 +739,12 @@ async def robot_show_image(body: ShowImageBody, request: Request):
     # Empty is allowed only for the firmware slot (it means "back to the face").
     if body.url and urlparse(body.url).scheme.lower() not in ("http", "https"):
         raise HTTPException(status_code=400, detail="url must be http(s)")
+    # Master isLocal flag: only LAN image sources while it's on.
+    if body.url and _local_only(request) and not _is_local_host(urlparse(body.url).hostname or ""):
+        raise HTTPException(
+            status_code=400,
+            detail="isLocal mode is on — only local (LAN) image URLs are allowed",
+        )
     shower = getattr(request.app.state.robot.driver, "show_image_url", None)
     if shower is not None:
         try:

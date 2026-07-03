@@ -50,7 +50,7 @@ _UPDATABLE_KEYS = (
     "personas", "active_persona", "memories", "routines", "voice", "voices", "inbox",
     "screens", "robot_driver", "robot_entities", "head_calibration",
     "climate_entity", "vitals", "nudges_enabled", "language", "wellness_tips",
-    "mood", "idle_motion", "robot_name",
+    "mood", "idle_motion", "robot_name", "local_only",
 )
 
 
@@ -148,6 +148,20 @@ class Store:
 
     def set_routines(self, routines: list[dict[str, Any]]) -> None:
         self._data["routines"] = routines
+        self.save()
+
+    def local_only(self, default: bool = True) -> bool:
+        """The MASTER isLocal flag: only local things may run (cloud AI blocked, the cloud
+        MCP bridge disconnected, external image URLs rejected). ``None`` in the store =
+        follow the add-on/env default; the dashboard writes True/False here."""
+        v = self._data.get("local_only")
+        return default if v is None else bool(v)
+
+    def local_only_override(self) -> bool | None:
+        return self._data.get("local_only")
+
+    def set_local_only(self, enabled: bool | None) -> None:
+        self._data["local_only"] = enabled
         self.save()
 
     def robot_name(self) -> str:
