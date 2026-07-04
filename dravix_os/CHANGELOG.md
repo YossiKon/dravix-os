@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.0.48
+
+The "feels alive" release (firmware v7) — inspired by what people love most about
+EMO, Vector, Cozmo and Eilik, plus the last gems from the original firmware:
+
+- **It breathes.** The face rises and settles on a slow gentle sine while idle, and
+  sways its head in tiny conversational moves while talking.
+- **Hand-turn awareness**: twist its head by hand and it goes wide-eyed (x_x), then
+  decides it liked it. And in the calm modes (night/focus/quiet) it now moves
+  **zero** — body language fully off, not even slowly.
+- **Boop!** Put a finger right up to its nose sensor → love-eyes + a happy nod.
+- **It cares about games** (the Cozmo magic): gloats with a double-nod + green flash
+  when it beats you at Rock-Paper-Scissors, huffs and turns away when it loses, and
+  slumps sadly on a Simon/Flappy game-over.
+- **Welcome home** 🏠 (better than Vector — HA knows you arrived): when a person
+  entity flips to `home`, the robot perks toward the door, love-eyes, green LEDs and
+  greets out loud. Per-person cool-down, silent in do-not-disturb modes.
+- **Sleep breathing**: asleep on the charger, the LED bar breathes very dimly (EMO's
+  beloved charger snooze). Wakes → instantly dark.
+- **On-screen chat text**: whatever the robot says (dashboard chat / announcements)
+  now also shows in its speech bubble — like the original app's text messages.
+
 ## 0.0.47
 
 Mined the original StackChan firmware + the M5Stack BSP for unused hardware — and

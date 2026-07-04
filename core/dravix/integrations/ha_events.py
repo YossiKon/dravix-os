@@ -62,6 +62,11 @@ def map_state_changed(
         return None
 
     domain, _, object_id = eid.partition(".")
+    # Someone arrived home — the welcome mode celebrates. Fires only on a REAL
+    # transition into "home" (not on restart/unknown noise).
+    if domain == "person" and state == "home" and old.get("state") not in (None, "home", "unknown", "unavailable"):
+        return "presence.home", {"entity_id": eid, "person": object_id}
+
     # The robot's "Local only" switch — republish EVERY real on/off transition (both
     # directions, unlike the became-active events): the user's isLocal choice made ON
     # the robot must flow back into dravix. app.py's watcher applies it.

@@ -76,3 +76,12 @@ def test_islocal_switch_maps_both_directions():
     # boot noise (unknown -> off) and unrelated switches don't fire
     assert map_state_changed(_changed("switch.dravix_local_only", "unavailable", "off")) is None
     assert map_state_changed(_changed("switch.garden_lights", "off", "on")) is None
+
+
+def test_person_arriving_home_maps():
+    out = map_state_changed(_changed("person.dana", "not_home", "home"))
+    assert out == ("presence.home", {"entity_id": "person.dana", "person": "dana"})
+    # restart noise / already home / leaving do not fire
+    assert map_state_changed(_changed("person.dana", "unknown", "home")) is None
+    assert map_state_changed(_changed("person.dana", "home", "home")) is None
+    assert map_state_changed(_changed("person.dana", "home", "not_home")) is None

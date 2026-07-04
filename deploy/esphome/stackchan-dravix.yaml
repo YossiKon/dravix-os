@@ -39,7 +39,7 @@ substitutions:
   # publishes it to HA ("Firmware version" sensor); the dravix dashboard compares it
   # with the version bundled in the add-on and shows "firmware update available".
   # (Maintainers: bump this on every firmware change. Users: don't touch.)
-  fw_version: "6"
+  fw_version: "7"
   # The ESPHome node name (mDNS hostname + the default entity prefix on a fresh flash).
   # Change it only if you run MORE THAN ONE robot — each needs a unique name. NOTE:
   # changing it on an already-adopted robot registers a NEW device in HA.
@@ -66,6 +66,7 @@ substitutions:
   # Presence + room-light thresholds (tune without touching any lambda):
   prox_near: "150"   # proximity counts above this = someone came close → greet
   prox_far: "80"     # …and below this = they moved away
+  prox_boop: "650"   # nearly-touching (a finger at the sensor) = a BOOP 👉 → love
   lux_dark: "5"      # lux below this = room went dark → sleep (if enabled)
   lux_bright: "30"   # lux above this = light came back → wake
 
@@ -280,6 +281,14 @@ globals:
   - { id: fb_gap,   type: int,   restore_value: false, initial_value: "90" }   # pipe gap top y
   - { id: fb_score, type: int,   restore_value: false, initial_value: "0" }
   - { id: fb_alive, type: bool,  restore_value: false, initial_value: "false" }
+  # sleep-breathing LED bookkeeping (so the bar goes dark the moment it wakes)
+  - { id: g_breath, type: bool, restore_value: false, initial_value: "false" }
+  # hand-turn detection: the servos report their REAL position back into the angle
+  # numbers, so a hand-twist changes them with no command. Track the last sampled
+  # angles + when WE last commanded a move, and a big uncommanded jump = a hand.
+  - { id: g_prev_x,  type: float, restore_value: false, initial_value: "-999" }
+  - { id: g_prev_y,  type: float, restore_value: false, initial_value: "-999" }
+  - { id: g_move_ms, type: long,  restore_value: false, initial_value: "0" }
   # battery engine (see battery_pct): smoothed open-circuit voltage + charging flag
   - { id: g_batt_v_filt, type: float, restore_value: false, initial_value: "-1" }
   - { id: g_batt_chg,    type: bool,  restore_value: false, initial_value: "false" }
@@ -421,6 +430,10 @@ sensor:
     id: ha_prox
     entity_id: sensor.${ha_prefix}_proximity_counts
     on_value:
+      # a finger right at the sensor = a BOOP — beloved ritual of every desk robot
+      - if:
+          condition: { lambda: 'return x > ${prox_boop} && !id(g_sleep) && !id(g_saver) && id(sw_touch).state;' }
+          then: [ { script.execute: boop_react } ]
       - if:
           condition: { lambda: 'return x > ${prox_near} && !id(g_near) && id(sw_greet).state;' }
           then:
@@ -605,6 +618,27 @@ text:
             - online_image.set_url:      # set_url also starts the download itself
                 id: oi_show
                 url: !lambda 'return x;'
+  # ── BUBBLE — dravix mirrors whatever the robot SAYS (dashboard chat / announce /
+  #    TTS) into the speech bubble, so text shows on-screen too (like the original
+  #    app's text messages) — no flash, no wiggle, just the bubble; auto-hides ~12s.
+  - platform: template
+    name: "Bubble"
+    id: t_bubble
+    optimistic: true
+    mode: text
+    max_length: 120
+    initial_value: ""
+    set_action:
+      - if:
+          condition: { lambda: 'return !x.empty();' }
+          then:
+            - globals.set: { id: g_tip, value: "true" }
+            - lvgl.label.update: { id: speech_txt, text: !lambda 'return x;' }
+            - script.execute: render_face
+            - script.execute: tip_timeout
+          else:
+            - globals.set: { id: g_tip, value: "false" }
+            - script.execute: render_face
   # ── WELLNESS TIP — dravix writes a short tip here; the robot pops it in the speech
   #    bubble, flashes cyan + wiggles so you notice, then auto-hides after ~12s.
   - platform: template
@@ -675,6 +709,7 @@ number:
     initial_value: 165
     restore_value: true
     set_action:
+      - lambda: 'id(g_move_ms) = (long) millis();'   # every pitch write is a commanded move
       - number.set:
           id: servo_y_angle
           # 158..260 → 0..90, then clamped to 5..85 — M5Stack's recommended vertical
@@ -1427,14 +1462,20 @@ script:
   # Nudge the head relative to where it is now. PITCH goes through n_head_pitch, i.e.
   # in YOUR units (158..260, straight=165) — never the motor's internal 0..90 scale.
   # Writes are spaced 350ms apart — the SCS9009 serial bus drops back-to-back writes.
+  # HARD no-move rule: in the calm modes (night / focus / quiet) body language is
+  # fully OFF — not even slow moves (only deliberate user control still works).
   - id: head_nudge
     mode: restart
     parameters:
       dx: int
       dy: int
     then:
+      - lambda: 'id(g_move_ms) = (long) millis();'   # a commanded move — not a hand
       - if:
-          condition: { lambda: 'return id(sw_move).state && dx != 0 && !std::isnan(id(servo_x_angle).state);' }
+          condition:
+            lambda: |-
+              return id(sw_move).state && dx != 0 && !std::isnan(id(servo_x_angle).state)
+                     && !id(g_night) && !id(g_focus) && !id(g_quiet);
           then:
             - number.set:
                 id: servo_x_angle
@@ -1443,19 +1484,26 @@ script:
                   return v < -164 ? -164 : (v > 164 ? 164 : v);
             - delay: 350ms
       - if:
-          condition: { lambda: 'return id(sw_move).state && dy != 0 && !std::isnan(id(n_head_pitch).state);' }
+          condition:
+            lambda: |-
+              return id(sw_move).state && dy != 0 && !std::isnan(id(n_head_pitch).state)
+                     && !id(g_night) && !id(g_focus) && !id(g_quiet);
           then:
             - number.set:
                 id: n_head_pitch
                 value: !lambda |-
                   float v = id(n_head_pitch).state + dy;
                   return v < 158 ? 158 : (v > 260 ? 260 : v);
-  # A quick left-right "no!" shake (angry / playful).
+  # A quick left-right "no!" shake (angry / playful). Silent in the calm modes.
   - id: head_shake
     mode: restart
     then:
+      - lambda: 'id(g_move_ms) = (long) millis();'
       - if:
-          condition: { lambda: 'return id(sw_move).state && !std::isnan(id(servo_x_angle).state);' }
+          condition:
+            lambda: |-
+              return id(sw_move).state && !std::isnan(id(servo_x_angle).state)
+                     && !id(g_night) && !id(g_focus) && !id(g_quiet);
           then:
             - number.set:
                 id: servo_x_angle
@@ -1468,12 +1516,17 @@ script:
             - number.set:
                 id: servo_x_angle
                 value: !lambda 'float v = id(servo_x_angle).state - 12; return v < -164 ? -164 : v;'
-  # A gentle up-down "yes" nod (agree / acknowledge / greet). PITCH via n_head_pitch (158..260).
+  # A gentle up-down "yes" nod (agree / acknowledge / greet). PITCH via n_head_pitch
+  # (158..260). Silent in the calm modes.
   - id: head_nod
     mode: restart
     then:
+      - lambda: 'id(g_move_ms) = (long) millis();'
       - if:
-          condition: { lambda: 'return id(sw_move).state && !std::isnan(id(n_head_pitch).state);' }
+          condition:
+            lambda: |-
+              return id(sw_move).state && !std::isnan(id(n_head_pitch).state)
+                     && !id(g_night) && !id(g_focus) && !id(g_quiet);
           then:
             - number.set:
                 id: n_head_pitch
@@ -1541,6 +1594,39 @@ script:
       - script.execute: { id: head_nudge, dx: 0, dy: 12 }         # nuzzle up into your hand
       - delay: 900ms
       - script.execute: head_shake                                # happy little wiggle
+  # ── BOOP 👉 — a finger right up at the proximity sensor: love-eyes + a happy nod.
+  - id: boop_react
+    mode: single
+    then:
+      - lambda: 'lv_disp_trig_activity(NULL);'
+      - globals.set: { id: g_expr, value: "6" }      # love ♥
+      - globals.set: { id: g_card, value: "0" }
+      - lvgl.page.show: page_face
+      - script.execute: render_face
+      - script.execute: { id: led_flash, r: 100, g: 20, b: 45 }
+      - script.execute: head_nod
+      - delay: 2500ms
+      - globals.set: { id: g_expr, value: "0" }
+      - script.execute: render_face
+      - delay: 8s                                    # throttle boops
+  # ── HAND-TURN REACTION — someone physically turned the head: a startled "hey!?",
+  #    then it accepts the new pose (no fighting the hand) and settles happy.
+  - id: hand_react
+    mode: single
+    then:
+      - lambda: 'lv_disp_trig_activity(NULL);'
+      - globals.set: { id: g_expr, value: "7" }      # dizzy x_x — whoa!
+      - globals.set: { id: g_card, value: "0" }
+      - lvgl.page.show: page_face
+      - script.execute: render_face
+      - script.execute: { id: led_flash, r: 60, g: 25, b: 100 }
+      - delay: 1300ms
+      - globals.set: { id: g_expr, value: "1" }      # ...okay, that was fun actually
+      - script.execute: render_face
+      - delay: 2000ms
+      - globals.set: { id: g_expr, value: "0" }
+      - script.execute: render_face
+      - delay: 12s                                   # throttle: at most once per ~15s
   # ── IR GLANCE — someone pressed a TV/AC remote: glance over, quizzical, then back.
   #    mode: single + the trailing delay = fires at most once per ~20s, and never
   #    interrupts sleep / screensaver / calm modes.
@@ -1610,7 +1696,7 @@ script:
                 then:
                   - number.set:
                       id: servo_x_angle
-                      value: !lambda 'id(g_pn)++; return (id(g_pn) % 2) ? 20.0f : -20.0f;'
+                      value: !lambda 'id(g_move_ms) = (long) millis(); id(g_pn)++; return (id(g_pn) % 2) ? 20.0f : -20.0f;'
             - delay: 620ms
       # settle: head back to centre, effect off, LEDs back to how they were
       - if:
@@ -1979,6 +2065,9 @@ script:
                       text: !lambda |-
                         char b[28]; snprintf(b, sizeof(b), "OOPS!  score %d", id(g_slen) - 1);
                         return std::string(b);
+                  # it feels the loss too — a sympathetic blue + a little slump
+                  - script.execute: { id: led_flash, r: 10, g: 25, b: 100 }
+                  - script.execute: { id: head_nudge, dx: 0, dy: -8 }
   # ── GAME: Rock-Paper-Scissors — the robot nods when it wins, shakes when it loses
   - id: rps_play
     parameters:
@@ -1999,8 +2088,22 @@ script:
             const char* v[] = {"Tie!", "You win!", "I win!"};
             char b[52]; snprintf(b, sizeof(b), "You: %s   Me: %s\n%s", n[me], n[id(g_rps_bot)], v[id(g_rps_out)]);
             return std::string(b);
-      - if: { condition: { lambda: 'return id(g_rps_out) == 2;' }, then: [ { script.execute: head_nod } ] }
-      - if: { condition: { lambda: 'return id(g_rps_out) == 1;' }, then: [ { script.execute: head_shake } ] }
+      # EMOTIONAL STAKES (the Cozmo magic): it CARES about the result — gloats a
+      # double-nod + green flash when it wins, huffs and turns away when it loses.
+      - if:
+          condition: { lambda: 'return id(g_rps_out) == 2;' }
+          then:
+            - script.execute: { id: led_flash, r: 20, g: 100, b: 30 }
+            - script.execute: head_nod
+            - delay: 1200ms
+            - script.execute: head_nod
+      - if:
+          condition: { lambda: 'return id(g_rps_out) == 1;' }
+          then:
+            - script.execute: { id: led_flash, r: 100, g: 15, b: 0 }
+            - script.execute: head_shake
+            - delay: 900ms
+            - script.execute: { id: head_nudge, dx: -14, dy: 0 }   # ...huffy turn away
 select:
   - platform: template
     name: "Face"
@@ -2176,6 +2279,7 @@ interval:
             - lambda: |-
                 id(g_rc_fresh) = false;
                 id(g_rc_busy) = true;
+                id(g_move_ms) = (long) millis();   // remote-driven moves aren't a hand
                 lv_disp_trig_activity(NULL);
             # button B rising edge → toggle the voice assistant (privacy-respecting)
             - if:
@@ -2198,6 +2302,25 @@ interval:
                 id: n_head_pitch
                 value: !lambda 'return id(g_rc_pitch);'
             - lambda: 'id(g_rc_busy) = false;'
+  # HAND-TURN DETECTION — the serial servos report their true position back into the
+  # angle numbers, so when a hand twists the head the numbers change with NO command.
+  # Sample both axes every 800ms: a big jump, with no commanded move in the last 4s,
+  # while awake = someone's hand → react (hand_react, throttled).
+  - interval: 800ms
+    then:
+      - lambda: |-
+          float x = id(servo_x_angle).state, y = id(servo_y_angle).state;
+          if (!std::isnan(x) && !std::isnan(y)) {
+            bool jump = (id(g_prev_x) > -900.0f) &&
+                        (fabsf(x - id(g_prev_x)) > 14.0f || fabsf(y - id(g_prev_y)) > 10.0f);
+            bool commanded = ((long) millis() - id(g_move_ms)) < 4000;
+            if (jump && !commanded && !id(g_sleep) && !id(g_saver) && !id(g_voice)
+                && id(sw_touch).state) {
+              id(hand_react).execute();
+            }
+            id(g_prev_x) = x;
+            id(g_prev_y) = y;
+          }
   # FLAPPY physics — ~11 fps is plenty for a 320px playfield. Only ticks while the
   # game page is showing AND a run is alive; otherwise this is a single cheap check.
   - interval: 90ms
@@ -2232,7 +2355,29 @@ interval:
                 condition: { lambda: 'return !id(fb_alive);' }
                 then:
                   - lvgl.label.update: { id: fb_lbl, text: "GAME OVER" }
+                  - script.execute: { id: led_flash, r: 10, g: 25, b: 100 }   # a sad blue
                   - script.execute: head_shake
+  # SLEEP BREATHING — while asleep ON THE CHARGER, the LED bar "breathes" very dimly
+  # (the EMO/Vector charger-snooze everyone loves). Gated on Mood LEDs; goes fully
+  # dark the moment it wakes or is unplugged.
+  - interval: 4s
+    then:
+      - if:
+          condition: { lambda: 'return id(g_sleep) && id(g_batt_chg) && id(sw_mood_led).state;' }
+          then:
+            - light.turn_on:
+                id: stackchan_light_bar
+                red: 0%
+                green: 90%
+                blue: 80%
+                brightness: !lambda 'return (id(g_anim) % 2) ? 0.07f : 0.03f;'
+            - globals.set: { id: g_breath, value: "true" }
+          else:
+            - if:
+                condition: { lambda: 'return id(g_breath);' }
+                then:
+                  - light.turn_off: stackchan_light_bar
+                  - globals.set: { id: g_breath, value: "false" }
   # Random blink (never while sleeping / listening / talking).
   - interval: 1s
     then:
@@ -2252,6 +2397,29 @@ interval:
       - if:
           condition: { lambda: 'return id(g_sleep) || id(g_talk) || id(g_saver);' }
           then: [ { script.execute: render_face } ]
+      # BREATHING — the whole face rises/settles on a slow ~5s sine (the original's
+      # breath modifier). Idle awake only; the games/cards pages aren't affected.
+      - if:
+          condition:
+            lambda: |-
+              return !id(g_sleep) && !id(g_saver) && !id(g_listen) && !id(g_talk) && !id(g_voice);
+          then:
+            - lvgl.widget.update:
+                id: face_box
+                y: !lambda 'const int b[] = {0, -2, -3, -2, 0, 2, 3, 2}; return b[id(g_anim) % 8];'
+  # SPEAKING MOTION — tiny conversational head sways while it talks (the original's
+  # speaking modifier): small ABSOLUTE yaw targets so they can never wander off-centre.
+  - interval: 2300ms
+    then:
+      - if:
+          condition:
+            lambda: |-
+              return id(g_talk) && id(sw_move).state && !std::isnan(id(servo_x_angle).state)
+                     && !id(g_night) && !id(g_focus) && !id(g_quiet);
+          then:
+            - number.set:
+                id: servo_x_angle
+                value: !lambda 'id(g_move_ms) = (long) millis(); return random_float() * 16.0f - 8.0f;'
   # "Alive" looking-around: the whole face glances to a random spot every few seconds —
   # only when fully awake (not screensaver/sleep/busy). Calmer cadence (9s) so the head
   # isn't constantly swinging — combine with a narrower yaw range in the dravix Setup page.
@@ -2275,7 +2443,7 @@ interval:
           then:
             - number.set:
                 id: servo_x_angle
-                value: !lambda 'return random_float() * 20.0f - 10.0f;'   # always within ±10 of centre
+                value: !lambda 'id(g_move_ms) = (long) millis(); return random_float() * 20.0f - 10.0f;'   # always within ±10 of centre
       # ...and drift back to centre half the time, so it doesn't wander off.
       - if:
           condition: { lambda: 'return id(sw_drift).state && !id(g_sleep) && !id(g_saver) && random_float() < 0.5;' }

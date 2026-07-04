@@ -255,6 +255,16 @@ class HARobotDriver(RobotDriver):
         await self._set_number_value(ent, value)
 
     async def say(self, text: str, voice: str | None = None) -> None:
+        # Mirror whatever is spoken into the robot's on-screen speech bubble (like the
+        # original app's text messages). Best-effort — older firmware has no such slot.
+        bubble = self._entities.get("bubble_text")
+        if bubble:
+            try:
+                await self._ha.call_service(
+                    "text", "set_value", {"entity_id": bubble, "value": text[:120]}
+                )
+            except Exception:  # noqa: BLE001 — showing text must never block speaking
+                pass
         engine = self._entities.get("tts_engine", "")
         # An assist_satellite speaks via its own announce service (no separate media_player).
         if engine.startswith("assist_satellite."):
