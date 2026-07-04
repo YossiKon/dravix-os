@@ -607,10 +607,15 @@ async def get_updates(request: Request):
     """Version report for the dashboard: add-on vs the newest release, and the firmware
     the robot runs vs the firmware this release ships. Never calls the internet while
     the master isLocal flag is on."""
-    from ..updates import update_report
+    from ..updates import push_latest_fw, update_report
 
     s = request.app.state
-    return await update_report(s.ha, allow_network=not _local_only(request))
+    report = await update_report(s.ha, allow_network=not _local_only(request))
+    # opportunistically refresh the robot's "Latest firmware" slot (FW+ badge / HA sensor)
+    eid = (getattr(s, "discovered_entities", None) or {}).get("latest_fw_text")
+    if eid:
+        await push_latest_fw(s.ha, eid)
+    return report
 
 
 class LocalOnlyBody(BaseModel):

@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.0.52
+
+- **You now SEE firmware updates everywhere** (firmware v10):
+  - **In Home Assistant**: a new `Firmware update available` sensor turns on the
+    moment a newer firmware ships — build any automation/notification on it.
+  - **On the robot**: an amber **FW+** badge appears on the swipe-down status bar.
+  - **How it works**: the add-on writes the newest version into the robot's
+    "Latest firmware" slot (every 6 h + whenever the Updates card opens); the robot
+    compares it to what it's running. Fully local — works with isLocal on.
+  - Updating is still one press: **Install** in ESPHome.
+
 ## 0.0.51
 
 - **Asleep = truly still** (firmware v9): every gesture path (nudge / shake / nod) is

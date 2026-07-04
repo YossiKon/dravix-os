@@ -90,6 +90,22 @@ async def robot_fw_version(ha) -> str | None:
     return None
 
 
+async def push_latest_fw(ha, entity_id: str) -> None:
+    """Tell the ROBOT which firmware version is available (its "Latest firmware" slot).
+
+    The robot compares it to its own version: a mismatch turns on its "Firmware update
+    available" binary sensor in HA and shows the FW+ badge on its status bar. Purely
+    local — the version comes from the firmware YAML bundled in this add-on release,
+    so this works with isLocal on too. Best-effort."""
+    version = bundled_fw_version()
+    if not version or ha is None or not entity_id:
+        return
+    try:
+        await ha.call_service("text", "set_value", {"entity_id": entity_id, "value": version})
+    except Exception as exc:  # noqa: BLE001 — the robot may be offline
+        log.debug("couldn't push latest fw to the robot: %s", exc)
+
+
 async def update_report(ha, *, allow_network: bool) -> dict[str, Any]:
     """Everything the dashboard's "updates" card needs, in one call."""
     latest = await latest_release(allow_network=allow_network)

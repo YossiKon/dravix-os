@@ -254,15 +254,33 @@ async def lifespan(app: FastAPI):
 
     islocal_task = asyncio.create_task(_islocal_watcher(), name="dravix-islocal")
 
+    async def _fw_notifier() -> None:
+        """Every 6h, tell the robot which firmware version this release ships — its
+        FW+ badge + "Firmware update available" HA sensor come alive from that. Local
+        data only (parsed from the bundled YAML), so it runs with isLocal on too."""
+        from .updates import push_latest_fw
+
+        while True:
+            try:
+                eid = (app.state.discovered_entities or {}).get("latest_fw_text")
+                if ha is not None and eid:
+                    await push_latest_fw(ha, eid)
+            except Exception:  # noqa: BLE001 — never die
+                pass
+            await asyncio.sleep(6 * 3600)
+
+    fw_notify_task = asyncio.create_task(_fw_notifier(), name="dravix-fw-notify")
+
     try:
         yield
     finally:
         log.info("shutting down dravix-os")
-        islocal_task.cancel()
-        try:
-            await islocal_task
-        except asyncio.CancelledError:
-            pass
+        for t in (islocal_task, fw_notify_task):
+            t.cancel()
+            try:
+                await t
+            except asyncio.CancelledError:
+                pass
         # read the CURRENT bridge from app.state — /api/config/local_only may have
         # stopped/replaced the one this scope created.
         if getattr(app.state, "xiaozhi", None) is not None:

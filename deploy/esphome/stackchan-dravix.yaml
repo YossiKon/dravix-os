@@ -39,7 +39,7 @@ substitutions:
   # publishes it to HA ("Firmware version" sensor); the dravix dashboard compares it
   # with the version bundled in the add-on and shows "firmware update available".
   # (Maintainers: bump this on every firmware change. Users: don't touch.)
-  fw_version: "9"
+  fw_version: "10"
   # The ESPHome node name (mDNS hostname + the default entity prefix on a fresh flash).
   # Change it only if you run MORE THAN ONE robot — each needs a unique name. NOTE:
   # changing it on an already-adopted robot registers a NEW device in HA.
@@ -329,6 +329,16 @@ globals:
     # plain '{}' is ambiguous between GlobalsComponent's two ctors (scalar vs array) in
     # ESPHome 2026.6.4 — pass an explicit std::array so it binds the array ctor cleanly.
     initial_value: "std::array<int, 16>{}"
+
+# The robot itself tells HA when newer firmware exists (see "Latest firmware" above).
+binary_sensor:
+  - platform: template
+    name: "Firmware update available"
+    device_class: update
+    lambda: |-
+      if (!id(t_latest_fw).has_state()) return false;
+      std::string l = id(t_latest_fw).state;
+      return !l.empty() && l != "${fw_version}";
 
 # If Validate says homeassistant time already exists (from the BSP), delete this block.
 time:
@@ -665,6 +675,19 @@ text:
           else:
             - globals.set: { id: g_tip, value: "false" }
             - script.execute: render_face
+  # ── LATEST FIRMWARE — dravix writes the newest available fw_version here (every few
+  #    hours + whenever the Updates card is opened). The robot compares it to its own
+  #    ${fw_version}: mismatch → the "Firmware update available" binary sensor turns ON
+  #    in HA (automations/notifications!) and an amber FW+ badge appears on the status
+  #    bar. Updating = press Install in ESPHome.
+  - platform: template
+    name: "Latest firmware"
+    id: t_latest_fw
+    optimistic: true
+    mode: text
+    max_length: 16
+    initial_value: ""
+    entity_category: diagnostic
   # ── WELLNESS TIP — dravix writes a short tip here; the robot pops it in the speech
   #    bubble, flashes cyan + wiggles so you notice, then auto-hides after ~12s.
   - platform: template
@@ -859,6 +882,8 @@ lvgl:
           widgets:
             # row 2 — REAL power draw from the INA226 (watts · mA · true time left)
             - label: { id: sb_power, text: "", text_font: small_font, text_color: 0x8b96a4, align: TOP_LEFT, x: 12, y: 38 }
+            # FW+ — amber badge when newer firmware is available (press Install in ESPHome)
+            - label: { id: sb_upd, text: "", text_font: small_font, text_color: 0xFFC23D, align: TOP_RIGHT, x: -84, y: 38 }
             # LOCAL — choose isLocal right on the robot (teal when on; dravix syncs it)
             - button:
                 id: sb_local
@@ -2560,6 +2585,13 @@ interval:
               snprintf(b, sizeof(b), "%.2fW  %.0fmA", w, ma);
             }
             return std::string(b);
+      # FW+ badge — newer firmware is waiting (dravix keeps "Latest firmware" fresh)
+      - lvgl.label.update:
+          id: sb_upd
+          text: !lambda |-
+            if (id(t_latest_fw).has_state() && !id(t_latest_fw).state.empty()
+                && id(t_latest_fw).state != "${fw_version}") return std::string("FW+");
+            return std::string("");
       # WiFi signal → reveal more bars as it gets stronger
       - if:
           condition: { lambda: 'return id(wifi_db).state < -78;' }
