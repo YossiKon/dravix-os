@@ -2,7 +2,7 @@
 // AUTO-DISCOVERED by the core (discovery.py) — shown here read-only, nothing to fill in.
 import { useEffect, useMemo, useState } from "react";
 import { apiGet, apiSend } from "../api";
-import type { AppConfig, HAEntity, RobotConfig, ScreenTimers, Updates } from "../api";
+import type { AppConfig, HAEntity, PluginMode, RobotConfig, ScreenTimers, Updates } from "../api";
 import { Section, Toggle, toast, toastErr } from "../ui";
 import { useI18n } from "../i18n";
 
@@ -63,6 +63,10 @@ export function SettingsPage(props: {
   const [switches, setSwitches] = useState<HAEntity[]>([]);
   const [robotName, setRobotName] = useState<string | null>(null); // null = not user-edited yet
   const [updates, setUpdates] = useState<Updates | null>(null);
+  const [modes, setModes] = useState<PluginMode[]>([]);
+  const [openMode, setOpenMode] = useState<string | null>(null); // which mode's config is expanded
+  const [modeEdits, setModeEdits] = useState<Record<string, Record<string, unknown>>>({});
+  const [birthday, setBirthdayState] = useState<string | null>(null); // null = not edited yet
 
   useEffect(() => {
     apiGet<{ entities: HAEntity[] }>("/api/ha/entities?domains=switch")
@@ -106,7 +110,53 @@ export function SettingsPage(props: {
       .catch(() => undefined);
     apiGet<AppConfig>("/api/config").then(setApp).catch(toastErr);
     apiGet<Updates>("/api/updates").then(setUpdates).catch(() => undefined);
+    void refreshModes();
   }, []);
+
+  const refreshModes = () =>
+    apiGet<{ modes: PluginMode[] }>("/api/modes")
+      .then((r) => setModes(r.modes))
+      .catch(() => undefined);
+
+  async function setModeDisabled(name: string, disabled: boolean) {
+    try {
+      await apiSend(`/api/config/modes/${name}/disabled`, "POST", { disabled });
+      await refreshModes();
+    } catch (e) {
+      toastErr(e);
+    }
+  }
+
+  async function toggleModeActive(m: PluginMode) {
+    try {
+      if (m.active) await apiSend("/api/modes/deactivate", "POST", {});
+      else await apiSend(`/api/modes/${m.name}/activate`, "POST", {});
+      await refreshModes();
+    } catch (e) {
+      toastErr(e);
+    }
+  }
+
+  async function saveModeConfig(name: string) {
+    try {
+      const base = modes.find((m) => m.name === name)?.config ?? {};
+      await apiSend(`/api/config/modes/${name}`, "PUT", { config: { ...base, ...(modeEdits[name] ?? {}) } });
+      toast(tr("ההגדרות נשמרו והוחלו", "Config saved & applied"));
+      setModeEdits((cur) => ({ ...cur, [name]: {} }));
+      await refreshModes();
+    } catch (e) {
+      toastErr(e);
+    }
+  }
+
+  async function saveBirthday() {
+    try {
+      await apiSend("/api/config/birthday", "PUT", { date: (birthday ?? "").trim() });
+      toast(tr("🎂 נשמר — הוא יחגוג אותך", "🎂 Saved — it will celebrate you"));
+    } catch (e) {
+      toastErr(e);
+    }
+  }
 
   async function setDriver(driver: string) {
     try {
@@ -360,6 +410,111 @@ export function SettingsPage(props: {
           </div>
         </Section>
       )}
+
+      {/* ── plugin modes — the full manager: enable/disable, run, edit config ── */}
+      {modes.length > 0 && (
+        <Section title={tr("🧩 מצבים והתנהגויות (תוספים)", "🧩 Modes & behaviours (plugins)")} delay={100}>
+          <p className="mb-3 text-sm text-mute">
+            {tr(
+              "כל מצבי התוכנה של הרובוט — הפעלה, כיבוי ועריכת ההגדרות של כל אחד, מכאן.",
+              "Every software mode the robot has — run, disable, and edit each one's settings, right here.",
+            )}
+          </p>
+          <div className="space-y-2">
+            {modes.map((m) => {
+              const edits = modeEdits[m.name] ?? {};
+              const cfg2 = { ...m.config, ...edits };
+              const open = openMode === m.name;
+              return (
+                <div key={m.name} className="rounded-2xl border border-line bg-card2 p-3">
+                  <div className="flex items-center gap-2">
+                    <span className={`inline-block h-2 w-2 rounded-full ${m.active ? "bg-green" : m.disabled ? "bg-red" : "bg-mute"}`} />
+                    <span className="font-mono text-sm" dir="ltr">{m.name}</span>
+                    <span className="text-xs text-mute">{m.kind === "ambient" ? tr("רקע", "ambient") : tr("קדמי", "foreground")}</span>
+                    <div className="ms-auto flex items-center gap-2">
+                      {!m.disabled && m.kind === "foreground" && (
+                        <button className="chip" onClick={() => void toggleModeActive(m)}>
+                          {m.active ? tr("⏹ עצור", "⏹ Stop") : tr("▶ הפעל", "▶ Run")}
+                        </button>
+                      )}
+                      <button className="chip" onClick={() => void setModeDisabled(m.name, !m.disabled)}>
+                        {m.disabled ? tr("אפשר", "Enable") : tr("השבת", "Disable")}
+                      </button>
+                      {Object.keys(m.config).length > 0 && (
+                        <button className="chip" onClick={() => setOpenMode(open ? null : m.name)}>
+                          {open ? tr("סגור", "Close") : tr("⚙ הגדרות", "⚙ Config")}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                  {m.description && <p className="mt-1 text-xs text-mute">{m.description}</p>}
+                  {open && (
+                    <div className="mt-3 space-y-2 border-t border-line pt-3">
+                      {Object.entries(cfg2).map(([k, v]) =>
+                        typeof v === "boolean" ? (
+                          <Toggle
+                            key={k}
+                            label={k}
+                            on={v}
+                            onChange={(nv) =>
+                              setModeEdits((cur) => ({ ...cur, [m.name]: { ...cur[m.name], [k]: nv } }))
+                            }
+                          />
+                        ) : (
+                          <div key={k} className="flex items-center gap-2">
+                            <label className="lbl mb-0 flex-1 font-mono text-xs" dir="ltr">{k}</label>
+                            <input
+                              className="inp w-40 text-sm"
+                              dir="ltr"
+                              type={typeof v === "number" ? "number" : "text"}
+                              value={String(v ?? "")}
+                              onChange={(e) =>
+                                setModeEdits((cur) => ({
+                                  ...cur,
+                                  [m.name]: {
+                                    ...cur[m.name],
+                                    [k]: typeof v === "number" ? Number(e.target.value) : e.target.value,
+                                  },
+                                }))
+                              }
+                            />
+                          </div>
+                        ),
+                      )}
+                      <button className="btn btn-primary mt-2 w-full" onClick={() => void saveModeConfig(m.name)}>
+                        {tr("💾 שמור והחל", "💾 Save & apply")}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </Section>
+      )}
+
+      {/* ── birthday — it celebrates you 🎂 ── */}
+      <Section title={tr("🎂 יום הולדת", "🎂 Birthday")} delay={110}>
+        <p className="mb-3 text-sm text-mute">
+          {tr(
+            "פעם בשנה, בבוקר התאריך הזה, הרובוט יחגוג אותך — עיני-אהבה, אורות וברכה בקול.",
+            "Once a year, on this date's morning, the robot celebrates you — love-eyes, lights and a spoken greeting.",
+          )}
+        </p>
+        <div className="flex gap-2">
+          <input
+            className="inp flex-1"
+            dir="ltr"
+            placeholder="MM-DD"
+            maxLength={5}
+            value={birthday ?? String(app?.store.birthday ?? "")}
+            onChange={(e) => setBirthdayState(e.target.value)}
+          />
+          <button className="btn btn-primary" disabled={birthday === null} onClick={() => void saveBirthday()}>
+            {tr("שמור", "Save")}
+          </button>
+        </div>
+      </Section>
 
       {/* ── head calibration ── */}
       <Section title={tr("כיול ראש", "Head calibration")} delay={120}>

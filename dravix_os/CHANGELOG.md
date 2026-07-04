@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.0.49
+
+Everything is now managed from the add-on dashboard in your browser:
+
+- **🧩 Full Modes manager** (Settings): every plugin mode — follow, security, welcome,
+  surprises, pomodoro, guard, dance, frigate-watch… — with run/stop, enable/disable,
+  and an editor for each mode's settings (toggles for booleans, fields for
+  numbers/text). Save applies live, no restart.
+- **🎂 Birthday**: set your date (MM-DD) in Settings — once a year, that morning, the
+  robot celebrates you: love-eyes, party lights and a spoken greeting.
+- **🎁 NEW Surprises mode** (ambient): every hour or two, when awake and undisturbed,
+  the robot does one small unprompted delight — a wiggle, a spin, a happy flash. The
+  "it feels alive" secret of EMO/Vector, and you can tune or disable it in the Modes
+  manager.
+- **📝 Wellness tips editor** (Life tab): write your own reminder lines (one per
+  line); empty restores the built-ins.
+
 ## 0.0.48
 
 The "feels alive" release (firmware v7) — inspired by what people love most about

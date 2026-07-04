@@ -89,6 +89,15 @@ export interface AppConfig {
   store: { idle_motion?: boolean } & Record<string, unknown>;
 }
 
+export interface PluginMode {
+  name: string;
+  description: string;
+  kind: "foreground" | "ambient";
+  active: boolean;
+  disabled: boolean;
+  config: Record<string, unknown>;
+}
+
 export interface SecurityInfo {
   armed: boolean;
   total: number;

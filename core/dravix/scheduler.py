@@ -89,6 +89,7 @@ class Scheduler:
         now = self._clock()
         hhmm = now.strftime("%H:%M")
         today = now.strftime("%Y-%m-%d")
+        await self._maybe_celebrate_birthday(today, hhmm)
         for job in self._schedule():
             name = job.get("name") or job.get("at") or "?"
             if not daily_due(job, hhmm, now.weekday()):
@@ -98,6 +99,36 @@ class Scheduler:
             self._fired[name] = today
             await self.run_action(job.get("action") or {}, {"name": name})
             await self._bus.publish("schedule.fired", job=name)
+
+    async def _maybe_celebrate_birthday(self, today: str, hhmm: str) -> None:
+        """🎂 Once a year: on the first tick after 09:00 of the stored birthday (MM-DD),
+        the robot celebrates — love face, party lights, and a spoken greeting in the
+        configured language. Best-effort: a missing capability just skips its part."""
+        bday = getattr(self._store, "birthday", lambda: "")() if self._store is not None else ""
+        if not bday or today[5:] != bday or hhmm < "09:00":
+            return
+        if self._fired.get("__birthday__") == today:
+            return
+        self._fired["__birthday__"] = today
+        from .config import get_settings
+        from .dal.base import CAP_FACE, CAP_LEDS, CAP_SAY, Expression
+
+        robot = self._robot
+        try:
+            if robot.supports(CAP_FACE):
+                await robot.set_face(Expression.LOVE)
+            if robot.supports(CAP_LEDS):
+                await robot.set_leds("purple", 0.9)
+            line = (
+                "יום הולדת שמח! חוגגים אותך היום 🎂"
+                if (get_settings().language or "en").startswith("he")
+                else "Happy birthday! Today we're celebrating you 🎂"
+            )
+            if robot.supports(CAP_SAY):
+                await robot.say(line)
+        except Exception:  # noqa: BLE001 — a party must never crash the scheduler
+            pass
+        await self._bus.publish("birthday.celebrated", date=today)
 
     # ── timers ─────────────────────────────────────────────────────────────────
     async def set_timer(

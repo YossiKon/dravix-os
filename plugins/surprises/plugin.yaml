@@ -1,0 +1,8 @@
+name: surprises
+description: Spontaneous little delights — every hour or two, when the robot is awake and not disturbed, it does something small and unprompted (a wiggle, a spin, a happy flash).
+kind: ambient
+entrypoint: mode:SurprisesMode
+enabled: true
+config:
+  every_min: 75        # average minutes between surprises
+  jitter_min: 30       # ± random jitter, so it never feels scheduled

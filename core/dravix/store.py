@@ -50,7 +50,7 @@ _UPDATABLE_KEYS = (
     "personas", "active_persona", "memories", "routines", "voice", "voices", "inbox",
     "screens", "robot_driver", "robot_entities", "head_calibration",
     "climate_entity", "vitals", "nudges_enabled", "language", "wellness_tips",
-    "mood", "idle_motion", "robot_name", "local_only",
+    "mood", "idle_motion", "robot_name", "local_only", "birthday",
 )
 
 
@@ -299,6 +299,18 @@ class Store:
         """Custom wellness tip texts; a non-empty list replaces the built-in tips as-is."""
         tips = self._data.get("wellness_tips") or []
         return [t for t in tips if isinstance(t, str) and t.strip()]
+
+    def set_wellness_tips(self, tips: list[str]) -> None:
+        self._data["wellness_tips"] = [t.strip() for t in tips if isinstance(t, str) and t.strip()]
+        self.save()
+
+    def birthday(self) -> str:
+        """The user's birthday as "MM-DD" ("" = not set) — the robot celebrates it."""
+        return str(self._data.get("birthday") or "")
+
+    def set_birthday(self, mmdd: str) -> None:
+        self._data["birthday"] = (mmdd or "").strip()
+        self.save()
 
     # ── typed helpers ──────────────────────────────────────────────────────────
     def ai_provider(self) -> str | None:

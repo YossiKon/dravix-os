@@ -116,16 +116,22 @@ class ModeEngine:
         return self._store is not None and self._store.is_disabled(name)
 
     def list_modes(self) -> list[dict[str, Any]]:
-        return [
-            {
+        out: list[dict[str, Any]] = []
+        for m in self._modes.values():
+            # effective per-mode config = plugin.yaml defaults + the store's overrides —
+            # the dashboard's Modes manager renders and edits exactly this dict
+            config = dict(m.config)
+            if self._store is not None:
+                config.update(self._store.mode_config(m.meta.name))
+            out.append({
                 "name": m.meta.name,
                 "description": m.meta.description,
                 "kind": m.meta.kind,
                 "active": self.is_active(m.meta.name),
                 "disabled": self._is_disabled(m.meta.name),
-            }
-            for m in self._modes.values()
-        ]
+                "config": config,
+            })
+        return out
 
     @property
     def active(self) -> str | None:

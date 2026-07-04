@@ -692,6 +692,34 @@ async def security_photo(day: str, name: str):
     return Response(content=path.read_bytes(), media_type="image/jpeg")
 
 
+class BirthdayBody(BaseModel):
+    date: str = ""  # "MM-DD" ("" clears it)
+
+
+@router.put("/api/config/birthday")
+async def set_birthday(body: BirthdayBody, request: Request):
+    """Set the user's birthday (MM-DD). Once a year, on the first scheduler tick after
+    09:00, the robot celebrates — love face, party lights and a spoken greeting."""
+    date = body.date.strip()
+    if date and not re.match(r"^(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$", date):
+        raise HTTPException(status_code=400, detail="birthday must be MM-DD")
+    request.app.state.store.set_birthday(date)
+    return {"birthday": date}
+
+
+class TipsBody(BaseModel):
+    tips: list[str] = Field(default_factory=list)  # [] = back to the built-in tips
+
+
+@router.put("/api/vitals/tips")
+async def set_wellness_tips(body: TipsBody, request: Request):
+    """Replace the built-in wellness tips with your own lines ([] restores the defaults)."""
+    if any(not isinstance(t, str) or len(t) > 120 for t in body.tips):
+        raise HTTPException(status_code=400, detail="tips must be strings up to 120 chars")
+    request.app.state.store.set_wellness_tips(body.tips)
+    return {"tips": request.app.state.store.wellness_tips()}
+
+
 class RobotNameBody(BaseModel):
     name: str = ""
 

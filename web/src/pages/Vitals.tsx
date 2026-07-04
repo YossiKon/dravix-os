@@ -24,6 +24,17 @@ export function VitalsPage() {
   const [v, setV] = useState<Vitals | null>(null);
   const [busy, setBusy] = useState("");
   const [failed, setFailed] = useState(false);
+  const [tips, setTips] = useState<string | null>(null); // null = not user-edited yet
+
+  async function saveTips() {
+    try {
+      const list = (tips ?? "").split("\n").map((t) => t.trim()).filter(Boolean);
+      await apiSend("/api/vitals/tips", "PUT", { tips: list });
+      toast(list.length ? tr("הטיפים שלך פעילים", "Your tips are live") : tr("חזרנו לטיפים המובנים", "Back to the built-in tips"));
+    } catch (e) {
+      toastErr(e);
+    }
+  }
 
   const refresh = useCallback(() => {
     apiGet<Vitals>("/api/vitals")
@@ -122,6 +133,17 @@ export function VitalsPage() {
         </p>
         <button className="btn w-full" onClick={() => void toggleNudges()}>
           {tr("טיפי רווחה", "Wellness tips")}: {v?.nudges ? tr("דלוקים ✓", "On ✓") : tr("כבויים", "Off")}
+        </button>
+        {/* custom tips — one per line; empty = the built-in set */}
+        <label className="lbl mt-4">{tr("טיפים משלך (שורה לכל טיפ; ריק = המובנים)", "Your own tips (one per line; empty = built-ins)")}</label>
+        <textarea
+          className="inp min-h-24 w-full"
+          value={tips ?? ""}
+          placeholder={tr("קום לתה ☕\nחייך רגע 🙂", "Get up for tea ☕\nSmile for a second 🙂")}
+          onChange={(e) => setTips(e.target.value)}
+        />
+        <button className="btn btn-primary mt-2 w-full" disabled={tips === null} onClick={() => void saveTips()}>
+          {tr("💾 שמור טיפים", "💾 Save tips")}
         </button>
       </Section>
     </div>
