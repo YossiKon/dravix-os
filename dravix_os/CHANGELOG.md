@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.0.51
+
+- **Asleep = truly still** (firmware v9): every gesture path (nudge / shake / nod) is
+  now hard-blocked in sleep AND screensaver — no matter who commands it (a mood, an
+  expression, a tip). Only waking itself moves the head back up.
+- **Everything the robot knows is now in Home Assistant**: new diagnostic entities —
+  WiFi signal (dBm), Uptime, IP address, Connected SSID, Chip temperature, Battery
+  voltage — joining Battery level/charging, real power, reset reason, heap, loop time
+  and the rest.
+
 ## 0.0.50
 
 - **The every-few-minutes resets — root-caused and fixed** (firmware v8). Live

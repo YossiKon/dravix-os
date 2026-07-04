@@ -39,7 +39,7 @@ substitutions:
   # publishes it to HA ("Firmware version" sensor); the dravix dashboard compares it
   # with the version bundled in the add-on and shows "firmware update available".
   # (Maintainers: bump this on every firmware change. Users: don't touch.)
-  fw_version: "8"
+  fw_version: "9"
   # The ESPHome node name (mDNS hostname + the default entity prefix on a fresh flash).
   # Change it only if you run MORE THAN ONE robot — each needs a unique name. NOTE:
   # changing it on an already-adopted robot registers a NEW device in HA.
@@ -353,10 +353,14 @@ sensor:
     loop_time: { name: "Loop Time" }
     psram: { name: "PSRAM Free" }
   - platform: wifi_signal
+    name: "WiFi signal"
     id: wifi_db
     update_interval: 30s
+    entity_category: diagnostic
   - platform: uptime
+    name: "Uptime"
     id: up_sec
+    entity_category: diagnostic
   # ── THE REAL BATTERY GAUGE — the same source the ORIGINAL StackChan firmware uses:
   #    the AXP2101 power-management chip's own fuel gauge + true charging status. The
   #    BSP already drives this chip (it powers the whole board); we just read it.
@@ -369,8 +373,13 @@ sensor:
       name: "Battery level"
       id: axp_batt
     battery_voltage:
+      name: "Battery voltage"
       id: axp_volt
-      internal: true
+      entity_category: diagnostic
+    axp_temperature:
+      name: "Chip temperature"
+      id: axp_temp
+      entity_category: diagnostic
     battery_charging:
       name: "Battery charging"
       id: axp_chg
@@ -548,9 +557,13 @@ text_sensor:
             - globals.set: { id: g_pet, value: "false" }
   - platform: wifi_info
     ip_address:
+      name: "IP address"
       id: ip_txt
+      entity_category: diagnostic
     ssid:
+      name: "Connected SSID"
       id: ssid_txt
+      entity_category: diagnostic
   # Which firmware revision is running — the dashboard uses this for "update available".
   - platform: template
     name: "Firmware version"
@@ -1488,7 +1501,8 @@ script:
           condition:
             lambda: |-
               return id(sw_move).state && dx != 0 && !std::isnan(id(servo_x_angle).state)
-                     && !id(g_night) && !id(g_focus) && !id(g_quiet);
+                     && !id(g_night) && !id(g_focus) && !id(g_quiet)
+                     && !id(g_sleep) && !id(g_saver);
           then:
             - number.set:
                 id: servo_x_angle
@@ -1500,7 +1514,8 @@ script:
           condition:
             lambda: |-
               return id(sw_move).state && dy != 0 && !std::isnan(id(n_head_pitch).state)
-                     && !id(g_night) && !id(g_focus) && !id(g_quiet);
+                     && !id(g_night) && !id(g_focus) && !id(g_quiet)
+                     && !id(g_sleep) && !id(g_saver);
           then:
             - number.set:
                 id: n_head_pitch
@@ -1516,7 +1531,8 @@ script:
           condition:
             lambda: |-
               return id(sw_move).state && !std::isnan(id(servo_x_angle).state)
-                     && !id(g_night) && !id(g_focus) && !id(g_quiet);
+                     && !id(g_night) && !id(g_focus) && !id(g_quiet)
+                     && !id(g_sleep) && !id(g_saver);
           then:
             - number.set:
                 id: servo_x_angle
@@ -1539,7 +1555,8 @@ script:
           condition:
             lambda: |-
               return id(sw_move).state && !std::isnan(id(n_head_pitch).state)
-                     && !id(g_night) && !id(g_focus) && !id(g_quiet);
+                     && !id(g_night) && !id(g_focus) && !id(g_quiet)
+                     && !id(g_sleep) && !id(g_saver);
           then:
             - number.set:
                 id: n_head_pitch
