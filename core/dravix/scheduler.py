@@ -171,6 +171,12 @@ class Scheduler:
                 await robot.move_head(float(yaw), float(pitch))
             if action.get("emote"):
                 await play_emote(robot, action["emote"])
+            # the robot's ON-DEVICE mode (awake/morning/focus/quiet/night/sleep) — this
+            # is what the dashboard's Day-Schedule rows use ("07:30 morning, 23:00 sleep")
+            if action.get("mode"):
+                setter = getattr(robot.driver, "set_mode", None)
+                if setter is not None:
+                    await setter(str(action["mode"]))
             if action.get("say") and robot.supports(CAP_SAY):
                 await robot.say(str(action["say"]).format_map(_SafeDict(ctx)))
             if action.get("activate_mode") and self._engine is not None:

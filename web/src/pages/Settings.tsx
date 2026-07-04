@@ -71,6 +71,9 @@ export function SettingsPage(props: {
   const [openMode, setOpenMode] = useState<string | null>(null); // which mode's config is expanded
   const [modeEdits, setModeEdits] = useState<Record<string, Record<string, unknown>>>({});
   const [birthday, setBirthdayState] = useState<string | null>(null); // null = not edited yet
+  // day schedule: preset hours → robot modes ("07:30 morning, 23:00 sleep")
+  const [sched, setSched] = useState<{ at: string; mode: string; say: string }[]>([]);
+  const [schedLoaded, setSchedLoaded] = useState(false);
 
   useEffect(() => {
     apiGet<{ entities: HAEntity[] }>("/api/ha/entities?domains=switch")
@@ -114,8 +117,37 @@ export function SettingsPage(props: {
       .catch(() => undefined);
     apiGet<AppConfig>("/api/config").then(setApp).catch(toastErr);
     apiGet<Updates>("/api/updates").then(setUpdates).catch(() => undefined);
+    apiGet<{ schedule: { at?: string; action?: { mode?: string; say?: string } }[] }>("/api/schedule")
+      .then((r) =>
+        setSched(
+          r.schedule.map((j) => ({
+            at: j.at ?? "",
+            mode: j.action?.mode ?? "",
+            say: j.action?.say ?? "",
+          })),
+        ),
+      )
+      .catch(() => undefined)
+      .finally(() => setSchedLoaded(true));
     void refreshModes();
   }, []);
+
+  async function saveSchedule() {
+    try {
+      const jobs = sched
+        .filter((r) => /^([01]?\d|2[0-3]):[0-5]\d$/.test(r.at) && (r.mode || r.say))
+        .map((r, i) => ({
+          name: `day${i + 1}`,
+          at: r.at,
+          enabled: true,
+          action: { ...(r.mode ? { mode: r.mode } : {}), ...(r.say ? { say: r.say } : {}) },
+        }));
+      await apiSend("/api/schedule", "PUT", { schedule: jobs });
+      toast(tr("סדר היום נשמר — הרובוט יעקוב אחריו", "Day schedule saved — the robot will follow it"));
+    } catch (e) {
+      toastErr(e);
+    }
+  }
 
   const refreshModes = () =>
     apiGet<{ modes: PluginMode[] }>("/api/modes")
@@ -519,6 +551,77 @@ export function SettingsPage(props: {
           </button>
         </div>
       </Section>
+
+      {/* ── day schedule — preset hours → robot modes ── */}
+      {schedLoaded && (
+        <Section title={tr("🕐 סדר יום", "🕐 Day schedule")} delay={115}>
+          <p className="mb-3 text-sm text-mute">
+            {tr(
+              "שעות קבועות שבהן הרובוט נכנס למצב לבד — למשל 07:30 בוקר, 23:00 שינה. אפשר גם משפט שייאמר.",
+              "Preset hours when the robot enters a mode on its own — e.g. 07:30 morning, 23:00 sleep. An optional line to speak, too.",
+            )}
+          </p>
+          <div className="space-y-2">
+            {sched.map((row, i) => (
+              <div key={i} className="rounded-2xl border border-line bg-card2 p-3">
+                <div className="flex items-center gap-2">
+                  <input
+                    className="inp w-24 text-center"
+                    dir="ltr"
+                    placeholder="07:30"
+                    maxLength={5}
+                    value={row.at}
+                    onChange={(e) =>
+                      setSched((cur) => cur.map((r, j) => (j === i ? { ...r, at: e.target.value } : r)))
+                    }
+                  />
+                  <select
+                    className="inp flex-1"
+                    value={row.mode}
+                    onChange={(e) =>
+                      setSched((cur) => cur.map((r, j) => (j === i ? { ...r, mode: e.target.value } : r)))
+                    }
+                  >
+                    <option value="">{tr("— בלי שינוי מצב —", "— no mode change —")}</option>
+                    <option value="awake">{tr("☀️ ער", "☀️ Awake")}</option>
+                    <option value="morning">{tr("🌅 בוקר", "🌅 Morning")}</option>
+                    <option value="focus">{tr("🎯 מרוכז", "🎯 Focus")}</option>
+                    <option value="quiet">{tr("🤫 שקט", "🤫 Quiet")}</option>
+                    <option value="night">{tr("🌙 לילה", "🌙 Night")}</option>
+                    <option value="sleep">{tr("😴 שינה", "😴 Sleep")}</option>
+                  </select>
+                  <button
+                    className="chip"
+                    onClick={() => setSched((cur) => cur.filter((_, j) => j !== i))}
+                    aria-label={tr("מחק", "Delete")}
+                  >
+                    🗑
+                  </button>
+                </div>
+                <input
+                  className="inp mt-2 w-full"
+                  placeholder={tr("משפט לומר (לא חובה) — למשל: בוקר טוב!", "Line to speak (optional) — e.g. Good morning!")}
+                  value={row.say}
+                  onChange={(e) =>
+                    setSched((cur) => cur.map((r, j) => (j === i ? { ...r, say: e.target.value } : r)))
+                  }
+                />
+              </div>
+            ))}
+          </div>
+          <div className="mt-3 flex gap-2">
+            <button
+              className="btn flex-1"
+              onClick={() => setSched((cur) => [...cur, { at: "", mode: "", say: "" }])}
+            >
+              {tr("+ הוסף שעה", "+ Add time")}
+            </button>
+            <button className="btn btn-primary flex-1" onClick={() => void saveSchedule()}>
+              {tr("💾 שמור סדר יום", "💾 Save schedule")}
+            </button>
+          </div>
+        </Section>
+      )}
 
       {/* ── head calibration ── */}
       <Section title={tr("כיול ראש", "Head calibration")} delay={120}>

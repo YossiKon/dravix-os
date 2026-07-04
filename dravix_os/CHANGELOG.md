@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.0.60
+
+- **🕐 Day schedule**: set preset hours in Settings and the robot follows them by
+  itself — e.g. 07:30 → morning (sunrise scene), 23:00 → sleep — with an optional
+  spoken line per entry ("Good morning!"). Any number of entries, applied live.
+  This joins the other ways it already senses the day: room light (sleep when dark,
+  wake when bright) and your own HA automations (e.g. the sun entity).
+
 ## 0.0.59
 
 Four little life-moments (firmware v17):
