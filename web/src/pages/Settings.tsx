@@ -39,6 +39,10 @@ const ROLES: Record<string, Bi> = {
   image_url_text: { he: "הצגת תמונה (Show image URL)", en: "Show image URL" },
   privacy_switch: { he: "מצב פרטיות (Privacy)", en: "Privacy mode" },
   islocal_switch: { he: "מקומי בלבד (isLocal)", en: "Local-only (isLocal)" },
+  battery_sensor: { he: "אחוז סוללה", en: "Battery %" },
+  presence_sensor: { he: "נוכחות ליד השולחן", en: "Presence nearby" },
+  bubble_text: { he: "בועת דיבור (טקסט)", en: "Speech bubble (text)" },
+  latest_fw_text: { he: "קושחה אחרונה זמינה", en: "Latest firmware" },
 };
 
 const PROVIDERS: Record<string, Bi> = {

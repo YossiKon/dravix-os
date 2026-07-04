@@ -174,6 +174,17 @@ async def test_vitals_unknown_mode_counts_as_active():
     assert v._active(None) is True
 
 
+def test_wellness_nudges_allowed_in_focus():
+    # focus = the user is definitely at the desk (work/gaming DND) — exactly when the
+    # eye/move/water reminders matter. The autonomy set still silences focus antics.
+    from dravix.vitals import _NUDGE_QUIET_MODES, _QUIET_MODES
+
+    assert "focus" not in _NUDGE_QUIET_MODES
+    assert "focus" in _QUIET_MODES
+    for m in ("sleep", "night", "screensaver", "quiet", "busy"):
+        assert m in _NUDGE_QUIET_MODES
+
+
 async def test_vitals_tips_language_and_override(tmp_path, monkeypatch):
     from dravix.config import get_settings
     from dravix.store import Store

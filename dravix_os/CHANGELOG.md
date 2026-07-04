@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.0.55
+
+- **Wave at it 👋** (firmware v13): wave a hand at the robot's nose sensor (3 quick
+  near/far swings) — it wakes, waves back with its head, happy face, warm flash.
+- **Wellness tips follow YOU now**: they fire in *focus* too — that's exactly when
+  you're at the desk (your work/gaming automations set it) — quietly (bubble only, no
+  wiggle). And a new **Presence nearby** sensor (proximity) tells HA when someone is
+  actually at the desk; tips are skipped when nobody's been there for 15 minutes.
+  Sleep/night/quiet/away modes stay reminder-free.
+- **Truly random idle motion**: it now skips beats (no fixed rhythm), varies how far
+  it looks, mixes sideways glances with up/down tilts and diagonal looks, and drifts
+  back near-centre instead of the exact same spot — no more "same move every time".
+
 ## 0.0.54
 
 - **Asleep means completely still — sealed at every layer** (firmware v12). Beyond the

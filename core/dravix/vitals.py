@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import asyncio
 import time
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Callable
 
 import httpx
 
@@ -39,6 +39,13 @@ log = get_logger("vitals")
 # as active, so a new firmware mode never mutes the robot by accident. None/"" = unknown
 # backend (mock) → allow.
 _QUIET_MODES = {"sleep", "night", "screensaver", "quiet", "focus", "busy"}
+
+# WELLNESS NUDGES have their own rule: focus = the user is DEFINITELY at the desk
+# (work/gaming DND automations set it), which is exactly when the eye/move/water
+# reminders matter — so nudges DO fire in focus (quietly: the firmware suppresses the
+# wiggle/LED flash in calm modes, leaving just the on-screen bubble). They stay silent
+# where the user probably ISN'T looking at the robot at all:
+_NUDGE_QUIET_MODES = {"sleep", "night", "screensaver", "quiet", "busy"}
 
 # Decay in points PER HOUR while awake (tunable). energy instead REFILLS while asleep.
 _DECAY_PER_H = {"energy": 22.0, "food": 16.0, "fun": 28.0, "calm": 30.0}
@@ -108,12 +115,14 @@ class VitalsEngine:
         ha: "HomeAssistant | None" = None,
         tick_interval: float = 20.0,
         nudge_interval: float = 30.0,
+        discovered: "Callable[[], dict] | None" = None,
     ) -> None:
         self._bus = bus
         self._robot = controller
         self._store = store
         self._engine = engine
         self._ha = ha
+        self._discovered = discovered  # lazy accessor to the auto-discovered entity map
         self._tick = tick_interval
         self._nudge_tick = nudge_interval
         self.energy = 80.0
@@ -185,6 +194,28 @@ class VitalsEngine:
         if mode is None or mode == "":
             return True
         return mode.strip().lower() not in _QUIET_MODES
+
+    async def _user_present(self) -> bool:
+        """Is someone actually at the desk? Uses the robot's "Presence nearby" sensor
+        (proximity): present = ON now, or was ON within the last 15 minutes. No sensor
+        discovered / read error → assume present (never silently starve the tips)."""
+        entity = ((self._discovered() if self._discovered else {}) or {}).get("presence_sensor")
+        if not entity or self._ha is None:
+            return True
+        try:
+            st = await self._ha.get_state(entity)
+        except Exception:  # noqa: BLE001
+            return True
+        if str(st.get("state")) == "on":
+            return True
+        changed = str(st.get("last_changed") or "")
+        try:
+            from datetime import datetime, timezone
+
+            seen = datetime.fromisoformat(changed.replace("Z", "+00:00"))
+            return (datetime.now(timezone.utc) - seen).total_seconds() < 15 * 60
+        except ValueError:
+            return True
 
     async def _mode(self) -> str | None:
         getter = getattr(self._robot.driver, "get_text", None)
@@ -384,8 +415,10 @@ class VitalsEngine:
                 if self._store is not None and not self._store.nudges_enabled():
                     continue
                 mode = await self._mode()
-                if not self._active(mode):
-                    continue          # HARD rule: no nudges in calm/DND/sleep/conversation
+                if mode is not None and mode.strip().lower() in _NUDGE_QUIET_MODES:
+                    continue          # user isn't at the robot — no reminders
+                if not await self._user_present():
+                    continue          # nobody at the desk (proximity) — save the tip
                 now = time.monotonic()
                 if now - self._nudge_last_any < _NUDGE_MIN_SPACING_S:
                     continue

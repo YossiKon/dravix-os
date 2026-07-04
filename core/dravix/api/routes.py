@@ -233,6 +233,7 @@ ROBOT_ENTITY_ROLES = [
     {"key": "privacy_switch", "label": "Privacy mode (switch)", "domains": ["switch"]},
     {"key": "islocal_switch", "label": "Local-only (switch)", "domains": ["switch"]},
     {"key": "battery_sensor", "label": "Battery % (sensor)", "domains": ["sensor"]},
+    {"key": "presence_sensor", "label": "Presence nearby (sensor)", "domains": ["binary_sensor"]},
 ]
 _ROLE_KEYS = {r["key"] for r in ROBOT_ENTITY_ROLES}
 

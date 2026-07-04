@@ -39,7 +39,7 @@ substitutions:
   # publishes it to HA ("Firmware version" sensor); the dravix dashboard compares it
   # with the version bundled in the add-on and shows "firmware update available".
   # (Maintainers: bump this on every firmware change. Users: don't touch.)
-  fw_version: "12"
+  fw_version: "13"
   # The ESPHome node name (mDNS hostname + the default entity prefix on a fresh flash).
   # Change it only if you run MORE THAN ONE robot — each needs a unique name. NOTE:
   # changing it on an already-adopted robot registers a NEW device in HA.
@@ -296,6 +296,9 @@ globals:
   - { id: fb_alive, type: bool,  restore_value: false, initial_value: "false" }
   # sleep-breathing LED bookkeeping (so the bar goes dark the moment it wakes)
   - { id: g_breath, type: bool, restore_value: false, initial_value: "false" }
+  # hand-WAVE detection (proximity oscillations): rising-edge count + window start
+  - { id: g_wv_cnt, type: int,  restore_value: false, initial_value: "0" }
+  - { id: g_wv_ms,  type: long, restore_value: false, initial_value: "0" }
   # hand-turn detection: the servos report their REAL position back into the angle
   # numbers, so a hand-twist changes them with no command. Track the last sampled
   # angles + when WE last commanded a move, and a big uncommanded jump = a hand.
@@ -339,6 +342,13 @@ binary_sensor:
       if (!id(t_latest_fw).has_state()) return false;
       std::string l = id(t_latest_fw).state;
       return !l.empty() && l != "${fw_version}";
+  # PRESENCE — "someone is at the desk right now" (from the proximity sensor). dravix
+  # uses it to send wellness tips only when you're actually there; great for HA
+  # automations too ("turn on the desk lamp when I sit down").
+  - platform: template
+    name: "Presence nearby"
+    device_class: occupancy
+    lambda: 'return id(g_near);'
 
 # If Validate says homeassistant time already exists (from the BSP), delete this block.
 time:
@@ -470,7 +480,19 @@ sensor:
           condition: { lambda: 'return x > ${prox_near} && !id(g_near) && id(sw_greet).state;' }
           then:
             - globals.set: { id: g_near, value: "true" }
-            - script.execute: greet
+            # WAVE 👋 — three near/far swings inside 4s = a hand waving (an approach is
+            # ONE sustained rise; only fast oscillation reaches 3). Waving wins over greet.
+            - lambda: |-
+                long now = (long) millis();
+                if (now - id(g_wv_ms) > 4000) { id(g_wv_cnt) = 1; id(g_wv_ms) = now; }
+                else { id(g_wv_cnt)++; }
+            - if:
+                condition: { lambda: 'return id(g_wv_cnt) >= 3;' }
+                then:
+                  - lambda: 'id(g_wv_cnt) = 0;'
+                  - script.execute: wave_react
+                else:
+                  - script.execute: greet
       - if:
           condition: { lambda: 'return x < ${prox_far};' }            # they moved away
           then:
@@ -1657,6 +1679,25 @@ script:
       - script.execute: { id: head_nudge, dx: 0, dy: 12 }         # nuzzle up into your hand
       - delay: 900ms
       - script.execute: head_shake                                # happy little wiggle
+  # ── WAVE 👋 — a hand waving at the sensor: wakes up, waves BACK with its head,
+  #    happy face + warm flash. (Detected as 3 near/far proximity swings within 4s.)
+  - id: wave_react
+    mode: single
+    then:
+      - lambda: 'lv_disp_trig_activity(NULL);'
+      - select.set: { id: robot_mode, option: awake }   # waving = you want its attention
+      - globals.set: { id: g_expr, value: "1" }         # happy
+      - globals.set: { id: g_card, value: "0" }
+      - lvgl.page.show: page_face
+      - script.execute: render_face
+      - script.execute: { id: led_flash, r: 100, g: 60, b: 15 }   # warm hello
+      - script.execute: head_shake                                 # waves back!
+      - delay: 900ms
+      - script.execute: head_shake
+      - delay: 2000ms
+      - globals.set: { id: g_expr, value: "0" }
+      - script.execute: render_face
+      - delay: 6s                                       # throttle
   # ── BOOP 👉 — a finger right up at the proximity sensor: love-eyes + a happy nod.
   - id: boop_react
     mode: single
@@ -2489,36 +2530,56 @@ interval:
             - number.set:
                 id: servo_x_angle
                 value: !lambda 'id(g_move_ms) = (long) millis(); return random_float() * 16.0f - 8.0f;'
-  # "Alive" looking-around: the whole face glances to a random spot every few seconds —
-  # only when fully awake (not screensaver/sleep/busy). Calmer cadence (9s) so the head
-  # isn't constantly swinging — combine with a narrower yaw range in the dravix Setup page.
+  # "Alive" looking-around — TRULY random: it skips a beat sometimes (irregular
+  # timing), varies how far it looks, and mixes yaw glances with pitch tilts and an
+  # occasional look-up "stretch", so it never repeats the same move twice in a row.
+  # Only when fully awake (not screensaver/sleep/busy/calm modes).
   - interval: 9s
     then:
+      # ~30% of ticks it simply doesn't move at all — rhythm is what kills realism
       - if:
-          condition: { lambda: 'return id(sw_drift).state && !id(g_sleep) && !id(g_saver) && !id(g_busy) && !id(g_night) && !id(g_focus) && !id(g_quiet);' }
+          condition:
+            lambda: |-
+              return id(sw_drift).state && !id(g_sleep) && !id(g_saver) && !id(g_busy)
+                     && !id(g_night) && !id(g_focus) && !id(g_quiet) && random_float() < 0.7;
           then:
             - lvgl.widget.update:
                 id: face_box
                 x: !lambda 'return (int)(random_float() * 32 - 16);'
                 y: !lambda 'return (int)(random_float() * 18 - 9);'
-      # …and sometimes the HEAD glances too — ABSOLUTE, small angles around centre, so
-      # repeated glances can never accumulate and wander the head off to the side.
+      # …and sometimes the HEAD moves too — ABSOLUTE small angles around centre (never
+      # accumulates), with a random FLAVOUR each time: a yaw glance, a pitch tilt,
+      # or both (a little diagonal look).
       - if:
           condition:
             lambda: |-
               return id(sw_move).state && id(sw_drift).state && !id(g_sleep) && !id(g_saver)
                      && !id(g_busy) && !id(g_night) && !id(g_focus) && !id(g_quiet) && !id(g_voice)
-                     && !std::isnan(id(servo_x_angle).state) && random_float() < 0.10;
+                     && !std::isnan(id(servo_x_angle).state) && random_float() < 0.14;
           then:
             - number.set:
                 id: servo_x_angle
-                value: !lambda 'id(g_move_ms) = (long) millis(); return random_float() * 20.0f - 10.0f;'   # always within ±10 of centre
-      # ...and drift back to centre half the time, so it doesn't wander off.
+                value: !lambda |-
+                  id(g_move_ms) = (long) millis();
+                  // vary the reach too: mostly small (±8), sometimes a wider look (±14)
+                  float span = (random_float() < 0.3f) ? 14.0f : 8.0f;
+                  return random_float() * 2.0f * span - span;
+            - delay: 350ms   # serial-bus spacing before a possible pitch write
+            - if:
+                condition: { lambda: 'return random_float() < 0.45 && !std::isnan(id(n_head_pitch).state);' }
+                then:
+                  - number.set:
+                      id: n_head_pitch
+                      value: !lambda 'return 160.0f + random_float() * 16.0f;'   # tilt: 160..176
+      # ...and drift back roughly (not exactly!) to centre about half the time.
       - if:
           condition: { lambda: 'return id(sw_drift).state && !id(g_sleep) && !id(g_saver) && random_float() < 0.5;' }
           then:
-            - delay: 2.5s
-            - lvgl.widget.update: { id: face_box, x: 0, y: 0 }
+            - delay: !lambda 'return (uint32_t)(1500 + random_float() * 3000);'   # 1.5-4.5s, varies
+            - lvgl.widget.update:
+                id: face_box
+                x: !lambda 'return (int)(random_float() * 8 - 4);'
+                y: !lambda 'return (int)(random_float() * 6 - 3);'
   # Refresh the status labels + the dynamic card labels (from the text slots dravix writes).
   - interval: 5s
     then:

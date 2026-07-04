@@ -149,7 +149,11 @@ async def lifespan(app: FastAPI):
 
     # Vitals: the Tamagotchi "life" needs (energy/food/fun/calm) + wellness nudges. Silent in
     # calm modes (focus/quiet/night/busy/sleep) — the HARD do-not-disturb rule.
-    vitals = VitalsEngine(bus, controller, store=store, engine=engine, ha=ha)
+    vitals = VitalsEngine(
+        bus, controller, store=store, engine=engine, ha=ha,
+        # lazy — evaluated at nudge time, when app.state.discovered_entities exists
+        discovered=lambda: getattr(app.state, "discovered_entities", {}) or {},
+    )
     await vitals.start()
 
     # Pet reaction: lift the head up when petted (pleased), lower it after a hold.
