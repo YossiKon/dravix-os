@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import asyncio
 import datetime
+import time
 import uuid
 from typing import TYPE_CHECKING, Any, Callable
 
@@ -57,6 +58,7 @@ class Scheduler:
         self._clock = clock or datetime.datetime.now
         self._fired: dict[str, str] = {}  # job name -> last date fired (once per day)
         self._timers: dict[str, asyncio.Task] = {}
+        self._timer_meta: dict[str, dict[str, Any]] = {}  # id -> {label, ends} for listing
         self._task: asyncio.Task | None = None
 
     def _schedule(self) -> list[dict[str, Any]]:
@@ -146,16 +148,33 @@ class Scheduler:
                 raise
             finally:
                 self._timers.pop(timer_id, None)
+                self._timer_meta.pop(timer_id, None)
 
+        self._timer_meta[timer_id] = {"label": label, "ends": time.time() + seconds}
         self._timers[timer_id] = asyncio.create_task(_fire(), name=f"dravix-timer-{timer_id}")
         return timer_id
 
     def cancel_timer(self, timer_id: str) -> bool:
         task = self._timers.pop(timer_id, None)
+        self._timer_meta.pop(timer_id, None)
         if task is None:
             return False
         task.cancel()
         return True
+
+    def list_timers(self) -> list[dict[str, Any]]:
+        """The running one-shot timers, newest first, with seconds remaining."""
+        now = time.time()
+        out = [
+            {
+                "id": tid,
+                "label": meta.get("label", ""),
+                "seconds_left": max(0, round(float(meta.get("ends", now)) - now)),
+            }
+            for tid, meta in self._timer_meta.items()
+        ]
+        out.sort(key=lambda t: t["seconds_left"])
+        return out
 
     # ── shared action runner ────────────────────────────────────────────────────
     async def run_action(self, action: dict[str, Any], ctx: dict[str, Any]) -> None:

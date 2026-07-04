@@ -180,8 +180,23 @@ class MoodEngine:
         # A foreground mode owns the face; don't override it with mood.
         return self._engine is not None and self._engine.active is not None
 
+    async def _dnd(self) -> bool:
+        """The robot's ON-DEVICE do-not-disturb states — the same hard rule vitals
+        follows: mood must not push faces or play quips in sleep / calm modes /
+        the screensaver (a face push also flashes LEDs and poses the head there)."""
+        getter = getattr(self._robot.driver, "get_text", None)
+        if getter is None:
+            return False
+        try:
+            state = await getter("state_sensor")
+        except Exception:  # noqa: BLE001
+            return False
+        return (state or "").strip().lower() in {
+            "sleep", "night", "screensaver", "quiet", "focus", "busy",
+        }
+
     async def _express(self, force: bool = False) -> None:
-        if self._locked():
+        if self._locked() or await self._dnd():
             return
         expr = self.expression()
         if not force and expr is self._last_expr:
@@ -196,7 +211,7 @@ class MoodEngine:
     async def idle_behavior(self) -> None:
         """A small spontaneous behavior when bored (skipped if a mode owns the face, or if
         the robot's autonomous idle motion is switched off)."""
-        if self._locked():
+        if self._locked() or await self._dnd():
             return
         if not getattr(self._robot, "idle_motion", True):
             return  # idle motion off → stay still & quiet (e.g. the firmware owns idle life)

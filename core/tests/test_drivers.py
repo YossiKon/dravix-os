@@ -53,15 +53,16 @@ async def test_ha_driver_move_head_normalized_full_travel():
     d = HARobotDriver(
         ha=ha, entities={"head_yaw": "number.servo_x", "head_pitch": "number.servo_y"}
     )
+    # PITCH is written first (it stamps the firmware's commanded-move marker), yaw second.
     await d.move_head(0, 0)
-    assert ha.calls[-2][2]["value"] == 0.0     # yaw centre
-    assert ha.calls[-1][2]["value"] == 45.0    # pitch centre (midpoint)
+    assert ha.calls[-2][2]["value"] == 45.0    # pitch centre (midpoint)
+    assert ha.calls[-1][2]["value"] == 0.0     # yaw centre
     await d.move_head(1, 1)
-    assert ha.calls[-2][2]["value"] == 164.0   # yaw max
-    assert ha.calls[-1][2]["value"] == 90.0    # pitch max
+    assert ha.calls[-2][2]["value"] == 90.0    # pitch max
+    assert ha.calls[-1][2]["value"] == 164.0   # yaw max
     await d.move_head(-1, -1)
-    assert ha.calls[-2][2]["value"] == -164.0  # yaw min
-    assert ha.calls[-1][2]["value"] == 0.0     # pitch min
+    assert ha.calls[-2][2]["value"] == 0.0     # pitch min
+    assert ha.calls[-1][2]["value"] == -164.0  # yaw min
 
 
 async def test_ha_driver_head_calibration_center_and_invert():
@@ -73,12 +74,13 @@ async def test_ha_driver_head_calibration_center_and_invert():
         # pitch's straight-ahead is really 20 (not the 45 midpoint), and it's flipped.
         calibration={"pitch": {"center": 20, "invert": True}},
     )
+    # pitch is written FIRST, so its value sits at calls[-2] (yaw lands last)
     await d.move_head(0, 0)   # straight → the calibrated centre
-    assert ha.calls[-1][2]["value"] == 20.0
+    assert ha.calls[-2][2]["value"] == 20.0
     await d.move_head(0, 1)   # "up", inverted → toward min: 20 + (-1)*(20-0) = 0
-    assert ha.calls[-1][2]["value"] == 0.0
+    assert ha.calls[-2][2]["value"] == 0.0
     await d.move_head(0, -1)  # "down", inverted → toward max: 20 + 1*(90-20) = 90
-    assert ha.calls[-1][2]["value"] == 90.0
+    assert ha.calls[-2][2]["value"] == 90.0
 
 
 class _FlakyHA(_FakeHA):
@@ -138,10 +140,10 @@ async def test_ha_driver_head_always_in_range():
     d = HARobotDriver(
         ha=ha, entities={"head_yaw": "number.servo_x", "head_pitch": "number.servo_y"}
     )
-    await d.move_head(0, 5)    # 5 clamps to +1 → the real max (90)
-    assert ha.calls[-1][2]["value"] == 90.0
+    await d.move_head(0, 5)    # 5 clamps to +1 → the real max (90); pitch is at calls[-2]
+    assert ha.calls[-2][2]["value"] == 90.0
     await d.move_head(0, -5)   # -5 clamps to -1 → the real min (0)
-    assert ha.calls[-1][2]["value"] == 0.0
+    assert ha.calls[-2][2]["value"] == 0.0
 
 
 async def test_ha_driver_say_via_assist_satellite():

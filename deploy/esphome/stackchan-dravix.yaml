@@ -39,7 +39,7 @@ substitutions:
   # publishes it to HA ("Firmware version" sensor); the dravix dashboard compares it
   # with the version bundled in the add-on and shows "firmware update available".
   # (Maintainers: bump this on every firmware change. Users: don't touch.)
-  fw_version: "17"
+  fw_version: "18"
   # The ESPHome node name (mDNS hostname + the default entity prefix on a fresh flash).
   # Change it only if you run MORE THAN ONE robot — each needs a unique name. NOTE:
   # changing it on an already-adopted robot registers a NEW device in HA.
@@ -83,6 +83,13 @@ esphome:
         # which otherwise fires render_face BEFORE the display exists → boot crash).
         - globals.set: { id: g_booted, value: "true" }
         - script.execute: render_face   # correct face + PRIVACY badge after any reboot
+        # the LOCAL button must show the RESTORED isLocal state (its on_turn_on replays
+        # before LVGL exists and is skipped — recolor it here instead)
+        - if:
+            condition: { switch.is_on: sw_islocal }
+            then:
+              - lvgl.widget.update: { id: sb_local, bg_color: 0x0e4d44 }
+              - lvgl.label.update: { id: sb_local_lbl, text_color: 0x33E6C8 }
         # start listening for "Okay, Nabu" — unless privacy mode was left ON
         - if:
             condition: { switch.is_off: sw_privacy }
@@ -296,6 +303,8 @@ globals:
   - { id: fb_alive, type: bool,  restore_value: false, initial_value: "false" }
   # sleep-breathing LED bookkeeping (so the bar goes dark the moment it wakes)
   - { id: g_breath, type: bool, restore_value: false, initial_value: "false" }
+  # last glance time — the breathing y-write pauses briefly so glances aren't stomped
+  - { id: g_glance_ms, type: long, restore_value: false, initial_value: "0" }
   # hand-WAVE detection (proximity oscillations): rising-edge count + window start
   - { id: g_wv_cnt, type: int,  restore_value: false, initial_value: "0" }
   - { id: g_wv_ms,  type: long, restore_value: false, initial_value: "0" }
@@ -479,8 +488,9 @@ sensor:
       - if:
           condition: { lambda: 'return x > ${prox_boop} && !id(g_sleep) && !id(g_saver) && id(sw_touch).state;' }
           then: [ { script.execute: boop_react } ]
+      # (boop excludes greet/wave — a finger straight to the sensor is a boop, not both)
       - if:
-          condition: { lambda: 'return x > ${prox_near} && !id(g_near) && id(sw_greet).state;' }
+          condition: { lambda: 'return x > ${prox_near} && x <= ${prox_boop} && !id(g_near) && id(sw_greet).state;' }
           then:
             - globals.set: { id: g_near, value: "true" }
             # WAVE 👋 — three near/far swings inside 4s = a hand waving (an approach is
@@ -1789,11 +1799,12 @@ script:
       b: int
     then:
       - if:
-          # calm modes (night / focus / quiet) = no light shows
+          # calm modes (night / focus / quiet) and SLEEP/SAVER = no light shows
           condition:
             lambda: |-
               return id(sw_mood_led).state && !id(g_voice)
-                     && !id(g_night) && !id(g_focus) && !id(g_quiet);
+                     && !id(g_night) && !id(g_focus) && !id(g_quiet)
+                     && !id(g_sleep) && !id(g_saver);
           then:
             - if:
                 condition: { lambda: 'return !id(g_flash);' }   # don't re-save our own colour
@@ -1914,6 +1925,7 @@ script:
               return !id(g_sleep) && !id(g_saver) && !id(g_night) && !id(g_focus)
                      && !id(g_quiet) && !id(g_voice) && id(sw_drift).state;
           then:
+            - lambda: 'id(g_glance_ms) = (long) millis();'   # keep breathing off the glance
             - lvgl.widget.update: { id: face_box, x: 22, y: -4 }
             - globals.set: { id: g_expr, value: "5" }        # quizzical
             - script.execute: render_face
@@ -2545,6 +2557,9 @@ select:
                   - delay: 1500ms
                   - globals.set: { id: g_expr, value: "0" }
                   - script.execute: render_face
+            # ALWAYS clear the saved droop on waking — even when Body language is off,
+            # otherwise the next sleep skips its droop and a later wake restores stale pitch
+            - globals.set: { id: g_pitch_saved, value: "-1" }
       - if:
           condition: { lambda: 'return x == std::string("morning");' }
           then:
@@ -2698,11 +2713,13 @@ interval:
           condition: { lambda: 'return id(g_sleep) || id(g_talk) || id(g_saver);' }
           then: [ { script.execute: render_face } ]
       # BREATHING — the whole face rises/settles on a slow ~5s sine (the original's
-      # breath modifier). Idle awake only; the games/cards pages aren't affected.
+      # breath modifier). Idle awake only; pauses for 5s after any glance so the
+      # glance's vertical offset isn't immediately stomped.
       - if:
           condition:
             lambda: |-
-              return !id(g_sleep) && !id(g_saver) && !id(g_listen) && !id(g_talk) && !id(g_voice);
+              return !id(g_sleep) && !id(g_saver) && !id(g_listen) && !id(g_talk) && !id(g_voice)
+                     && ((long) millis() - id(g_glance_ms)) > 5000;
           then:
             - lvgl.widget.update:
                 id: face_box
@@ -2735,7 +2752,7 @@ interval:
           then:
             - lvgl.widget.update:
                 id: face_box
-                x: !lambda 'return (int)(random_float() * 32 - 16);'
+                x: !lambda 'id(g_glance_ms) = (long) millis(); return (int)(random_float() * 32 - 16);'
                 y: !lambda 'return (int)(random_float() * 18 - 9);'
       # …and sometimes the HEAD moves too — ABSOLUTE small angles around centre (never
       # accumulates), with a random FLAVOUR each time: a yaw glance, a pitch tilt,

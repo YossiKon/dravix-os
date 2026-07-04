@@ -118,6 +118,7 @@ export interface ScreenTimers {
   supported: boolean;
   screensaver_min: number | null;
   sleep_min: number | null;
+  brightness?: number | null;
 }
 
 export interface Vitals {

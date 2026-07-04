@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.0.61
+
+The full-audit release: a bug-hunt across everything built recently (12 verified
+findings — all fixed), plus complete dashboard management.
+
+**Now manageable from the dashboard** (nothing needs the API anymore):
+- 🔆 Screen brightness slider · 🎭 AI personas (pick / add / delete) · 🗣 TTS voice
+  picker · 🧠 Memories (view / add / delete) · ⏲ Kitchen timers on the Home tab
+  (quick 5/10/25/50-min chips, custom label, live countdown, cancel — the robot
+  announces when one fires) · 💾 Backup & restore (download / upload one JSON).
+
+**Fixed (firmware v18 + add-on):**
+- Tapping a card row could actuate the WRONG entity when another row's entity had
+  been renamed/removed (row alignment) — now impossible.
+- A finger straight to the nose triggered boop AND greet together; LED flashes could
+  fire mid-sleep; the LOCAL button showed grey after reboot while isLocal was on;
+  breathing stomped the vertical part of every glance; a stale head position could be
+  restored after toggling Body language off during sleep.
+- Focus-mode tips are now truly bubble-only (a dravix-side wiggle bypassed the calm
+  gates), and the mood engine now honors sleep/calm modes like everything else.
+- The first dashboard move after a long stillness could startle the robot ("who
+  touched me?!") — command order fixed.
+- Over-long card text no longer wedges a card stale.
+
 ## 0.0.60
 
 - **🕐 Day schedule**: set preset hours in Settings and the robot follows them by

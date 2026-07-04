@@ -211,9 +211,12 @@ class HARobotDriver(RobotDriver):
                     return
             except Exception:  # noqa: BLE001 — can't read the state → don't block movement
                 pass
-        # Both writes go through _set_number_value, which serializes + spaces them on the bus.
-        await self._set_head_axis("yaw", yaw_e, yaw)
+        # Both writes go through _set_number_value, which serializes + spaces them on the
+        # bus. PITCH FIRST on purpose: the firmware's pitch entity stamps its "commanded
+        # move" marker — writing yaw first let the hand-turn detector see an unmarked yaw
+        # jump and mistake the first dravix move after a long stillness for a hand.
         await self._set_head_axis("pitch", pitch_e, pitch)
+        await self._set_head_axis("yaw", yaw_e, yaw)
 
     async def read_head_raw(self) -> dict[str, float | None]:
         """Read the servos' current raw angle values (for 'set current position as home')."""

@@ -46,6 +46,7 @@ _ROLES: dict[str, tuple[str, tuple[str, ...], bool]] = {
     "battery_sensor": ("sensor", ("battery",), True),
     "screensaver_number": ("number", ("screensaver_after_min",), False),
     "sleep_number": ("number", ("sleep_after_min",), False),
+    "brightness_number": ("number", ("screen_brightness",), False),
 }
 
 # Suffixes unique enough to identify the robot device (they vote for its prefix).

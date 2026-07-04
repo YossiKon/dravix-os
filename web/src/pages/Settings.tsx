@@ -1,6 +1,6 @@
 // Settings — robot connection, behaviour, head calibration, timers, AI. Entity wiring is
 // AUTO-DISCOVERED by the core (discovery.py) — shown here read-only, nothing to fill in.
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { apiGet, apiSend } from "../api";
 import type { AppConfig, HAEntity, PluginMode, RobotConfig, ScreenTimers, Updates } from "../api";
 import { Section, Toggle, toast, toastErr } from "../ui";
@@ -45,6 +45,18 @@ const ROLES: Record<string, Bi> = {
   latest_fw_text: { he: "קושחה אחרונה זמינה", en: "Latest firmware" },
 };
 
+// A custom AI personality — a name + system prompt (optional dedicated voice).
+interface Persona {
+  name: string;
+  system_prompt: string;
+  voice?: string;
+}
+
+interface Memory {
+  id: number | string;
+  text: string;
+}
+
 const PROVIDERS: Record<string, Bi> = {
   ha_assist: { he: "העוזר של Home Assistant", en: "Home Assistant Assist" },
   claude: { he: "Claude", en: "Claude" },
@@ -74,6 +86,23 @@ export function SettingsPage(props: {
   // day schedule: preset hours → robot modes ("07:30 morning, 23:00 sleep")
   const [sched, setSched] = useState<{ at: string; mode: string; say: string }[]>([]);
   const [schedLoaded, setSchedLoaded] = useState(false);
+  // screen brightness (10-100); null = robot doesn't expose it
+  const [bright, setBright] = useState<number | null>(null);
+  const brightTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // custom AI personas + the active one (null = built-in default)
+  const [personas, setPersonas] = useState<Persona[]>([]);
+  const [activePersona, setActivePersona] = useState<string | null>(null);
+  const [personaOpen, setPersonaOpen] = useState(false);
+  const [pName, setPName] = useState("");
+  const [pPrompt, setPPrompt] = useState("");
+  // TTS voice override
+  const [voices, setVoices] = useState<string[]>([]);
+  const [voiceLoaded, setVoiceLoaded] = useState(false);
+  const [voiceText, setVoiceText] = useState("");
+  // long-term memories fed into every conversation
+  const [memories, setMemories] = useState<Memory[]>([]);
+  const [memText, setMemText] = useState("");
+  const restoreInput = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     apiGet<{ entities: HAEntity[] }>("/api/ha/entities?domains=switch")
@@ -108,14 +137,24 @@ export function SettingsPage(props: {
 
   useEffect(() => {
     apiGet<ScreenTimers>("/api/robot/screen")
-      .then((t) =>
+      .then((t) => {
         setTimers({
           saver: t.screensaver_min != null ? String(t.screensaver_min) : "",
           sleep: t.sleep_min != null ? String(t.sleep_min) : "",
-        }),
-      )
+        });
+        setBright(t.brightness ?? null);
+      })
       .catch(() => undefined);
     apiGet<AppConfig>("/api/config").then(setApp).catch(toastErr);
+    void refreshPersonas();
+    apiGet<{ voice: string | null; override: string | boolean | null; voices: string[] }>("/api/voice")
+      .then((r) => {
+        setVoices(r.voices);
+        setVoiceText(typeof r.override === "string" ? r.override : r.override ? r.voice ?? "" : "");
+        setVoiceLoaded(true);
+      })
+      .catch(() => undefined);
+    void refreshMemories();
     apiGet<Updates>("/api/updates").then(setUpdates).catch(() => undefined);
     apiGet<{ schedule: { at?: string; action?: { mode?: string; say?: string } }[] }>("/api/schedule")
       .then((r) =>
@@ -239,6 +278,137 @@ export function SettingsPage(props: {
     }
   }
 
+  // Debounced brightness — PUTs while dragging, like the volume slider on Home.
+  function onBrightness(v: number) {
+    setBright(v);
+    if (brightTimer.current) clearTimeout(brightTimer.current);
+    brightTimer.current = setTimeout(() => {
+      apiSend("/api/robot/screen", "PUT", { brightness: v }).catch(toastErr);
+    }, 250);
+  }
+
+  useEffect(
+    () => () => {
+      if (brightTimer.current) clearTimeout(brightTimer.current);
+    },
+    [],
+  );
+
+  // ── personas ──
+  const refreshPersonas = () =>
+    apiGet<{ personas: Persona[]; active: string | null }>("/api/personas")
+      .then((r) => {
+        setPersonas(r.personas);
+        setActivePersona(r.active);
+      })
+      .catch(() => undefined);
+
+  async function activatePersona(name: string | null) {
+    try {
+      await apiSend("/api/personas/active", "POST", { name });
+      await refreshPersonas();
+    } catch (e) {
+      toastErr(e);
+    }
+  }
+
+  async function addPersona() {
+    const name = pName.trim();
+    const prompt = pPrompt.trim();
+    if (!name || !prompt) return;
+    try {
+      await apiSend("/api/personas", "PUT", { personas: [...personas, { name, system_prompt: prompt }] });
+      setPName("");
+      setPPrompt("");
+      setPersonaOpen(false);
+      toast(tr("האישיות נוספה", "Persona added"));
+      await refreshPersonas();
+    } catch (e) {
+      toastErr(e);
+    }
+  }
+
+  async function deletePersona(name: string) {
+    try {
+      await apiSend("/api/personas", "PUT", { personas: personas.filter((p) => p.name !== name) });
+      if (activePersona === name) await apiSend("/api/personas/active", "POST", { name: null });
+      await refreshPersonas();
+    } catch (e) {
+      toastErr(e);
+    }
+  }
+
+  // ── voice ──
+  async function saveVoice() {
+    try {
+      const v = voiceText.trim();
+      await apiSend("/api/voice", "PUT", { voice: v || null });
+      toast(v ? tr("הקול נשמר", "Voice saved") : tr("חזרה לקול ברירת המחדל", "Back to the default voice"));
+    } catch (e) {
+      toastErr(e);
+    }
+  }
+
+  // ── memories ──
+  const refreshMemories = () =>
+    apiGet<{ memories: Memory[] }>("/api/memory")
+      .then((r) => setMemories(r.memories))
+      .catch(() => undefined);
+
+  async function addMemory() {
+    const text = memText.trim();
+    if (!text) return;
+    try {
+      await apiSend("/api/memory", "POST", { text });
+      setMemText("");
+      await refreshMemories();
+    } catch (e) {
+      toastErr(e);
+    }
+  }
+
+  async function deleteMemory(id: number | string) {
+    try {
+      await apiSend(`/api/memory/${encodeURIComponent(String(id))}`, "DELETE");
+      await refreshMemories();
+    } catch (e) {
+      toastErr(e);
+    }
+  }
+
+  // ── backup & restore ──
+  async function downloadBackup() {
+    try {
+      const data = await apiGet<unknown>("/api/export");
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "dravix-backup.json";
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      toastErr(e);
+    }
+  }
+
+  async function restoreBackup(file: File) {
+    let data: unknown;
+    try {
+      data = JSON.parse(await file.text());
+    } catch {
+      toast(tr("הקובץ אינו JSON תקין", "The file isn't valid JSON"), "err");
+      return;
+    }
+    try {
+      await apiSend("/api/import", "POST", data);
+      toast(tr("שוחזר! חלק מהשינויים דורשים ריסטארט לתוסף", "Restored! Some changes need an add-on restart"));
+      props.onConfigChanged();
+    } catch (e) {
+      toastErr(e);
+    }
+  }
+
   async function setProvider(p: string) {
     try {
       const r = await apiSend<{ ai_provider: string; ai_available: boolean; error: string | null }>(
@@ -335,6 +505,42 @@ export function SettingsPage(props: {
           />
           <button className="btn btn-primary" disabled={robotName === null} onClick={() => void saveRobotName()}>
             {tr("שמור", "Save")}
+          </button>
+        </div>
+      </Section>
+
+      {/* ── memories — long-term facts fed into every conversation ── */}
+      <Section title={tr("🧠 זיכרונות", "🧠 Memories")} delay={42}>
+        <p className="mb-3 text-sm text-mute">
+          {tr(
+            "עובדות שהרובוט זוכר על העולם שלך — נכנסות להקשר של כל שיחה.",
+            "Facts the robot remembers about your world — fed into every conversation.",
+          )}
+        </p>
+        {memories.length > 0 && (
+          <div className="mb-3 space-y-1.5">
+            {memories.map((m) => (
+              <div key={m.id} className="flex items-center gap-2 rounded-2xl border border-line bg-card2 px-3 py-2 text-sm">
+                <span className="flex-1">{m.text}</span>
+                <button className="chip" onClick={() => void deleteMemory(m.id)} aria-label={tr("מחק", "Delete")}>
+                  🗑
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+        <div className="flex gap-2">
+          <input
+            className="inp flex-1"
+            placeholder={tr("למשל: לחתול שלנו קוראים מוקה", "e.g. Our cat is called Mocha")}
+            value={memText}
+            onChange={(e) => setMemText(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && memText.trim()) void addMemory();
+            }}
+          />
+          <button className="btn btn-primary" disabled={!memText.trim()} onClick={() => void addMemory()}>
+            {tr("הוסף", "Add")}
           </button>
         </div>
       </Section>
@@ -648,8 +854,26 @@ export function SettingsPage(props: {
         </div>
       </Section>
 
-      {/* ── timers ── */}
-      <Section title={tr("שומר מסך ושינה", "Screensaver & sleep")} delay={180}>
+      {/* ── screen: brightness + screensaver/sleep timers ── */}
+      <Section title={tr("מסך, שומר מסך ושינה", "Screen, screensaver & sleep")} delay={180}>
+        {bright != null && (
+          <div className="mb-3">
+            <label className="lbl">{tr("בהירות המסך", "Screen brightness")}</label>
+            <div className="flex items-center gap-3">
+              <span className="text-sm text-mute">🔆</span>
+              <input
+                type="range"
+                min={10}
+                max={100}
+                value={bright}
+                onChange={(e) => onBrightness(Number(e.target.value))}
+                className="h-2 flex-1 accent-teal"
+                aria-label={tr("בהירות המסך", "Screen brightness")}
+              />
+              <span dir="ltr" className="w-10 text-end font-mono text-xs text-mute">{bright}%</span>
+            </div>
+          </div>
+        )}
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className="lbl">{tr("שומר מסך אחרי (דק׳)", "Screensaver after (min)")}</label>
@@ -696,10 +920,120 @@ export function SettingsPage(props: {
             {tr("ספק הבינה לא זמין כרגע — בדוק את ההגדרות שלו.", "The AI provider is unavailable — check its settings.")}
           </p>
         )}
+
+        {/* personas — who the robot IS when it answers */}
+        <label className="lbl">{tr("אישיות", "Persona")}</label>
+        <div className="mb-3 flex flex-wrap gap-2">
+          <button
+            className={`chip ${activePersona == null ? "chip-on" : ""}`}
+            onClick={() => void activatePersona(null)}
+          >
+            {tr("🤖 ברירת מחדל", "🤖 Default")}
+          </button>
+          {personas.map((p) => (
+            <span key={p.name} className={`chip ${activePersona === p.name ? "chip-on" : ""}`}>
+              <button onClick={() => void activatePersona(p.name)}>{p.name}</button>
+              <button
+                className="text-xs opacity-70"
+                onClick={() => void deletePersona(p.name)}
+                aria-label={tr("מחק אישיות", "Delete persona")}
+              >
+                🗑
+              </button>
+            </span>
+          ))}
+          <button className="chip" onClick={() => setPersonaOpen((v) => !v)}>
+            {personaOpen ? tr("סגור", "Close") : tr("＋ הוסף אישיות", "＋ Add persona")}
+          </button>
+        </div>
+        {personaOpen && (
+          <div className="mb-3 space-y-2 rounded-2xl border border-line bg-card2 p-3">
+            <input
+              className="inp w-full"
+              maxLength={40}
+              placeholder={tr("שם — למשל: פיראט", "Name — e.g. Pirate")}
+              value={pName}
+              onChange={(e) => setPName(e.target.value)}
+            />
+            <textarea
+              className="inp min-h-20 w-full resize-none"
+              placeholder={tr(
+                "הנחיית מערכת — מי הרובוט ואיך הוא מדבר…",
+                "System prompt — who the robot is and how it talks…",
+              )}
+              value={pPrompt}
+              onChange={(e) => setPPrompt(e.target.value)}
+            />
+            <button
+              className="btn btn-primary w-full"
+              disabled={!pName.trim() || !pPrompt.trim()}
+              onClick={() => void addPersona()}
+            >
+              {tr("💾 שמור אישיות", "💾 Save persona")}
+            </button>
+          </div>
+        )}
+
+        {/* voice — TTS voice-id override */}
+        {voiceLoaded && (
+          <div className="mb-3">
+            <label className="lbl">
+              {tr("קול (מזהה קול של מנוע ה-TTS; ריק = ברירת מחדל)", "Voice (TTS voice id; empty = default)")}
+            </label>
+            <div className="flex gap-2">
+              <input
+                className="inp flex-1"
+                dir="ltr"
+                placeholder="he_IL-..."
+                list="voice-options"
+                value={voiceText}
+                onChange={(e) => setVoiceText(e.target.value)}
+              />
+              <datalist id="voice-options">
+                {voices.map((v) => (
+                  <option key={v} value={v} />
+                ))}
+              </datalist>
+              <button className="btn btn-primary" onClick={() => void saveVoice()}>
+                {tr("שמור", "Save")}
+              </button>
+            </div>
+          </div>
+        )}
+
         <Toggle
           label={tr("תנועת ראש עצמאית (כשהוא משועמם)", "Autonomous head motion (when bored)")}
           on={Boolean(app?.store.idle_motion ?? true)}
           onChange={(v) => void setIdle(v)}
+        />
+      </Section>
+
+      {/* ── backup & restore — the whole add-on config as one JSON file ── */}
+      <Section title={tr("גיבוי ושחזור", "Backup & restore")} delay={300}>
+        <p className="mb-3 text-sm text-mute">
+          {tr(
+            "כל ההגדרות, האישיויות והזיכרונות — קובץ JSON אחד להורדה ולשחזור.",
+            "All settings, personas and memories — one JSON file to download and restore.",
+          )}
+        </p>
+        <div className="grid grid-cols-2 gap-2">
+          <button className="btn" onClick={() => void downloadBackup()}>
+            {tr("⬇ הורד גיבוי", "⬇ Download backup")}
+          </button>
+          <button className="btn" onClick={() => restoreInput.current?.click()}>
+            {tr("⬆ שחזר מגיבוי", "⬆ Restore from backup")}
+          </button>
+        </div>
+        <input
+          ref={restoreInput}
+          type="file"
+          accept=".json"
+          className="hidden"
+          onChange={(e) => {
+            const f = e.target.files?.[0];
+            if (f) void restoreBackup(f);
+            e.target.value = ""; // allow re-picking the same file
+          }}
         />
       </Section>
     </div>

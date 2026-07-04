@@ -107,8 +107,10 @@ class ScreenPusher:
                 continue  # robot not flashed with the card firmware (yet)
             card = cards[i] if i < len(cards) else None
             try:
-                title = str(card.get("title", "")) if card else ""
-                body = self._render_body(card, smap) if card else ""
+                # truncate to the firmware slots' max_length (30 / 160) — an over-long
+                # value fails text.set_value validation and the card would stay stale
+                title = str(card.get("title", ""))[:30] if card else ""
+                body = self._render_body(card, smap)[:160] if card else ""
                 await self._sync_text(title_ent, title, smap)
                 await self._sync_text(body_ent, body, smap)
             except Exception as exc:  # noqa: BLE001 — one bad card must not stop the rest
@@ -149,8 +151,20 @@ class ScreenPusher:
             return
         cards = self._store.screens()
         try:
-            entity = (cards[card - 1].get("entities") or [])[row]
+            picked = (cards[card - 1].get("entities") or [])[:ROW_COUNT]
         except (IndexError, AttributeError, TypeError):
+            return
+        # CRITICAL: the rendered rows skip entities that are missing from HA — the tapped
+        # row index refers to that same FILTERED list, or a tap could actuate the wrong
+        # device (renamed entity above a lock/cover…).
+        try:
+            known = {st.get("entity_id") for st in await self._ha.states()}
+        except Exception:  # noqa: BLE001 — can't verify alignment → don't act
+            return
+        visible = [e for e in picked if e in known]
+        try:
+            entity = visible[row]
+        except IndexError:
             return
         domain = entity.split(".", 1)[0]
         action: tuple[str, str] | None = None

@@ -234,6 +234,9 @@ ROBOT_ENTITY_ROLES = [
     {"key": "islocal_switch", "label": "Local-only (switch)", "domains": ["switch"]},
     {"key": "battery_sensor", "label": "Battery % (sensor)", "domains": ["sensor"]},
     {"key": "presence_sensor", "label": "Presence nearby (sensor)", "domains": ["binary_sensor"]},
+    {"key": "bubble_text", "label": "Speech bubble (text)", "domains": ["text"]},
+    {"key": "latest_fw_text", "label": "Latest firmware (text)", "domains": ["text"]},
+    {"key": "brightness_number", "label": "Screen brightness (number)", "domains": ["number"]},
 ]
 _ROLE_KEYS = {r["key"] for r in ROBOT_ENTITY_ROLES}
 
@@ -247,6 +250,7 @@ class RobotConfigBody(BaseModel):
 class ScreenBody(BaseModel):
     screensaver_min: float | None = Field(None, ge=0, le=1440)
     sleep_min: float | None = Field(None, ge=0, le=1440)
+    brightness: float | None = Field(None, ge=10, le=100)  # the screen % (firmware number)
 
 
 def _effective_entities(request: Request) -> dict[str, str]:
@@ -448,15 +452,16 @@ async def robot_live(request: Request):
 
 @router.get("/api/robot/screen")
 async def get_screen(request: Request):
-    """Read the on-device screensaver/sleep timeouts (the ESPHome number entities)."""
+    """Read the on-device screensaver/sleep timeouts + screen brightness."""
     drv = request.app.state.robot.driver
     getter = getattr(drv, "get_number", None)
     if getter is None:
-        return {"supported": False, "screensaver_min": None, "sleep_min": None}
+        return {"supported": False, "screensaver_min": None, "sleep_min": None, "brightness": None}
     return {
         "supported": True,
         "screensaver_min": await getter("screensaver_number"),
         "sleep_min": await getter("sleep_number"),
+        "brightness": await getter("brightness_number"),
     }
 
 
@@ -472,6 +477,8 @@ async def put_screen(body: ScreenBody, request: Request):
             await setter("screensaver_number", body.screensaver_min)
         if body.sleep_min is not None:
             await setter("sleep_number", body.sleep_min)
+        if body.brightness is not None:
+            await setter("brightness_number", body.brightness)
     except NotImplementedError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     except Exception as exc:  # noqa: BLE001
@@ -1265,6 +1272,19 @@ async def get_schedule(request: Request):
 async def put_schedule(body: ScheduleBody, request: Request):
     request.app.state.store.set_schedule(body.schedule)  # the scheduler reads these live
     return {"schedule": request.app.state.store.schedule()}
+
+
+@router.get("/api/timers")
+async def list_timers(request: Request):
+    """The running one-shot timers (for the dashboard's timers card)."""
+    return {"timers": request.app.state.scheduler.list_timers()}
+
+
+@router.delete("/api/timers/{timer_id}")
+async def cancel_timer(timer_id: str, request: Request):
+    if not request.app.state.scheduler.cancel_timer(timer_id):
+        raise HTTPException(status_code=404, detail="no such timer")
+    return {"ok": True}
 
 
 @router.post("/api/timer")

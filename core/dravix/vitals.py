@@ -433,11 +433,14 @@ class VitalsEngine:
                 key, text = due
                 self._nudge_last[key] = now
                 self._nudge_last_any = now
-                await self._fire_nudge(text)
+                # in focus the tip must be BUBBLE-ONLY: the dravix-side wiggle emote
+                # drives the LEDs/head directly and would bypass the firmware's calm-mode
+                # gates — so it only plays when the mode is fully active
+                await self._fire_nudge(text, wiggle=self._active(mode))
         except asyncio.CancelledError:
             raise
 
-    async def _fire_nudge(self, text: str) -> None:
+    async def _fire_nudge(self, text: str, wiggle: bool = True) -> None:
         if self._ha is not None:
             await self._resolve_entities()
             if self._tip_entity:
@@ -448,5 +451,6 @@ class VitalsEngine:
                 except Exception as exc:  # noqa: BLE001
                     if _entity_missing(exc):
                         self._reset_entity_cache()
-        await self._emote("nudge", gated=True)   # a little wiggle so you notice
+        if wiggle:
+            await self._emote("nudge", gated=True)   # a little wiggle so you notice
         await self._bus.publish("vitals.nudge", text=text)

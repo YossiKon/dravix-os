@@ -97,6 +97,10 @@ export function HomePage(props: { config: RobotConfig | null }) {
   const [vol, setVol] = useState<number | null>(null);
   // the last photo taken via the 📸 ritual (shown inline under the camera)
   const [shot, setShot] = useState<{ day: string; name: string } | null>(null);
+  // kitchen timers running on the core (the robot speaks when one fires)
+  const [timers, setTimers] = useState<{ id: number | string; label: string; seconds_left: number }[]>([]);
+  const [tMin, setTMin] = useState("");
+  const [tLabel, setTLabel] = useState("");
 
   async function takePhoto() {
     try {
@@ -110,6 +114,9 @@ export function HomePage(props: { config: RobotConfig | null }) {
   }
   const volTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // don't leave a pending volume PUT behind after unmount
+  useEffect(() => () => { if (volTimer.current) clearTimeout(volTimer.current); }, []);
+
   function onVolume(v: number) {
     setVol(v);
     if (volTimer.current) clearTimeout(volTimer.current);
@@ -120,6 +127,48 @@ export function HomePage(props: { config: RobotConfig | null }) {
 
   const refreshSecurity = () =>
     apiGet<SecurityInfo>("/api/security/photos?limit=1").then(setSec).catch(() => undefined);
+
+  const refreshTimers = () =>
+    apiGet<{ timers: { id: number | string; label: string; seconds_left: number }[] }>("/api/timers")
+      .then((r) => setTimers(r.timers))
+      .catch(() => undefined);
+
+  // Poll active timers every 5s while the tab is visible.
+  useEffect(() => {
+    const tick = () => {
+      if (document.visibilityState === "visible") void refreshTimers();
+    };
+    tick();
+    const t = setInterval(tick, 5000);
+    return () => clearInterval(t);
+  }, []);
+
+  async function startTimer(minutes: number, label: string) {
+    if (!Number.isFinite(minutes) || minutes <= 0) return;
+    try {
+      await apiSend("/api/timer", "POST", { seconds: Math.round(minutes * 60), label });
+      toast(tr("⏲ הטיימר הופעל", "⏲ Timer started"));
+      setTMin("");
+      setTLabel("");
+      await refreshTimers();
+    } catch (e) {
+      toastErr(e);
+    }
+  }
+
+  async function cancelTimer(id: number | string) {
+    try {
+      await apiSend(`/api/timers/${encodeURIComponent(String(id))}`, "DELETE");
+      await refreshTimers();
+    } catch (e) {
+      toastErr(e);
+    }
+  }
+
+  const fmtLeft = (s: number) => {
+    const sec = Math.max(0, Math.round(s));
+    return `${String(Math.floor(sec / 60)).padStart(2, "0")}:${String(sec % 60).padStart(2, "0")}`;
+  };
 
   useEffect(() => {
     apiGet<{ games: string[] }>("/api/fun")
@@ -425,6 +474,57 @@ export function HomePage(props: { config: RobotConfig | null }) {
             </span>
           )}
         </div>
+      </Section>
+
+      {/* ── kitchen timers — the robot speaks up when one fires ── */}
+      <Section title={tr("⏲ טיימרים", "⏲ Timers")} delay={100}>
+        <div className="flex flex-wrap gap-2">
+          {[5, 10, 25, 50].map((m) => (
+            <button key={m} className="chip" onClick={() => void startTimer(m, "")}>
+              {tr(`${m} דק׳`, `${m} min`)}
+            </button>
+          ))}
+        </div>
+        <div className="mt-3 flex gap-2">
+          <input
+            type="number"
+            inputMode="numeric"
+            min={1}
+            className="inp w-20 text-center"
+            placeholder={tr("דק׳", "min")}
+            value={tMin}
+            onChange={(e) => setTMin(e.target.value)}
+          />
+          <input
+            className="inp flex-1"
+            placeholder={tr("תווית — למשל: פסטה", "Label — e.g. Pasta")}
+            value={tLabel}
+            onChange={(e) => setTLabel(e.target.value)}
+          />
+          <button
+            className="btn btn-primary"
+            disabled={!tMin || Number(tMin) <= 0}
+            onClick={() => void startTimer(Number(tMin), tLabel.trim())}
+          >
+            {tr("▶ הפעל", "▶ Start")}
+          </button>
+        </div>
+        {timers.length > 0 && (
+          <div className="mt-3 space-y-1.5">
+            {timers.map((t) => (
+              <div key={t.id} className="flex items-center gap-2 rounded-2xl border border-line bg-card2 px-3 py-2 text-sm">
+                <span className="flex-1">{t.label || tr("טיימר", "Timer")}</span>
+                <span dir="ltr" className="font-mono text-xs text-teal">{fmtLeft(t.seconds_left)}</span>
+                <button className="chip" onClick={() => void cancelTimer(t.id)} aria-label={tr("בטל טיימר", "Cancel timer")}>
+                  ✖
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+        <p className="mt-2 text-xs text-mute">
+          {tr("כשהזמן נגמר — הרובוט מכריז על זה בקול.", "When time is up — the robot announces it out loud.")}
+        </p>
       </Section>
 
       {/* ── head ── */}
