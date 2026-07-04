@@ -95,6 +95,19 @@ export function HomePage(props: { config: RobotConfig | null }) {
   const [sec, setSec] = useState<SecurityInfo | null>(null);
   // speaker volume (0-100); null until loaded / unsupported
   const [vol, setVol] = useState<number | null>(null);
+  // the last photo taken via the 📸 ritual (shown inline under the camera)
+  const [shot, setShot] = useState<{ day: string; name: string } | null>(null);
+
+  async function takePhoto() {
+    try {
+      const r = await apiSend<{ day: string; name: string }>("/api/robot/photo", "POST", {});
+      setShot(r);
+      toast(tr("📸 צולם! נשמר בגלריה", "📸 Snapped! Saved to the gallery"));
+      void refreshSecurity();
+    } catch (e) {
+      toastErr(e);
+    }
+  }
   const volTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   function onVolume(v: number) {
@@ -532,6 +545,18 @@ export function HomePage(props: { config: RobotConfig | null }) {
             <button className="btn btn-primary w-full" onClick={() => setCamOn(true)}>
               {tr("🎥 צפה דרך העיניים של הרובוט", "🎥 See through the robot's eyes")}
             </button>
+          )}
+          {!privacy.private && (
+            <button className="btn mt-3 w-full" onClick={() => void takePhoto()}>
+              {tr("📸 צלם תמונה (הוא יחייך)", "📸 Take a photo (it will smile)")}
+            </button>
+          )}
+          {shot && (
+            <img
+              src={`/api/security/photo/${shot.day}/${shot.name}`}
+              alt={tr("התמונה שצולמה", "The photo")}
+              className="mt-3 w-full rounded-2xl border border-line bg-black"
+            />
           )}
           <p className="mt-2 text-xs text-mute">
             {tr(

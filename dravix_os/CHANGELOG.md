@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.0.59
+
+Four little life-moments (firmware v17):
+
+- **It catches a cold** 🥶: when it's genuinely cold outside (your HA weather entity,
+  threshold configurable), the sneezes get frequent and it tells you "It's cold out —
+  I've caught the sniffles". Warms up → back to normal.
+- **Morning stretch** 🥱: waking from sleep, the head rises with a sleepy yawn face,
+  then a bright-eyed shake — like it's shaking the sleep off.
+- **"Nom, electricity!"** 🔌: plug in the charger while it's awake — happy face and a
+  green flash.
+- **📸 Photo ritual**: a new button in the dashboard's Camera section — the robot
+  smiles for the shot, and the photo lands in the same gallery the security mode uses
+  (shown right there too).
+
 ## 0.0.58
 
 - **Volume control, both ends** (firmware v16): a real slider on the robot's

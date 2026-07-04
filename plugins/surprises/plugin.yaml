@@ -6,3 +6,5 @@ enabled: true
 config:
   every_min: 75        # average minutes between surprises
   jitter_min: 30       # ± random jitter, so it never feels scheduled
+  weather_entity: ""   # weather.* to feel the outdoors ("" = auto-pick the first one)
+  cold_c: 10           # below this outdoor °C the robot "catches a cold" (more sneezes)

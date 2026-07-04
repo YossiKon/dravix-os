@@ -64,17 +64,43 @@ class SurprisesMode(Mode):
             return False
         return state not in _DND_STATES
 
+    async def _outdoor_temp(self) -> float | None:
+        """The outdoor temperature from a weather entity (config, or the first one)."""
+        if self.ctx.ha is None:
+            return None
+        entity = str(self.ctx.config.get("weather_entity") or "").strip()
+        try:
+            if not entity:
+                for st in await self.ctx.ha.states():
+                    if str(st.get("entity_id", "")).startswith("weather."):
+                        entity = st["entity_id"]
+                        break
+            if not entity:
+                return None
+            st = await self.ctx.ha.get_state(entity)
+            t = (st.get("attributes") or {}).get("temperature")
+            return float(t) if t is not None else None
+        except Exception:  # noqa: BLE001
+            return None
+
     async def _delight(self) -> None:
         robot = self.ctx.robot
         # occasionally it just… sneezes (the beloved EMO bit): dizzy face, a shake,
-        # and an "Achoo!" that also pops in its speech bubble
-        if random.random() < 0.12:
+        # and an "Achoo!" that also pops in its speech bubble. When it's genuinely
+        # COLD outside, it "catches a cold" — sneezes much more, and says so.
+        temp = await self._outdoor_temp()
+        cold = temp is not None and temp < float(self.ctx.config.get("cold_c", 10))
+        if random.random() < (0.45 if cold else 0.12):
             from dravix.config import get_settings
 
+            he = (get_settings().language or "en").startswith("he")
             try:
                 if robot.supports(CAP_FACE):
                     await robot.set_face(Expression.DIZZY)
-                line = "אַפְּצִ'י!" if (get_settings().language or "en").startswith("he") else "Achoo!"
+                if cold:
+                    line = "אַפְּצִ'י! קר בחוץ, אני קצת מצונן" if he else "Achoo! It's cold out — I've caught the sniffles"
+                else:
+                    line = "אַפְּצִ'י!" if he else "Achoo!"
                 await robot.say(line)
                 await asyncio.sleep(2.0)
                 if robot.supports(CAP_FACE):

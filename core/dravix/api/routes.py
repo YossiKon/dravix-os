@@ -635,6 +635,40 @@ async def set_local_only(body: LocalOnlyBody, request: Request):
     return await apply_local_only(request.app.state, body.enabled)
 
 
+@router.post("/api/robot/photo")
+async def take_photo_ritual(request: Request):
+    """📸 The photo ritual: the robot smiles, snaps a picture through its eyes, and the
+    shot lands in the same browsable gallery the security mode uses."""
+    from datetime import datetime
+
+    from ..config import security_dir
+    from ..dal.base import CAP_FACE, CAP_PHOTO, Expression
+
+    robot = request.app.state.robot
+    if not robot.supports(CAP_PHOTO):
+        raise HTTPException(status_code=501, detail="this robot has no camera")
+    try:
+        if robot.supports(CAP_FACE):
+            await robot.set_face(Expression.HAPPY)  # say cheese!
+        data = await robot.take_photo()
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=502, detail=f"photo failed: {exc}") from exc
+    finally:
+        if robot.supports(CAP_FACE):
+            try:
+                await robot.set_face(Expression.NEUTRAL)
+            except Exception:  # noqa: BLE001
+                pass
+    if not data:
+        raise HTTPException(status_code=502, detail="camera returned no frame")
+    now = datetime.now()
+    day_dir = security_dir() / now.strftime("%Y-%m-%d")
+    day_dir.mkdir(parents=True, exist_ok=True)
+    name = f"{now.strftime('%H%M%S')}.jpg"
+    (day_dir / name).write_bytes(data)
+    return {"ok": True, "day": now.strftime("%Y-%m-%d"), "name": name}
+
+
 class VolumeBody(BaseModel):
     volume: int = Field(ge=0, le=100)
 

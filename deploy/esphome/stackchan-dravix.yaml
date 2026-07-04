@@ -39,7 +39,7 @@ substitutions:
   # publishes it to HA ("Firmware version" sensor); the dravix dashboard compares it
   # with the version bundled in the add-on and shows "firmware update available".
   # (Maintainers: bump this on every firmware change. Users: don't touch.)
-  fw_version: "16"
+  fw_version: "17"
   # The ESPHome node name (mDNS hostname + the default entity prefix on a fresh flash).
   # Change it only if you run MORE THAN ONE robot — each needs a unique name. NOTE:
   # changing it on an already-adopted robot registers a NEW device in HA.
@@ -403,6 +403,9 @@ sensor:
     battery_charging:
       name: "Battery charging"
       id: axp_chg
+      # nom, electricity! — a happy little reaction the moment it's plugged in
+      on_press:
+        then: [ { script.execute: plug_react } ]
   # REAL power metering — the BSP exposes the INA226 battery monitor to HA. Current is in A,
   # power in W, bus voltage in V. These make the status page show true consumption + a true
   # time-left instead of a guess.
@@ -1832,6 +1835,21 @@ script:
       - script.execute: { id: head_nudge, dx: 0, dy: 12 }         # nuzzle up into your hand
       - delay: 900ms
       - script.execute: head_shake                                # happy little wiggle
+  # ── PLUGGED IN 🔌 — "nom, electricity!": happy face + a green flash when the
+  #    charger connects (silent while sleeping — the breathing LEDs take over there).
+  - id: plug_react
+    mode: single
+    then:
+      - if:
+          condition: { lambda: 'return id(g_booted) && !id(g_sleep) && !id(g_saver);' }
+          then:
+            - globals.set: { id: g_expr, value: "1" }
+            - script.execute: render_face
+            - script.execute: { id: led_flash, r: 20, g: 100, b: 30 }
+            - delay: 2500ms
+            - globals.set: { id: g_expr, value: "0" }
+            - script.execute: render_face
+      - delay: 30s   # a flaky charger connection can't turn this into a disco
   # ── WAVE 👋 — a hand waving at the sensor: wakes up, waves BACK with its head,
   #    happy face + warm flash. (Detected as 3 near/far proximity swings within 4s.)
   - id: wave_react
@@ -2508,7 +2526,9 @@ select:
                   || x == std::string("quiet") || x == std::string("busy");
           then:
             - light.turn_on: { id: lcd_backlight, brightness: !lambda 'return id(n_brightness).state / 100.0;' }
-            # …and on waking the head rises back to where it was before sleeping.
+            # …and on waking the head rises back to where it was before sleeping —
+            # with a little MORNING STRETCH: a sleepy yawn face, then a bright-eyed
+            # shake-awake (only on a real wake-from-sleep, when a droop was saved).
             - if:
                 condition: { lambda: 'return id(sw_move).state && id(g_pitch_saved) >= 0;' }
                 then:
@@ -2516,6 +2536,15 @@ select:
                       id: n_head_pitch
                       value: !lambda 'return id(g_pitch_saved);'
                   - globals.set: { id: g_pitch_saved, value: "-1" }
+                  - globals.set: { id: g_expr, value: "4" }      # yaaawn…
+                  - script.execute: render_face
+                  - delay: 1400ms
+                  - globals.set: { id: g_expr, value: "1" }      # …bright and happy!
+                  - script.execute: render_face
+                  - script.execute: head_shake                    # shakes the sleep off
+                  - delay: 1500ms
+                  - globals.set: { id: g_expr, value: "0" }
+                  - script.execute: render_face
       - if:
           condition: { lambda: 'return x == std::string("morning");' }
           then:
