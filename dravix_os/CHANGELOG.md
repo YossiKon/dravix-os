@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.0.63
+
+- **❄ Control your AC from the robot's screen** (firmware v19): a new CLIMATE page in
+  the swipe cycle (…GAMES → VITALS → **CLIMATE**) for the AC you picked in the Climate
+  tab — big **−/+** target temperature, **COOL / HEAT / FAN / DRY / AUTO** modes,
+  **OFF**, and a **FAN SPEED** cycle. It shows the live temp/mode/fan; buttons act
+  immediately.
+- **🔆 Brightness sliders on the robot**: swipe ⬇ now has three sliders — **volume**,
+  **screen brightness**, and **LED brightness** — each live-mirroring the real value.
+- **Fixed: dragging a status-bar slider changed screens.** While the status bar is
+  open, horizontal drags belong to its sliders — they no longer flip cards.
+- **Cleaner card rows**: toggleable entities now read as **ON / OFF** (covers
+  OPEN/CLOSED, locks OPEN/LOCKED) instead of the raw `off` / `closed` state.
+
 ## 0.0.62
 
 Plugin consistency + docs pass (no firmware change — just Update the add-on).

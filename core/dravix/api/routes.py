@@ -237,6 +237,9 @@ ROBOT_ENTITY_ROLES = [
     {"key": "bubble_text", "label": "Speech bubble (text)", "domains": ["text"]},
     {"key": "latest_fw_text", "label": "Latest firmware (text)", "domains": ["text"]},
     {"key": "brightness_number", "label": "Screen brightness (number)", "domains": ["number"]},
+    {"key": "climate_name_text", "label": "Climate name (text)", "domains": ["text"]},
+    {"key": "climate_set_text", "label": "Climate target (text)", "domains": ["text"]},
+    {"key": "climate_info_text", "label": "Climate info (text)", "domains": ["text"]},
 ]
 _ROLE_KEYS = {r["key"] for r in ROBOT_ENTITY_ROLES}
 

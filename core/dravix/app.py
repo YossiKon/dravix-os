@@ -253,6 +253,15 @@ async def lifespan(app: FastAPI):
                     except Exception:  # noqa: BLE001 — never kill the watcher
                         log.exception("card tap handling failed")
                     continue
+                # a tap on the robot's CLIMATE page → control the configured AC
+                if ev.type == "climate.control":
+                    try:
+                        from .climate_bridge import handle_control
+
+                        await handle_control(ha, store.climate_entity(), str(ev.data.get("action") or ""))
+                    except Exception:  # noqa: BLE001 — never kill the watcher
+                        log.exception("climate control failed")
+                    continue
                 if ev.type != "islocal.set":
                     continue
                 enabled = bool(ev.data.get("enabled"))
@@ -284,11 +293,25 @@ async def lifespan(app: FastAPI):
 
     fw_notify_task = asyncio.create_task(_fw_notifier(), name="dravix-fw-notify")
 
+    async def _climate_pusher() -> None:
+        """Keep the robot's CLIMATE page fresh with the configured AC's live state."""
+        from .climate_bridge import push_status
+
+        while True:
+            try:
+                if ha is not None:
+                    await push_status(ha, store.climate_entity(), app.state.discovered_entities or {})
+            except Exception:  # noqa: BLE001 — never die
+                pass
+            await asyncio.sleep(5)
+
+    climate_task = asyncio.create_task(_climate_pusher(), name="dravix-climate")
+
     try:
         yield
     finally:
         log.info("shutting down dravix-os")
-        for t in (islocal_task, fw_notify_task):
+        for t in (islocal_task, fw_notify_task, climate_task):
             t.cancel()
             try:
                 await t

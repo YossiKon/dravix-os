@@ -39,7 +39,7 @@ substitutions:
   # publishes it to HA ("Firmware version" sensor); the dravix dashboard compares it
   # with the version bundled in the add-on and shows "firmware update available".
   # (Maintainers: bump this on every firmware change. Users: don't touch.)
-  fw_version: "18"
+  fw_version: "19"
   # The ESPHome node name (mDNS hostname + the default entity prefix on a fresh flash).
   # Change it only if you run MORE THAN ONE robot — each needs a unique name. NOTE:
   # changing it on an already-adopted robot registers a NEW device in HA.
@@ -244,9 +244,11 @@ font:
   - file: "gfonts://Roboto"
     id: small_font
     size: 19
+    glyphsets: [GF_Latin_Core]   # adds ° and accented Latin (for the climate page etc.)
   - file: "gfonts://Roboto"
     id: big_font
     size: 52
+    glyphsets: [GF_Latin_Core]   # the big climate target readout shows "21°"
   # Speech-bubble font. GF_Latin_Core covers Latin/digits/punctuation; the Hebrew letters
   # are listed explicitly (ESPHome has no GF_Hebrew glyphset). SWAP POINT: if your Assist
   # replies in another script (Cyrillic/CJK/…), switch the font + glyphsets here — e.g.
@@ -689,6 +691,30 @@ text:
             - online_image.set_url:      # set_url also starts the download itself
                 id: oi_show
                 url: !lambda 'return x;'
+  # ── CLIMATE page slots — dravix writes the configured AC's live status here every
+  #    few seconds; the swipe-to CLIMATE page shows them. The buttons on that page fire
+  #    esphome.dravix_climate events back to dravix, which performs the HA service call.
+  - platform: template
+    name: "Climate name"
+    id: t_clim_name
+    optimistic: true
+    mode: text
+    max_length: 40
+    initial_value: ""
+  - platform: template
+    name: "Climate set"         # the big target-temp readout, e.g. "21°"
+    id: t_clim_set
+    optimistic: true
+    mode: text
+    max_length: 8
+    initial_value: "--°"
+  - platform: template
+    name: "Climate info"        # e.g. "now 24°   cool   fan: auto"
+    id: t_clim_info
+    optimistic: true
+    mode: text
+    max_length: 60
+    initial_value: ""
   # ── BUBBLE — dravix mirrors whatever the robot SAYS (dashboard chat / announce /
   #    TTS) into the speech bubble, so text shows on-screen too (like the original
   #    app's text messages) — no flash, no wiggle, just the bubble; auto-hides ~12s.
@@ -912,7 +938,7 @@ lvgl:
           x: 0
           y: 0
           width: 320
-          height: 92
+          height: 150
           radius: 0
           bg_color: 0x05080b
           bg_opa: COVER
@@ -921,7 +947,10 @@ lvgl:
           hidden: true
           scrollbar_mode: "OFF"
           widgets:
-            # row 3 — VOLUME, controllable right on the robot (drag the slider)
+            # row 3 — VOLUME · row 4 — SCREEN brightness · row 5 — LED brightness.
+            # All controllable right on the robot (drag the slider). Dragging a slider
+            # never cycles screens (the swipe left/right handlers ignore drags while the
+            # status bar is open).
             - label: { id: sb_vol_lbl, text: "VOL", text_font: small_font, text_color: 0x8b96a4, align: TOP_LEFT, x: 12, y: 66 }
             - slider:
                 id: sl_vol
@@ -939,6 +968,41 @@ lvgl:
                   - media_player.volume_set:
                       id: va_media_player
                       volume: !lambda 'return x / 100.0f;'
+            - label: { id: sb_scr_lbl, text: "SCR", text_font: small_font, text_color: 0x8b96a4, align: TOP_LEFT, x: 12, y: 94 }
+            - slider:
+                id: sl_scr
+                x: 62
+                y: 96
+                width: 220
+                height: 14
+                min_value: 10
+                max_value: 100
+                value: 100
+                bg_color: 0x1a2233
+                indicator: { bg_color: 0xffc23d, bg_opa: COVER }
+                knob: { bg_color: 0xFFFFFF, radius: 8 }
+                on_release:
+                  - number.set: { id: n_brightness, value: !lambda 'return x;' }   # persists + sets the LCD
+            - label: { id: sb_led_lbl, text: "LED", text_font: small_font, text_color: 0x8b96a4, align: TOP_LEFT, x: 12, y: 122 }
+            - slider:
+                id: sl_led
+                x: 62
+                y: 124
+                width: 220
+                height: 14
+                min_value: 0
+                max_value: 100
+                value: 60
+                bg_color: 0x1a2233
+                indicator: { bg_color: 0x5dffa0, bg_opa: COVER }
+                knob: { bg_color: 0xFFFFFF, radius: 8 }
+                on_release:
+                  - if:
+                      condition: { lambda: 'return x < 3;' }
+                      then:
+                        - light.turn_off: stackchan_light_bar
+                      else:
+                        - light.turn_on: { id: stackchan_light_bar, brightness: !lambda 'return x / 100.0f;' }
             # row 2 — battery time-left / "charging" (raw W/mA live in HA, not here)
             - label: { id: sb_power, text: "", text_font: small_font, text_color: 0x8b96a4, align: TOP_LEFT, x: 12, y: 38 }
             # UPDATE icon — an amber up-arrow appears when newer firmware is available
@@ -1652,6 +1716,65 @@ lvgl:
             max_value: 100
             value: 0
             indicator: { bg_color: 0x7bb0ff, bg_opa: COVER }
+    # ── CLIMATE — control the configured AC right on the robot (swipe slot 6). Every
+    #    button fires esphome.dravix_climate {action}; dravix runs the HA service call
+    #    on the AC you picked in the dashboard's Climate tab and writes the status back.
+    - id: page_climate
+      bg_color: 0x05080b
+      bg_opa: COVER
+      scrollable: false
+      scrollbar_mode: "OFF"
+      widgets:
+        - label: { id: lbl_clim_name, text: "AC", text_font: title_font, styles: accent_txt, align: TOP_MID, y: 6 }
+        - label: { id: lbl_clim_info, text: "", text_font: small_font, text_color: 0x8b96a4, align: TOP_MID, y: 40 }
+        # big − / + for the target temperature, flanking a large readout
+        - button:
+            id: clim_minus
+            x: 8
+            y: 74
+            width: 78
+            height: 84
+            radius: 14
+            bg_color: 0x14324a
+            widgets:
+              - label: { text: "-", text_font: big_font, text_color: 0xFFFFFF, align: CENTER }
+            on_click:
+              - homeassistant.event: { event: esphome.dravix_climate, data: { action: "temp_down" } }
+        - label: { id: lbl_clim_set, text: "--°", text_font: big_font, text_color: 0x33E6C8, align: CENTER, y: -6 }
+        - button:
+            id: clim_plus
+            x: 234
+            y: 74
+            width: 78
+            height: 84
+            radius: 14
+            bg_color: 0x14324a
+            widgets:
+              - label: { text: "+", text_font: big_font, text_color: 0xFFFFFF, align: CENTER }
+            on_click:
+              - homeassistant.event: { event: esphome.dravix_climate, data: { action: "temp_up" } }
+        # HVAC mode + power row
+        - button: { id: clim_cool, x: 6,   y: 172, width: 58, height: 30, radius: 8, bg_color: 0x123a5a, widgets: [ { label: { text: "COOL", text_font: small_font, text_color: 0x7bb0ff, align: CENTER } } ], on_click: [ { homeassistant.event: { event: esphome.dravix_climate, data: { action: "cool" } } } ] }
+        - button: { id: clim_heat, x: 68,  y: 172, width: 58, height: 30, radius: 8, bg_color: 0x4a1c14, widgets: [ { label: { text: "HEAT", text_font: small_font, text_color: 0xff9440, align: CENTER } } ], on_click: [ { homeassistant.event: { event: esphome.dravix_climate, data: { action: "heat" } } } ] }
+        - button: { id: clim_fan,  x: 130, y: 172, width: 58, height: 30, radius: 8, bg_color: 0x14324a, widgets: [ { label: { text: "FAN", text_font: small_font, text_color: 0x33E6C8, align: CENTER } } ], on_click: [ { homeassistant.event: { event: esphome.dravix_climate, data: { action: "fan_only" } } } ] }
+        - button: { id: clim_dry,  x: 192, y: 172, width: 58, height: 30, radius: 8, bg_color: 0x14324a, widgets: [ { label: { text: "DRY", text_font: small_font, text_color: 0xffc23d, align: CENTER } } ], on_click: [ { homeassistant.event: { event: esphome.dravix_climate, data: { action: "dry" } } } ] }
+        - button: { id: clim_auto, x: 254, y: 172, width: 58, height: 30, radius: 8, bg_color: 0x14324a, widgets: [ { label: { text: "AUTO", text_font: small_font, text_color: 0xFFFFFF, align: CENTER } } ], on_click: [ { homeassistant.event: { event: esphome.dravix_climate, data: { action: "auto" } } } ] }
+        # power + fan-speed row
+        - button: { id: clim_off,  x: 6,   y: 206, width: 120, height: 30, radius: 8, bg_color: 0x3a1414, widgets: [ { label: { text: "OFF", text_font: small_font, text_color: 0xE05555, align: CENTER } } ], on_click: [ { homeassistant.event: { event: esphome.dravix_climate, data: { action: "off" } } } ] }
+        - button: { id: clim_fanspd, x: 130, y: 206, width: 124, height: 30, radius: 8, bg_color: 0x14324a, widgets: [ { label: { text: "FAN SPEED", text_font: small_font, text_color: 0x33E6C8, align: CENTER } } ], on_click: [ { homeassistant.event: { event: esphome.dravix_climate, data: { action: "fan_cycle" } } } ] }
+        - button:
+            id: clim_back
+            x: 258
+            y: 206
+            width: 54
+            height: 30
+            radius: 8
+            bg_color: 0x05080b
+            widgets:
+              - label: { text: "<", text_font: text_font, text_color: 0x33E6C8, align: CENTER }
+            on_click:
+              - globals.set: { id: g_card, value: "0" }
+              - lvgl.page.show: page_face
 
 script:
   # After ~25s the alert image goes away and the face comes back.
@@ -2187,7 +2310,8 @@ script:
       - if: { condition: { lambda: 'return id(g_card) == 3;' }, then: [ { lvgl.page.show: page_card3 } ] }
       - if: { condition: { lambda: 'return id(g_card) == 4;' }, then: [ { lvgl.page.show: page_games } ] }
       - if: { condition: { lambda: 'return id(g_card) == 5;' }, then: [ { lvgl.page.show: page_vitals } ] }
-      - if: { condition: { lambda: 'return id(g_card) <= 0 || id(g_card) > 5;' }, then: [ { lvgl.page.show: page_face } ] }
+      - if: { condition: { lambda: 'return id(g_card) == 6;' }, then: [ { lvgl.page.show: page_climate } ] }
+      - if: { condition: { lambda: 'return id(g_card) <= 0 || id(g_card) > 6;' }, then: [ { lvgl.page.show: page_face } ] }
   # Greet: someone approached → wake up + a happy face + perk the head up.
   # (Skipped at night and in focus mode — do-not-disturb.)
   - id: greet
@@ -2894,13 +3018,23 @@ interval:
               return std::string("");
             }
             return std::string(b);
-      # keep the volume slider mirroring the real speaker volume (skips while touched)
+      # keep the sliders mirroring the real values (each skips while it's being touched)
       - if:
           condition: { lambda: 'return !lv_obj_has_state(id(sl_vol), LV_STATE_PRESSED);' }
           then:
             - lvgl.slider.update:
                 id: sl_vol
                 value: !lambda 'return (int)(id(va_media_player).volume * 100.0f);'
+      - if:
+          condition: { lambda: 'return !lv_obj_has_state(id(sl_scr), LV_STATE_PRESSED);' }
+          then:
+            - lvgl.slider.update: { id: sl_scr, value: !lambda 'return (int) id(n_brightness).state;' }
+      - if:
+          condition: { lambda: 'return !lv_obj_has_state(id(sl_led), LV_STATE_PRESSED);' }
+          then:
+            - lvgl.slider.update:
+                id: sl_led
+                value: !lambda 'return (int)(id(stackchan_light_bar).remote_values.is_on() ? id(stackchan_light_bar).remote_values.get_brightness() * 100.0f : 0.0f);'
       # UPDATE arrow — newer firmware is waiting (dravix keeps "Latest firmware" fresh)
       - if:
           condition:
@@ -2927,6 +3061,10 @@ interval:
       - lvgl.bar.update: { id: bar_food,   value: !lambda 'return (int) id(n_vital_food).state;' }
       - lvgl.bar.update: { id: bar_fun,    value: !lambda 'return (int) id(n_vital_fun).state;' }
       - lvgl.bar.update: { id: bar_calm,   value: !lambda 'return (int) id(n_vital_calm).state;' }
+      # climate page — dravix keeps these slots fresh from the configured AC
+      - lvgl.label.update: { id: lbl_clim_name, text: !lambda 'return id(t_clim_name).state.empty() ? std::string("No AC configured") : id(t_clim_name).state;' }
+      - lvgl.label.update: { id: lbl_clim_set,  text: !lambda 'return id(t_clim_set).state;' }
+      - lvgl.label.update: { id: lbl_clim_info, text: !lambda 'return id(t_clim_info).state;' }
 
 # ── Manual SWIPE detection (ESPHome LVGL has no built-in gesture) ────────────────
 touchscreen:
@@ -3004,26 +3142,29 @@ touchscreen:
             - globals.set: { id: g_card, value: "0" }
             - lvgl.widget.hide: statusbar
             - lvgl.page.show: page_face
-      # swipe LEFT → next screen (face → c1 → c2 → c3 → game → face)
+      # swipe LEFT → next screen (face → c1 → c2 → c3 → games → vitals → climate → face)
+      # BUT NOT while the status bar is open — there, a horizontal drag is a slider
+      # (volume / screen / LED brightness), not a screen change.
       - if:
           condition:
             lambda: |-
               int dx = id(sw_x1) - id(sw_x0), dy = id(sw_y1) - id(sw_y0);
               int adx = dx < 0 ? -dx : dx, ady = dy < 0 ? -dy : dy;
-              return !id(sw_sleep) && adx >= ady && dx < -40;
+              return !id(sw_sleep) && adx >= ady && dx < -40
+                     && lv_obj_has_flag(id(statusbar), LV_OBJ_FLAG_HIDDEN);
           then:
-            - globals.set: { id: g_card, value: !lambda 'return (id(g_card) + 1) % 6;' }
-            - lvgl.widget.hide: statusbar
+            - globals.set: { id: g_card, value: !lambda 'return (id(g_card) + 1) % 7;' }
             - script.execute: show_card
-      # swipe RIGHT → previous screen
+      # swipe RIGHT → previous screen (blocked while the status bar is open — see above)
       - if:
           condition:
             lambda: |-
               int dx = id(sw_x1) - id(sw_x0), dy = id(sw_y1) - id(sw_y0);
               int adx = dx < 0 ? -dx : dx, ady = dy < 0 ? -dy : dy;
+              if (!lv_obj_has_flag(id(statusbar), LV_OBJ_FLAG_HIDDEN)) return false;
               return !id(sw_sleep) && adx >= ady && dx > 40;
           then:
-            - globals.set: { id: g_card, value: !lambda 'return (id(g_card) + 5) % 6;' }
+            - globals.set: { id: g_card, value: !lambda 'return (id(g_card) + 6) % 7;' }
             - lvgl.widget.hide: statusbar
             - script.execute: show_card
 

@@ -43,6 +43,10 @@ const ROLES: Record<string, Bi> = {
   presence_sensor: { he: "נוכחות ליד השולחן", en: "Presence nearby" },
   bubble_text: { he: "בועת דיבור (טקסט)", en: "Speech bubble (text)" },
   latest_fw_text: { he: "קושחה אחרונה זמינה", en: "Latest firmware" },
+  brightness_number: { he: "בהירות מסך", en: "Screen brightness" },
+  climate_name_text: { he: "מזגן — שם", en: "Climate name" },
+  climate_set_text: { he: "מזגן — יעד", en: "Climate target" },
+  climate_info_text: { he: "מזגן — מידע", en: "Climate info" },
 };
 
 // A custom AI personality — a name + system prompt (optional dedicated voice).

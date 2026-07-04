@@ -36,6 +36,24 @@ ROW_COUNT = 4  # tappable rows per card — more won't fit a 320x240 screen comf
 NAME_MAX = 14  # truncate long friendly names so a line fits the small display
 
 
+def _onoff(entity_id: str, state: str) -> str | None:
+    """A clean ON/OFF-style label for a toggleable entity (so a switch shows "ON"/"OFF"
+    instead of the raw "on"/"closed"/"unlocked" state). Returns None for entities whose
+    raw state should be shown as-is (sensors, numbers, …)."""
+    domain = entity_id.split(".", 1)[0]
+    s = str(state).strip().lower()
+    if domain in ("switch", "light", "fan", "input_boolean", "siren", "humidifier",
+                  "automation", "remote", "group"):
+        return "ON" if s == "on" else "OFF"
+    if domain == "cover":
+        return "OPEN" if s == "open" else "CLOSED"
+    if domain == "lock":
+        return "OPEN" if s == "unlocked" else "LOCKED"
+    if domain == "media_player":
+        return "PLAY" if s in ("playing", "on") else "OFF"
+    return None
+
+
 class ScreenPusher:
     def __init__(
         self,
@@ -138,7 +156,9 @@ class ScreenPusher:
                         continue
                 except Exception as exc:  # noqa: BLE001 — never let one card break the loop
                     log.debug("climate format for %s failed: %s", entity_id, exc)
-            lines.append(f"{name}  {state}")
+            # toggleable entities read as a clean ON/OFF (the row is a tappable button)
+            onoff = _onoff(entity_id, state)
+            lines.append(f"{name}   {onoff}" if onoff is not None else f"{name}  {state}")
         return "\n".join(lines)
 
     async def handle_tap(self, card: int, row: int) -> None:

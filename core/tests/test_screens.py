@@ -75,8 +75,8 @@ async def test_configured_screen_pushes_title_and_body():
 
     assert ("text", "set_value", {"entity_id": f"{PREFIX}_card1_title", "value": "Home"}) in ha.calls
     body = _value(ha.calls, f"{PREFIX}_card1_body")
-    # friendly name truncated to ~14 chars, "Name  State" per line, newline-joined.
-    assert body == "Living Room Te  21\nLamp  on"
+    # a sensor shows its raw value; a toggleable entity shows a clean ON/OFF.
+    assert body == "Living Room Te  21\nLamp   ON"
 
     # Cards beyond what's configured stay blank (no write needed — already "unknown"→"").
     assert ha.slots[f"{PREFIX}_card2_title"] in ("unknown", "")
@@ -124,7 +124,7 @@ async def test_unknown_entity_is_skipped_not_fatal():
     await pusher.stop()
 
     # The missing entity is skipped; the good one still renders.
-    assert _value(ha.calls, f"{PREFIX}_card1_body") == "Lamp  on"
+    assert _value(ha.calls, f"{PREFIX}_card1_body") == "Lamp   ON"
 
 
 async def test_unchanged_values_written_only_once():
@@ -161,7 +161,7 @@ async def test_robot_reboot_wipes_slots_and_pusher_self_heals():
     await asyncio.sleep(0.05)
     await pusher.stop()
     assert ha.slots[f"{PREFIX}_card1_title"] == "Home"      # rewritten
-    assert ha.slots[f"{PREFIX}_card1_body"] == "Lamp  on"   # rewritten
+    assert ha.slots[f"{PREFIX}_card1_body"] == "Lamp   ON"  # rewritten
 
 
 async def test_more_than_four_entities_are_capped_per_card():
@@ -175,3 +175,16 @@ async def test_more_than_four_entities_are_capped_per_card():
 
     body = _value(ha.calls, f"{PREFIX}_card1_body")
     assert body is not None and len(body.split("\n")) == 4  # ROW_COUNT rows max
+
+
+def test_onoff_labels_for_toggleable_domains():
+    from dravix.screens import _onoff
+    assert _onoff("switch.x", "off") == "OFF"
+    assert _onoff("light.x", "on") == "ON"
+    assert _onoff("cover.x", "closed") == "CLOSED"
+    assert _onoff("cover.x", "open") == "OPEN"
+    assert _onoff("lock.x", "locked") == "LOCKED"
+    assert _onoff("lock.x", "unlocked") == "OPEN"
+    assert _onoff("media_player.x", "playing") == "PLAY"
+    assert _onoff("sensor.x", "21.5") is None   # raw value shown as-is
+    assert _onoff("climate.x", "cool") is None
