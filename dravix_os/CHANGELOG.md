@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.0.56
+
+- **Control Home Assistant FROM the robot's screen** (firmware v14): each of the 3
+  cards now shows up to 4 finger-sized tappable rows — tap a row and it toggles
+  lights/switches/fans/covers/locks, presses buttons, runs scripts & scenes, triggers
+  automations, or flips the AC on/off. Sensors and other read-only entities just
+  display. Pick what's on each card in the dashboard's Screens tab, as before.
+- **Fixed: cards showed nothing.** The pusher used to trust a local "already wrote
+  that" cache — but every robot reboot wipes the on-device text, so cards stayed
+  blank. It now compares against the robot's REAL text and self-heals within
+  seconds of any reboot (and re-discovers the slots each cycle, so device renames
+  can't strand it either).
+- **Dashboard language now reaches the robot**: switching English/עברית in the header
+  also updates the server — wellness tips and greetings follow your language.
+
 ## 0.0.55
 
 - **Wave at it 👋** (firmware v13): wave a hand at the robot's nose sensor (3 quick

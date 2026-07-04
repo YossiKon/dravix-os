@@ -155,14 +155,24 @@ class HAEventBridge:
             auth = json.loads(await ws.recv())
             if auth.get("type") != "auth_ok":
                 raise RuntimeError(f"auth failed: {auth.get('type')}")
-            # Subscribe.
+            # Subscribe: state changes + the robot's card-tap events.
             await ws.send(json.dumps({"id": 1, "type": "subscribe_events", "event_type": "state_changed"}))
+            await ws.send(json.dumps({"id": 2, "type": "subscribe_events", "event_type": "esphome.dravix_card"}))
             log.info("HA event bridge connected and subscribed")
             async for raw in ws:
                 msg = json.loads(raw)
                 if msg.get("type") != "event":
                     continue
-                data = (msg.get("event") or {}).get("data") or {}
+                event = msg.get("event") or {}
+                data = event.get("data") or {}
+                # A tap on one of the robot's card rows → dravix performs the action.
+                if event.get("event_type") == "esphome.dravix_card":
+                    await self._bus.publish(
+                        "card.tap",
+                        card=int(data.get("card") or 0),
+                        row=int(data.get("row") or 0),
+                    )
+                    continue
                 mapped = map_state_changed(data, self._map)
                 if mapped:
                     event_type, payload = mapped

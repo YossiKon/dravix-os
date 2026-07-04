@@ -698,6 +698,19 @@ async def security_photo(day: str, name: str):
     return Response(content=path.read_bytes(), media_type="image/jpeg")
 
 
+class LanguageBody(BaseModel):
+    language: str = "en"  # en | he (any code the tips tables know)
+
+
+@router.put("/api/config/language")
+async def set_language(body: LanguageBody, request: Request):
+    """Persist the UI language server-side too, so server-generated content (wellness
+    tips, greetings) speaks the same language as the dashboard."""
+    lang = body.language.strip().lower()[:8]
+    request.app.state.store.set_language(lang or None)
+    return {"language": lang}
+
+
 class BirthdayBody(BaseModel):
     date: str = ""  # "MM-DD" ("" clears it)
 

@@ -12,10 +12,15 @@ PREFIX = "text.study_room_dravix"
 
 
 class _FakeHA:
-    """Minimal HA stub: records service calls, returns canned states."""
+    """Minimal HA stub: one state dump feeds both rendering and slot freshness, and
+    text.set_value updates the slot state (like a real optimistic text entity)."""
 
     def __init__(self) -> None:
         self.calls: list = []
+        # the robot's text slots, as optimistic entities (fresh boot = "unknown")
+        self.slots = {
+            f"{PREFIX}_card{n}_{kind}": "unknown" for n in (1, 2, 3) for kind in ("title", "body")
+        }
         self._states = {
             "sensor.temp": {"state": "21", "attributes": {"friendly_name": "Living Room Temperature"}},
             "light.lamp": {"state": "on", "attributes": {"friendly_name": "Lamp"}},
@@ -32,13 +37,13 @@ class _FakeHA:
 
     async def call_service(self, domain, service, data=None):
         self.calls.append((domain, service, data))
-
-    async def get_state(self, entity_id):
-        return self._states.get(entity_id, {"state": "unknown", "attributes": {}})
+        if domain == "text" and service == "set_value":
+            self.slots[data["entity_id"]] = data["value"]
 
     async def states(self):
-        out = [{"entity_id": f"{PREFIX}_card{n}_{kind}"} for n in (1, 2, 3) for kind in ("title", "body")]
-        out.append({"entity_id": "text.something_else"})
+        out = [{"entity_id": eid, "state": st} for eid, st in self.slots.items()]
+        out.extend({"entity_id": eid, **st} for eid, st in self._states.items())
+        out.append({"entity_id": "text.something_else", "state": "x"})
         return out
 
 
@@ -73,9 +78,9 @@ async def test_configured_screen_pushes_title_and_body():
     # friendly name truncated to ~14 chars, "Name  State" per line, newline-joined.
     assert body == "Living Room Te  21\nLamp  on"
 
-    # Cards beyond what's configured get empty title + body.
-    assert _value(ha.calls, f"{PREFIX}_card2_title") == ""
-    assert _value(ha.calls, f"{PREFIX}_card2_body") == ""
+    # Cards beyond what's configured stay blank (no write needed — already "unknown"→"").
+    assert ha.slots[f"{PREFIX}_card2_title"] in ("unknown", "")
+    assert _value(ha.calls, f"{PREFIX}_card2_body") is None
 
 
 async def test_climate_card_formats_mode_and_temps():
@@ -110,21 +115,15 @@ async def test_pusher_noop_without_ha():
     await pusher.stop()  # should not raise — nothing to push without HA
 
 
-async def test_bad_entity_does_not_kill_the_task():
-    class _FlakyHA(_FakeHA):
-        async def get_state(self, entity_id):
-            if entity_id == "sensor.boom":
-                raise RuntimeError("entity gone")
-            return await super().get_state(entity_id)
-
-    ha = _FlakyHA()
+async def test_unknown_entity_is_skipped_not_fatal():
+    ha = _FakeHA()
     store = _StoreStub([{"title": "Mix", "entities": ["sensor.boom", "light.lamp"]}])
     pusher = ScreenPusher(ha, store, interval=0.01)
     await pusher.start()
     await asyncio.sleep(0.05)
     await pusher.stop()
 
-    # The bad entity is skipped; the good one still renders.
+    # The missing entity is skipped; the good one still renders.
     assert _value(ha.calls, f"{PREFIX}_card1_body") == "Lamp  on"
 
 
@@ -142,3 +141,37 @@ async def test_unchanged_values_written_only_once():
         if c[0] == "text" and c[2].get("entity_id") == f"{PREFIX}_card1_title"
     ]
     assert len(title_writes) == 1
+
+
+async def test_robot_reboot_wipes_slots_and_pusher_self_heals():
+    """THE bug that blanked the user's cards: the robot reboots, its optimistic text
+    slots reset to "unknown", and a local last-written cache believed the text was
+    still there. Freshness is now judged against the ACTUAL slot state — the pusher
+    must rewrite within one cycle of a reboot."""
+    ha = _FakeHA()
+    store = _StoreStub([{"title": "Home", "entities": ["light.lamp"]}])
+    pusher = ScreenPusher(ha, store, interval=0.01)
+    await pusher.start()
+    await asyncio.sleep(0.05)
+    assert ha.slots[f"{PREFIX}_card1_title"] == "Home"
+
+    # 🤖💥 reboot: every slot back to "unknown"
+    for k in ha.slots:
+        ha.slots[k] = "unknown"
+    await asyncio.sleep(0.05)
+    await pusher.stop()
+    assert ha.slots[f"{PREFIX}_card1_title"] == "Home"      # rewritten
+    assert ha.slots[f"{PREFIX}_card1_body"] == "Lamp  on"   # rewritten
+
+
+async def test_more_than_four_entities_are_capped_per_card():
+    ha = _FakeHA()
+    many = ["light.lamp", "sensor.temp", "climate.ac", "climate.bare", "light.lamp", "sensor.temp"]
+    store = _StoreStub([{"title": "Busy", "entities": many}])
+    pusher = ScreenPusher(ha, store, interval=0.01)
+    await pusher.start()
+    await asyncio.sleep(0.05)
+    await pusher.stop()
+
+    body = _value(ha.calls, f"{PREFIX}_card1_body")
+    assert body is not None and len(body.split("\n")) == 4  # ROW_COUNT rows max

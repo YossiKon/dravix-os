@@ -244,6 +244,15 @@ async def lifespan(app: FastAPI):
         try:
             while True:
                 ev = await q.get()
+                # a tap on one of the robot's entity-card rows → perform the action
+                if ev.type == "card.tap":
+                    try:
+                        await screen_pusher.handle_tap(
+                            int(ev.data.get("card") or 0), int(ev.data.get("row") or 0)
+                        )
+                    except Exception:  # noqa: BLE001 — never kill the watcher
+                        log.exception("card tap handling failed")
+                    continue
                 if ev.type != "islocal.set":
                     continue
                 enabled = bool(ev.data.get("enabled"))

@@ -57,8 +57,8 @@ export function ScreensPage(props: { entities: HAEntity[] }) {
     <div className="space-y-4">
       <p className="animate-rise text-sm text-mute">
         {tr(
-          `מחליקים ימינה / שמאלה על מסך הרובוט כדי לעבור בין 3 כרטיסים. כאן בוחרים מה יופיע על כל אחד (עד ${MAX_PER_CARD} ישויות לכרטיס).`,
-          `Swipe left / right on the robot's screen to move between the 3 cards. Here you pick what appears on each (up to ${MAX_PER_CARD} entities per card).`,
+          `מחליקים ימינה / שמאלה על מסך הרובוט כדי לעבור בין 3 כרטיסים. כאן בוחרים מה יופיע על כל אחד (עד ${MAX_PER_CARD} ישויות לכרטיס) — וכל שורה על מסך הרובוט היא כפתור: נגיעה מדליקה/מכבה אור ומתג, לוחצת כפתור, מריצה סקריפט או מחליפה מצב מזגן. חיישנים מוצגים בלבד.`,
+          `Swipe left / right on the robot's screen to move between the 3 cards. Here you pick what appears on each (up to ${MAX_PER_CARD} entities per card) — and every row on the robot's screen is a button: a tap toggles lights & switches, presses buttons, runs scripts, or flips the AC. Sensors are display-only.`,
         )}
       </p>
       {cards.map((card, i) => (

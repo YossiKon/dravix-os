@@ -39,7 +39,7 @@ substitutions:
   # publishes it to HA ("Firmware version" sensor); the dravix dashboard compares it
   # with the version bundled in the add-on and shows "firmware update available".
   # (Maintainers: bump this on every firmware change. Users: don't touch.)
-  fw_version: "13"
+  fw_version: "14"
   # The ESPHome node name (mDNS hostname + the default entity prefix on a fresh flash).
   # Change it only if you run MORE THAN ONE robot — each needs a unique name. NOTE:
   # changing it on an already-adopted robot registers a NEW device in HA.
@@ -1082,47 +1082,177 @@ lvgl:
                   text_color: 0xFFFFFF
                   text_align: RIGHT
                   long_mode: WRAP
-    # ── The 3 dynamic cards (swipe left/right). (The old full status PAGE was removed —
-    #    the swipe-down status BAR overlay replaced it; keeping both just wasted RAM.) ──
+    # ── The 3 dynamic cards (swipe left/right): up to 4 HA entities each, one per
+    #    TAPPABLE row — tap a row and dravix performs the right action for that
+    #    entity's type (toggle a light/switch, press a button, run a script, flip the
+    #    AC…). Read-only entities (sensors) just display. Rows are sized for fingers
+    #    on a 320x240 screen; the row texts come from the card body slot (one line
+    #    per row), so no extra entities are needed.
     - id: page_card1
       bg_color: 0x05080b
       bg_opa: COVER
+      scrollable: false
+      scrollbar_mode: "OFF"
       widgets:
-        - obj:
-            styles: card_box
-            align: CENTER
+        - label: { id: lbl_c1_title, text: "CARD 1", text_font: title_font, styles: accent_txt, align: TOP_MID, y: 4 }
+        - button:
+            id: c1_r0
+            x: 10
+            y: 42
             width: 300
-            height: 222
-            scrollbar_mode: "OFF"
+            height: 44
+            radius: 10
+            bg_color: 0x121821
             widgets:
-              - label: { id: lbl_c1_title, text: "CARD 1", text_font: title_font, styles: accent_txt, align: TOP_MID, y: 2 }
-              - label: { id: lbl_c1_body, text: "", text_font: text_font, text_color: 0xFFFFFF, align: TOP_LEFT, x: 4, y: 52 }
+              - label: { id: lbl_c1_r0, text: "", text_font: small_font, text_color: 0xFFFFFF, align: LEFT_MID, x: 10 }
+            on_click:
+              - homeassistant.event: { event: esphome.dravix_card, data: { card: "1", row: "0" } }
+        - button:
+            id: c1_r1
+            x: 10
+            y: 92
+            width: 300
+            height: 44
+            radius: 10
+            bg_color: 0x121821
+            widgets:
+              - label: { id: lbl_c1_r1, text: "", text_font: small_font, text_color: 0xFFFFFF, align: LEFT_MID, x: 10 }
+            on_click:
+              - homeassistant.event: { event: esphome.dravix_card, data: { card: "1", row: "1" } }
+        - button:
+            id: c1_r2
+            x: 10
+            y: 142
+            width: 300
+            height: 44
+            radius: 10
+            bg_color: 0x121821
+            widgets:
+              - label: { id: lbl_c1_r2, text: "", text_font: small_font, text_color: 0xFFFFFF, align: LEFT_MID, x: 10 }
+            on_click:
+              - homeassistant.event: { event: esphome.dravix_card, data: { card: "1", row: "2" } }
+        - button:
+            id: c1_r3
+            x: 10
+            y: 192
+            width: 300
+            height: 44
+            radius: 10
+            bg_color: 0x121821
+            widgets:
+              - label: { id: lbl_c1_r3, text: "", text_font: small_font, text_color: 0xFFFFFF, align: LEFT_MID, x: 10 }
+            on_click:
+              - homeassistant.event: { event: esphome.dravix_card, data: { card: "1", row: "3" } }
     - id: page_card2
       bg_color: 0x05080b
       bg_opa: COVER
+      scrollable: false
+      scrollbar_mode: "OFF"
       widgets:
-        - obj:
-            styles: card_box
-            align: CENTER
+        - label: { id: lbl_c2_title, text: "CARD 2", text_font: title_font, styles: accent_txt, align: TOP_MID, y: 4 }
+        - button:
+            id: c2_r0
+            x: 10
+            y: 42
             width: 300
-            height: 222
-            scrollbar_mode: "OFF"
+            height: 44
+            radius: 10
+            bg_color: 0x121821
             widgets:
-              - label: { id: lbl_c2_title, text: "CARD 2", text_font: title_font, styles: accent_txt, align: TOP_MID, y: 2 }
-              - label: { id: lbl_c2_body, text: "", text_font: text_font, text_color: 0xFFFFFF, align: TOP_LEFT, x: 4, y: 52 }
+              - label: { id: lbl_c2_r0, text: "", text_font: small_font, text_color: 0xFFFFFF, align: LEFT_MID, x: 10 }
+            on_click:
+              - homeassistant.event: { event: esphome.dravix_card, data: { card: "2", row: "0" } }
+        - button:
+            id: c2_r1
+            x: 10
+            y: 92
+            width: 300
+            height: 44
+            radius: 10
+            bg_color: 0x121821
+            widgets:
+              - label: { id: lbl_c2_r1, text: "", text_font: small_font, text_color: 0xFFFFFF, align: LEFT_MID, x: 10 }
+            on_click:
+              - homeassistant.event: { event: esphome.dravix_card, data: { card: "2", row: "1" } }
+        - button:
+            id: c2_r2
+            x: 10
+            y: 142
+            width: 300
+            height: 44
+            radius: 10
+            bg_color: 0x121821
+            widgets:
+              - label: { id: lbl_c2_r2, text: "", text_font: small_font, text_color: 0xFFFFFF, align: LEFT_MID, x: 10 }
+            on_click:
+              - homeassistant.event: { event: esphome.dravix_card, data: { card: "2", row: "2" } }
+        - button:
+            id: c2_r3
+            x: 10
+            y: 192
+            width: 300
+            height: 44
+            radius: 10
+            bg_color: 0x121821
+            widgets:
+              - label: { id: lbl_c2_r3, text: "", text_font: small_font, text_color: 0xFFFFFF, align: LEFT_MID, x: 10 }
+            on_click:
+              - homeassistant.event: { event: esphome.dravix_card, data: { card: "2", row: "3" } }
     - id: page_card3
       bg_color: 0x05080b
       bg_opa: COVER
+      scrollable: false
+      scrollbar_mode: "OFF"
       widgets:
-        - obj:
-            styles: card_box
-            align: CENTER
+        - label: { id: lbl_c3_title, text: "CARD 3", text_font: title_font, styles: accent_txt, align: TOP_MID, y: 4 }
+        - button:
+            id: c3_r0
+            x: 10
+            y: 42
             width: 300
-            height: 222
-            scrollbar_mode: "OFF"
+            height: 44
+            radius: 10
+            bg_color: 0x121821
             widgets:
-              - label: { id: lbl_c3_title, text: "CARD 3", text_font: title_font, styles: accent_txt, align: TOP_MID, y: 2 }
-              - label: { id: lbl_c3_body, text: "", text_font: text_font, text_color: 0xFFFFFF, align: TOP_LEFT, x: 4, y: 52 }
+              - label: { id: lbl_c3_r0, text: "", text_font: small_font, text_color: 0xFFFFFF, align: LEFT_MID, x: 10 }
+            on_click:
+              - homeassistant.event: { event: esphome.dravix_card, data: { card: "3", row: "0" } }
+        - button:
+            id: c3_r1
+            x: 10
+            y: 92
+            width: 300
+            height: 44
+            radius: 10
+            bg_color: 0x121821
+            widgets:
+              - label: { id: lbl_c3_r1, text: "", text_font: small_font, text_color: 0xFFFFFF, align: LEFT_MID, x: 10 }
+            on_click:
+              - homeassistant.event: { event: esphome.dravix_card, data: { card: "3", row: "1" } }
+        - button:
+            id: c3_r2
+            x: 10
+            y: 142
+            width: 300
+            height: 44
+            radius: 10
+            bg_color: 0x121821
+            widgets:
+              - label: { id: lbl_c3_r2, text: "", text_font: small_font, text_color: 0xFFFFFF, align: LEFT_MID, x: 10 }
+            on_click:
+              - homeassistant.event: { event: esphome.dravix_card, data: { card: "3", row: "2" } }
+        - button:
+            id: c3_r3
+            x: 10
+            y: 192
+            width: 300
+            height: 44
+            radius: 10
+            bg_color: 0x121821
+            widgets:
+              - label: { id: lbl_c3_r3, text: "", text_font: small_font, text_color: 0xFFFFFF, align: LEFT_MID, x: 10 }
+            on_click:
+              - homeassistant.event: { event: esphome.dravix_card, data: { card: "3", row: "3" } }
     # ── Page 5: CATCH ME! — tap the dot before it runs away (in the swipe cycle) ──
     - id: page_play
       bg_color: 0x05080b
@@ -2602,11 +2732,40 @@ interval:
             }
             return std::string("");
       - lvgl.label.update: { id: lbl_c1_title, text: !lambda 'return id(t_c1_title).state;' }
-      - lvgl.label.update: { id: lbl_c1_body,  text: !lambda 'return id(t_c1_body).state;' }
       - lvgl.label.update: { id: lbl_c2_title, text: !lambda 'return id(t_c2_title).state;' }
-      - lvgl.label.update: { id: lbl_c2_body,  text: !lambda 'return id(t_c2_body).state;' }
       - lvgl.label.update: { id: lbl_c3_title, text: !lambda 'return id(t_c3_title).state;' }
-      - lvgl.label.update: { id: lbl_c3_body,  text: !lambda 'return id(t_c3_body).state;' }
+      # split each card body into its 4 tappable rows (line k → row k; empty → hidden)
+      - lvgl.label.update: { id: lbl_c1_r0, text: !lambda 'std::string b = id(t_c1_body).state; size_t s = 0; for (int i = 0; i < 0; i++) { size_t p = b.find(10, s); if (p == std::string::npos) return std::string(""); s = p + 1; } size_t e = b.find(10, s); return b.substr(s, e == std::string::npos ? std::string::npos : e - s);' }
+      - lvgl.label.update: { id: lbl_c1_r1, text: !lambda 'std::string b = id(t_c1_body).state; size_t s = 0; for (int i = 0; i < 1; i++) { size_t p = b.find(10, s); if (p == std::string::npos) return std::string(""); s = p + 1; } size_t e = b.find(10, s); return b.substr(s, e == std::string::npos ? std::string::npos : e - s);' }
+      - lvgl.label.update: { id: lbl_c1_r2, text: !lambda 'std::string b = id(t_c1_body).state; size_t s = 0; for (int i = 0; i < 2; i++) { size_t p = b.find(10, s); if (p == std::string::npos) return std::string(""); s = p + 1; } size_t e = b.find(10, s); return b.substr(s, e == std::string::npos ? std::string::npos : e - s);' }
+      - lvgl.label.update: { id: lbl_c1_r3, text: !lambda 'std::string b = id(t_c1_body).state; size_t s = 0; for (int i = 0; i < 3; i++) { size_t p = b.find(10, s); if (p == std::string::npos) return std::string(""); s = p + 1; } size_t e = b.find(10, s); return b.substr(s, e == std::string::npos ? std::string::npos : e - s);' }
+      - lvgl.label.update: { id: lbl_c2_r0, text: !lambda 'std::string b = id(t_c2_body).state; size_t s = 0; for (int i = 0; i < 0; i++) { size_t p = b.find(10, s); if (p == std::string::npos) return std::string(""); s = p + 1; } size_t e = b.find(10, s); return b.substr(s, e == std::string::npos ? std::string::npos : e - s);' }
+      - lvgl.label.update: { id: lbl_c2_r1, text: !lambda 'std::string b = id(t_c2_body).state; size_t s = 0; for (int i = 0; i < 1; i++) { size_t p = b.find(10, s); if (p == std::string::npos) return std::string(""); s = p + 1; } size_t e = b.find(10, s); return b.substr(s, e == std::string::npos ? std::string::npos : e - s);' }
+      - lvgl.label.update: { id: lbl_c2_r2, text: !lambda 'std::string b = id(t_c2_body).state; size_t s = 0; for (int i = 0; i < 2; i++) { size_t p = b.find(10, s); if (p == std::string::npos) return std::string(""); s = p + 1; } size_t e = b.find(10, s); return b.substr(s, e == std::string::npos ? std::string::npos : e - s);' }
+      - lvgl.label.update: { id: lbl_c2_r3, text: !lambda 'std::string b = id(t_c2_body).state; size_t s = 0; for (int i = 0; i < 3; i++) { size_t p = b.find(10, s); if (p == std::string::npos) return std::string(""); s = p + 1; } size_t e = b.find(10, s); return b.substr(s, e == std::string::npos ? std::string::npos : e - s);' }
+      - lvgl.label.update: { id: lbl_c3_r0, text: !lambda 'std::string b = id(t_c3_body).state; size_t s = 0; for (int i = 0; i < 0; i++) { size_t p = b.find(10, s); if (p == std::string::npos) return std::string(""); s = p + 1; } size_t e = b.find(10, s); return b.substr(s, e == std::string::npos ? std::string::npos : e - s);' }
+      - lvgl.label.update: { id: lbl_c3_r1, text: !lambda 'std::string b = id(t_c3_body).state; size_t s = 0; for (int i = 0; i < 1; i++) { size_t p = b.find(10, s); if (p == std::string::npos) return std::string(""); s = p + 1; } size_t e = b.find(10, s); return b.substr(s, e == std::string::npos ? std::string::npos : e - s);' }
+      - lvgl.label.update: { id: lbl_c3_r2, text: !lambda 'std::string b = id(t_c3_body).state; size_t s = 0; for (int i = 0; i < 2; i++) { size_t p = b.find(10, s); if (p == std::string::npos) return std::string(""); s = p + 1; } size_t e = b.find(10, s); return b.substr(s, e == std::string::npos ? std::string::npos : e - s);' }
+      - lvgl.label.update: { id: lbl_c3_r3, text: !lambda 'std::string b = id(t_c3_body).state; size_t s = 0; for (int i = 0; i < 3; i++) { size_t p = b.find(10, s); if (p == std::string::npos) return std::string(""); s = p + 1; } size_t e = b.find(10, s); return b.substr(s, e == std::string::npos ? std::string::npos : e - s);' }
+      # rows with no entity behind them disappear (count the body's lines)
+      - lambda: |-
+          auto rows_of = [](const std::string &b) -> int {
+            if (b.empty()) return 0;
+            int n = 1;
+            for (char c : b) if (c == '\n') n++;
+            return n;
+          };
+          int n1 = rows_of(id(t_c1_body).state);
+          int n2 = rows_of(id(t_c2_body).state);
+          int n3 = rows_of(id(t_c3_body).state);
+          lv_obj_t *c1[4] = {id(c1_r0), id(c1_r1), id(c1_r2), id(c1_r3)};
+          lv_obj_t *c2[4] = {id(c2_r0), id(c2_r1), id(c2_r2), id(c2_r3)};
+          lv_obj_t *c3[4] = {id(c3_r0), id(c3_r1), id(c3_r2), id(c3_r3)};
+          for (int i = 0; i < 4; i++) {
+            if (i < n1) lv_obj_clear_flag(c1[i], LV_OBJ_FLAG_HIDDEN); else lv_obj_add_flag(c1[i], LV_OBJ_FLAG_HIDDEN);
+            if (i < n2) lv_obj_clear_flag(c2[i], LV_OBJ_FLAG_HIDDEN); else lv_obj_add_flag(c2[i], LV_OBJ_FLAG_HIDDEN);
+            if (i < n3) lv_obj_clear_flag(c3[i], LV_OBJ_FLAG_HIDDEN); else lv_obj_add_flag(c3[i], LV_OBJ_FLAG_HIDDEN);
+          }
       # ── status-bar overlay (compact time · date · battery · wifi) ──
       - lvgl.label.update:
           id: sb_time

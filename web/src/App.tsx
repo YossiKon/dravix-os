@@ -1,6 +1,6 @@
 // Dravix — remote control for the robot. Tabs: home · screens · life · climate · settings.
 import { useCallback, useEffect, useState } from "react";
-import { apiGet } from "./api";
+import { apiGet, apiSend } from "./api";
 import type { HAEntity, Health, RobotConfig } from "./api";
 import { HomePage } from "./pages/Home";
 import { ScreensPage } from "./pages/Screens";
@@ -88,7 +88,11 @@ export default function App() {
           <button
             type="button"
             className="rounded-full border border-line bg-card2 px-2.5 py-1 text-xs text-mute transition active:scale-95"
-            onClick={() => setLang(nextLang.code)}
+            onClick={() => {
+              setLang(nextLang.code);
+              // keep the SERVER in the same language too (wellness tips, greetings)
+              apiSend("/api/config/language", "PUT", { language: nextLang.code }).catch(() => undefined);
+            }}
             aria-label="Switch language"
             title={nextLang.label}
           >
