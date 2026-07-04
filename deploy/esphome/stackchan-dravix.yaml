@@ -39,7 +39,7 @@ substitutions:
   # publishes it to HA ("Firmware version" sensor); the dravix dashboard compares it
   # with the version bundled in the add-on and shows "firmware update available".
   # (Maintainers: bump this on every firmware change. Users: don't touch.)
-  fw_version: "14"
+  fw_version: "15"
   # The ESPHome node name (mDNS hostname + the default entity prefix on a fresh flash).
   # Change it only if you run MORE THAN ONE robot — each needs a unique name. NOTE:
   # changing it on an already-adopted robot registers a NEW device in HA.
@@ -1056,12 +1056,14 @@ lvgl:
             align: TOP_RIGHT
             x: -6
             y: 4
-        # SPEECH BUBBLE — shows "Listening..." while listening and the AI's reply while
-        # speaking (Hebrew via heb_font). Hidden otherwise; text set by the voice events.
+        # SPEECH BUBBLE — a comic bubble COMING FROM THE MOUTH: sits at the TOP of the
+        # screen (so the animated talking mouth stays fully visible) with a little tail
+        # pointing down toward the mouth. Shows the AI's words while speaking, and
+        # wellness tips. NOT shown while listening — listening is a FACE, not a label.
         - obj:
             id: speech_bubble
-            align: BOTTOM_MID
-            y: -2
+            align: TOP_MID
+            y: 28
             width: 312
             height: 66
             radius: 14
@@ -1082,6 +1084,9 @@ lvgl:
                   text_color: 0xFFFFFF
                   text_align: RIGHT
                   long_mode: WRAP
+        # the bubble's tail — two teal lines converging toward the mouth
+        - line: { id: bub_t1, points: ["150, 93", "132, 114"], line_width: 4, line_color: 0x33E6C8, line_rounded: true, hidden: true }
+        - line: { id: bub_t2, points: ["174, 93", "132, 114"], line_width: 4, line_color: 0x33E6C8, line_rounded: true, hidden: true }
     # ── The 3 dynamic cards (swipe left/right): up to 4 HA entities each, one per
     #    TAPPABLE row — tap a row and dravix performs the right action for that
     #    entity's type (toggle a light/switch, press a button, run a script, flip the
@@ -1971,11 +1976,19 @@ script:
       - lvgl.label.update:
           id: lbl_priv
           text: !lambda 'return id(sw_privacy).state ? std::string("PRIVACY") : std::string("");'
-      # speech bubble — visible while listening / speaking / showing a wellness tip
+      # speech bubble — while SPEAKING (the AI's words) or showing a wellness tip.
+      # NOT while listening: listening is expressed by the FACE (big curious eyes,
+      # attentive perk), never by an on-screen label.
       - if:
-          condition: { lambda: 'return id(g_listen) || id(g_talk) || id(g_tip);' }
-          then: [ { lvgl.widget.show: speech_bubble } ]
-          else: [ { lvgl.widget.hide: speech_bubble } ]
+          condition: { lambda: 'return id(g_talk) || id(g_tip);' }
+          then:
+            - lvgl.widget.show: speech_bubble
+            - lvgl.widget.show: bub_t1
+            - lvgl.widget.show: bub_t2
+          else:
+            - lvgl.widget.hide: speech_bubble
+            - lvgl.widget.hide: bub_t1
+            - lvgl.widget.hide: bub_t2
       # zzz drifts while sleeping
       - lvgl.label.update:
           id: lbl_zzz
@@ -2981,11 +2994,11 @@ voice_assistant:
     - select.set: { id: robot_mode, option: awake }
     - globals.set: { id: g_listen, value: "true" }
     - globals.set: { id: g_voice, value: "true" }
-    - lvgl.label.update: { id: speech_txt, text: "Listening..." }
     - lvgl.page.show: page_face
     - globals.set: { id: g_card, value: "0" }
     - script.execute: leds_yellow
-    - script.execute: render_face
+    - script.execute: render_face          # the LISTENING FACE (big curious eyes) — no label
+    - script.execute: { id: head_nudge, dx: 0, dy: 6 }   # perks up attentively, like it leans in
   on_stt_end:
     # Publish what the robot HEARD (shows live on the dashboard + HA).
     - text_sensor.template.publish: { id: st_heard, state: !lambda 'return x;' }

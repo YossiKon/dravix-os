@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.0.57
+
+- **Listening is a face, not a label** (firmware v15): when you talk to it, no more
+  "Listening..." text — just the listening FACE (big curious eyes) and an attentive
+  little perk-up, like it leans in.
+- **A real comic speech bubble** 💬: the AI's words now appear in a bubble at the TOP
+  of the screen with a tail pointing to the mouth — and the animated talking mouth
+  stays fully visible while it speaks (the old bubble used to sit right on top of it).
+
 ## 0.0.56
 
 - **Control Home Assistant FROM the robot's screen** (firmware v14): each of the 3
