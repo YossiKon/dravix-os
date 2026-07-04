@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.0.64
+
+- **🖼 Security gallery — full media management** (dashboard → Home → Security →
+  Gallery). Captures are grouped **by day with date & time**; you can:
+  - **view** any shot full-size,
+  - **download** a single photo, or a whole day as a **ZIP**,
+  - build & download a **🎬 timelapse MP4** of a day (ffmpeg, bundled in the add-on),
+  - **delete** a single photo, a whole day, or clear everything.
+  (Captures live in the add-on's persistent `/data/security/YYYY-MM-DD/`, pruned after
+  `keep_days`.)
+
 ## 0.0.63
 
 - **❄ Control your AC from the robot's screen** (firmware v19): a new CLIMATE page in

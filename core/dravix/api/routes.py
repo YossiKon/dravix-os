@@ -739,43 +739,225 @@ async def robot_leds_effect(body: LedsEffectBody, request: Request):
     return {"ok": True, "effect": body.effect}
 
 
-# ── security mode — browse the saved snapshots ────────────────────────────────
+# ── security mode — browse / manage the saved captures ────────────────────────
 _SEC_DAY_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 _SEC_FILE_RE = re.compile(r"^\d{6}\.jpg$")
 
 
-@router.get("/api/security/photos")
-async def security_photos(request: Request, limit: int = 24):
-    """The newest snapshots the security mode saved (+ whether it's armed right now)."""
+def _sec_ts(day: str, name: str) -> str:
+    """ISO timestamp from a day folder + HHMMSS.jpg name, e.g. 2026-07-04T15:30:12."""
+    return f"{day}T{name[0:2]}:{name[2:4]}:{name[4:6]}"
+
+
+def _sec_day_dir(day: str):
+    """Validated day directory (or a 400)."""
+    from ..config import security_dir
+
+    if not _SEC_DAY_RE.match(day):
+        raise HTTPException(status_code=400, detail="bad day")
+    return security_dir() / day
+
+
+def _sec_prune_empty(day_dir) -> None:
+    """Drop a day folder once its last photo is gone (also removes a lingering video)."""
+    try:
+        if not any(_SEC_FILE_RE.match(f.name) for f in day_dir.iterdir()):
+            (day_dir / "timelapse.mp4").unlink(missing_ok=True)
+            (day_dir / "_frames.txt").unlink(missing_ok=True)
+            day_dir.rmdir()
+    except OSError:
+        pass
+
+
+@router.get("/api/security/days")
+async def security_days(request: Request):
+    """A per-day summary of the saved captures (newest first) for the gallery."""
     from ..config import security_dir
 
     root = security_dir()
+    days: list[dict] = []
+    if root.exists():
+        for d in sorted((x for x in root.iterdir() if x.is_dir() and _SEC_DAY_RE.match(x.name)), reverse=True):
+            files = [f for f in d.iterdir() if _SEC_FILE_RE.match(f.name)]
+            if not files:
+                continue
+            days.append({
+                "day": d.name,
+                "count": len(files),
+                "bytes": sum(f.stat().st_size for f in files),
+                "has_video": (d / "timelapse.mp4").is_file(),
+            })
+    return {"armed": _engine(request).is_active("security"), "days": days}
+
+
+@router.get("/api/security/photos")
+async def security_photos(request: Request, limit: int = 24, day: str = ""):
+    """Saved snapshots (newest first) with timestamps; ``day`` filters to one day."""
+    from ..config import security_dir
+
+    root = security_dir()
+    if day:
+        if not _SEC_DAY_RE.match(day):
+            raise HTTPException(status_code=400, detail="bad day")
+        day_dirs = [root / day] if (root / day).is_dir() else []
+    else:
+        day_dirs = (
+            sorted((d for d in root.iterdir() if d.is_dir() and _SEC_DAY_RE.match(d.name)), reverse=True)
+            if root.exists() else []
+        )
+    cap = max(1, min(2000, limit))
     photos: list[dict] = []
     total = 0
-    if root.exists():
-        for day in sorted((d for d in root.iterdir() if d.is_dir()), reverse=True):
-            if not _SEC_DAY_RE.match(day.name):
-                continue
-            files = sorted((f for f in day.iterdir() if _SEC_FILE_RE.match(f.name)), reverse=True)
-            total += len(files)
-            for f in files:
-                if len(photos) < max(1, min(200, limit)):
-                    photos.append({"day": day.name, "name": f.name, "size": f.stat().st_size})
-    armed = _engine(request).is_active("security")
-    return {"armed": armed, "total": total, "photos": photos}
+    for d in day_dirs:
+        files = sorted((f for f in d.iterdir() if _SEC_FILE_RE.match(f.name)), reverse=True)
+        total += len(files)
+        for f in files:
+            if len(photos) < cap:
+                photos.append({
+                    "day": d.name, "name": f.name,
+                    "size": f.stat().st_size, "ts": _sec_ts(d.name, f.name),
+                })
+    return {"armed": _engine(request).is_active("security"), "total": total, "photos": photos}
 
 
 @router.get("/api/security/photo/{day}/{name}")
-async def security_photo(day: str, name: str):
-    """Serve one saved snapshot. The path parts are strictly validated — no traversal."""
-    from ..config import security_dir
-
+async def security_photo(day: str, name: str, download: int = 0):
+    """Serve one saved snapshot. Path parts are strictly validated — no traversal."""
     if not _SEC_DAY_RE.match(day) or not _SEC_FILE_RE.match(name):
         raise HTTPException(status_code=400, detail="bad photo path")
-    path = security_dir() / day / name
+    path = _sec_day_dir(day) / name
     if not path.is_file():
         raise HTTPException(status_code=404, detail="no such photo")
-    return Response(content=path.read_bytes(), media_type="image/jpeg")
+    headers = (
+        {"Content-Disposition": f'attachment; filename="dravix-{day}-{name}"'} if download else None
+    )
+    return Response(content=path.read_bytes(), media_type="image/jpeg", headers=headers)
+
+
+@router.delete("/api/security/photo/{day}/{name}")
+async def security_delete_photo(day: str, name: str):
+    """Delete a single snapshot."""
+    if not _SEC_DAY_RE.match(day) or not _SEC_FILE_RE.match(name):
+        raise HTTPException(status_code=400, detail="bad photo path")
+    day_dir = _sec_day_dir(day)
+    path = day_dir / name
+    if not path.is_file():
+        raise HTTPException(status_code=404, detail="no such photo")
+    path.unlink()
+    _sec_prune_empty(day_dir)
+    return {"ok": True}
+
+
+@router.delete("/api/security/day/{day}")
+async def security_delete_day(day: str):
+    """Delete a whole day's captures (photos + any built video)."""
+    day_dir = _sec_day_dir(day)
+    if not day_dir.is_dir():
+        raise HTTPException(status_code=404, detail="no such day")
+    n = 0
+    for f in list(day_dir.iterdir()):
+        try:
+            f.unlink()
+            n += 1 if _SEC_FILE_RE.match(f.name) else 0
+        except OSError:
+            pass
+    try:
+        day_dir.rmdir()
+    except OSError:
+        pass
+    return {"ok": True, "deleted": n}
+
+
+@router.delete("/api/security/photos")
+async def security_delete_all():
+    """Clear ALL saved captures."""
+    from ..config import security_dir
+
+    root = security_dir()
+    n = 0
+    if root.exists():
+        for d in list(root.iterdir()):
+            if not (d.is_dir() and _SEC_DAY_RE.match(d.name)):
+                continue
+            for f in list(d.iterdir()):
+                try:
+                    f.unlink()
+                    n += 1 if _SEC_FILE_RE.match(f.name) else 0
+                except OSError:
+                    pass
+            try:
+                d.rmdir()
+            except OSError:
+                pass
+    return {"ok": True, "deleted": n}
+
+
+@router.get("/api/security/day/{day}/zip")
+async def security_day_zip(day: str):
+    """Download a whole day's photos as a single zip."""
+    import io
+    import zipfile
+
+    day_dir = _sec_day_dir(day)
+    if not day_dir.is_dir():
+        raise HTTPException(status_code=404, detail="no such day")
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_STORED) as z:  # JPEGs are already compressed
+        for f in sorted(day_dir.iterdir()):
+            if _SEC_FILE_RE.match(f.name):
+                z.write(f, arcname=f"{day}/{f.name}")
+    return Response(
+        content=buf.getvalue(),
+        media_type="application/zip",
+        headers={"Content-Disposition": f'attachment; filename="dravix-security-{day}.zip"'},
+    )
+
+
+@router.post("/api/security/day/{day}/video")
+async def security_day_video(day: str, fps: int = 8):
+    """Build a timelapse MP4 from a day's snapshots (needs ffmpeg in the image)."""
+    import shutil
+
+    day_dir = _sec_day_dir(day)
+    if not day_dir.is_dir():
+        raise HTTPException(status_code=404, detail="no such day")
+    if shutil.which("ffmpeg") is None:
+        raise HTTPException(status_code=501, detail="ffmpeg is not available in this image")
+    frames = sorted(f for f in day_dir.iterdir() if _SEC_FILE_RE.match(f.name))
+    if not frames:
+        raise HTTPException(status_code=404, detail="no photos to build a video from")
+    per = 1.0 / max(1, min(30, fps))
+    listf = day_dir / "_frames.txt"
+    listf.write_text(
+        "".join(f"file '{f.name}'\nduration {per:.4f}\n" for f in frames) + f"file '{frames[-1].name}'\n",
+        encoding="utf-8",
+    )
+    out = day_dir / "timelapse.mp4"
+    proc = await asyncio.create_subprocess_exec(
+        "ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", str(listf),
+        "-vf", "scale=320:240:force_original_aspect_ratio=decrease,pad=320:240:(ow-iw)/2:(oh-ih)/2",
+        "-c:v", "libx264", "-pix_fmt", "yuv420p", str(out),
+        cwd=str(day_dir),
+        stdout=asyncio.subprocess.DEVNULL,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    _, err = await proc.communicate()
+    listf.unlink(missing_ok=True)
+    if proc.returncode != 0 or not out.is_file():
+        raise HTTPException(status_code=502, detail=f"video build failed: {err.decode('utf-8', 'replace')[-160:]}")
+    return {"ok": True, "day": day, "bytes": out.stat().st_size}
+
+
+@router.get("/api/security/day/{day}/video")
+async def security_get_video(day: str, download: int = 0):
+    """Serve a previously built day timelapse MP4."""
+    path = _sec_day_dir(day) / "timelapse.mp4"
+    if not path.is_file():
+        raise HTTPException(status_code=404, detail="no video built for this day yet")
+    headers = (
+        {"Content-Disposition": f'attachment; filename="dravix-security-{day}.mp4"'} if download else None
+    )
+    return Response(content=path.read_bytes(), media_type="video/mp4", headers=headers)
 
 
 class LanguageBody(BaseModel):

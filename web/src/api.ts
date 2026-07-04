@@ -98,10 +98,24 @@ export interface PluginMode {
   config: Record<string, unknown>;
 }
 
+export interface SecurityPhoto {
+  day: string;
+  name: string;
+  size: number;
+  ts?: string;
+}
+
 export interface SecurityInfo {
   armed: boolean;
   total: number;
-  photos: { day: string; name: string; size: number }[];
+  photos: SecurityPhoto[];
+}
+
+export interface SecurityDay {
+  day: string;
+  count: number;
+  bytes: number;
+  has_video: boolean;
 }
 
 export interface Updates {

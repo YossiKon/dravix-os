@@ -20,6 +20,11 @@ ENV PYTHONUNBUFFERED=1 \
     DRAVIX_DATA_DIR=/data \
     DRAVIX_VERSION=${DRAVIX_VERSION}
 WORKDIR /app
+# ffmpeg powers the security-gallery "timelapse video" feature (an MP4 built from a day's
+# snapshots). Small; optional at runtime — the endpoint 501s gracefully if it's absent.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ffmpeg \
+    && rm -rf /var/lib/apt/lists/*
 COPY README.md /app/README.md
 COPY core /app/core
 COPY plugins /app/plugins

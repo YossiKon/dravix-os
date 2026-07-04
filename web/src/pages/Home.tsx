@@ -4,6 +4,7 @@ import { apiGet, apiSend } from "../api";
 import type { Live, RobotConfig, SecurityInfo } from "../api";
 import { RobotFace, stateLabel } from "../components/RobotFace";
 import { Joystick } from "../components/Joystick";
+import { SecurityGallery } from "../components/SecurityGallery";
 import { Section, Spinner, toast, toastErr } from "../ui";
 import { useI18n } from "../i18n";
 
@@ -93,6 +94,7 @@ export function HomePage(props: { config: RobotConfig | null }) {
   });
   // security mode: armed state + how many snapshots are stored (null = not loaded yet)
   const [sec, setSec] = useState<SecurityInfo | null>(null);
+  const [galleryOpen, setGalleryOpen] = useState(false);
   // speaker volume (0-100); null until loaded / unsupported
   const [vol, setVol] = useState<number | null>(null);
   // the last photo taken via the 📸 ritual (shown inline under the camera)
@@ -698,11 +700,19 @@ export function HomePage(props: { config: RobotConfig | null }) {
                   <>
                     {" · "}
                     <span dir="ltr" className="font-mono">
-                      {sec.photos[0].day} {sec.photos[0].name.replace(".jpg", "")}
+                      {sec.photos[0].ts ? sec.photos[0].ts.replace("T", " ") : sec.photos[0].name.replace(".jpg", "")}
                     </span>
                   </>
                 )}
               </p>
+              <button className="chip ms-auto" onClick={() => setGalleryOpen((g) => !g)}>
+                {galleryOpen ? tr("סגור גלריה", "Close gallery") : tr("🖼 גלריה", "🖼 Gallery")}
+              </button>
+            </div>
+          )}
+          {galleryOpen && (
+            <div className="mt-3">
+              <SecurityGallery onChanged={refreshSecurity} />
             </div>
           )}
         </Section>
