@@ -635,6 +635,42 @@ async def set_local_only(body: LocalOnlyBody, request: Request):
     return await apply_local_only(request.app.state, body.enabled)
 
 
+class VolumeBody(BaseModel):
+    volume: int = Field(ge=0, le=100)
+
+
+@router.get("/api/robot/volume")
+async def get_volume(request: Request):
+    """The robot speaker's current volume (0-100), from the media_player entity."""
+    s = request.app.state
+    eid = _effective_entities(request).get("media_player")
+    if not eid or s.ha is None:
+        return {"supported": False, "volume": None}
+    try:
+        st = await s.ha.get_state(eid)
+        level = (st.get("attributes") or {}).get("volume_level")
+        return {"supported": True, "volume": round(float(level) * 100) if level is not None else None}
+    except Exception:  # noqa: BLE001
+        return {"supported": True, "volume": None}
+
+
+@router.put("/api/robot/volume")
+async def set_volume(body: VolumeBody, request: Request):
+    """Set the robot speaker's volume (0-100)."""
+    s = request.app.state
+    eid = _effective_entities(request).get("media_player")
+    if not eid or s.ha is None:
+        raise HTTPException(status_code=503, detail="no media player discovered")
+    try:
+        await s.ha.call_service(
+            "media_player", "volume_set",
+            {"entity_id": eid, "volume_level": body.volume / 100.0},
+        )
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=502, detail=f"volume set failed: {exc}") from exc
+    return {"ok": True, "volume": body.volume}
+
+
 class LedsEffectBody(BaseModel):
     effect: str  # one of the light bar's effect names, or "None" to stop
 

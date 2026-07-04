@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.0.58
+
+- **Volume control, both ends** (firmware v16): a real slider on the robot's
+  swipe-down status bar (drag it — it also live-mirrors the actual speaker volume),
+  and a matching 🔊 slider on the dashboard Home tab. Same speaker, always in sync.
+- **It sneezes now** 🤧 (the beloved EMO bit): once in a while, among its little
+  surprises — dizzy face, a shake, and an "Achoo!" that pops in its speech bubble.
+
 ## 0.0.57
 
 - **Listening is a face, not a label** (firmware v15): when you talk to it, no more

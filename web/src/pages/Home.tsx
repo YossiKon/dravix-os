@@ -93,6 +93,17 @@ export function HomePage(props: { config: RobotConfig | null }) {
   });
   // security mode: armed state + how many snapshots are stored (null = not loaded yet)
   const [sec, setSec] = useState<SecurityInfo | null>(null);
+  // speaker volume (0-100); null until loaded / unsupported
+  const [vol, setVol] = useState<number | null>(null);
+  const volTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  function onVolume(v: number) {
+    setVol(v);
+    if (volTimer.current) clearTimeout(volTimer.current);
+    volTimer.current = setTimeout(() => {
+      apiSend("/api/robot/volume", "PUT", { volume: v }).catch(toastErr);
+    }, 250); // debounce while dragging
+  }
 
   const refreshSecurity = () =>
     apiGet<SecurityInfo>("/api/security/photos?limit=1").then(setSec).catch(() => undefined);
@@ -107,6 +118,9 @@ export function HomePage(props: { config: RobotConfig | null }) {
       .catch(() => undefined)
       .finally(() => setEmotesSettled(true));
     apiGet<{ supported: boolean; private: boolean }>("/api/robot/privacy").then(setPrivacy).catch(() => undefined);
+    apiGet<{ supported: boolean; volume: number | null }>("/api/robot/volume")
+      .then((r) => setVol(r.supported ? r.volume : null))
+      .catch(() => undefined);
     void refreshSecurity();
   }, []);
 
@@ -255,6 +269,22 @@ export function HomePage(props: { config: RobotConfig | null }) {
             </button>
           )}
         </div>
+        {/* speaker volume — synced with the slider on the robot's own status bar */}
+        {vol != null && (
+          <div className="mt-3 flex items-center gap-3">
+            <span className="text-sm text-mute">🔊</span>
+            <input
+              type="range"
+              min={0}
+              max={100}
+              value={vol}
+              onChange={(e) => onVolume(Number(e.target.value))}
+              className="h-2 flex-1 accent-teal"
+              aria-label={tr("עוצמת קול", "Volume")}
+            />
+            <span dir="ltr" className="w-10 text-end font-mono text-xs text-mute">{vol}%</span>
+          </div>
+        )}
         {/* modes */}
         <div className="mt-3 flex flex-wrap gap-2">
           {MODES.map((m) => (

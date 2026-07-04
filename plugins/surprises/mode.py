@@ -66,6 +66,23 @@ class SurprisesMode(Mode):
 
     async def _delight(self) -> None:
         robot = self.ctx.robot
+        # occasionally it just… sneezes (the beloved EMO bit): dizzy face, a shake,
+        # and an "Achoo!" that also pops in its speech bubble
+        if random.random() < 0.12:
+            from dravix.config import get_settings
+
+            try:
+                if robot.supports(CAP_FACE):
+                    await robot.set_face(Expression.DIZZY)
+                line = "אַפְּצִ'י!" if (get_settings().language or "en").startswith("he") else "Achoo!"
+                await robot.say(line)
+                await asyncio.sleep(2.0)
+                if robot.supports(CAP_FACE):
+                    await robot.set_face(Expression.NEUTRAL)
+                self.ctx.log.info("surprise: sneeze")
+                return
+            except Exception:  # noqa: BLE001 — fall through to a regular delight
+                pass
         # prefer a random named emote when the backend can express them
         names = [n for n in emote_names() if n not in ("wake", "sleep")]
         if names and random.random() < 0.7:
