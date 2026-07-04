@@ -4,6 +4,9 @@ While armed it:
   * saves a camera snapshot every ``snapshot_every_s`` seconds into the add-on's
     persistent storage (``<data>/security/YYYY-MM-DD/HHMMSS.jpg``) — browse/serve them
     via ``GET /api/security/photos`` and the dashboard's Security card;
+  * optionally records continuous video (``record_video: true``) — ffmpeg reads our own
+    privacy-gated MJPEG stream and writes ``clip_seconds``-long ``vid_HHMMSS.mp4`` clips
+    into the same day-folders, browse/serve them via ``GET /api/security/videos``;
   * patrols — every ``patrol_every_min`` minutes the head sweeps left → right → centre,
     so the camera covers the room (0 disables the patrol);
   * stays steerable — the dashboard's joystick + live camera view keep working, so you
@@ -12,15 +15,17 @@ While armed it:
 
 Storage is day-folders, pruned to ``keep_days``. Everything stays on YOUR box — nothing
 leaves the LAN, which also means it fully respects the master isLocal flag. Needs a
-backend with a camera (``CAP_PHOTO``); patrol additionally wants a head (``CAP_HEAD``).
+backend with a camera (``CAP_PHOTO``); patrol additionally wants a head (``CAP_HEAD``);
+video additionally needs ``ffmpeg`` on PATH (bundled in the add-on image).
 """
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import time
 from datetime import datetime, timedelta
 
-from dravix.config import security_dir
+from dravix.config import get_settings, security_dir
 from dravix.dal.base import CAP_HEAD, CAP_PHOTO, CAP_SAY
 from dravix.modes import Mode, ModeMeta
 
@@ -35,6 +40,7 @@ class SecurityMode(Mode):
     def __init__(self, ctx) -> None:  # noqa: ANN001 — ctx is ModeContext
         super().__init__(ctx)
         self._task: asyncio.Task | None = None
+        self._video_task: asyncio.Task | None = None
         self._prev_idle = True
 
     async def on_enter(self) -> None:
@@ -46,23 +52,25 @@ class SecurityMode(Mode):
         self._prev_idle = getattr(robot, "idle_motion", True)
         robot.idle_motion = False
         if bool(self.ctx.config.get("announce", False)) and robot.supports(CAP_SAY):
-            from dravix.config import get_settings
-
             he = (get_settings().language or "en").startswith("he")
             try:
                 await robot.say("מצב אבטחה הופעל." if he else "Security mode armed.")
             except Exception:  # noqa: BLE001 — announcing is best-effort
                 pass
         self._task = asyncio.create_task(self._run(), name="dravix-security")
+        if bool(self.ctx.config.get("record_video", False)):
+            self._video_task = asyncio.create_task(self._video_loop(), name="dravix-security-video")
 
     async def on_exit(self) -> None:
-        if self._task is not None:
-            self._task.cancel()
-            try:
-                await self._task
-            except asyncio.CancelledError:
-                pass
-            self._task = None
+        for task in (self._task, self._video_task):
+            if task is not None:
+                task.cancel()
+                try:
+                    await task
+                except asyncio.CancelledError:
+                    pass
+        self._task = None
+        self._video_task = None
         self.ctx.robot.idle_motion = self._prev_idle
 
     # ── the guard loop ────────────────────────────────────────────────────────────
@@ -130,3 +138,60 @@ class SecurityMode(Mode):
                     day.rmdir()
                 except OSError:
                     pass
+
+    # ── continuous video recording (ffmpeg reads our own MJPEG stream) ──────────────
+    async def _video_loop(self) -> None:
+        """Record the camera stream into ``clip_seconds`` MP4 clips while armed.
+
+        ffmpeg pulls our own privacy-gated ``/camera/robot/stream.mjpeg`` endpoint, so the
+        recording follows every rule the stream already enforces: when privacy/isLocal or a
+        quiet mode closes the stream ffmpeg just gets EOF, the clip ends, and we retry after
+        a short backoff. Clips land next to the snapshots as ``vid_HHMMSS.mp4``.
+        """
+        import shutil
+
+        if shutil.which("ffmpeg") is None:
+            self.ctx.log.warning("security: record_video is on but ffmpeg is not on PATH — skipping")
+            return
+        cfg = self.ctx.config
+        clip_s = max(10, int(cfg.get("clip_seconds", 300)))
+        fps = min(15, max(1, int(cfg.get("video_fps", 4))))
+        settings = get_settings()
+        url = f"http://127.0.0.1:{settings.port}/camera/robot/stream.mjpeg?fps={fps}"
+        if settings.api_token:
+            url += f"&token={settings.api_token}"
+        while True:
+            now = datetime.now()
+            day_dir = security_dir() / now.strftime("%Y-%m-%d")
+            out = day_dir / f"vid_{now.strftime('%H%M%S')}.mp4"
+            await asyncio.to_thread(day_dir.mkdir, parents=True, exist_ok=True)
+            cmd = [
+                "ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
+                "-f", "mpjpeg", "-i", url,
+                "-t", str(clip_s), "-r", str(fps),
+                "-c:v", "libx264", "-preset", "veryfast", "-pix_fmt", "yuv420p",
+                "-movflags", "+faststart", str(out),
+            ]
+            started = time.monotonic()
+            proc = await asyncio.create_subprocess_exec(
+                *cmd,
+                stdout=asyncio.subprocess.DEVNULL,
+                stderr=asyncio.subprocess.DEVNULL,
+            )
+            try:
+                await proc.wait()
+            except asyncio.CancelledError:
+                proc.terminate()
+                try:
+                    await asyncio.wait_for(proc.wait(), timeout=5)
+                except (asyncio.TimeoutError, ProcessLookupError):
+                    with contextlib.suppress(ProcessLookupError):
+                        proc.kill()
+                raise
+            # a clip that ended almost immediately means the stream was closed (privacy /
+            # quiet mode / no camera) — drop the empty file and back off before retrying.
+            if time.monotonic() - started < 3.0:
+                with contextlib.suppress(OSError):
+                    if out.is_file() and out.stat().st_size < 1024:
+                        out.unlink()
+                await asyncio.sleep(10.0)

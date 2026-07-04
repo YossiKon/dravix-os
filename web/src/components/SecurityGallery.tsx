@@ -1,7 +1,7 @@
 // Security gallery — browse / download / delete the robot's saved captures, by day.
 import { useCallback, useEffect, useState } from "react";
 import { apiGet, apiSend } from "../api";
-import type { SecurityDay, SecurityPhoto } from "../api";
+import type { SecurityClip, SecurityDay, SecurityPhoto } from "../api";
 import { toast, toastErr } from "../ui";
 import { useI18n } from "../i18n";
 
@@ -12,12 +12,15 @@ function fmtBytes(n: number): string {
 }
 
 const timeOf = (p: SecurityPhoto) => (p.ts ? p.ts.slice(11, 19) : p.name.replace(".jpg", ""));
+const clipTime = (c: SecurityClip) =>
+  c.ts ? c.ts.slice(11, 19) : c.name.replace("vid_", "").replace(".mp4", "");
 
 export function SecurityGallery(props: { onChanged?: () => void }) {
   const { tr } = useI18n();
   const [days, setDays] = useState<SecurityDay[]>([]);
   const [open, setOpen] = useState<string | null>(null);
   const [photos, setPhotos] = useState<SecurityPhoto[]>([]);
+  const [clips, setClips] = useState<SecurityClip[]>([]);
   const [busy, setBusy] = useState(false);
 
   const refresh = useCallback(() => {
@@ -35,11 +38,18 @@ export function SecurityGallery(props: { onChanged?: () => void }) {
       return;
     }
     setOpen(day);
+    setClips([]);
     try {
       const r = await apiGet<{ photos: SecurityPhoto[] }>(`/api/security/photos?day=${day}&limit=500`);
       setPhotos(r.photos);
     } catch (e) {
       toastErr(e);
+    }
+    try {
+      const v = await apiGet<{ clips: SecurityClip[] }>(`/api/security/videos?day=${day}&limit=500`);
+      setClips(v.clips);
+    } catch {
+      /* clips are optional — a backend without recordings just has none */
     }
   }
 
@@ -47,6 +57,16 @@ export function SecurityGallery(props: { onChanged?: () => void }) {
     try {
       await apiSend(`/api/security/photo/${p.day}/${p.name}`, "DELETE");
       setPhotos((cur) => cur.filter((x) => !(x.day === p.day && x.name === p.name)));
+      refresh();
+    } catch (e) {
+      toastErr(e);
+    }
+  }
+
+  async function delClip(c: SecurityClip) {
+    try {
+      await apiSend(`/api/security/video/${c.day}/${c.name}`, "DELETE");
+      setClips((cur) => cur.filter((x) => !(x.day === c.day && x.name === c.name)));
       refresh();
     } catch (e) {
       toastErr(e);
@@ -106,7 +126,8 @@ export function SecurityGallery(props: { onChanged?: () => void }) {
               {open === d.day ? "▾" : "▸"} <span dir="ltr" className="font-mono">{d.day}</span>
             </button>
             <span className="text-xs text-mute">
-              {d.count} {tr("תמונות", "shots")} · {fmtBytes(d.bytes)}
+              {d.count} {tr("תמונות", "shots")}
+              {d.videos ? ` · ${d.videos} ${tr("סרטונים", "clips")}` : ""} · {fmtBytes(d.bytes)}
             </span>
             <div className="ms-auto flex items-center gap-2">
               <a className="chip" href={`/api/security/day/${d.day}/zip`}>
@@ -124,6 +145,34 @@ export function SecurityGallery(props: { onChanged?: () => void }) {
               <button className="chip" onClick={() => void delDay(d.day)}>🗑</button>
             </div>
           </div>
+          {open === d.day && clips.length > 0 && (
+            <div className="mt-3 space-y-1.5">
+              <p className="text-xs font-semibold text-mute">
+                {tr("🎥 הקלטות וידאו", "🎥 Recorded video")}
+              </p>
+              {clips.map((c) => (
+                <div
+                  key={c.name}
+                  className="flex items-center gap-2 rounded-xl border border-line bg-black/30 px-2 py-1.5"
+                >
+                  <span className="text-base">🎞</span>
+                  <span dir="ltr" className="font-mono text-xs">{clipTime(c)}</span>
+                  <span className="text-[10px] text-mute">{fmtBytes(c.size)}</span>
+                  <span className="ms-auto flex items-center gap-2">
+                    <a className="chip" href={`/api/security/video/${c.day}/${c.name}`} target="_blank" rel="noreferrer">
+                      {tr("▶ נגן", "▶ Play")}
+                    </a>
+                    <a className="text-sm" href={`/api/security/video/${c.day}/${c.name}?download=1`} title={tr("הורד", "Download")}>
+                      ⬇
+                    </a>
+                    <button className="text-sm" onClick={() => void delClip(c)} title={tr("מחק", "Delete")}>
+                      🗑
+                    </button>
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
           {open === d.day && (
             <div className="mt-3 grid grid-cols-3 gap-2 sm:grid-cols-4">
               {photos.map((p) => (

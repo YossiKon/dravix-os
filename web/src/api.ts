@@ -105,6 +105,13 @@ export interface SecurityPhoto {
   ts?: string;
 }
 
+export interface SecurityClip {
+  day: string;
+  name: string;
+  size: number;
+  ts?: string;
+}
+
 export interface SecurityInfo {
   armed: boolean;
   total: number;
@@ -114,6 +121,7 @@ export interface SecurityInfo {
 export interface SecurityDay {
   day: string;
   count: number;
+  videos: number;
   bytes: number;
   has_video: boolean;
 }

@@ -110,3 +110,40 @@ def test_bad_paths_rejected(tmp_path, monkeypatch):
         from dravix.config import get_settings
 
         get_settings.cache_clear()
+
+
+def _seed_clip(tmp_path):
+    a = tmp_path / "security" / "2026-07-04"
+    a.mkdir(parents=True, exist_ok=True)
+    (a / "153012.jpg").write_bytes(b"\xff\xd8jpeg")
+    (a / "vid_153000.mp4").write_bytes(b"\x00\x00\x00\x18ftypmp42clip")
+
+
+def test_video_clips_list_serve_delete(tmp_path, monkeypatch):
+    _seed_clip(tmp_path)
+    app = _app(monkeypatch, tmp_path)
+    try:
+        with TestClient(app) as c:
+            # the recorded clip shows in the day summary AND the clip listing
+            day = c.get("/api/security/days").json()["days"][0]
+            assert day["count"] == 1 and day["videos"] == 1
+
+            v = c.get("/api/security/videos?day=2026-07-04").json()
+            assert v["total"] == 1
+            clip = v["clips"][0]
+            assert clip["name"] == "vid_153000.mp4"
+            assert clip["ts"] == "2026-07-04T15:30:00"  # parsed from vid_HHMMSS
+
+            got = c.get("/api/security/video/2026-07-04/vid_153000.mp4")
+            assert got.status_code == 200 and got.headers["content-type"] == "video/mp4"
+            dl = c.get("/api/security/video/2026-07-04/vid_153000.mp4?download=1")
+            assert "attachment" in dl.headers.get("content-disposition", "")
+
+            # bad clip names are rejected; a real delete prunes the (now empty of clips) list
+            assert c.get("/api/security/video/2026-07-04/evil.mp4").status_code == 400
+            assert c.delete("/api/security/video/2026-07-04/vid_153000.mp4").status_code == 200
+            assert c.get("/api/security/videos?day=2026-07-04").json()["total"] == 0
+    finally:
+        from dravix.config import get_settings
+
+        get_settings.cache_clear()

@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.0.65
+
+- **🎥 Continuous video recording in Security mode.** Turn on `record_video` (Security
+  plugin options) and the robot records the live camera to disk while armed — ffmpeg
+  pulls the same privacy-gated stream the dashboard uses and writes `clip_seconds`-long
+  `vid_HHMMSS.mp4` clips into the day-folders (`video_fps`, default 4 fps). It follows
+  every existing rule: when privacy / isLocal / a quiet mode closes the stream the clip
+  just ends and recording resumes when it reopens — nothing leaves your box.
+- **Gallery now shows recorded clips too** (dashboard → Home → Security → Gallery): each
+  day lists its clips with time & size — **▶ play**, **⬇ download**, or **🗑 delete** each
+  one. Distinct from the on-demand 🎬 timelapse. Clips prune with `keep_days` like photos.
+
 ## 0.0.64
 
 - **🖼 Security gallery — full media management** (dashboard → Home → Security →

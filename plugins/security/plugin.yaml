@@ -9,3 +9,6 @@ config:
   patrol_span: 0.7         # how far left/right the sweep goes (0..1 of full travel)
   keep_days: 7             # delete day-folders older than this
   announce: false          # say "Security armed" when entering the mode
+  record_video: false      # also record continuous video (needs ffmpeg) into vid_*.mp4 clips
+  clip_seconds: 300        # length of each recorded clip (min 10)
+  video_fps: 4             # frames/sec for the recording (1..15)

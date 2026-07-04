@@ -741,12 +741,14 @@ async def robot_leds_effect(body: LedsEffectBody, request: Request):
 
 # ── security mode — browse / manage the saved captures ────────────────────────
 _SEC_DAY_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
-_SEC_FILE_RE = re.compile(r"^\d{6}\.jpg$")
+_SEC_FILE_RE = re.compile(r"^\d{6}\.jpg$")          # snapshots: HHMMSS.jpg
+_SEC_VIDEO_RE = re.compile(r"^vid_\d{6}\.mp4$")     # recorded clips: vid_HHMMSS.mp4
 
 
 def _sec_ts(day: str, name: str) -> str:
-    """ISO timestamp from a day folder + HHMMSS.jpg name, e.g. 2026-07-04T15:30:12."""
-    return f"{day}T{name[0:2]}:{name[2:4]}:{name[4:6]}"
+    """ISO timestamp from a day folder + HHMMSS(.jpg)/vid_HHMMSS(.mp4) name."""
+    hms = name[4:10] if name.startswith("vid_") else name[0:6]
+    return f"{day}T{hms[0:2]}:{hms[2:4]}:{hms[4:6]}"
 
 
 def _sec_day_dir(day: str):
@@ -759,9 +761,14 @@ def _sec_day_dir(day: str):
 
 
 def _sec_prune_empty(day_dir) -> None:
-    """Drop a day folder once its last photo is gone (also removes a lingering video)."""
+    """Drop a day folder once it holds no photos AND no recorded clips (also clears a
+    lingering timelapse)."""
     try:
-        if not any(_SEC_FILE_RE.match(f.name) for f in day_dir.iterdir()):
+        keep = any(
+            _SEC_FILE_RE.match(f.name) or _SEC_VIDEO_RE.match(f.name)
+            for f in day_dir.iterdir()
+        )
+        if not keep:
             (day_dir / "timelapse.mp4").unlink(missing_ok=True)
             (day_dir / "_frames.txt").unlink(missing_ok=True)
             day_dir.rmdir()
@@ -779,12 +786,14 @@ async def security_days(request: Request):
     if root.exists():
         for d in sorted((x for x in root.iterdir() if x.is_dir() and _SEC_DAY_RE.match(x.name)), reverse=True):
             files = [f for f in d.iterdir() if _SEC_FILE_RE.match(f.name)]
-            if not files:
+            clips = [f for f in d.iterdir() if _SEC_VIDEO_RE.match(f.name)]
+            if not files and not clips:
                 continue
             days.append({
                 "day": d.name,
                 "count": len(files),
-                "bytes": sum(f.stat().st_size for f in files),
+                "videos": len(clips),
+                "bytes": sum(f.stat().st_size for f in files) + sum(f.stat().st_size for f in clips),
                 "has_video": (d / "timelapse.mp4").is_file(),
             })
     return {"armed": _engine(request).is_active("security"), "days": days}
@@ -958,6 +967,65 @@ async def security_get_video(day: str, download: int = 0):
         {"Content-Disposition": f'attachment; filename="dravix-security-{day}.mp4"'} if download else None
     )
     return Response(content=path.read_bytes(), media_type="video/mp4", headers=headers)
+
+
+# ── recorded video clips (security mode records the camera stream while armed) ──
+@router.get("/api/security/videos")
+async def security_videos(request: Request, limit: int = 200, day: str = ""):
+    """The recorded MP4 clips (newest first), with timestamps; ``day`` filters to one day."""
+    from ..config import security_dir
+
+    root = security_dir()
+    if day:
+        if not _SEC_DAY_RE.match(day):
+            raise HTTPException(status_code=400, detail="bad day")
+        day_dirs = [root / day] if (root / day).is_dir() else []
+    else:
+        day_dirs = (
+            sorted((d for d in root.iterdir() if d.is_dir() and _SEC_DAY_RE.match(d.name)), reverse=True)
+            if root.exists() else []
+        )
+    cap = max(1, min(1000, limit))
+    clips: list[dict] = []
+    total = 0
+    for d in day_dirs:
+        files = sorted((f for f in d.iterdir() if _SEC_VIDEO_RE.match(f.name)), reverse=True)
+        total += len(files)
+        for f in files:
+            if len(clips) < cap:
+                clips.append({
+                    "day": d.name, "name": f.name,
+                    "size": f.stat().st_size, "ts": _sec_ts(d.name, f.name),
+                })
+    return {"total": total, "clips": clips}
+
+
+@router.get("/api/security/video/{day}/{name}")
+async def security_get_clip(day: str, name: str, download: int = 0):
+    """Serve one recorded MP4 clip."""
+    if not _SEC_DAY_RE.match(day) or not _SEC_VIDEO_RE.match(name):
+        raise HTTPException(status_code=400, detail="bad clip path")
+    path = _sec_day_dir(day) / name
+    if not path.is_file():
+        raise HTTPException(status_code=404, detail="no such clip")
+    headers = (
+        {"Content-Disposition": f'attachment; filename="dravix-{day}-{name}"'} if download else None
+    )
+    return Response(content=path.read_bytes(), media_type="video/mp4", headers=headers)
+
+
+@router.delete("/api/security/video/{day}/{name}")
+async def security_delete_clip(day: str, name: str):
+    """Delete one recorded clip."""
+    if not _SEC_DAY_RE.match(day) or not _SEC_VIDEO_RE.match(name):
+        raise HTTPException(status_code=400, detail="bad clip path")
+    day_dir = _sec_day_dir(day)
+    path = day_dir / name
+    if not path.is_file():
+        raise HTTPException(status_code=404, detail="no such clip")
+    path.unlink()
+    _sec_prune_empty(day_dir)
+    return {"ok": True}
 
 
 class LanguageBody(BaseModel):
