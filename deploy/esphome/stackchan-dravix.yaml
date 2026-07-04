@@ -39,7 +39,7 @@ substitutions:
   # publishes it to HA ("Firmware version" sensor); the dravix dashboard compares it
   # with the version bundled in the add-on and shows "firmware update available".
   # (Maintainers: bump this on every firmware change. Users: don't touch.)
-  fw_version: "10"
+  fw_version: "11"
   # The ESPHome node name (mDNS hostname + the default entity prefix on a fresh flash).
   # Change it only if you run MORE THAN ONE robot — each needs a unique name. NOTE:
   # changing it on an already-adopted robot registers a NEW device in HA.
@@ -880,10 +880,12 @@ lvgl:
           hidden: true
           scrollbar_mode: "OFF"
           widgets:
-            # row 2 — REAL power draw from the INA226 (watts · mA · true time left)
+            # row 2 — battery time-left / "charging" (raw W/mA live in HA, not here)
             - label: { id: sb_power, text: "", text_font: small_font, text_color: 0x8b96a4, align: TOP_LEFT, x: 12, y: 38 }
-            # FW+ — amber badge when newer firmware is available (press Install in ESPHome)
-            - label: { id: sb_upd, text: "", text_font: small_font, text_color: 0xFFC23D, align: TOP_RIGHT, x: -84, y: 38 }
+            # UPDATE icon — an amber up-arrow appears when newer firmware is available
+            # (press Install in ESPHome). Drawn from two lines: stem + chevron head.
+            - line: { id: upd_a1, points: ["230, 56", "230, 40"], line_width: 4, line_color: 0xFFC23D, line_rounded: true, hidden: true }
+            - line: { id: upd_a2, points: ["223, 47", "230, 40", "237, 47"], line_width: 4, line_color: 0xFFC23D, line_rounded: true, hidden: true }
             # LOCAL — choose isLocal right on the robot (teal when on; dravix syncs it)
             - button:
                 id: sb_local
@@ -2566,32 +2568,31 @@ interval:
       - lvgl.bar.update:
           id: sb_bat_f
           value: !lambda 'return id(battery_pct).has_state() ? (int) id(battery_pct).state : 0;'
-      # row 2 — REAL consumption from the INA226 (+ true time-left from the actual draw)
+      # row 2 — battery TIME-LEFT only (the raw W/mA still live in HA as the INA226
+      # sensors; the user asked to keep this line clean). While charging just say so —
+      # a time-left would be a lie there, the charger pulls the voltage up.
       - lvgl.label.update:
           id: sb_power
           text: !lambda |-
-            if (!id(ha_curr).has_state() && !id(ha_pow).has_state())
-              return std::string("");
-            char b[48];
+            char b[24];
             float ma = id(ha_curr).has_state() ? fabsf(id(ha_curr).state) * 1000.0f : 0.0f;
-            float w  = id(ha_pow).has_state()  ? fabsf(id(ha_pow).state)           : 0.0f;
             if (id(g_batt_chg)) {
-              // a "time-left" while charging would be a lie — the charger pulls the voltage up
-              snprintf(b, sizeof(b), "%.2fW  %.0fmA  charging", w, ma);
+              snprintf(b, sizeof(b), "charging");
             } else if (id(battery_pct).has_state() && ma > 20.0f) {
               float hours = (id(battery_pct).state * ${battery_mah}.0f / 100.0f) / ma;   // pack size from substitutions
-              snprintf(b, sizeof(b), "%.2fW  %.0fmA  ~%.1fh left", w, ma, hours);
+              snprintf(b, sizeof(b), "~%.1fh left", hours);
             } else {
-              snprintf(b, sizeof(b), "%.2fW  %.0fmA", w, ma);
+              return std::string("");
             }
             return std::string(b);
-      # FW+ badge — newer firmware is waiting (dravix keeps "Latest firmware" fresh)
-      - lvgl.label.update:
-          id: sb_upd
-          text: !lambda |-
-            if (id(t_latest_fw).has_state() && !id(t_latest_fw).state.empty()
-                && id(t_latest_fw).state != "${fw_version}") return std::string("FW+");
-            return std::string("");
+      # UPDATE arrow — newer firmware is waiting (dravix keeps "Latest firmware" fresh)
+      - if:
+          condition:
+            lambda: |-
+              return id(t_latest_fw).has_state() && !id(t_latest_fw).state.empty()
+                     && id(t_latest_fw).state != "${fw_version}";
+          then: [ { lvgl.widget.show: upd_a1 }, { lvgl.widget.show: upd_a2 } ]
+          else: [ { lvgl.widget.hide: upd_a1 }, { lvgl.widget.hide: upd_a2 } ]
       # WiFi signal → reveal more bars as it gets stronger
       - if:
           condition: { lambda: 'return id(wifi_db).state < -78;' }

@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.0.53
+
+- **Status-bar polish** (firmware v11): the firmware-update indicator is now a proper
+  amber **⬆ arrow icon** on the swipe-down status bar, and the battery line is clean —
+  just "~2.3h left" (or "charging"); the raw W/mA readings stay available in Home
+  Assistant as the INA226 sensors.
+
 ## 0.0.52
 
 - **You now SEE firmware updates everywhere** (firmware v10):
