@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.0.54
+
+- **Asleep means completely still — sealed at every layer** (firmware v12). Beyond the
+  firmware's own gesture gates, now: (1) the add-on drops ALL head commands (welcome
+  celebrations, surprises, emotes, mood, follow…) while the robot reports
+  sleep/screensaver; (2) the robot itself ignores any pitch command from any source
+  while asleep. The only movements left in sleep are the intended droop when falling
+  asleep and the rise when waking.
+
 ## 0.0.53
 
 - **Status-bar polish** (firmware v11): the firmware-update indicator is now a proper

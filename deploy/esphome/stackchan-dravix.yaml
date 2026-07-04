@@ -39,7 +39,7 @@ substitutions:
   # publishes it to HA ("Firmware version" sensor); the dravix dashboard compares it
   # with the version bundled in the add-on and shows "firmware update available".
   # (Maintainers: bump this on every firmware change. Users: don't touch.)
-  fw_version: "11"
+  fw_version: "12"
   # The ESPHome node name (mDNS hostname + the default entity prefix on a fresh flash).
   # Change it only if you run MORE THAN ONE robot — each needs a unique name. NOTE:
   # changing it on an already-adopted robot registers a NEW device in HA.
@@ -759,13 +759,19 @@ number:
     restore_value: true
     set_action:
       - lambda: 'id(g_move_ms) = (long) millis();'   # every pitch write is a commanded move
-      - number.set:
-          id: servo_y_angle
-          # 158..260 → 0..90, then clamped to 5..85 — M5Stack's recommended vertical
-          # operating range (protects the servo from grinding at the mechanical stops).
-          value: !lambda |-
-            float a = (x - 158.0f) * 90.0f / 102.0f;
-            return a < 5.0f ? 5.0f : (a > 85.0f ? 85.0f : a);
+      # ASLEEP = DEAD STILL: while sleeping, pitch commands from ANY source (HA
+      # automations, external tools) are ignored — the sleep-droop itself writes the
+      # servo directly, and waking clears g_sleep before the head rises.
+      - if:
+          condition: { lambda: 'return !id(g_sleep);' }
+          then:
+            - number.set:
+                id: servo_y_angle
+                # 158..260 → 0..90, then clamped to 5..85 — M5Stack's recommended vertical
+                # operating range (protects the servo from grinding at the mechanical stops).
+                value: !lambda |-
+                  float a = (x - 158.0f) * 90.0f / 102.0f;
+                  return a < 5.0f ? 5.0f : (a > 85.0f ? 85.0f : a);
   # ── VITALS bars — dravix writes these 0-100; page_vitals draws them as bars ──
   - { platform: template, name: "Vital energy", id: n_vital_energy, optimistic: true, min_value: 0, max_value: 100, step: 1, initial_value: 80 }
   - { platform: template, name: "Vital food",   id: n_vital_food,   optimistic: true, min_value: 0, max_value: 100, step: 1, initial_value: 80 }
@@ -2269,14 +2275,20 @@ select:
       - if:
           condition: { lambda: 'return x == std::string("sleep");' }
           then:
-            # the head slowly droops (remembering where it was — in the 158..260 scale), LEDs off…
+            # the head slowly droops (remembering where it was — in the 158..260 scale),
+            # LEDs off… the droop writes the SERVO directly (n_head_pitch is locked
+            # while g_sleep, which is already true at this point)
             - if:
                 condition: { lambda: 'return id(sw_move).state && id(g_pitch_saved) < 0;' }
                 then:
                   - lambda: 'id(g_pitch_saved) = id(n_head_pitch).state;'
                   - number.set:
-                      id: n_head_pitch
-                      value: !lambda 'float v = id(n_head_pitch).state - 25.0f; return v < 158 ? 158 : v;'
+                      id: servo_y_angle
+                      value: !lambda |-
+                        float p = id(n_head_pitch).state - 25.0f;
+                        if (p < 158.0f) p = 158.0f;
+                        float a = (p - 158.0f) * 90.0f / 102.0f;
+                        return a < 5.0f ? 5.0f : (a > 85.0f ? 85.0f : a);
             - light.turn_off: stackchan_light_bar
             # …the zzz face shows for a moment, then the screen goes fully off
             - delay: 2s

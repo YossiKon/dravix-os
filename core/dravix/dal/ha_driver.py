@@ -199,6 +199,18 @@ class HARobotDriver(RobotDriver):
         yaw_e, pitch_e = self._entities.get("head_yaw"), self._entities.get("head_pitch")
         if not (yaw_e and pitch_e):
             raise NotImplementedError("no head servo entities configured")
+        # ASLEEP = DEAD STILL. Every dravix-side mover (welcome, surprises, emotes, mood,
+        # follow…) funnels through here — while the robot reports sleep/screensaver, head
+        # commands are silently dropped so nothing can twitch it. Wake it first.
+        state_e = self._entities.get("state_sensor")
+        if state_e:
+            try:
+                st = str((await self._ha.get_state(state_e)).get("state") or "").strip().lower()
+                if st in ("sleep", "screensaver"):
+                    log.debug("move_head skipped — robot is %s", st)
+                    return
+            except Exception:  # noqa: BLE001 — can't read the state → don't block movement
+                pass
         # Both writes go through _set_number_value, which serializes + spaces them on the bus.
         await self._set_head_axis("yaw", yaw_e, yaw)
         await self._set_head_axis("pitch", pitch_e, pitch)
