@@ -346,6 +346,15 @@ dravix-os integrates with **Frigate** both ways, all on your LAN:
 See [docs/frigate.md](docs/frigate.md). For copy-paste Home Assistant `rest_command`s and
 automations, see [docs/home-assistant.md](docs/home-assistant.md).
 
+## 🤖 Robot as a status lamp for an AI agent
+
+Run an AI coding agent on your PC (**Claude Code**, Cursor, a CI job…) and the StackChan
+shows you what it's doing at a glance — **working** 🔵, **waiting for your approval** 🟠
+(it says so out loud), **has a question** 🟣, **done** 🟢, **error** 🔴. It's one POST to
+`/api/agent/status`; ready-made Claude Code hooks + a fail-quiet bridge live in
+`deploy/agent-bridge/`. LAN-only, so it respects isLocal. Guide:
+[docs/agent-bridge.md](docs/agent-bridge.md).
+
 ## 🛠 Development
 
 No robot or Home Assistant required — the **mock** driver logs calls instead of moving real

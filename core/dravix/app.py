@@ -220,6 +220,9 @@ async def lifespan(app: FastAPI):
     app.state.scheduler = scheduler
     app.state.screen_pusher = screen_pusher
     app.state.xiaozhi = xiaozhi
+    from .agent_status import AgentPresence
+
+    app.state.agent = AgentPresence(controller, bus)
 
     # ── isLocal ⇄ the robot's own "Local only" switch ─────────────────────────────
     # The choice can be made ON the robot (the LOCAL button on its status bar). The HA

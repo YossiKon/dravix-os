@@ -57,6 +57,14 @@ class ModeBody(BaseModel):
     mode: str  # awake | busy | sleep
 
 
+class AgentStatusBody(BaseModel):
+    # working | waiting_permission | question | done | error | idle
+    state: str
+    text: str = ""          # optional line to show/speak instead of the state's default
+    say: bool | None = None  # override whether the robot speaks (default depends on state)
+    source: str = ""        # optional label for who's reporting (e.g. "claude-code")
+
+
 class ChatBody(BaseModel):
     text: str
     conversation_id: str | None = None
@@ -105,6 +113,9 @@ async def status(request: Request):
         "last_error": (xz.last_error if xz else ""),
         "tools": (xz.tools if xz else []),
     }
+    agent = getattr(request.app.state, "agent", None)
+    if agent is not None:
+        data["agent"] = agent.snapshot()
     return data
 
 
@@ -208,6 +219,38 @@ async def set_idle_motion(body: IdleMotionBody, request: Request):
     request.app.state.robot.idle_motion = body.enabled
     request.app.state.store.set_idle_motion(body.enabled)
     return {"idle_motion": body.enabled}
+
+
+# ── agent presence — an AI agent on your PC uses the robot as a status lamp ──────────
+@router.post("/api/agent/status")
+async def agent_status_set(body: AgentStatusBody, request: Request):
+    """Report an AI agent's state; the robot reflects it (face + LED + optional speech).
+
+    States: working | waiting_permission | question | done | error | idle. See
+    docs/agent-bridge.md for wiring Claude Code (or any agent) to this endpoint.
+    """
+    from ..agent_status import STATES
+
+    agent = getattr(request.app.state, "agent", None)
+    if agent is None:
+        raise HTTPException(status_code=503, detail="agent presence not available")
+    state = body.state.strip().lower()
+    if state not in STATES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"unknown state {body.state!r} — use one of: {', '.join(STATES)}",
+        )
+    snap = await agent.set(state, body.text, say=body.say, source=body.source)
+    return {"ok": True, **snap}
+
+
+@router.get("/api/agent/status")
+async def agent_status_get(request: Request):
+    """The last reported agent status (for the dashboard / polling)."""
+    agent = getattr(request.app.state, "agent", None)
+    if agent is None:
+        raise HTTPException(status_code=503, detail="agent presence not available")
+    return agent.snapshot()
 
 
 # ── robot wiring: pick the driver + HA entities + head calibration from the UI ──

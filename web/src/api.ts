@@ -118,6 +118,13 @@ export interface SecurityInfo {
   photos: SecurityPhoto[];
 }
 
+export interface AgentStatus {
+  state: string;
+  text: string;
+  updated_at: string;
+  source: string;
+}
+
 export interface SecurityDay {
   day: string;
   count: number;

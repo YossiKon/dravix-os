@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.0.66
+
+- **🤖 Turn the robot into a status lamp for an AI agent on your PC.** Run Claude Code
+  (or Cursor, a CI job, any script) and the StackChan shows you what it's doing without
+  you watching the screen: **working** (🔵 blue, concentrating face), **waiting for your
+  approval** (🟠 amber — *"I need your approval."*), **has a question** (🟣 purple),
+  **done** (🟢 green — *"All done."*), **error** (🔴 red), **idle**. The attention states
+  speak so you look up from across the room; the ambient ones stay silent.
+  - New endpoints: `POST /api/agent/status` (`state` + optional `text`/`say`/`source`) and
+    `GET /api/agent/status`; the state also rides along in `/api/status`.
+  - New **AI agent** card on the dashboard shows the live state, source & time, with test
+    buttons — everything managed from the site.
+  - Ready-to-use Claude Code wiring: a tiny `dravix-notify.py` bridge + example hooks in
+    `deploy/agent-bridge/`, full guide in **docs/agent-bridge.md**. It's fail-quiet and
+    LAN-only, so it never breaks your agent and fully respects isLocal.
+
 ## 0.0.65
 
 - **🎥 Continuous video recording in Security mode.** Turn on `record_video` (Security

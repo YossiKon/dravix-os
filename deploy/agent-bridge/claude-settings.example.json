@@ -1,0 +1,27 @@
+{
+  "//": "Claude Code hooks that drive the dravix robot status lamp. Merge the 'hooks' and",
+  "//2": "'env' blocks into your ~/.claude/settings.json (or .claude/settings.json in a project).",
+  "//3": "Replace PATH_TO with the real path to dravix-notify.py. On Windows use \"python\";",
+  "//4": "on macOS/Linux use \"python3\". Set DRAVIX_URL/DRAVIX_TOKEN to reach your add-on.",
+  "env": {
+    "DRAVIX_URL": "http://localhost:8800",
+    "DRAVIX_TOKEN": ""
+  },
+  "hooks": {
+    "UserPromptSubmit": [
+      { "hooks": [{ "type": "command", "command": "python3 PATH_TO/dravix-notify.py working" }] }
+    ],
+    "PreToolUse": [
+      { "matcher": "*", "hooks": [{ "type": "command", "command": "python3 PATH_TO/dravix-notify.py working" }] }
+    ],
+    "Notification": [
+      { "hooks": [{ "type": "command", "command": "python3 PATH_TO/dravix-notify.py notify" }] }
+    ],
+    "Stop": [
+      { "hooks": [{ "type": "command", "command": "python3 PATH_TO/dravix-notify.py done" }] }
+    ],
+    "SessionStart": [
+      { "hooks": [{ "type": "command", "command": "python3 PATH_TO/dravix-notify.py idle" }] }
+    ]
+  }
+}
