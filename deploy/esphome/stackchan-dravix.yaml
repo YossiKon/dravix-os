@@ -39,7 +39,7 @@ substitutions:
   # publishes it to HA ("Firmware version" sensor); the dravix dashboard compares it
   # with the version bundled in the add-on and shows "firmware update available".
   # (Maintainers: bump this on every firmware change. Users: don't touch.)
-  fw_version: "7"
+  fw_version: "8"
   # The ESPHome node name (mDNS hostname + the default entity prefix on a fresh flash).
   # Change it only if you run MORE THAN ONE robot — each needs a unique name. NOTE:
   # changing it on an already-adopted robot registers a NEW device in HA.
@@ -109,8 +109,21 @@ esp32:
       # Also route TLS / encryption (mbedTLS) buffers to PSRAM — these are big and only needed
       # during secure connections, so they don't belong in the scarce internal RAM either.
       CONFIG_MBEDTLS_EXTERNAL_MEM_ALLOC: "y"
+      # TASK-WATCHDOG RESET FIX (diagnosed live 2026-07-04: Reset Reason = "task
+      # watchdog", loop ~170ms, full-screen LVGL flush = 61ms each). This firmware's
+      # main loop is legitimately heavy (LVGL + wake-word inference + I2C sensors +
+      # serial servos) — under a burst it starves the IDLE task past the default 5s
+      # and the watchdog reboots a perfectly healthy robot. Give real stalls 15s
+      # before rebooting, and stop watching the IDLE tasks (loopTask keeps feeding
+      # its own WDT, so true hangs still reset):
+      CONFIG_ESP_TASK_WDT_TIMEOUT_S: "15"
+      CONFIG_ESP_TASK_WDT_CHECK_IDLE_TASK_CPU0: "n"
+      CONFIG_ESP_TASK_WDT_CHECK_IDLE_TASK_CPU1: "n"
 
+# INFO, not the default DEBUG — log formatting runs inside the (already heavy) main
+# loop; quieter logging = measurably lighter loop. Flip to DEBUG when hunting a bug.
 logger:
+  level: INFO
 
 api:
 

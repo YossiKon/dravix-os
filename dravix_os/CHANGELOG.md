@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.0.50
+
+- **The every-few-minutes resets — root-caused and fixed** (firmware v8). Live
+  diagnosis on the running robot: `Reset Reason = task watchdog`, average loop
+  ~170 ms, every full-screen redraw 61 ms. The robot's main loop is legitimately
+  heavy (animated face + on-device wake word + sensors + serial servos) — under a
+  burst it starved the chip's IDLE task past the 5-second default and the watchdog
+  rebooted a healthy robot. Fix: watchdog window 5s→15s, IDLE-task watching off
+  (real hangs still reset via the loop's own watchdog), and quieter logging (INFO)
+  to lighten every loop iteration. **Press Install in ESPHome to get firmware v8.**
+
 ## 0.0.49
 
 Everything is now managed from the add-on dashboard in your browser:
