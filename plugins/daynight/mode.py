@@ -1,18 +1,21 @@
-"""Day/night ambient mood.
+"""Day/night awareness.
 
-Checks the local hour on each tick; at night the robot looks sleepy with warm dim LEDs, by
-day it relaxes to neutral. Only acts on transitions, so it won't fight other modes every tick.
+Checks the local hour on each tick and, on a day↔night transition, publishes
+``daynight.changed`` — the signal the MoodEngine uses to drift toward a sleepy expression
+at night. It does NOT paint the face or LEDs itself: the firmware already owns night
+behaviour (its ``night`` mode + the "Sleep when dark" ambient-light path), so a second
+painter here would fight it and leave LEDs lit all night. This mode is the tiny bridge
+that tells the mood engine what time of day it is.
 """
 from __future__ import annotations
 
 import datetime
 
-from dravix.dal.base import CAP_FACE, CAP_LEDS, Expression
 from dravix.modes import Mode, ModeMeta
 
 
 class DayNightMode(Mode):
-    meta = ModeMeta(name="daynight", description="Day/night mood", kind="ambient")
+    meta = ModeMeta(name="daynight", description="Day/night awareness (mood signal)", kind="ambient")
 
     async def on_enter(self) -> None:
         self._night_start = int(self.ctx.config.get("night_start", 22))
@@ -34,15 +37,5 @@ class DayNightMode(Mode):
         if night == self._last:
             return
         self._last = night
-        robot = self.ctx.robot
-        if night:
-            if robot.supports(CAP_FACE):
-                await robot.set_face(Expression.SLEEPY)
-            if robot.supports(CAP_LEDS):
-                await robot.set_leds("amber", 0.1)
-        else:
-            if robot.supports(CAP_FACE):
-                await robot.set_face(Expression.NEUTRAL)
-            if robot.supports(CAP_LEDS):
-                await robot.set_leds("white", 0.3)
+        # signal only — the mood engine and the firmware do the actual expressing
         await self.ctx.bus.publish("daynight.changed", night=night)

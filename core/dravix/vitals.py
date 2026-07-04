@@ -23,6 +23,7 @@ from typing import TYPE_CHECKING, Any, Callable
 import httpx
 
 from .config import get_settings
+from .dal.base import QUIET_STATES
 from .emotes import play_emote
 from .events import Event, EventBus
 from .logging import get_logger
@@ -35,10 +36,10 @@ if TYPE_CHECKING:
 
 log = get_logger("vitals")
 
-# Modes where the engine must stay SILENT (do-not-disturb). Any other/unknown state counts
-# as active, so a new firmware mode never mutes the robot by accident. None/"" = unknown
-# backend (mock) → allow.
-_QUIET_MODES = {"sleep", "night", "screensaver", "quiet", "focus", "busy"}
+# Modes where the engine must stay SILENT (do-not-disturb) — the canonical set shared with
+# mood + every plugin (via ModeContext.is_quiet). Any other/unknown state counts as active,
+# so a new firmware mode never mutes the robot by accident. None/"" = mock → allow.
+_QUIET_MODES = QUIET_STATES
 
 # WELLNESS NUDGES have their own rule: focus = the user is DEFINITELY at the desk
 # (work/gaming DND automations set it), which is exactly when the eye/move/water

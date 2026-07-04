@@ -1,5 +1,5 @@
 name: pomodoro
-description: Work/break timer. Announces phase changes and shows time on the robot's face & LEDs.
+description: Work/break timer. Announces each phase change (face + LED colour + a spoken line).
 kind: foreground
 entrypoint: mode:PomodoroMode
 enabled: true

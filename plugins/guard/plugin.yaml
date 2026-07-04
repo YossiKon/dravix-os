@@ -6,5 +6,7 @@ enabled: true
 config:
   alert_color: red
   alert_line: "Motion detected. I'm watching."
+  throttle_s: 20        # min seconds between alerts (a flapping sensor can't machine-gun)
+  quiet_no_voice: true  # in sleep/calm modes, alert with face+LEDs only (no spoken line)
   # Event types this mode treats as an alert (published onto the bus by the HA bridge).
   triggers: ["ha.motion", "presence.detected", "ha.door"]

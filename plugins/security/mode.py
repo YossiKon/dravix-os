@@ -21,7 +21,7 @@ import time
 from datetime import datetime, timedelta
 
 from dravix.config import security_dir
-from dravix.dal.base import CAP_HEAD, CAP_PHOTO
+from dravix.dal.base import CAP_HEAD, CAP_PHOTO, CAP_SAY
 from dravix.modes import Mode, ModeMeta
 
 
@@ -45,9 +45,12 @@ class SecurityMode(Mode):
         # the autonomous idle glances would fight the patrol — pause them while armed
         self._prev_idle = getattr(robot, "idle_motion", True)
         robot.idle_motion = False
-        if bool(self.ctx.config.get("announce", False)) and robot.supports("say"):
+        if bool(self.ctx.config.get("announce", False)) and robot.supports(CAP_SAY):
+            from dravix.config import get_settings
+
+            he = (get_settings().language or "en").startswith("he")
             try:
-                await robot.say("Security mode armed.")
+                await robot.say("מצב אבטחה הופעל." if he else "Security mode armed.")
             except Exception:  # noqa: BLE001 — announcing is best-effort
                 pass
         self._task = asyncio.create_task(self._run(), name="dravix-security")

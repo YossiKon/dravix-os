@@ -18,6 +18,9 @@ def test_discovery_full_robot():
         "sensor.dravix_last_heard", "sensor.dravix_last_reply",
         "text.dravix_show_image_url", "switch.dravix_privacy_mode",
         "sensor.dravix_battery", "sensor.phone_battery", "sensor.door_lock_battery",
+        "switch.dravix_local_only", "text.dravix_bubble", "text.dravix_latest_firmware",
+        "number.dravix_screen_brightness", "binary_sensor.dravix_presence_nearby",
+        "binary_sensor.hall_presence_nearby",
         "tts.piper",
     ))
     assert found["face_select"] == "select.dravix_face"
@@ -35,6 +38,12 @@ def test_discovery_full_robot():
     assert found["tts_engine"] == "tts.piper"
     # battery is anchored to the robot's prefix — the phone/door batteries must not match
     assert found["battery_sensor"] == "sensor.dravix_battery"
+    # the newer roles resolve too
+    assert found["islocal_switch"] == "switch.dravix_local_only"
+    assert found["bubble_text"] == "text.dravix_bubble"
+    assert found["latest_fw_text"] == "text.dravix_latest_firmware"
+    assert found["brightness_number"] == "number.dravix_screen_brightness"
+    assert found["presence_sensor"] == "binary_sensor.dravix_presence_nearby"
 
 
 def test_discovery_renamed_prefix():

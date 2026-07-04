@@ -47,7 +47,9 @@ class PomodoroMode(Mode):
         if robot.supports(CAP_LEDS):
             color = cfg.get("break_color" if self._phase == "break" else "work_color", "blue")
             await robot.set_leds(color, 0.5)
-        if robot.supports(CAP_SAY):
+        # the break reminder is the whole point — it SHOULD interrupt focus/quiet; only
+        # skip it when the robot is truly off (asleep/screensaver → nobody's there)
+        if robot.supports(CAP_SAY) and not await self.ctx.is_asleep():
             await robot.say(line)
         await self.ctx.bus.publish("pomodoro.phase", phase=self._phase)
         self.ctx.log.info("pomodoro -> %s", self._phase)

@@ -1,8 +1,8 @@
 name: ambient_idle
-description: Subtle idle life — occasional glances and blinks so the robot never looks frozen.
+description: Subtle idle glances (off by default — the firmware owns idle life; turn on "Idle head drift" to add these).
 kind: ambient
 entrypoint: mode:AmbientIdleMode
 enabled: true
 config:
   glance_every_ticks: 3
-  glance_yaw: 18
+  glance_yaw: 0.35   # 0..1 fraction of the head's travel (small = subtle looks)

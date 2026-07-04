@@ -49,6 +49,15 @@ CAP_LISTEN = "listen"
 CAP_DISPLAY = "show_image"  # push a JPEG to the robot's screen (e.g. a Frigate snapshot)
 ALL_CAPABILITIES = (CAP_FACE, CAP_HEAD, CAP_SAY, CAP_LEDS, CAP_PHOTO, CAP_LISTEN, CAP_DISPLAY)
 
+# ── canonical robot-state names (published by the firmware's "State" sensor) ──────────
+# The ONE source of truth for do-not-disturb gating, shared by vitals, mood and every
+# mode (via ModeContext.is_quiet). Any OTHER/unknown state counts as active, so a new
+# firmware state can never accidentally mute the robot.
+#   QUIET_STATES  — no autonomous faces / speech / LEDs / head moves belong here.
+#   ASLEEP_STATES — the robot is effectively OFF; even deliberate foreground alerts hold.
+QUIET_STATES = frozenset({"sleep", "night", "screensaver", "quiet", "focus", "busy"})
+ASLEEP_STATES = frozenset({"sleep", "screensaver"})
+
 
 class RobotDriver(abc.ABC):
     """Backend that knows how to physically talk to the robot."""

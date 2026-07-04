@@ -8,7 +8,6 @@ backends).
 from __future__ import annotations
 
 from dravix.dal.base import CAP_FACE, CAP_SAY
-from dravix.events import Event
 from dravix.modes import Mode, ModeMeta
 from dravix.persona import Persona, parse_expression
 
@@ -18,16 +17,15 @@ class CompanionMode(Mode):
 
     async def on_enter(self) -> None:
         self._persona = Persona()
+        # a greeting to an off (asleep/screensaver) robot is just a disembodied voice
+        if await self.ctx.is_asleep():
+            return
         line = await self._greeting()
         await self._express_and_say(line)
 
-    async def on_event(self, event: Event) -> None:
-        # When something is said to/around the robot, the chat endpoint handles the reply; here
-        # we just keep the face lively by reflecting our own speech as a happy beat.
-        if event.type == "robot.say" and self.ctx.robot.supports(CAP_FACE):
-            from dravix.dal.base import Expression
-
-            await self.ctx.robot.set_face(Expression.HAPPY)
+    # (no robot.say reflex: it fired for EVERY utterance on the bus — including wellness
+    # nudges and the chat endpoint — and stomped each reply's own parsed emotion with a
+    # blanket HAPPY, so a "(sad)" answer never actually looked sad.)
 
     async def _greeting(self) -> str:
         cfg = self.ctx.config

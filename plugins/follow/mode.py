@@ -108,6 +108,13 @@ class FollowMode(Mode):
         recentred = False
         while True:
             try:
+                # asleep/screensaver: the driver drops head moves anyway — pause so the
+                # P-controller doesn't keep stepping from a phantom head position (which
+                # would diverge robot.state from reality and snap the head on wake), and
+                # skip the 2 Hz Frigate poll while it's off.
+                if await self.ctx.is_asleep():
+                    await asyncio.sleep(period)
+                    continue
                 centre = await self._frigate.latest_person(camera, label, box_format, frame)
                 now = time.monotonic()
                 if centre is not None:

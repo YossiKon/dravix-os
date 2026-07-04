@@ -10,6 +10,7 @@ import abc
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
+from ..dal.base import ASLEEP_STATES, QUIET_STATES
 from ..events import Event, EventBus
 from ..logging import get_logger
 
@@ -30,6 +31,25 @@ class ModeContext:
     @property
     def log(self):  # noqa: ANN201
         return get_logger("mode")
+
+    async def robot_state(self) -> str | None:
+        """The robot's live on-device state (awake/sleep/focus/…), or None if unreadable."""
+        getter = getattr(self.robot.driver, "get_text", None)
+        if getter is None:
+            return None
+        try:
+            return await getter("state_sensor")
+        except Exception:  # noqa: BLE001 — a state read must never break a mode
+            return None
+
+    async def is_quiet(self) -> bool:
+        """Do-not-disturb: the robot is asleep or in a calm mode — no autonomous faces,
+        speech, LEDs or moves. Unknown/unreadable state → False (never over-suppress)."""
+        return (await self.robot_state() or "").strip().lower() in QUIET_STATES
+
+    async def is_asleep(self) -> bool:
+        """The robot is effectively OFF (sleep / screensaver) — even foreground alerts hold."""
+        return (await self.robot_state() or "").strip().lower() in ASLEEP_STATES
 
 
 @dataclass

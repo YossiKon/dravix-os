@@ -14,6 +14,8 @@ from __future__ import annotations
 
 import time
 
+import asyncio
+
 from dravix.config import get_settings
 from dravix.dal.base import CAP_FACE, CAP_HEAD, CAP_LEDS, CAP_SAY, Expression
 from dravix.events import Event
@@ -60,6 +62,16 @@ class WelcomeMode(Mode):
     async def _celebrate(self) -> None:
         robot = self.ctx.robot
         cfg = self.ctx.config
+        # coming home should WAKE it — otherwise the head-perk below is dropped by the
+        # driver and a dark, sleeping robot greets you as a disembodied voice
+        if await self.ctx.is_asleep():
+            setter = getattr(robot.driver, "set_mode", None)
+            if setter is not None:
+                try:
+                    await setter("awake")
+                    await asyncio.sleep(0.4)
+                except Exception:  # noqa: BLE001 — best-effort
+                    pass
         if robot.supports(CAP_FACE):
             await robot.set_face(Expression.LOVE)
         if robot.supports(CAP_LEDS):
@@ -67,10 +79,10 @@ class WelcomeMode(Mode):
         if robot.supports(CAP_HEAD):
             # perk up toward the door — a clear "I noticed you!" pose
             await robot.move_head(0.0, 0.5, speed=1.0)
-        line = str(
-            cfg.get("line_he") if (get_settings().language or "en").startswith("he")
-            else cfg.get("line") or ""
-        ).strip()
+        # NB the parens: `(a if he else b) or ""` — without them a Hebrew user who cleared
+        # line_he would get the robot literally saying the string "None".
+        he = (get_settings().language or "en").startswith("he")
+        line = str((cfg.get("line_he") if he else cfg.get("line")) or "").strip()
         if line and robot.supports(CAP_SAY):
             try:
                 await robot.say(line)

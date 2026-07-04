@@ -15,7 +15,7 @@ import random
 import time
 from typing import TYPE_CHECKING, Any
 
-from .dal.base import CAP_FACE, CAP_SAY, Expression, RobotController
+from .dal.base import CAP_FACE, CAP_SAY, QUIET_STATES, Expression, RobotController
 from .emotes import play_emote
 from .events import Event, EventBus
 from .logging import get_logger
@@ -191,9 +191,7 @@ class MoodEngine:
             state = await getter("state_sensor")
         except Exception:  # noqa: BLE001
             return False
-        return (state or "").strip().lower() in {
-            "sleep", "night", "screensaver", "quiet", "focus", "busy",
-        }
+        return (state or "").strip().lower() in QUIET_STATES
 
     async def _express(self, force: bool = False) -> None:
         if self._locked() or await self._dnd():

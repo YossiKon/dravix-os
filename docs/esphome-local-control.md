@@ -8,7 +8,8 @@ to **ESPHome firmware** (reversible), appears in HA as entities, and dravix driv
 > **What's preserved:** 📷 camera (security cam → Frigate), 👆 petting (touch sensors → mood),
 > head/servos, LEDs, speech. **Recreated:** 💃 dance (the built-in `dance` mode now moves the real
 > servos). **Changed:** the animated face is drawn by our firmware (simpler than stock; tunable);
-> face-tracking is not included; the AI moves to HA Assist.
+> on-device face-tracking is not included (the `follow` mode tracks people via Frigate instead,
+> off-device); the AI moves to HA Assist.
 >
 > **Reversible:** re-flash the stock/xiaozhi firmware anytime via M5Burner.
 
@@ -38,23 +39,19 @@ esptool write_flash 0 stackchan-original-backup.bin            # robot is back t
 
 You already run the **ESPHome Device Builder** add-on.
 
-1. Add two secrets in ESPHome (`secrets.yaml`): `wifi_ssid`, `wifi_password`, and a
-   `stackchan_api_key` (ESPHome can generate an encryption key for you).
-2. ESPHome Builder → **New device** → ESP32-S3 (M5Stack CoreS3). Replace the generated YAML with
-   [deploy/esphome/stackchan-dravix.yaml](../deploy/esphome/stackchan-dravix.yaml).
-3. **Install → Manual download → Factory format.**
-4. Connect the StackChan by USB-C, hold reset until the green LED, open <https://web.esphome.io/>,
-   **Connect → Install** the downloaded factory `.bin`.
-5. Press reset. The device joins Wi-Fi and Home Assistant discovers it
-   (**Settings → Devices & services → ESPHome → Configure**, enter the API key).
+1. ESPHome Builder → **New device** → give it a name → skip the wizard's install step.
+2. **Edit** the new device and replace ALL of its YAML with the tiny
+   [deploy/esphome/stackchan-from-git.yaml](../deploy/esphome/stackchan-from-git.yaml) —
+   it pulls the real firmware ([stackchan-dravix.yaml](../deploy/esphome/stackchan-dravix.yaml))
+   from this repo on every build, so future firmware updates are just **Install** again.
+   Edit the two Wi-Fi lines at the top; all personal knobs (device name, wake word, room
+   thresholds) are commented substitutions in the same file.
+3. First flash over USB-C: **Install → Plug into this computer** (the first build compiles a
+   wake-word model, so it takes a while). Every later update is **Install → Wirelessly**.
+4. The device joins Wi-Fi and Home Assistant discovers it
+   (**Settings → Devices & services** → the new device → **Configure**).
 
-> **First-flash tuning (normal for custom firmware):** open the device page in HA / the ESPHome
-> logs and note the real ids for the **display**, **microphone**, **speaker**. Set them in the two
-> `TODO` spots in the YAML (`m5core_display`, `mic`, `spkr`) and re-install. The hardware entities
-> (servos/camera/touch/LEDs) work immediately; the **face drawing** + **voice** are the parts you
-> may adjust once.
-
-## Step 2 — Note the entity ids
+## Step 2 — The entity ids (for reference — nothing to note down)
 
 In HA → the StackChan device, you'll see entities like:
 
@@ -68,31 +65,23 @@ In HA → the StackChan device, you'll see entities like:
 | Camera | `camera.stackchan` |
 | Petting | `binary_sensor.*touch*` (auto-mapped to `touch.pet`) |
 
-## Step 3 — Point dravix at it (add-on Configuration)
+## Step 3 — Point dravix at it: nothing to do
 
-In the **dravix-os** add-on → **Configuration**:
-
-```
-robot_driver: ha
-robot_entity_face:         select.stackchan_face
-robot_entity_head_yaw:     number.stackchan_servo_x
-robot_entity_head_pitch:   number.stackchan_servo_y
-robot_entity_media_player: media_player.stackchan
-robot_entity_light:        light.stackchan_led
-robot_entity_camera:       camera.stackchan
-```
-
-**Save → Restart.**
+There is **no entity mapping to fill in**. The add-on's `ha` driver **auto-discovers** every
+robot entity by suffix (face, head servos, mode, speaker, LEDs, camera, sensors, timers…) —
+it works with any device name, or a renamed device. The dashboard's **Settings** page shows
+what was found, read-only. (The add-on's `robot_entity_*` options exist only as manual
+overrides for non-standard setups — leave them blank.)
 
 ## Step 4 — It's alive 🎉
 
-Open the dashboard → **Console**:
-- System Status shows **DRIVER: ha**, and the **Capabilities** row lights up Say / Set Face /
-  Move Head / Set Leds / Take Photo.
-- The manual controls (face buttons, head sliders, LED picker) now **move the real robot**.
+Open the dashboard (**Open Web UI** on the add-on page):
+- **Settings** shows the auto-wired entities that discovery found.
+- The manual controls on **Home** (face buttons, head joystick, LED picker, volume) **move the
+  real robot**.
 - **Dance:** activate the `dance` mode — the head servos perform the routine.
 - **Petting:** touch the head → the touch sensor fires `touch.pet` → the mood engine reacts.
-- **Camera:** the Cameras tab / Frigate can use `camera.stackchan`.
+- **Camera:** the Home tab's camera view / Frigate can use the robot's camera.
 - **Talk to it:** HA Assist handles the conversation (local), and the face follows along.
 
 ## Reverting

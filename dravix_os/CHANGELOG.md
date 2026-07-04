@@ -1,5 +1,31 @@
 # Changelog
 
+## 0.0.62
+
+Plugin consistency + docs pass (no firmware change — just Update the add-on).
+
+- **The "do-not-disturb" rule now holds everywhere.** A dedicated review found the older
+  plugins didn't all respect sleep / calm modes; fixed via one shared helper:
+  - **ambient_idle**: no head twitch in night/focus/quiet (and it no longer fights the
+    foreground mode's face); a stale config value (`glance_yaw: 18`) that made it slam the
+    head to the hard limit is fixed to `0.35`.
+  - **daynight**: stopped painting the face/LEDs directly (it left the LED lit all night and
+    fought the firmware's own night mode) — it now just tells the mood engine day↔night.
+  - **guard**: alerts are throttled (a flapping sensor can't machine-gun), and at night the
+    spoken warning is held (face + LEDs still alert).
+  - **dance**: no LED disco while the robot is asleep; it now pauses idle glances so they
+    don't fight the choreography, and turns the LEDs off on exit.
+  - **frigate_watch**: it silently never worked on the real backend — now the robot
+    downloads the snapshot itself (like the camera-image feature), throttled and DND-aware.
+  - **follow**: pauses while the robot is asleep instead of chasing a phantom head position.
+  - **companion**: stopped a reflex that flashed HAPPY on *every* utterance and overwrote each
+    reply's real emotion; **welcome**: now wakes the robot before greeting (no more
+    disembodied voice) and fixes a case that could make it literally say "None"; **pomodoro**,
+    **security**, **surprises**: small guards + localization.
+- **Docs refreshed**: the README cheat-sheet + feature maps now cover everything added since
+  0.0.35 (volume, interactive cards, gestures, battery gauge, security, schedule, timers,
+  personas/voice/memories/backup, update awareness, IR…).
+
 ## 0.0.61
 
 The full-audit release: a bug-hunt across everything built recently (12 verified

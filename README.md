@@ -34,8 +34,9 @@ talks to HA core over REST/WebSocket. There is no cloud in the loop.
 
 ## 🧭 Core principles
 
-1. **Local-first.** dravix-os runs fully on your box. `local_only` (default on) refuses cloud AI
-   providers, and nothing talks to a vendor cloud. See [docs/local-only.md](docs/local-only.md).
+1. **Local-first.** dravix-os runs fully on your box. **Local-only (isLocal)** is *your* persisted
+   choice — toggled from the robot's LOCAL button, the dashboard or HA, all synced; when on, cloud
+   AI is refused and nothing leaves your LAN. See [docs/local-only.md](docs/local-only.md).
 2. **Everything is pluggable.** Robot drivers, AI providers and modes are swappable behind clean
    interfaces (the [Device Abstraction Layer](docs/architecture.md)). Higher layers only ever see
    the `RobotController` facade, so *how* the robot is reached can change without touching modes,
@@ -67,7 +68,7 @@ Follow **Step 0 — Back up the original firmware** in
 
 1. Open the **ESPHome Device Builder** → **+ New Device** → give it a name (e.g. `stackchan`) →
    **Skip** the wizard's install step.
-2. Click **Edit** on the new device and replace ALL of its YAML with the ~40-line
+2. Click **Edit** on the new device and replace ALL of its YAML with the tiny (~60-line)
    [`deploy/esphome/stackchan-from-git.yaml`](deploy/esphome/stackchan-from-git.yaml).
 3. Edit the two **Wi-Fi lines** at the top (`ssid:` / `password:` — your home network).
    That tiny file is the only thing that ever lives in your ESPHome: it pulls the real firmware
@@ -129,9 +130,14 @@ Everything is done by touching the robot, talking to it, or from the dashboard:
 | **Pet the head** (front / middle zones) | Pink LEDs, nuzzles up into your hand, happy wiggle |
 | **Tickle the back of the head** | Green flash + giggly double-wiggle |
 | **Walk up close** | Notices you and greets — perks up and nods hello |
+| **Wave 👋** at its nose (3 quick near/far swings) | Wakes, waves back with its head, happy face, warm flash |
+| **Boop 👉** (a finger right up to the nose sensor) | Love-eyes + a happy nod |
+| **Turn its head by hand** | Startled wide eyes (x_x)… then it decides it liked it |
+| **Plug in the charger** (while awake) | "Nom, electricity!" — happy face + a green flash |
 | Room goes **dark / bright** | Falls asleep / wakes up (toggleable) |
-| **Swipe ⬇** | Status bar: clock · date · Wi-Fi bars · battery % · real power draw + time-left · **LOCAL** button |
+| **Swipe ⬇** | Status bar: clock · date · Wi-Fi bars · battery % + time-left · **volume slider** · **LOCAL** button · amber ⬆ arrow when a firmware update is available |
 | **Swipe ⬅ / ➡** | Cycles: face → card 1 → card 2 → card 3 → **GAMES** → **VITALS** |
+| **Tap a row on a card** | Controls that HA entity right from the robot — toggles lights/switches, presses buttons, runs scripts & scenes (up to 4 rows per card) |
 | **Swipe ⬆** | Back to the face |
 | **LOCAL** button (on the status bar) | Toggles local-only mode — nothing in or out of your LAN |
 | The **official ESP-NOW remote** | Joystick steers the head; button **B** = talk (set the remote's channel to your router's Wi-Fi channel) |
@@ -144,18 +150,25 @@ Everything is done by touching the robot, talking to it, or from the dashboard:
 |---------|-----------|----------------------|
 | 🐣 Pet face | Drawn animated eyes/cheeks/mouth — blinks, looks around, squints when happy | Always on; expressions via HA `select` / dashboard / the AI's emotion tags |
 | 🎭 7 modes | `awake · morning · focus · quiet · night · busy · sleep` — each changes face, LEDs, volume, behaviour | Mode chips on the dashboard Home tab, or the `Mode` select in HA |
-| 🗣️ Voice + speech bubble | On-device wake word → HA Assist (STT/LLM/TTS); bubble shows what it heard and answered | "Okay, Nabu" or tap the face; swap the wake word in the tiny file |
+| 🗣️ Voice + speech bubble | On-device wake word → HA Assist (STT/LLM/TTS); listening is a **face** (big curious eyes, no label), replies pop in a **comic bubble** at the top with a tail to the mouth | "Okay, Nabu" or tap the face; swap the wake word in the tiny file |
+| 🌬 Breathing + body language | The face rises/settles on a slow sine while idle, sways in tiny moves while talking; truly random idle glances | Always on; fully still in calm modes (Body language toggle) |
+| 👋 Wave & 👉 boop gestures | Wave at the nose sensor → it waves back; a finger right at the sensor → love-eyes + a nod | Just do it (proximity sensor) |
+| 🫨 Hand-turn reaction | Physically turn its head → startled wide eyes, then it warms up to it | Just do it |
 | 🕹️ Games arcade | **Catch Me · Reaction · Simon · Rock-Paper-Scissors · Flappy · Party** | Swipe to **GAMES**, tap a game (Party also has an HA button) |
 | 💗 Vitals screen | The robot's live needs as bars (energy/food/fun/calm) | Swipe to **VITALS**; care actions on the dashboard **Life** tab |
-| 🗂 3 dynamic cards | Any HA entities you pick, shown on the robot's screen | Dashboard → **Screens**: pick entities per card |
+| 🗂 3 interactive cards | Any HA entities you pick — and up to 4 **tappable rows** per card: tap to toggle/press/run scripts, scenes, automations, the AC | Dashboard → **Screens**: pick entities per card; tap rows on the robot |
+| 🔊 Volume slider | A real slider on the status bar — drag it; it live-mirrors the actual speaker volume | Swipe ⬇ (matching slider on the dashboard Home tab) |
 | 🔒 Privacy mode | Mic dead on-device + camera endpoints blocked; red PRIVACY badge | Toggle on the dashboard Home tab or the HA switch |
 | 🏠 Local-only (isLocal) | *Your* master choice: everything stays inside the home network | **LOCAL** button on the robot, dashboard Settings, or the HA switch — all synced |
-| 🔋 Real power metering | True W / mA / time-left from the INA226, battery % with voltage fallback | Swipe ⬇ — it's on the status bar |
+| 🔋 Real battery gauge | Level + charging straight from the **AXP2101** fuel gauge (hardware charging flag), time-left estimate, sleep-breathing LEDs on the charger; raw W/mA from the INA226 live in HA | Swipe ⬇ — % + bar + time-left on the status bar |
+| 📡 IR blaster + receiver | The robot controls your AC (a ready `Default AC` climate entity) and glances over, curious, when anyone uses a TV/AC remote | Pick `climate.*_default_ac` in the dashboard Climate tab |
+| 🧍 Presence nearby | A proximity-based "someone is at the desk" sensor for HA (gates wellness tips too) | Automatic — a `binary_sensor` in HA |
 | 🎮 Official remote | The M5Stack StackChan ESP-NOW joystick remote | Just use it (match its channel to your router's) |
 | 🖼 Alert images | Any camera/Frigate snapshot full-screen on the robot | Set the `Show image URL` text entity (automations) or dashboard camera actions |
+| 💡 LED effects | Rainbow / Twinkle / Random on the light bar (Party runs the rainbow) | Dashboard → Home → LED effect buttons, or HA |
 | 🧭 Behaviour toggles | Greet-on-approach, sleep-when-dark, blink, idle glances, mood LEDs, tap-to-talk… | Dashboard → Settings → **Robot behaviour** |
 | 🆔 Identify / Party / Reboot | Find-my-robot flash · desk disco · restart | HA buttons (also exposed on the dashboard) |
-| 📟 Firmware version | The robot reports which firmware it runs | Automatic — feeds the Updates card |
+| ⬆️ Update awareness | The robot reports its firmware and shows an amber ⬆ arrow on the status bar when a newer one ships; HA gets a `Firmware update available` sensor | Automatic — updating is still one press: **Install** in ESPHome |
 
 **In the add-on** (the dravix service + dashboard):
 
@@ -163,18 +176,27 @@ Everything is done by touching the robot, talking to it, or from the dashboard:
 |---------|-----------|-------|
 | 🪞 Live face mirror | The robot's face, state and speech mirrored in the browser | **Home** |
 | 💬 Chat with memory | Talk to the robot by text; it remembers facts you tell it | **Home** |
-| 🕹 Joystick + faces + LEDs | Manual head control, expression picker, LED colours | **Home** |
-| 📸 Camera view | The robot's camera (blocked while privacy is on) | **Home** |
-| 🗂 Cards editor | Choose the HA entities for the robot's 3 screens | **Screens** |
-| 💗 Life system | Needs bars, feed/rest/play/calm actions, wellness-nudge toggle | **Life** |
-| ❄ Climate | Control your AC from the same app | **Climate** |
+| 🕹 Joystick + faces + LEDs | Manual head control, expression picker, LED colours + effects | **Home** |
+| 🔊 Volume slider | The speaker volume — always in sync with the robot's own slider | **Home** |
+| 📸 Camera view + photo ritual | The robot's camera (blocked while privacy is on); a 📸 button makes it smile for the shot — photos land in the gallery | **Home** |
+| 🛡 Security guard mode | Arm it and the robot becomes a guard camera: snapshots every few seconds, a slow head patrol, live remote view/steering, a browsable gallery (day-folders auto-prune) | **Home** → Security |
+| ⏲ Kitchen timers | Quick 5/10/25/50-min chips, custom label, live countdown — the robot announces when one fires | **Home** |
+| 🗂 Cards editor | Choose the HA entities for the robot's 3 interactive screens | **Screens** |
+| 💗 Life system | Needs bars, feed/rest/play/calm actions, wellness-nudge toggle + a tips editor (write your own lines) | **Life** |
+| ❄ Climate | Control your AC from the same app (including via the robot's own IR) | **Climate** |
+| 🧩 Modes manager | Every plugin mode — run/stop, enable/disable, edit each mode's settings live | **Settings** |
+| 🏠 Welcome home + 🎁 surprises | Celebration when a person arrives (HA person entity) · spontaneous little delights — wiggles, spins, sneezes (extra sniffly when it's cold outside), a morning stretch | **Settings** → Modes (tune or disable) |
+| 🕐 Day schedule | Preset hours → modes (e.g. 07:30 → morning, 23:00 → sleep), optional spoken line per entry | **Settings** |
+| 🎂 Birthday | Set MM-DD — once a year it celebrates you: love-eyes, party lights, a greeting | **Settings** |
+| 🎭 Personas · 🗣 voice · 🧠 memories | Pick/add/delete personas, TTS voice picker, view/add/delete memories | **Settings** |
 | 🤖 Robot name | Name it anything — the AI answers to that name | **Settings** |
 | 🏠 Local-only master switch | The isLocal choice with a plain-language explanation | **Settings** |
 | 🔌 Auto-wired entities | What discovery found, read-only — nothing to fill in | **Settings** |
-| 🎚 Calibration + timers | Per-axis head invert/centre, screensaver/sleep minutes | **Settings** |
+| 🎚 Calibration + timers + brightness | Per-axis head invert/centre, screensaver/sleep minutes, screen-brightness slider | **Settings** |
 | 🧠 AI provider | HA Assist (default) / Claude / OpenAI / Ollama | **Settings** |
 | ⬆️ Updates card | Add-on + firmware versions vs latest, with rollback recipe | **Settings** |
-| 🌐 Language | English default, Hebrew built-in, one-file recipe for more | header toggle |
+| 💾 Backup & restore | Download / upload all your config as one JSON | **Settings** |
+| 🌐 Language | English default, Hebrew built-in, one-file recipe for more (the choice reaches the robot too) | header toggle |
 
 ## 🤖 What the robot does (custom firmware)
 
@@ -193,20 +215,25 @@ controllable from Home Assistant:
 - **Voice** — an on-device wake word, **"Okay, Nabu"**, hands off to HA Assist for STT/LLM/TTS; the
   face follows along (listening → speaking) and the live state, last-heard and last-reply text
   stream to the dashboard.
-- **Speech bubble** — a bubble by the mouth shows what it's hearing and the AI's reply (Hebrew or
-  English), with clear *listening* / *speaking* states.
+- **Speech bubble** — a comic bubble at the top of the screen, with a tail pointing to the mouth,
+  shows the AI's reply (Hebrew or English) while the animated talking mouth stays fully visible.
+  Listening is a **face**, not a label — big curious eyes and an attentive little perk-up.
 - **A games arcade** — a **Games** menu on the robot's screen: **Catch Me** (tap the runaway dot),
   **Reaction** (a reflex speed test in milliseconds), **Simon** (the growing colour-sequence memory
   game), **Rock-Paper-Scissors** (it nods when it wins), **Flappy** (slip through the pipes) and
   **Party** (a desk disco).
-- **A swipe UI** — swipe **down** for a slim status-bar overlay (Wi-Fi · battery · clock · date ·
-  real power draw + time-left · the **LOCAL** button), and **left/right** through 3 **dynamic
-  cards** (you choose the HA entities on each, from the dashboard), the **Games** arcade and the
-  **Vitals** page — plus a full-screen alert-image page for Frigate / doorbell snapshots.
+- **A swipe UI** — swipe **down** for a slim status-bar overlay (clock · date · Wi-Fi bars ·
+  battery % + time-left · a draggable **volume slider** · the **LOCAL** button · an amber ⬆ arrow
+  when a firmware update is available), and **left/right** through 3 **interactive cards** (you
+  choose the HA entities on each from the dashboard; tap a row to toggle/press/run it), the
+  **Games** arcade and the **Vitals** page — plus a full-screen alert-image page for Frigate /
+  doorbell snapshots.
 - **Privacy mode** — kills the microphone on-device (wake word + voice pipeline stopped) and shows a
   red **PRIVACY** badge; dravix additionally blocks the camera stream/snapshot.
 - **Head calibration** — the head servos are driven and calibrated per-axis from the dashboard.
-- **Battery** — level plus estimated time-left, shown on the status bar.
+- **Battery** — the real level + charging flag straight from the AXP2101 fuel gauge (the same
+  source the original firmware uses), with an estimated time-left on the status bar — and dim
+  sleep-breathing LEDs while it snoozes on the charger.
 
 ## 💗 A robot with a life
 
@@ -229,14 +256,16 @@ real feedback (it "eats", yawns, wiggles, LEDs). Petting and talking to it feed 
 ## 📱 Web dashboard
 
 The add-on ships a **bilingual (English default · עברית RTL built-in), mobile-friendly** dashboard: a live mirror of the robot's
-face, chat with memory, mode switching, games & emotes, a head joystick, the privacy toggle, a
-camera view, the dynamic-cards editor, the **Vitals** page (feed · rest · play · calm + the wellness
-toggle), climate control, and entity mapping + per-axis head calibration.
+face, chat with memory, mode switching, games & emotes, a head joystick, volume, the privacy
+toggle, a camera view + security guard + photo gallery, kitchen timers, the cards editor, the
+**Life** page (feed · rest · play · calm + the wellness tips), climate control, and Settings —
+modes manager, personas/voice/memories, day schedule, birthday, auto-wired entities (read-only),
+per-axis head calibration, brightness, updates and backup/restore.
 
 |  Home  |  Screens  |  Settings  |
 |:------:|:---------:|:----------:|
 | ![Home dashboard](dravix-home.png) | ![Screens editor](dravix-screens.png) | ![Settings](dravix-settings.png) |
-| Face, modes, chat, games | Choose each card's entities | Entity mapping & calibration |
+| Face, modes, chat, games | Choose each card's entities | Auto-wired entities & calibration |
 
 ## 🧩 Modes (plugins)
 
@@ -254,12 +283,16 @@ ambient modes run alongside them.
 | `dance` | foreground | A little dance — bobs the head through a sequence and cycles the LED colours. |
 | `frigate_watch` | foreground | On a Frigate detection, shows that camera on the robot's screen. |
 | `follow` | foreground | Head tracks a person in real time from Frigate detections — off-device, no load on the robot. See [docs/frigate.md](docs/frigate.md). |
+| `security` | foreground | Guard camera — periodic snapshots to a browsable gallery, a slow head patrol, live remote view/steering from the dashboard. |
+| `welcome` | ambient | Welcome-home celebration — an HA person arrives → perks toward the door, love-eyes, green LEDs, greets out loud. |
+| `surprises` | ambient | Spontaneous little delights every hour or two — wiggles, spins, sneezes (frequent when it's cold outside), a morning stretch, "nom, electricity!" on plug-in. |
 | `ambient_idle` | ambient | Subtle glances and blinks so the robot never looks frozen. |
 | `daynight` | ambient | Sleepy face + warm dim LEDs at night, neutral by day. |
 
 Add your own by dropping a `plugins/<name>/plugin.yaml` + a `Mode` subclass — full guide in
-[docs/plugins.md](docs/plugins.md). Per-mode config, enable/disable and the AI provider are all
-editable at runtime via the `/api/config/*` endpoints and persist across restarts (no redeploy).
+[docs/plugins.md](docs/plugins.md). Every mode is managed live from the dashboard's **Modes
+manager** (Settings): run/stop, enable/disable and per-mode settings — or via the
+`/api/config/*` endpoints; everything persists across restarts (no redeploy).
 
 ## 🎭 Personality (the "desk robot" bit)
 

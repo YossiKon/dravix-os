@@ -12,7 +12,7 @@ from __future__ import annotations
 import asyncio
 import random
 
-from dravix.dal.base import CAP_FACE, CAP_HEAD, CAP_LEDS, Expression
+from dravix.dal.base import CAP_FACE, CAP_HEAD, CAP_LEDS, CAP_SAY, Expression
 from dravix.emotes import emote_names, play_emote
 from dravix.modes import Mode, ModeMeta
 
@@ -101,7 +101,8 @@ class SurprisesMode(Mode):
                     line = "אַפְּצִ'י! קר בחוץ, אני קצת מצונן" if he else "Achoo! It's cold out — I've caught the sniffles"
                 else:
                     line = "אַפְּצִ'י!" if he else "Achoo!"
-                await robot.say(line)
+                if robot.supports(CAP_SAY):
+                    await robot.say(line)
                 await asyncio.sleep(2.0)
                 if robot.supports(CAP_FACE):
                     await robot.set_face(Expression.NEUTRAL)
