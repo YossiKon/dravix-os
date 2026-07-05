@@ -1013,6 +1013,13 @@ button:
     id: btn_dance
     on_press:
       - script.execute: dance
+  # LED COLOURS — open the on-screen colour picker.
+  - platform: template
+    name: "LED colours"
+    id: btn_colors
+    on_press:
+      - globals.set: { id: g_card, value: "0" }
+      - lvgl.page.show: page_colors
   # RESET HIGH SCORES — clear the leaderboard from the dashboard.
   - platform: template
     name: "Reset high scores"
@@ -2099,6 +2106,47 @@ lvgl:
               - label: { text: "<", text_font: text_font, text_color: 0x33E6C8, align: CENTER }
             on_click:
               - lvgl.page.show: page_games
+    # ── LED COLOUR PICKER — tap a swatch to set the LED bar (opened from the "LED colours" button) ──
+    - id: page_colors
+      bg_color: 0x05080b
+      bg_opa: COVER
+      scrollable: false
+      scrollbar_mode: "OFF"
+      widgets:
+        - label: { text: "LED COLOUR", text_font: title_font, styles: accent_txt, align: TOP_MID, y: 6 }
+        - button: { id: col_red,    x: 10,  y: 46,  width: 68, height: 52, radius: 8, bg_color: 0xff2a2a, on_click: [ { light.turn_on: { id: stackchan_light_bar, brightness: 100%, red: 100%, green: 0%,  blue: 0%,   effect: "None" } } ] }
+        - button: { id: col_orange, x: 86,  y: 46,  width: 68, height: 52, radius: 8, bg_color: 0xff8000, on_click: [ { light.turn_on: { id: stackchan_light_bar, brightness: 100%, red: 100%, green: 45%, blue: 0%,   effect: "None" } } ] }
+        - button: { id: col_yellow, x: 162, y: 46,  width: 68, height: 52, radius: 8, bg_color: 0xffdd00, on_click: [ { light.turn_on: { id: stackchan_light_bar, brightness: 100%, red: 100%, green: 80%, blue: 0%,   effect: "None" } } ] }
+        - button: { id: col_green,  x: 238, y: 46,  width: 68, height: 52, radius: 8, bg_color: 0x22cc33, on_click: [ { light.turn_on: { id: stackchan_light_bar, brightness: 100%, red: 0%,   green: 85%, blue: 12%,  effect: "None" } } ] }
+        - button: { id: col_cyan,   x: 10,  y: 104, width: 68, height: 52, radius: 8, bg_color: 0x00dddd, on_click: [ { light.turn_on: { id: stackchan_light_bar, brightness: 100%, red: 0%,   green: 85%, blue: 85%,  effect: "None" } } ] }
+        - button: { id: col_blue,   x: 86,  y: 104, width: 68, height: 52, radius: 8, bg_color: 0x2266ff, on_click: [ { light.turn_on: { id: stackchan_light_bar, brightness: 100%, red: 15%,  green: 30%, blue: 100%, effect: "None" } } ] }
+        - button: { id: col_purple, x: 162, y: 104, width: 68, height: 52, radius: 8, bg_color: 0x9933ff, on_click: [ { light.turn_on: { id: stackchan_light_bar, brightness: 100%, red: 55%,  green: 15%, blue: 100%, effect: "None" } } ] }
+        - button: { id: col_pink,   x: 238, y: 104, width: 68, height: 52, radius: 8, bg_color: 0xff55aa, on_click: [ { light.turn_on: { id: stackchan_light_bar, brightness: 100%, red: 100%, green: 30%, blue: 55%,  effect: "None" } } ] }
+        - button:
+            id: col_off
+            x: 10
+            y: 168
+            width: 220
+            height: 46
+            radius: 8
+            bg_color: 0x1a2233
+            widgets:
+              - label: { text: "OFF", text_font: text_font, text_color: 0x8b96a4, align: CENTER }
+            on_click:
+              - light.turn_off: stackchan_light_bar
+        - button:
+            id: col_back
+            x: 238
+            y: 168
+            width: 68
+            height: 46
+            radius: 8
+            bg_color: 0x05080b
+            widgets:
+              - label: { text: "<", text_font: title_font, text_color: 0x33E6C8, align: CENTER }
+            on_click:
+              - globals.set: { id: g_card, value: "0" }
+              - lvgl.page.show: page_face
     - id: page_vitals
       bg_color: 0x05080b
       bg_opa: COVER
