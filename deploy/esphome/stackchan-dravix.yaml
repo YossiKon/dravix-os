@@ -314,6 +314,21 @@ globals:
   - { id: pg_as,     type: int,   restore_value: false, initial_value: "0" }
   - { id: pg_alive,  type: bool,  restore_value: false, initial_value: "false" }
   - { id: g_tempst,  type: int,   restore_value: false, initial_value: "0" }   # temperature mood: 0 ok · 1 hot · 2 cold
+  # ── SNAKE — 13×8 grid (24px cells), body in two arrays, joystick sets a continuous heading ──
+  - id: sn_x
+    type: int[12]
+    restore_value: false
+    initial_value: "std::array<int, 12>{}"
+  - id: sn_y
+    type: int[12]
+    restore_value: false
+    initial_value: "std::array<int, 12>{}"
+  - { id: sn_len, type: int,     restore_value: false, initial_value: "4" }
+  - { id: sn_dir, type: int,     restore_value: false, initial_value: "1" }   # 0 up · 1 right · 2 down · 3 left
+  - { id: sn_fx,  type: int,     restore_value: false, initial_value: "9" }
+  - { id: sn_fy,  type: int,     restore_value: false, initial_value: "4" }
+  - { id: sn_sc,  type: int,     restore_value: false, initial_value: "0" }
+  - { id: sn_alive, type: bool,  restore_value: false, initial_value: "false" }
   - { id: g_pn,     type: int,  restore_value: false, initial_value: "0" }   # party sway alternator
   # official ESP-NOW remote state (latest parsed packet + throttling)
   - { id: g_rc_yaw,   type: float, restore_value: false, initial_value: "0" }     # target yaw (servo scale)
@@ -1784,14 +1799,14 @@ lvgl:
         # bottom row: BREAKOUT · PONG · SCORES (three across)
         - button:
             id: btn_g_breakout
-            x: 8
+            x: 6
             y: 186
-            width: 98
+            width: 74
             height: 46
             radius: 10
             bg_color: 0x14463a
             widgets:
-              - label: { text: "BREAKOUT", text_font: small_font, text_color: 0x5dffa0, align: CENTER }
+              - label: { text: "BREAK", text_font: small_font, text_color: 0x5dffa0, align: CENTER }
             on_click:
               - lambda: |-
                   id(bk_mask) = 255; id(bk_score) = 0; id(bk_lives) = 3;
@@ -1801,9 +1816,9 @@ lvgl:
               - lvgl.page.show: page_breakout
         - button:
             id: btn_g_pong
-            x: 111
+            x: 84
             y: 186
-            width: 98
+            width: 74
             height: 46
             radius: 10
             bg_color: 0x1a3a4a
@@ -1817,10 +1832,28 @@ lvgl:
               - lvgl.label.update: { id: pg_msg, text: "" }
               - lvgl.page.show: page_pong
         - button:
-            id: btn_g_scores
-            x: 214
+            id: btn_g_snake
+            x: 162
             y: 186
-            width: 98
+            width: 74
+            height: 46
+            radius: 10
+            bg_color: 0x14402a
+            widgets:
+              - label: { text: "SNAKE", text_font: small_font, text_color: 0x5dffa0, align: CENTER }
+            on_click:
+              - lambda: |-
+                  id(sn_len) = 4; id(sn_dir) = 1; id(sn_sc) = 0;
+                  id(sn_x)[0] = 6; id(sn_y)[0] = 4; id(sn_x)[1] = 5; id(sn_y)[1] = 4;
+                  id(sn_x)[2] = 4; id(sn_y)[2] = 4; id(sn_x)[3] = 3; id(sn_y)[3] = 4;
+                  id(sn_fx) = 9; id(sn_fy) = 2; id(sn_alive) = true;
+              - lvgl.label.update: { id: sn_msg, text: "" }
+              - lvgl.page.show: page_snake
+        - button:
+            id: btn_g_scores
+            x: 240
+            y: 186
+            width: 74
             height: 46
             radius: 10
             bg_color: 0x2a2440
@@ -2041,6 +2074,42 @@ lvgl:
               - label: { text: "<", text_font: text_font, text_color: 0x33E6C8, align: CENTER }
             on_click:
               - globals.set: { id: bk_alive, value: "false" }
+              - globals.set: { id: g_card, value: "0" }
+              - lvgl.page.show: page_face
+    # ── SNAKE — joystick steers a continuous heading; eat the food, don't hit walls/yourself ──
+    - id: page_snake
+      bg_color: 0x0a1420
+      bg_opa: COVER
+      scrollable: false
+      scrollbar_mode: "OFF"
+      widgets:
+        - obj: { id: sn_food, x: 217, y: 137, width: 20, height: 20, radius: 10, bg_color: 0xff5a52, bg_opa: COVER, border_width: 0 }
+        - obj: { id: sn_s0,  x: 0, y: 40, width: 22, height: 22, radius: 5, bg_color: 0x5dffa0, bg_opa: COVER, border_width: 0 }
+        - obj: { id: sn_s1,  x: 0, y: 40, width: 22, height: 22, radius: 5, bg_color: 0x33E6C8, bg_opa: COVER, border_width: 0 }
+        - obj: { id: sn_s2,  x: 0, y: 40, width: 22, height: 22, radius: 5, bg_color: 0x33E6C8, bg_opa: COVER, border_width: 0 }
+        - obj: { id: sn_s3,  x: 0, y: 40, width: 22, height: 22, radius: 5, bg_color: 0x33E6C8, bg_opa: COVER, border_width: 0 }
+        - obj: { id: sn_s4,  x: 0, y: 40, width: 22, height: 22, radius: 5, bg_color: 0x33E6C8, bg_opa: COVER, border_width: 0, hidden: true }
+        - obj: { id: sn_s5,  x: 0, y: 40, width: 22, height: 22, radius: 5, bg_color: 0x33E6C8, bg_opa: COVER, border_width: 0, hidden: true }
+        - obj: { id: sn_s6,  x: 0, y: 40, width: 22, height: 22, radius: 5, bg_color: 0x33E6C8, bg_opa: COVER, border_width: 0, hidden: true }
+        - obj: { id: sn_s7,  x: 0, y: 40, width: 22, height: 22, radius: 5, bg_color: 0x33E6C8, bg_opa: COVER, border_width: 0, hidden: true }
+        - obj: { id: sn_s8,  x: 0, y: 40, width: 22, height: 22, radius: 5, bg_color: 0x33E6C8, bg_opa: COVER, border_width: 0, hidden: true }
+        - obj: { id: sn_s9,  x: 0, y: 40, width: 22, height: 22, radius: 5, bg_color: 0x33E6C8, bg_opa: COVER, border_width: 0, hidden: true }
+        - obj: { id: sn_s10, x: 0, y: 40, width: 22, height: 22, radius: 5, bg_color: 0x33E6C8, bg_opa: COVER, border_width: 0, hidden: true }
+        - obj: { id: sn_s11, x: 0, y: 40, width: 22, height: 22, radius: 5, bg_color: 0x33E6C8, bg_opa: COVER, border_width: 0, hidden: true }
+        - label: { id: sn_lbl, text: "0", text_font: title_font, text_color: 0x8b96a4, align: TOP_RIGHT, x: -10, y: 4 }
+        - label: { id: sn_msg, text: "", text_font: title_font, text_color: 0x33E6C8, align: CENTER, y: -8 }
+        - button:
+            id: sn_back
+            x: 6
+            y: 6
+            width: 48
+            height: 26
+            radius: 8
+            bg_color: 0x0a1420
+            widgets:
+              - label: { text: "<", text_font: text_font, text_color: 0x33E6C8, align: CENTER }
+            on_click:
+              - globals.set: { id: sn_alive, value: "false" }
               - globals.set: { id: g_card, value: "0" }
               - lvgl.page.show: page_face
     # ── PONG — joystick (up/down) moves your paddle; beat the robot to 7 ──
@@ -3888,6 +3957,72 @@ interval:
       - if:
           condition: { lambda: 'return id(axp_temp).has_state() && id(axp_temp).state >= 35.0 && id(axp_temp).state <= 44.0;' }
           then: [ { globals.set: { id: g_tempst, value: "0" } } ]
+  # SNAKE physics — ~6 fps. Joystick sets a continuous heading; grid 13×8; grows on food.
+  - interval: 160ms
+    then:
+      - if:
+          condition:
+            and:
+              - lvgl.page.is_showing: page_snake
+              - lambda: 'return id(sn_alive);'
+          then:
+            - lambda: |-
+                // heading from the joystick (continuous; can't reverse into itself)
+                float dx = id(g_rc_yaw);
+                float dy = id(g_rc_pitch) - 209.0f;
+                if (fabsf(dx) > 55.0f || fabsf(dy) > 22.0f) {
+                  if (fabsf(dx) > fabsf(dy)) {
+                    if (dx > 0 && id(sn_dir) != 3) id(sn_dir) = 1;
+                    else if (dx < 0 && id(sn_dir) != 1) id(sn_dir) = 3;
+                  } else {
+                    if (dy > 0 && id(sn_dir) != 0) id(sn_dir) = 2;
+                    else if (dy < 0 && id(sn_dir) != 2) id(sn_dir) = 0;
+                  }
+                }
+                for (int i = id(sn_len) - 1; i > 0; i--) { id(sn_x)[i] = id(sn_x)[i-1]; id(sn_y)[i] = id(sn_y)[i-1]; }
+                if (id(sn_dir) == 0) id(sn_y)[0]--;
+                else if (id(sn_dir) == 1) id(sn_x)[0]++;
+                else if (id(sn_dir) == 2) id(sn_y)[0]++;
+                else id(sn_x)[0]--;
+                if (id(sn_x)[0] < 0 || id(sn_x)[0] > 12 || id(sn_y)[0] < 0 || id(sn_y)[0] > 7) id(sn_alive) = false;
+                for (int i = 1; i < id(sn_len); i++) if (id(sn_x)[i] == id(sn_x)[0] && id(sn_y)[i] == id(sn_y)[0]) id(sn_alive) = false;
+                if (id(sn_x)[0] == id(sn_fx) && id(sn_y)[0] == id(sn_fy)) {
+                  id(sn_sc) += 1;
+                  if (id(sn_len) < 12) id(sn_len) += 1;
+                  id(sn_fx) = (int)(random_float() * 12.99f);
+                  id(sn_fy) = (int)(random_float() * 7.99f);
+                }
+            - lvgl.widget.update: { id: sn_food, x: !lambda 'return id(sn_fx) * 24 + 2;', y: !lambda 'return id(sn_fy) * 24 + 42;' }
+            - lvgl.label.update:  { id: sn_lbl, text: !lambda 'char b[8]; snprintf(b, sizeof(b), "%d", id(sn_sc)); return std::string(b);' }
+            - lvgl.widget.update: { id: sn_s0,  x: !lambda 'return id(sn_x)[0]  * 24;', y: !lambda 'return id(sn_y)[0]  * 24 + 40;' }
+            - lvgl.widget.update: { id: sn_s1,  x: !lambda 'return id(sn_x)[1]  * 24;', y: !lambda 'return id(sn_y)[1]  * 24 + 40;' }
+            - lvgl.widget.update: { id: sn_s2,  x: !lambda 'return id(sn_x)[2]  * 24;', y: !lambda 'return id(sn_y)[2]  * 24 + 40;' }
+            - lvgl.widget.update: { id: sn_s3,  x: !lambda 'return id(sn_x)[3]  * 24;', y: !lambda 'return id(sn_y)[3]  * 24 + 40;' }
+            - lvgl.widget.update: { id: sn_s4,  x: !lambda 'return id(sn_x)[4]  * 24;', y: !lambda 'return id(sn_y)[4]  * 24 + 40;' }
+            - lvgl.widget.update: { id: sn_s5,  x: !lambda 'return id(sn_x)[5]  * 24;', y: !lambda 'return id(sn_y)[5]  * 24 + 40;' }
+            - lvgl.widget.update: { id: sn_s6,  x: !lambda 'return id(sn_x)[6]  * 24;', y: !lambda 'return id(sn_y)[6]  * 24 + 40;' }
+            - lvgl.widget.update: { id: sn_s7,  x: !lambda 'return id(sn_x)[7]  * 24;', y: !lambda 'return id(sn_y)[7]  * 24 + 40;' }
+            - lvgl.widget.update: { id: sn_s8,  x: !lambda 'return id(sn_x)[8]  * 24;', y: !lambda 'return id(sn_y)[8]  * 24 + 40;' }
+            - lvgl.widget.update: { id: sn_s9,  x: !lambda 'return id(sn_x)[9]  * 24;', y: !lambda 'return id(sn_y)[9]  * 24 + 40;' }
+            - lvgl.widget.update: { id: sn_s10, x: !lambda 'return id(sn_x)[10] * 24;', y: !lambda 'return id(sn_y)[10] * 24 + 40;' }
+            - lvgl.widget.update: { id: sn_s11, x: !lambda 'return id(sn_x)[11] * 24;', y: !lambda 'return id(sn_y)[11] * 24 + 40;' }
+            - if: { condition: { lambda: 'return 1  < id(sn_len);' }, then: [ { lvgl.widget.show: sn_s1 } ],  else: [ { lvgl.widget.hide: sn_s1 } ] }
+            - if: { condition: { lambda: 'return 2  < id(sn_len);' }, then: [ { lvgl.widget.show: sn_s2 } ],  else: [ { lvgl.widget.hide: sn_s2 } ] }
+            - if: { condition: { lambda: 'return 3  < id(sn_len);' }, then: [ { lvgl.widget.show: sn_s3 } ],  else: [ { lvgl.widget.hide: sn_s3 } ] }
+            - if: { condition: { lambda: 'return 4  < id(sn_len);' }, then: [ { lvgl.widget.show: sn_s4 } ],  else: [ { lvgl.widget.hide: sn_s4 } ] }
+            - if: { condition: { lambda: 'return 5  < id(sn_len);' }, then: [ { lvgl.widget.show: sn_s5 } ],  else: [ { lvgl.widget.hide: sn_s5 } ] }
+            - if: { condition: { lambda: 'return 6  < id(sn_len);' }, then: [ { lvgl.widget.show: sn_s6 } ],  else: [ { lvgl.widget.hide: sn_s6 } ] }
+            - if: { condition: { lambda: 'return 7  < id(sn_len);' }, then: [ { lvgl.widget.show: sn_s7 } ],  else: [ { lvgl.widget.hide: sn_s7 } ] }
+            - if: { condition: { lambda: 'return 8  < id(sn_len);' }, then: [ { lvgl.widget.show: sn_s8 } ],  else: [ { lvgl.widget.hide: sn_s8 } ] }
+            - if: { condition: { lambda: 'return 9  < id(sn_len);' }, then: [ { lvgl.widget.show: sn_s9 } ],  else: [ { lvgl.widget.hide: sn_s9 } ] }
+            - if: { condition: { lambda: 'return 10 < id(sn_len);' }, then: [ { lvgl.widget.show: sn_s10 } ], else: [ { lvgl.widget.hide: sn_s10 } ] }
+            - if: { condition: { lambda: 'return 11 < id(sn_len);' }, then: [ { lvgl.widget.show: sn_s11 } ], else: [ { lvgl.widget.hide: sn_s11 } ] }
+            - if:
+                condition: { lambda: 'return !id(sn_alive);' }
+                then:
+                  - lvgl.label.update: { id: sn_msg, text: "GAME OVER" }
+                  - script.execute: { id: led_flash, r: 10, g: 25, b: 100 }
+                  - script.execute: head_shake
   # SLEEP BREATHING — while asleep ON THE CHARGER, the LED bar "breathes" very dimly
   # (the EMO/Vector charger-snooze everyone loves). Gated on Mood LEDs; goes fully
   # dark the moment it wakes or is unplugged.
