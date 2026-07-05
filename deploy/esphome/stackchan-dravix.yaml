@@ -324,6 +324,7 @@ globals:
   - { id: bk_ev,    type: int,   restore_value: false, initial_value: "0" }     # last event: 1 brick · 2 paddle · 3 hit
   - { id: g_dc_ms,  type: long,  restore_value: false, initial_value: "0" }     # face double-tap: millis of the 1st tap
   - { id: g_food,   type: int,   restore_value: false, initial_value: "0" }     # which treat is being eaten: 0 cookie·1 cake·2 apple·3 croissant
+  - { id: g_lowbatt, type: bool, restore_value: false, initial_value: "false" }  # low-battery worried beep already fired
   - { id: fb_alive, type: bool,  restore_value: false, initial_value: "false" }
   # sleep-breathing LED bookkeeping (so the bar goes dark the moment it wakes)
   - { id: g_breath, type: bool, restore_value: false, initial_value: "false" }
@@ -983,6 +984,12 @@ button:
     id: btn_feed
     on_press:
       - script.execute: eat
+  # GIVE WATER — the robot drinks it on screen (paws + a glass + "ahh").
+  - platform: template
+    name: "Give water"
+    id: btn_drink
+    on_press:
+      - script.execute: drink
   - platform: restart
     name: "Reboot"
     id: btn_reboot
@@ -1332,6 +1339,9 @@ lvgl:
               - obj: { id: hand_r,    align: CENTER, x: 34,  y: 92, width: 38, height: 26, radius: 13, bg_color: 0x9a7b5e, bg_opa: COVER, border_width: 0, hidden: true }
               - obj: { id: food_item, align: CENTER, x: 0,   y: 86, width: 30, height: 30, radius: 15, bg_color: 0x9c6b3f, bg_opa: COVER, border_width: 0, hidden: true }
               - obj: { id: food_top,  align: CENTER, x: 0,   y: 72, width: 12, height: 12, radius: 6,  bg_color: 0xff3333, bg_opa: COVER, border_width: 0, hidden: true }
+              # a glass of water (glass body + a blue fill that drops as it drinks)
+              - obj: { id: drink_glass, align: CENTER, x: 0, y: 86, width: 26, height: 34, radius: 4, bg_color: 0xBFE8FF, bg_opa: COVER, border_width: 2, border_color: 0xFFFFFF, hidden: true }
+              - obj: { id: drink_water, align: CENTER, x: 0, y: 96, width: 20, height: 18, radius: 2, bg_color: 0x4FC3F7, bg_opa: COVER, border_width: 0, hidden: true }
         # zzz while sleeping
         - label:
             id: lbl_zzz
@@ -2390,6 +2400,76 @@ script:
             - delay: 220ms
             - lvgl.widget.hide: hand_l
             - lvgl.widget.hide: hand_r
+  # ── DRINKS 🥤 — paws raise a glass of water to the mouth, 2 sips (the level drops), then "ahh".
+  - id: drink
+    mode: single
+    then:
+      - if:
+          condition: { lambda: 'return id(g_booted) && !id(g_sleep) && !id(g_saver) && !id(g_voice) && !id(g_perm);' }
+          then:
+            - lambda: 'lv_disp_trig_activity(NULL);'
+            - globals.set: { id: g_card, value: "0" }
+            - lvgl.page.show: page_face
+            - globals.set: { id: g_expr, value: "1" }
+            - script.execute: render_face
+            - lvgl.widget.update: { id: drink_glass, y: 86 }
+            - lvgl.widget.update: { id: drink_water, y: 96, height: 18 }
+            - lvgl.widget.update: { id: hand_l, y: 92 }
+            - lvgl.widget.update: { id: hand_r, y: 92 }
+            - lvgl.widget.show: drink_glass
+            - lvgl.widget.show: drink_water
+            - lvgl.widget.show: hand_l
+            - lvgl.widget.show: hand_r
+            - delay: 260ms
+            # raise to the mouth
+            - lvgl.widget.update: { id: drink_glass, y: 62 }
+            - lvgl.widget.update: { id: drink_water, y: 72, height: 14 }
+            - lvgl.widget.update: { id: hand_l, y: 72 }
+            - lvgl.widget.update: { id: hand_r, y: 72 }
+            - delay: 320ms
+            # sip 1
+            - if:
+                condition: { lambda: 'return id(sw_sfx).state && !id(g_quiet) && !id(g_night);' }
+                then: [ { rtttl.play: "sip:d=16,o=4,b=150:c" } ]
+            - lvgl.widget.update: { id: drink_water, y: 76, height: 8 }
+            - delay: 360ms
+            # sip 2
+            - if:
+                condition: { lambda: 'return id(sw_sfx).state && !id(g_quiet) && !id(g_night);' }
+                then: [ { rtttl.play: "sip:d=16,o=4,b=150:c" } ]
+            - lvgl.widget.update: { id: drink_water, y: 80, height: 2 }
+            - delay: 320ms
+            # empty → ahh
+            - lvgl.widget.hide: drink_water
+            - lvgl.widget.hide: drink_glass
+            - globals.set: { id: g_expr, value: "1" }
+            - script.execute: render_face
+            - if:
+                condition: { lambda: 'return id(sw_sfx).state && !id(g_quiet) && !id(g_night);' }
+                then: [ { rtttl.play: "ahh:d=8,o=5,b=140:e,c" } ]
+            - script.execute: head_nod
+            - delay: 220ms
+            - lvgl.widget.hide: hand_l
+            - lvgl.widget.hide: hand_r
+  # ── WAVE 👋 — a little paw rises by the face and wiggles hello (used by greet).
+  - id: wave
+    mode: single
+    then:
+      - if:
+          condition: { lambda: 'return id(g_booted) && !id(g_sleep) && !id(g_saver) && !id(g_perm);' }
+          then:
+            - lvgl.widget.update: { id: hand_r, x: 58, y: 8 }
+            - lvgl.widget.show: hand_r
+            - lvgl.widget.update: { id: hand_r, x: 44 }
+            - delay: 150ms
+            - lvgl.widget.update: { id: hand_r, x: 74 }
+            - delay: 150ms
+            - lvgl.widget.update: { id: hand_r, x: 44 }
+            - delay: 150ms
+            - lvgl.widget.update: { id: hand_r, x: 74 }
+            - delay: 150ms
+            - lvgl.widget.hide: hand_r
+            - lvgl.widget.update: { id: hand_r, x: 34, y: 92 }   # back to its eating spot
   # ── PLUGGED IN 🔌 — "nom, electricity!": happy face + a green flash when the
   #    charger connects (silent while sleeping — the breathing LEDs take over there).
   - id: plug_react
@@ -2753,6 +2833,7 @@ script:
             - globals.set: { id: g_expr,  value: "1" }     # happy
             - lvgl.page.show: page_face
             - select.set: { id: robot_mode, option: awake }
+            - script.execute: wave                                # 👋 a paw waves hello
             - if:
                 condition: { lambda: 'return id(sw_sfx).state && !id(g_quiet);' }
                 then: [ { rtttl.play: "hi:d=16,o=6,b=180:e,g,c7" } ]   # a friendly "hello!" 👋
@@ -3118,6 +3199,9 @@ select:
                   - globals.set: { id: g_pitch_saved, value: "-1" }
                   - globals.set: { id: g_expr, value: "4" }      # yaaawn…
                   - script.execute: render_face
+                  - if:
+                      condition: { lambda: 'return id(sw_sfx).state && !id(g_quiet) && !id(g_night);' }
+                      then: [ { rtttl.play: "yawn:d=4,o=4,b=85:c,e,d,c" } ]   # a sleepy yaaawn
                   - delay: 1400ms
                   - globals.set: { id: g_expr, value: "1" }      # …bright and happy!
                   - script.execute: render_face
@@ -3352,7 +3436,10 @@ interval:
               - lvgl.page.is_showing: page_face
               - lambda: 'return !id(g_sleep) && !id(g_saver) && !id(g_voice) && !id(g_busy) && !id(g_perm) && random_float() < 0.25;'
           then:
-            - script.execute: eat
+            - if:
+                condition: { lambda: 'return random_float() < 0.5;' }
+                then: [ { script.execute: eat } ]
+                else: [ { script.execute: drink } ]
   # SLEEP BREATHING — while asleep ON THE CHARGER, the LED bar "breathes" very dimly
   # (the EMO/Vector charger-snooze everyone loves). Gated on Mood LEDs; goes fully
   # dark the moment it wakes or is unplugged.
@@ -3491,6 +3578,21 @@ interval:
               return std::string(b);
             }
             return std::string("");
+      # LOW-BATTERY worried "uh-oh" — once when it dips below 15%; re-arms after charging past 25%.
+      - if:
+          condition:
+            lambda: |-
+              return !id(g_batt_chg) && id(battery_pct).has_state()
+                     && id(battery_pct).state < 15 && !id(g_lowbatt);
+          then:
+            - globals.set: { id: g_lowbatt, value: "true" }
+            - if:
+                condition: { lambda: 'return id(sw_sfx).state && !id(g_quiet) && !id(g_night);' }
+                then: [ { rtttl.play: "low:d=8,o=4,b=120:c,g#" } ]
+            - script.execute: head_shake
+      - if:
+          condition: { lambda: 'return id(g_batt_chg) || (id(battery_pct).has_state() && id(battery_pct).state > 25);' }
+          then: [ { globals.set: { id: g_lowbatt, value: "false" } } ]
       - lvgl.label.update: { id: lbl_c1_title, text: !lambda 'return id(t_c1_title).state;' }
       - lvgl.label.update: { id: lbl_c2_title, text: !lambda 'return id(t_c2_title).state;' }
       - lvgl.label.update: { id: lbl_c3_title, text: !lambda 'return id(t_c3_title).state;' }
