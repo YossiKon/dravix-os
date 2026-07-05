@@ -2470,6 +2470,82 @@ script:
             - delay: 150ms
             - lvgl.widget.hide: hand_r
             - lvgl.widget.update: { id: hand_r, x: 34, y: 92 }   # back to its eating spot
+  # ── RUBS EYES 😴 — both paws come up to the eyes and rub, sleepily (used when nodding off).
+  - id: rub_eyes
+    mode: single
+    then:
+      - if:
+          condition: { lambda: 'return id(g_booted) && !id(g_perm);' }
+          then:
+            - lvgl.widget.update: { id: hand_l, x: -50, y: 2 }
+            - lvgl.widget.update: { id: hand_r, x: 50, y: 2 }
+            - lvgl.widget.show: hand_l
+            - lvgl.widget.show: hand_r
+            - lvgl.widget.update: { id: hand_l, y: -8 }
+            - lvgl.widget.update: { id: hand_r, y: -8 }
+            - delay: 190ms
+            - lvgl.widget.update: { id: hand_l, y: 8 }
+            - lvgl.widget.update: { id: hand_r, y: 8 }
+            - delay: 190ms
+            - lvgl.widget.update: { id: hand_l, y: -8 }
+            - lvgl.widget.update: { id: hand_r, y: -8 }
+            - delay: 190ms
+            - lvgl.widget.update: { id: hand_l, y: 8 }
+            - lvgl.widget.update: { id: hand_r, y: 8 }
+            - delay: 190ms
+            - lvgl.widget.hide: hand_l
+            - lvgl.widget.hide: hand_r
+            - lvgl.widget.update: { id: hand_l, x: -34, y: 92 }
+            - lvgl.widget.update: { id: hand_r, x: 34, y: 92 }
+  # ── SHY 🙈 — paws cover the eyes (blushing), then peek out (used on a boop, too close).
+  - id: shy
+    mode: single
+    then:
+      - if:
+          condition: { lambda: 'return id(g_booted) && !id(g_sleep) && !id(g_saver) && !id(g_perm);' }
+          then:
+            - if:
+                condition: { lambda: 'return id(sw_sfx).state && !id(g_quiet) && !id(g_night);' }
+                then: [ { rtttl.play: "shy:d=16,o=6,b=200:e,c" } ]
+            - lvgl.widget.update: { id: hand_l, x: -54, y: 0 }
+            - lvgl.widget.update: { id: hand_r, x: 54, y: 0 }
+            - lvgl.widget.show: hand_l
+            - lvgl.widget.show: hand_r
+            - delay: 850ms
+            - lvgl.widget.update: { id: hand_l, x: -72 }   # peek out
+            - lvgl.widget.update: { id: hand_r, x: 72 }
+            - delay: 550ms
+            - lvgl.widget.hide: hand_l
+            - lvgl.widget.hide: hand_r
+            - lvgl.widget.update: { id: hand_l, x: -34, y: 92 }
+            - lvgl.widget.update: { id: hand_r, x: 34, y: 92 }
+  # ── CLAPS 👏 — paws clap together a few times (used when you win a game).
+  - id: clap
+    mode: single
+    then:
+      - if:
+          condition: { lambda: 'return id(g_booted) && !id(g_sleep) && !id(g_saver) && !id(g_perm);' }
+          then:
+            - lvgl.widget.update: { id: hand_l, x: -42, y: 42 }
+            - lvgl.widget.update: { id: hand_r, x: 42, y: 42 }
+            - lvgl.widget.show: hand_l
+            - lvgl.widget.show: hand_r
+            - lvgl.widget.update: { id: hand_l, x: -8 }
+            - lvgl.widget.update: { id: hand_r, x: 8 }
+            - delay: 120ms
+            - lvgl.widget.update: { id: hand_l, x: -42 }
+            - lvgl.widget.update: { id: hand_r, x: 42 }
+            - delay: 120ms
+            - lvgl.widget.update: { id: hand_l, x: -8 }
+            - lvgl.widget.update: { id: hand_r, x: 8 }
+            - delay: 120ms
+            - lvgl.widget.update: { id: hand_l, x: -42 }
+            - lvgl.widget.update: { id: hand_r, x: 42 }
+            - delay: 120ms
+            - lvgl.widget.hide: hand_l
+            - lvgl.widget.hide: hand_r
+            - lvgl.widget.update: { id: hand_l, x: -34, y: 92 }
+            - lvgl.widget.update: { id: hand_r, x: 34, y: 92 }
   # ── PLUGGED IN 🔌 — "nom, electricity!": happy face + a green flash when the
   #    charger connects (silent while sleeping — the breathing LEDs take over there).
   - id: plug_react
@@ -2518,6 +2594,7 @@ script:
       - script.execute: render_face
       - script.execute: { id: led_flash, r: 100, g: 20, b: 45 }
       - script.execute: head_nod
+      - script.execute: shy                          # 🙈 bashful — covers its eyes
       - delay: 2500ms
       - globals.set: { id: g_expr, value: "0" }
       - script.execute: render_face
@@ -3156,6 +3233,8 @@ select:
       - if:
           condition: { lambda: 'return x == std::string("sleep");' }
           then:
+            - script.execute: rub_eyes       # 😴 rubs its eyes sleepily before nodding off
+            - delay: 900ms
             # the head slowly droops (remembering where it was — in the 158..260 scale),
             # LEDs off… the droop writes the SERVO directly (n_head_pitch is locked
             # while g_sleep, which is already true at this point)
@@ -3421,6 +3500,7 @@ interval:
                         - script.execute: { id: led_flash, r: 20, g: 100, b: 30 }        # win → green
                         - script.execute: head_nod                                        # a happy nod
                         - rtttl.play: "win:d=8,o=6,b=180:c,e,g,c7"                        # victory fanfare
+                        - script.execute: clap                                            # 👏 claps for you
                       else:
                         - lvgl.label.update: { id: bk_msg, text: "GAME OVER" }
                         - script.execute: { id: led_flash, r: 100, g: 8, b: 8 }           # lose → red
