@@ -1,4 +1,4 @@
-"""Agent presence API: report a state, reflect it on the robot, read it back."""
+"""Agent presence API: multi-agent registry, winner selection, prefs, dismiss."""
 from __future__ import annotations
 
 from fastapi.testclient import TestClient
@@ -19,23 +19,64 @@ def _app(monkeypatch, tmp_path):
     return create_app()
 
 
-def test_report_and_read_back(tmp_path, monkeypatch):
+def test_single_agent_report_and_read_back(tmp_path, monkeypatch):
     app = _app(monkeypatch, tmp_path)
     try:
         with TestClient(app) as c:
-            # starts idle
-            assert c.get("/api/agent/status").json()["state"] == "idle"
+            # starts empty — no winner
+            snap = c.get("/api/agent/status").json()
+            assert snap["winner"] is None and snap["agents"] == []
+            assert snap["display"] == "both"
+            assert "palette" in snap  # colour-blind-safe palette rides along
 
-            r = c.post("/api/agent/status", json={"state": "waiting_permission", "text": "rm build/?"})
+            r = c.post("/api/agent/status",
+                       json={"state": "waiting_permission", "text": "rm build/?", "source": "claude"})
             assert r.status_code == 200
-            body = r.json()
-            assert body["ok"] is True
-            assert body["state"] == "waiting_permission" and body["text"] == "rm build/?"
-            assert body["updated_at"]  # a timestamp was stamped
+            win = r.json()["winner"]
+            assert win["name"] == "claude" and win["state"] == "waiting_permission"
+            assert win["text"] == "rm build/?"
 
-            # readable both from the dedicated endpoint and the main status snapshot
-            assert c.get("/api/agent/status").json()["state"] == "waiting_permission"
-            assert c.get("/api/status").json()["agent"]["state"] == "waiting_permission"
+            assert c.get("/api/status").json()["agent"]["winner"]["state"] == "waiting_permission"
+    finally:
+        from dravix.config import get_settings
+
+        get_settings.cache_clear()
+
+
+def test_two_agents_urgency_wins(tmp_path, monkeypatch):
+    app = _app(monkeypatch, tmp_path)
+    try:
+        with TestClient(app) as c:
+            c.post("/api/agent/status", json={"state": "working", "source": "proj-a"})
+            snap = c.post("/api/agent/status",
+                          json={"state": "waiting_permission", "source": "proj-b"}).json()
+            # both listed; the one needing approval wins over the one merely working
+            assert {a["name"] for a in snap["agents"]} == {"proj-a", "proj-b"}
+            assert snap["winner"]["name"] == "proj-b"
+
+            # pin proj-a as primary → it wins even though proj-b is more urgent
+            c.put("/api/agent/prefs", json={"primary": "proj-a"})
+            snap = c.get("/api/agent/status").json()
+            assert snap["winner"]["name"] == "proj-a"
+            assert snap["primary"] == "proj-a"
+    finally:
+        from dravix.config import get_settings
+
+        get_settings.cache_clear()
+
+
+def test_dismiss_and_display_pref(tmp_path, monkeypatch):
+    app = _app(monkeypatch, tmp_path)
+    try:
+        with TestClient(app) as c:
+            c.post("/api/agent/status", json={"state": "done", "source": "ci"})
+            assert c.get("/api/agent/status").json()["winner"]["name"] == "ci"
+
+            snap = c.delete("/api/agent/status/ci").json()
+            assert snap["winner"] is None and snap["agents"] == []
+
+            assert c.put("/api/agent/prefs", json={"display": "badge"}).json()["display"] == "badge"
+            assert c.put("/api/agent/prefs", json={"display": "nonsense"}).status_code == 400
     finally:
         from dravix.config import get_settings
 

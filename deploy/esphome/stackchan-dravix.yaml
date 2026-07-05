@@ -39,7 +39,7 @@ substitutions:
   # publishes it to HA ("Firmware version" sensor); the dravix dashboard compares it
   # with the version bundled in the add-on and shows "firmware update available".
   # (Maintainers: bump this on every firmware change. Users: don't touch.)
-  fw_version: "19"
+  fw_version: "20"
   # The ESPHome node name (mDNS hostname + the default entity prefix on a fresh flash).
   # Change it only if you run MORE THAN ONE robot — each needs a unique name. NOTE:
   # changing it on an already-adopted robot registers a NEW device in HA.
@@ -749,6 +749,26 @@ text:
     max_length: 16
     initial_value: ""
     entity_category: diagnostic
+  # ── AI AGENT BADGE — dravix writes "name: state" here (e.g. "claude: working") when a
+  #    coding agent on your PC reports its status; a small teal label on the face shows WHO
+  #    needs you. Plain text is the ultimate colour-blind-safe cue. "" clears it. (fw v20)
+  - platform: template
+    name: "Agent status"
+    id: t_agent
+    optimistic: true
+    mode: text
+    max_length: 32
+    initial_value: ""
+    entity_category: diagnostic
+    set_action:
+      - if:
+          condition: { lambda: 'return !x.empty();' }
+          then:
+            - lvgl.label.update: { id: lbl_agent, text: !lambda 'return x;' }
+            - lvgl.widget.show: lbl_agent
+          else:
+            - lvgl.label.update: { id: lbl_agent, text: "" }
+            - lvgl.widget.hide: lbl_agent
   # ── WELLNESS TIP — dravix writes a short tip here; the robot pops it in the speech
   #    bubble, flashes cyan + wiggles so you notice, then auto-hides after ~12s.
   - platform: template
@@ -1151,6 +1171,17 @@ lvgl:
             align: TOP_RIGHT
             x: -6
             y: 4
+        # AI AGENT badge — the winning coding-agent's "name: state" (fw v20). Bottom-left,
+        # clear of the top speech bubble; driven by the t_agent text slot, hidden when empty.
+        - label:
+            id: lbl_agent
+            text: ""
+            text_font: small_font
+            text_color: 0x33E6C8
+            align: BOTTOM_LEFT
+            x: 6
+            y: -6
+            hidden: true
         # SPEECH BUBBLE — a comic bubble COMING FROM THE MOUTH: sits at the TOP of the
         # screen (so the animated talking mouth stays fully visible) with a little tail
         # pointing down toward the mouth. Shows the AI's words while speaking, and

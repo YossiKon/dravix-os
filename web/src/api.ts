@@ -118,11 +118,20 @@ export interface SecurityInfo {
   photos: SecurityPhoto[];
 }
 
-export interface AgentStatus {
+export interface AgentEntry {
+  name: string;
   state: string;
   text: string;
   updated_at: string;
-  source: string;
+  stale: boolean;
+}
+
+export interface AgentStatus {
+  winner: AgentEntry | null;
+  agents: AgentEntry[];
+  display: string; // bubble | badge | both | off
+  primary: string; // pinned agent name, or "" = auto (most urgent)
+  palette: Record<string, { color: string; glyph: string }>;
 }
 
 export interface SecurityDay {

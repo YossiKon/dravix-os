@@ -1,49 +1,77 @@
-# Turn the robot into a status lamp for an AI agent
+# Turn the robot into a status lamp for your AI agents
 
-Run an AI coding agent on your PC — **Claude Code**, Cursor, an editor extension, a CI job,
-or your own script — and let the **StackChan on your desk show you what it's doing** without
-you watching the screen:
+Run AI coding agents on your PC — **Claude Code**, Cursor, editor extensions, CI jobs, your
+own scripts — and the **StackChan on your desk shows you what they're doing** without you
+watching the screen. Connect **one or many at once**; the robot shows the one that most needs
+you, and the dashboard shows them all.
 
-| Agent state | Robot face | LED | Speaks? |
-|---|---|---|---|
-| `working` | concentrating | 🔵 blue (dim) | no |
-| `waiting_permission` | doubtful | 🟠 amber | **"I need your approval."** |
-| `question` | neutral | 🟣 purple | **"I have a question."** |
-| `done` | happy | 🟢 green | **"All done."** |
-| `error` | sad | 🔴 red | **"Something went wrong."** |
-| `idle` | neutral | off | no |
+| Agent state | Face | LED (Okabe–Ito) | Glyph | Speaks? |
+|---|---|---|---|---|
+| `working` | concentrating | 🔵 sky blue `#56B4E9` | 🔧 | no |
+| `waiting_permission` | doubtful | 🟠 orange `#E69F00` | ✋ | **"I need your approval."** |
+| `question` | neutral | 🟣 reddish-purple `#CC79A7` | ❓ | **"I have a question."** |
+| `done` | happy | 🟢 bluish-green `#009E73` | ✅ | **"All done."** |
+| `error` | sad | 🔴 vermillion `#D55E00` | ⚠️ | **"Something went wrong."** |
+| `idle` | neutral | off | 💤 | no |
+
+**Colour-blind friendly by design.** The palette is [Okabe–Ito](https://jfly.uni-koeln.de/color/),
+chosen so the states stay distinct for the common colour-vision types, and **every state also
+carries a glyph and a distinct brightness** — so you never rely on colour alone. On the robot's
+screen the badge is plain text (`claude: working`), which is unambiguous regardless of colour
+vision.
 
 The attention states (permission / question / error) speak so you look up from across the
-room; the ambient ones (working / idle) stay silent. Everything is best-effort and
-capability-guarded, and the agent reaches the add-on **over your LAN only** — nothing leaves
-your network, so it fully respects the master **isLocal** switch.
+room; the ambient ones stay silent. Everything is best-effort, capability-guarded, and reaches
+the add-on **over your LAN only** — so it fully respects the master **isLocal** switch.
+
+## Several agents at once
+
+Each agent reports under a **name** (`source`). Run Claude Code in two projects and you'll see
+two agents on the dashboard's **AI agent** card. The robot reflects the **winning** agent:
+
+- **Auto (default)** — the most urgent state wins (`waiting_permission` > `question` > `error`
+  > `working` > `done` > `idle`); ties break by most-recent.
+- **Pinned** — from the dashboard, pin one agent so it always wins the robot.
+
+An agent that goes quiet for 15 min stops holding the robot (it's still listed, greyed out).
+You can dismiss any agent from the card.
+
+### Where "whose status" shows on the robot — you choose
+
+From the **AI agent** card (**Show on robot:**):
+
+- **🗨 Bubble** — when the winner needs you, the robot speaks and the name appears in its
+  speech bubble (`claude: needs your approval`). Works with the firmware you already have.
+- **🏷 Badge** — a small persistent label in the corner of the face showing `name: state`.
+  Needs firmware **v20+** (flash it once — it adds one tiny label, no reset risk).
+- **Both** (default) / **Off** (dashboard only).
 
 ## How it works
 
-Your agent POSTs its state to one endpoint on the add-on; dravix mirrors it onto the robot:
+Your agent POSTs its state to one endpoint; dravix mirrors the winner onto the robot:
 
 ```
 POST http://<add-on>:8800/api/agent/status
 Content-Type: application/json
-{ "state": "waiting_permission", "text": "Allow: rm build/?", "source": "claude-code" }
+{ "state": "waiting_permission", "text": "Allow: rm build/?", "source": "claude" }
 ```
 
 - `state` — one of the six above (required).
-- `text` — optional line shown/spoken **instead** of the state's default (e.g. the actual
-  permission question).
-- `say` — optional `true`/`false` to force speech on or off for this one call.
-- `source` — optional label for who's reporting.
+- `text` — optional line shown/spoken **instead** of the state's default.
+- `say` — optional `true`/`false` to force speech on/off for this call.
+- `source` — the agent's name (the registry key). Two instances should use two names.
 
-Read the current status any time with `GET /api/agent/status`, or watch the **Agent** card on
-the dashboard. If you set `DRAVIX_API_TOKEN` on the add-on, send it as
-`Authorization: Bearer <token>` (or `?token=`).
+Other endpoints: `GET /api/agent/status` (every agent + the winner + palette),
+`DELETE /api/agent/status/<name>` (dismiss), `PUT /api/agent/prefs` (`display`, `primary`).
+The winner also rides along in `GET /api/status`. If you set `DRAVIX_API_TOKEN` on the add-on,
+send it as `Authorization: Bearer <token>` (or `?token=`).
 
 Try it by hand:
 
 ```bash
 curl -X POST http://localhost:8800/api/agent/status \
   -H 'Content-Type: application/json' \
-  -d '{"state":"done"}'
+  -d '{"state":"done","source":"test"}'
 ```
 
 ## Wiring Claude Code (the easy path)
@@ -57,38 +85,33 @@ the endpoint above.
 2. Merge the `hooks` + `env` blocks from
    [`deploy/agent-bridge/claude-settings.example.json`](../deploy/agent-bridge/claude-settings.example.json)
    into your `~/.claude/settings.json` (all projects) or a project's `.claude/settings.json`.
-   In each command, replace `PATH_TO` with the real path to `dravix-notify.py`, and use
-   `python` on Windows or `python3` on macOS/Linux.
+   Replace `PATH_TO` with the real path, and use `python` on Windows or `python3` on
+   macOS/Linux.
 
 3. Point it at your add-on via the `env` block:
    - `DRAVIX_URL` — `http://localhost:8800` if the agent runs on the same box as the add-on,
-     otherwise `http://<home-assistant-ip>:8800`.
+     else `http://<home-assistant-ip>:8800`.
    - `DRAVIX_TOKEN` — only if you set `DRAVIX_API_TOKEN` on the add-on.
-
-That's it. Now:
+   - `DRAVIX_AGENT` — optional fixed name for this agent. **Left unset, each project shows as
+     its own agent automatically** (the bridge uses the project folder name).
 
 | Claude Code hook | Fires when | Robot shows |
 |---|---|---|
 | `UserPromptSubmit` | you send a message | `working` |
 | `PreToolUse` | before each tool runs | `working` |
-| `Notification` | it needs permission / your input | `waiting_permission` or `question` (inferred from the message) |
+| `Notification` | it needs permission / your input | `waiting_permission` or `question` |
 | `Stop` | it finishes the turn | `done` |
 | `SessionStart` | a session opens | `idle` |
 
-The `Notification` hook reads the message text and picks `waiting_permission` when it mentions
-permission/approval, otherwise `question`.
-
 ## Wiring anything else
 
-Any tool that can run a shell command or make an HTTP call can drive the lamp — there's no
-Claude-specific magic, just the one endpoint. Examples:
+Any tool that can run a shell command or make an HTTP call can drive the lamp — there's just
+the one endpoint. Reuse `dravix-notify.py` directly (`python3 dravix-notify.py done`) or:
 
 ```bash
-# a long build/deploy script
-curl -sX POST "$DRAVIX_URL/api/agent/status" -d '{"state":"working"}' -H 'Content-Type: application/json'
-make deploy && \
-  curl -sX POST "$DRAVIX_URL/api/agent/status" -d '{"state":"done"}'  -H 'Content-Type: application/json' || \
-  curl -sX POST "$DRAVIX_URL/api/agent/status" -d '{"state":"error"}' -H 'Content-Type: application/json'
+curl -sX POST "$DRAVIX_URL/api/agent/status" -H 'Content-Type: application/json' \
+  -d '{"state":"working","source":"deploy"}'
+make deploy \
+  && curl -sX POST "$DRAVIX_URL/api/agent/status" -d '{"state":"done","source":"deploy"}'  -H 'Content-Type: application/json' \
+  || curl -sX POST "$DRAVIX_URL/api/agent/status" -d '{"state":"error","source":"deploy"}' -H 'Content-Type: application/json'
 ```
-
-Or reuse `dravix-notify.py` directly: `python3 dravix-notify.py done`.

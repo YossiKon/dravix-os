@@ -196,6 +196,29 @@ class Store:
         self._data["idle_motion"] = bool(enabled)
         self.save()
 
+    def agent_prefs(self) -> dict[str, Any]:
+        """How multiple AI agents are shown on the robot (dashboard-managed).
+
+        display: bubble | badge | both | off  — bubble = spoken/12s speech bubble with the
+        agent name; badge = the persistent on-face label (needs fw v20+); both = both; off =
+        dashboard only. primary: pin one agent's name so it always wins the robot, or "" = auto
+        (most-urgent state wins, ties broken by most recent).
+        """
+        p = dict(self._data.get("agent_prefs", {}))
+        display = str(p.get("display", "both"))
+        if display not in ("bubble", "badge", "both", "off"):
+            display = "both"
+        return {"display": display, "primary": str(p.get("primary", "")).strip()}
+
+    def set_agent_prefs(self, display: str | None = None, primary: str | None = None) -> None:
+        p = self.agent_prefs()
+        if display is not None:
+            p["display"] = display
+        if primary is not None:
+            p["primary"] = primary.strip()
+        self._data["agent_prefs"] = p
+        self.save()
+
     # ── robot wiring (driver + HA entities + head calibration) ──────────────────
     def robot_driver(self) -> str | None:
         return self._data.get("robot_driver")

@@ -124,6 +124,10 @@ class RobotController:
         self.default_voice: str | None = None  # applied to say() when no explicit voice given
         # When False, ambient/idle behaviors skip moving the head (manual control still works).
         self.idle_motion: bool = True
+        # Short cache for the Privacy switch (see is_private) so the camera stream doesn't
+        # re-read HA every frame.
+        self._priv_val: bool = False
+        self._priv_at: float = 0.0
 
     async def connect(self) -> None:
         await self._driver.connect()
@@ -193,12 +197,37 @@ class RobotController:
         await self._driver.set_leds(color, brightness)
         await self._bus.publish("robot.leds", color=color, brightness=brightness)
 
+    async def is_private(self) -> bool:
+        """True while the robot's Privacy switch is ON. Cached ~1.5s so the camera stream
+        can check it every frame without hammering Home Assistant."""
+        reader = getattr(self._driver, "is_private", None)
+        if reader is None:
+            return False
+        import time as _time
+
+        now = _time.monotonic()
+        if now - self._priv_at < 1.5:
+            return self._priv_val
+        try:
+            self._priv_val = bool(await reader())
+        except Exception:  # noqa: BLE001 — an unreadable switch must not brick the camera
+            self._priv_val = False
+        self._priv_at = now
+        return self._priv_val
+
     async def take_photo(self) -> bytes | None:
         self._require(CAP_PHOTO)
+        # Privacy is enforced HERE, at the one choke point every capture funnels through
+        # (security snapshots, the photo ritual, the MJPEG stream) — so Privacy mode means
+        # the camera yields NOTHING, no matter who asks.
+        if await self.is_private():
+            return None
         return await self._driver.take_photo()
 
     async def listen(self, timeout: float = 7.0) -> str | None:
         self._require(CAP_LISTEN)
+        if await self.is_private():  # Privacy mode = no microphone, period
+            return None
         return await self._driver.listen(timeout)
 
     async def show_image(self, image: bytes) -> None:

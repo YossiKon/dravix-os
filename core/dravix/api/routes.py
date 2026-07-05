@@ -62,7 +62,12 @@ class AgentStatusBody(BaseModel):
     state: str
     text: str = ""          # optional line to show/speak instead of the state's default
     say: bool | None = None  # override whether the robot speaks (default depends on state)
-    source: str = ""        # optional label for who's reporting (e.g. "claude-code")
+    source: str = ""        # the agent's name (e.g. "claude-code" or a project) — the registry key
+
+
+class AgentPrefsBody(BaseModel):
+    display: str | None = None   # bubble | badge | both | off
+    primary: str | None = None   # pin an agent name (always wins), or "" for auto (most urgent)
 
 
 class ChatBody(BaseModel):
@@ -246,11 +251,33 @@ async def agent_status_set(body: AgentStatusBody, request: Request):
 
 @router.get("/api/agent/status")
 async def agent_status_get(request: Request):
-    """The last reported agent status (for the dashboard / polling)."""
+    """Every reporting agent + the current winner + display prefs (for the dashboard)."""
     agent = getattr(request.app.state, "agent", None)
     if agent is None:
         raise HTTPException(status_code=503, detail="agent presence not available")
     return agent.snapshot()
+
+
+@router.delete("/api/agent/status/{name}")
+async def agent_status_forget(name: str, request: Request):
+    """Dismiss one agent from the board."""
+    agent = getattr(request.app.state, "agent", None)
+    if agent is None:
+        raise HTTPException(status_code=503, detail="agent presence not available")
+    agent.forget(name)
+    return agent.snapshot()
+
+
+@router.put("/api/agent/prefs")
+async def agent_prefs_set(body: AgentPrefsBody, request: Request):
+    """Choose (from the dashboard) how agents show on the robot + who wins."""
+    store = request.app.state.store
+    display = body.display
+    if display is not None and display not in ("bubble", "badge", "both", "off"):
+        raise HTTPException(status_code=400, detail="display must be bubble|badge|both|off")
+    store.set_agent_prefs(display=display, primary=body.primary)
+    agent = getattr(request.app.state, "agent", None)
+    return agent.snapshot() if agent is not None else {"ok": True}
 
 
 # ── robot wiring: pick the driver + HA entities + head calibration from the UI ──
@@ -445,8 +472,15 @@ class PrivacyBody(BaseModel):
 
 
 async def _camera_blocked(request: Request) -> bool:
-    """True while privacy mode is on — the camera endpoints must serve nothing."""
-    reader = getattr(request.app.state.robot.driver, "is_private", None)
+    """True while privacy mode is on — the camera endpoints must serve nothing.
+
+    Uses the controller's cached privacy read, the same choke point that also blocks
+    take_photo() itself (security snapshots, the ritual, the stream)."""
+    robot = request.app.state.robot
+    checker = getattr(robot, "is_private", None)
+    if checker is not None:
+        return await checker()
+    reader = getattr(robot.driver, "is_private", None)
     return bool(reader is not None and await reader())
 
 
@@ -700,6 +734,8 @@ async def take_photo_ritual(request: Request):
     robot = request.app.state.robot
     if not robot.supports(CAP_PHOTO):
         raise HTTPException(status_code=501, detail="this robot has no camera")
+    if await _camera_blocked(request):
+        raise HTTPException(status_code=503, detail="privacy mode is on")
     try:
         if robot.supports(CAP_FACE):
             await robot.set_face(Expression.HAPPY)  # say cheese!

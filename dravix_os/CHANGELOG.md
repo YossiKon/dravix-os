@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.0.67
+
+- **🤖 Multiple AI agents at once + choose whose status shows.** Connect several agents
+  (Claude Code in two projects, Cursor, CI…) — each reports under its own name and they all
+  appear on the dashboard's **AI agent** card. The robot reflects the **winning** agent:
+  *Auto* (most-urgent state wins) or *pin* one agent as primary — chosen from the site.
+  Dismiss any agent; ones that go quiet 15 min stop holding the robot.
+- **Choose where "whose status" shows** (Show on robot:): **🗨 Bubble** — the robot speaks +
+  shows the name in its speech bubble (no flashing needed); **🏷 Badge** — a small persistent
+  `name: state` label on the face (firmware **v20**); **Both** / **Off**.
+- **🎨 Colour-blind-safe status colours.** The agent-status palette is now Okabe–Ito, and
+  every state also carries a distinct **glyph + brightness**, so state never depends on colour
+  alone. The robot LED now takes exact colours (hex → `rgb_color`), and the on-face badge is
+  plain text — unambiguous for any colour vision.
+- **🔒 Privacy mode hardened.** Privacy now blocks the camera at a single choke point
+  (`RobotController.take_photo`) so **security snapshots, the photo ritual, and the video
+  stream all yield nothing** while it's on — on top of the firmware already killing the
+  microphone (wake word + voice pipeline stopped). The mic and camera are both fully off.
+
 ## 0.0.66
 
 - **🤖 Turn the robot into a status lamp for an AI agent on your PC.** Run Claude Code

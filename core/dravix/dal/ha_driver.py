@@ -25,6 +25,17 @@ from .base import (
 log = get_logger("dal.ha")
 
 
+def _hex_to_rgb(value: str) -> tuple[int, int, int] | None:
+    """Parse ``#rrggbb`` → (r, g, b); None for a bare colour name so the caller falls back."""
+    s = (value or "").strip().lstrip("#")
+    if len(s) != 6:
+        return None
+    try:
+        return (int(s[0:2], 16), int(s[2:4], 16), int(s[4:6], 16))
+    except ValueError:
+        return None
+
+
 class HARobotDriver(RobotDriver):
     name = "ha"
     transport = "homeassistant"
@@ -311,11 +322,27 @@ class HARobotDriver(RobotDriver):
         if color in ("off", "none", "") or brightness <= 0:
             await self._ha.call_service("light", "turn_off", {"entity_id": light})
             return
-        await self._ha.call_service(
-            "light",
-            "turn_on",
-            {"entity_id": light, "color_name": color, "brightness_pct": int(brightness * 100)},
-        )
+        data: dict[str, Any] = {"entity_id": light, "brightness_pct": int(brightness * 100)}
+        # A "#rrggbb" value (used by the agent status lamp's colour-blind-safe palette) is an
+        # rgb_color; a bare name ("blue", "orange") is a color_name — HA rejects a hex as name.
+        rgb = _hex_to_rgb(color)
+        if rgb is not None:
+            data["rgb_color"] = list(rgb)
+        else:
+            data["color_name"] = color
+        await self._ha.call_service("light", "turn_on", data)
+
+    async def set_agent_text(self, text: str) -> None:
+        """Write the persistent AI-agent badge on the robot's face (fw v20+ ``t_agent`` slot).
+
+        Best-effort — firmware without the slot simply has no such entity, so we no-op."""
+        ent = self._entities.get("agent_text")
+        if not ent:
+            return
+        try:
+            await self._ha.call_service("text", "set_value", {"entity_id": ent, "value": text[:32]})
+        except Exception:  # noqa: BLE001 — a status badge must never break the caller
+            pass
 
     async def take_photo(self) -> bytes | None:
         cam = self._entities.get("camera")
