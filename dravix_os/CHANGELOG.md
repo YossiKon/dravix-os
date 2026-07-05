@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.0.71
+
+- **🖐 Head gestures now do both approve *and* reject** (firmware **v23**). While an
+  Approve/Reject prompt is up: a **quick tap** on the head approves (happy nuzzle), a
+  **3-second hold** rejects (a "no" head-shake). They can't be confused — one is a tap, the
+  other a deliberate hold — and the back-of-head tickle is unaffected. Outside a prompt a head
+  touch is still just a pet.
+
 ## 0.0.70
 
 - **🖐 Pet the robot's head to approve** (firmware **v22**). When an Approve/Reject prompt is

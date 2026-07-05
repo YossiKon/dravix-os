@@ -20,7 +20,7 @@
 #  SWIPE:  down → status · up → face · left/right → 3 cards + the CATCH-ME game.
 #  GAME "CATCH ME!": a teal dot runs around the screen — tap it to score; every 10
 #  catches the robot celebrates (green LEDs + a happy head wiggle).
-#  TAP face = talk (toggle) · LONG-PRESS face (1.2s) = instant sleep.
+#  SINGLE-tap face = STOP everything (speech/dance/LEDs → clean) · DOUBLE-tap = AI listen (toggle) · LONG-PRESS = sleep.
 #  Publishes live state to HA:  sensor State (awake/listening/speaking/screensaver/sleep),
 #  Last heard (STT), Last reply (TTS) — the dravix dashboard shows these in real time.
 #  Buttons: Identify (find the robot — cyan flashes) · Reboot.
@@ -39,7 +39,7 @@ substitutions:
   # publishes it to HA ("Firmware version" sensor); the dravix dashboard compares it
   # with the version bundled in the add-on and shows "firmware update available".
   # (Maintainers: bump this on every firmware change. Users: don't touch.)
-  fw_version: "22"
+  fw_version: "23"
   # The ESPHome node name (mDNS hostname + the default entity prefix on a fresh flash).
   # Change it only if you run MORE THAN ONE robot — each needs a unique name. NOTE:
   # changing it on an already-adopted robot registers a NEW device in HA.
@@ -276,6 +276,7 @@ globals:
   - { id: g_tip,    type: bool, restore_value: false, initial_value: "false" }  # a wellness tip is showing
   - { id: g_agent,  type: bool, restore_value: false, initial_value: "false" }  # an AI-agent badge is set
   - { id: g_perm,   type: bool, restore_value: false, initial_value: "false" }  # an approve/reject prompt is up
+  - { id: g_ptouch, type: bool, restore_value: false, initial_value: "false" }  # a head touch is deciding a prompt
   - { id: g_voice,  type: bool, restore_value: false, initial_value: "false" }  # voice pipeline active
   - { id: g_sleep,  type: bool, restore_value: false, initial_value: "false" }
   - { id: g_saver,  type: bool, restore_value: false, initial_value: "false" }
@@ -321,6 +322,7 @@ globals:
   - { id: bk_mask,  type: int,   restore_value: false, initial_value: "255" }  # 8 bricks alive (bits 0..7)
   - { id: bk_alive, type: bool,  restore_value: false, initial_value: "false" }
   - { id: bk_ev,    type: int,   restore_value: false, initial_value: "0" }     # last event: 1 brick · 2 paddle · 3 hit
+  - { id: g_dc_ms,  type: long,  restore_value: false, initial_value: "0" }     # face double-tap: millis of the 1st tap
   - { id: fb_alive, type: bool,  restore_value: false, initial_value: "false" }
   # sleep-breathing LED bookkeeping (so the bar goes dark the moment it wakes)
   - { id: g_breath, type: bool, restore_value: false, initial_value: "false" }
@@ -563,22 +565,32 @@ text_sensor:
                      && !id(g_pet) && id(sw_touch).state;
           then:
             - globals.set: { id: g_pet, value: "true" }
-            # A head-pet while an Approve/Reject prompt is up = "yes, go ahead" — fires the
-            # same approve event as the on-screen button, then nuzzles happily. Only active
-            # while g_perm (a prompt is showing), so normal petting still just pets.
+            # While an Approve/Reject prompt is up, a HEAD TOUCH decides it: a quick TAP
+            # approves (on release) and a 3s HOLD rejects (perm_hold). Otherwise it's a pet.
             - if:
                 condition: { lambda: 'return id(g_perm);' }
                 then:
-                  - globals.set: { id: g_perm, value: "false" }
-                  - lvgl.widget.hide: perm_box
-                  - homeassistant.event: { event: esphome.dravix_permission, data: { decision: "approve" } }
-                  - script.execute: pet_react
+                  - globals.set: { id: g_ptouch, value: "true" }
+                  - script.execute: perm_hold
                 else:
                   - script.execute: pet_react
       - if:
           condition: { lambda: 'return x == "No touch";' }            # released
           then:
             - globals.set: { id: g_pet, value: "false" }
+            # a prompt touch released BEFORE the 3s hold fired = a quick TAP → approve
+            - if:
+                condition: { lambda: 'return id(g_ptouch);' }
+                then:
+                  - script.stop: perm_hold
+                  - globals.set: { id: g_ptouch, value: "false" }
+                  - if:
+                      condition: { lambda: 'return id(g_perm);' }
+                      then:
+                        - globals.set: { id: g_perm, value: "false" }
+                        - lvgl.widget.hide: perm_box
+                        - homeassistant.event: { event: esphome.dravix_permission, data: { decision: "approve" } }
+                        - script.execute: pet_react
   # Fallback: after an HA device/area rename, re-registered entities can land under an
   # "<area>_<device>" prefix. Only one of the two prefixes really exists; the other just
   # stays unavailable (harmless). This makes petting survive either prefix.
@@ -593,22 +605,31 @@ text_sensor:
                      && !id(g_pet) && id(sw_touch).state;
           then:
             - globals.set: { id: g_pet, value: "true" }
-            # A head-pet while an Approve/Reject prompt is up = "yes, go ahead" — fires the
-            # same approve event as the on-screen button, then nuzzles happily. Only active
-            # while g_perm (a prompt is showing), so normal petting still just pets.
+            # While an Approve/Reject prompt is up, a HEAD TOUCH decides it: a quick TAP
+            # approves (on release) and a 3s HOLD rejects (perm_hold). Otherwise it's a pet.
             - if:
                 condition: { lambda: 'return id(g_perm);' }
                 then:
-                  - globals.set: { id: g_perm, value: "false" }
-                  - lvgl.widget.hide: perm_box
-                  - homeassistant.event: { event: esphome.dravix_permission, data: { decision: "approve" } }
-                  - script.execute: pet_react
+                  - globals.set: { id: g_ptouch, value: "true" }
+                  - script.execute: perm_hold
                 else:
                   - script.execute: pet_react
       - if:
           condition: { lambda: 'return x == "No touch";' }
           then:
             - globals.set: { id: g_pet, value: "false" }
+            - if:
+                condition: { lambda: 'return id(g_ptouch);' }
+                then:
+                  - script.stop: perm_hold
+                  - globals.set: { id: g_ptouch, value: "false" }
+                  - if:
+                      condition: { lambda: 'return id(g_perm);' }
+                      then:
+                        - globals.set: { id: g_perm, value: "false" }
+                        - lvgl.widget.hide: perm_box
+                        - homeassistant.event: { event: esphome.dravix_permission, data: { decision: "approve" } }
+                        - script.execute: pet_react
   # TOUCH ZONE 2 (middle of the head) — also petting.
   - platform: homeassistant
     id: ha_touch2
@@ -621,22 +642,31 @@ text_sensor:
                      && !id(g_pet) && id(sw_touch).state;
           then:
             - globals.set: { id: g_pet, value: "true" }
-            # A head-pet while an Approve/Reject prompt is up = "yes, go ahead" — fires the
-            # same approve event as the on-screen button, then nuzzles happily. Only active
-            # while g_perm (a prompt is showing), so normal petting still just pets.
+            # While an Approve/Reject prompt is up, a HEAD TOUCH decides it: a quick TAP
+            # approves (on release) and a 3s HOLD rejects (perm_hold). Otherwise it's a pet.
             - if:
                 condition: { lambda: 'return id(g_perm);' }
                 then:
-                  - globals.set: { id: g_perm, value: "false" }
-                  - lvgl.widget.hide: perm_box
-                  - homeassistant.event: { event: esphome.dravix_permission, data: { decision: "approve" } }
-                  - script.execute: pet_react
+                  - globals.set: { id: g_ptouch, value: "true" }
+                  - script.execute: perm_hold
                 else:
                   - script.execute: pet_react
       - if:
           condition: { lambda: 'return x == "No touch";' }
           then:
             - globals.set: { id: g_pet, value: "false" }
+            - if:
+                condition: { lambda: 'return id(g_ptouch);' }
+                then:
+                  - script.stop: perm_hold
+                  - globals.set: { id: g_ptouch, value: "false" }
+                  - if:
+                      condition: { lambda: 'return id(g_perm);' }
+                      then:
+                        - globals.set: { id: g_perm, value: "false" }
+                        - lvgl.widget.hide: perm_box
+                        - homeassistant.event: { event: esphome.dravix_permission, data: { decision: "approve" } }
+                        - script.execute: pet_react
   # TOUCH ZONE 3 (back of the head) — a TICKLE: giggly wiggle instead of a calm pet.
   - platform: homeassistant
     id: ha_touch3
@@ -2000,6 +2030,28 @@ lvgl:
               - lvgl.page.show: page_face
 
 script:
+  # ── FACE TAP dispatch — single tap = STOP everything · double tap = toggle the AI ──
+  - id: panic_stop            # single tap: cut speech + dance + effects, LEDs off, clean face
+    then:
+      - voice_assistant.stop                    # stop listening / speaking mid-sentence
+      - script.stop: led_flash
+      - script.stop: party                      # stop the disco / dance
+      - script.stop: identify
+      - globals.set: { id: g_flash,  value: "false" }
+      - globals.set: { id: g_listen, value: "false" }
+      - globals.set: { id: g_talk,   value: "false" }
+      - globals.set: { id: g_voice,  value: "false" }
+      - light.turn_off: stackchan_light_bar     # no LEDs — back to a clean state
+      - script.execute: render_face             # redraw the current mode's face
+  - id: tap_single            # fires the STOP only if a 2nd tap didn't arrive (→ that's a double)
+    mode: restart
+    then:
+      - delay: 350ms
+      - if:
+          condition: { lambda: 'return id(g_dc_ms) != 0;' }
+          then:
+            - globals.set: { id: g_dc_ms, value: "0" }
+            - script.execute: panic_stop
   # After ~25s the alert image goes away and the face comes back.
   - id: img_timeout
     mode: restart
@@ -2023,6 +2075,21 @@ script:
       - delay: 180s
       - globals.set: { id: g_perm, value: "false" }
       - lvgl.widget.hide: perm_box
+  # HOLD-TO-REJECT — armed on a head touch while a prompt is up. If the touch is still held
+  # 3s later it's a deliberate long-press → REJECT (with a "no" head shake). A quick tap
+  # releases before this fires and is handled as APPROVE in the touch release handler.
+  - id: perm_hold
+    mode: restart
+    then:
+      - delay: 3s
+      - if:
+          condition: { lambda: 'return id(g_ptouch) && id(g_perm);' }
+          then:
+            - globals.set: { id: g_ptouch, value: "false" }
+            - globals.set: { id: g_perm, value: "false" }
+            - lvgl.widget.hide: perm_box
+            - homeassistant.event: { event: esphome.dravix_permission, data: { decision: "reject" } }
+            - script.execute: head_shake
   # Set both eyes to a shape: width / height / corner-radius / vertical offset.
   # (Eyes are align:CENTER, so size changes keep them centred — no x math needed.)
   - id: set_eyes
@@ -3437,8 +3504,8 @@ touchscreen:
                   return !id(sw_sleep) && !id(g_voice) && adx < 40 && ady < 40 && dur > 1200;
           then:
             - select.set: { id: robot_mode, option: sleep }
-      # Quick TAP (not a swipe / long-press) on the FACE → toggle the voice assistant:
-      # 1st tap starts it (like "ok nabu"), a 2nd tap stops it. Toggle via sw_tap_talk.
+      # FACE TAP: SINGLE tap = STOP everything (panic); DOUBLE tap (2nd within ~350ms) = toggle
+      # the AI (start listening / cancel). Only on the face page, gated by "Tap face to talk".
       - if:
           condition:
             and:
@@ -3451,13 +3518,23 @@ touchscreen:
                   return !id(sw_sleep) && adx < 40 && ady < 40 && dur < 700;
           then:
             - if:
-                condition: { lambda: 'return id(g_voice);' }
+                condition: { lambda: 'return id(g_dc_ms) != 0 && ((long) millis() - id(g_dc_ms)) < 350;' }
                 then:
-                  - voice_assistant.stop     # already talking → a 2nd tap cancels
-                else:
+                  # ── DOUBLE tap → toggle the voice assistant ──
+                  - globals.set: { id: g_dc_ms, value: "0" }
+                  - script.stop: tap_single
                   - if:
-                      condition: { switch.is_off: sw_privacy }   # no listening in privacy mode
-                      then: [ voice_assistant.start ]
+                      condition: { lambda: 'return id(g_voice);' }
+                      then:
+                        - voice_assistant.stop
+                      else:
+                        - if:
+                            condition: { switch.is_off: sw_privacy }
+                            then: [ voice_assistant.start ]
+                else:
+                  # ── first tap → arm the single-tap STOP (fires if no 2nd tap arrives) ──
+                  - globals.set: { id: g_dc_ms, value: !lambda 'return (long) millis();' }
+                  - script.execute: tap_single
       # swipe DOWN → status
       - if:
           condition:
