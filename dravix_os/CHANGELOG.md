@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.0.74
+
+- **📢 Physical notifications from Home Assistant.** New `POST /api/robot/notify` — the robot
+  faces you + nods, pulses the LED in an event-class colour (Okabe–Ito, colour-blind-safe:
+  calendar=amber, message=blue, doorbell/delivery=green, alert=red, info=teal) and optionally
+  speaks. Movement is auto-dropped while it sleeps and speech is skipped while asleep. Drive it
+  from an HA automation, e.g. a `rest_command`:
+  ```yaml
+  rest_command:
+    dravix_notify:
+      url: "http://<add-on>:8800/api/robot/notify"
+      method: POST
+      content_type: "application/json"
+      payload: '{"kind":"{{ kind }}","text":"{{ text }}","say":true}'
+  ```
+  Then call it on a doorbell/calendar/message trigger — a glanceable, non-disruptive alert.
+
 ## 0.0.73
 
 - **🎬 Photobooth selfie with a 3-2-1 countdown.** New **Selfie 3-2-1** button on the Camera

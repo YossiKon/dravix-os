@@ -890,6 +890,67 @@ async def photobooth(request: Request):
     return {"ok": True, "day": now.strftime("%Y-%m-%d"), "name": name}
 
 
+# event-class → LED colour (Okabe–Ito, colour-blind-safe) for physical notifications
+_NOTIFY_COLORS = {
+    "calendar": "#E69F00",   # amber
+    "message": "#56B4E9",    # blue
+    "doorbell": "#009E73",   # green
+    "delivery": "#009E73",   # green
+    "alert": "#D55E00",      # vermillion
+    "info": "#2EE6C8",       # teal
+}
+
+
+class RobotNotifyBody(BaseModel):
+    kind: str = "info"    # calendar | message | doorbell | delivery | alert | info
+    text: str = ""        # optional line to speak
+    say: bool = True
+
+
+async def _robot_state_text(request: Request) -> str:
+    getter = getattr(request.app.state.robot.driver, "get_text", None)
+    if getter is None:
+        return ""
+    try:
+        return (await getter("state_sensor")) or ""
+    except Exception:  # noqa: BLE001
+        return ""
+
+
+@router.post("/api/robot/notify")
+async def robot_notify(body: RobotNotifyBody, request: Request):
+    """📢 A physical, glanceable notification: the robot faces you + nods, pulses the LED in
+    an event-class colour, and (optionally) speaks the text. Meant to be called from Home
+    Assistant automations via a rest_command (doorbell, calendar, a message…). All
+    best-effort + capability-guarded; movement is auto-dropped while the robot sleeps, and
+    speech is skipped while it's asleep. See docs/home-assistant.md."""
+    from ..dal.base import ASLEEP_STATES, CAP_HEAD, CAP_LEDS, CAP_SAY
+
+    robot = request.app.state.robot
+    color = _NOTIFY_COLORS.get(body.kind.strip().lower(), _NOTIFY_COLORS["info"])
+
+    async def _try(coro):
+        try:
+            await coro
+        except Exception:  # noqa: BLE001 — a notification must never raise
+            pass
+
+    if robot.supports(CAP_LEDS):
+        await _try(robot.set_leds(color, 1.0))
+    if robot.supports(CAP_HEAD):  # a little "hey, look at me" nod (dropped while asleep)
+        await _try(robot.move_head(0.0, -0.15, speed=0.6))
+        await asyncio.sleep(0.25)
+        await _try(robot.move_head(0.0, 0.1, speed=0.6))
+        await asyncio.sleep(0.2)
+        await _try(robot.move_head(0.0, 0.0, speed=0.6))
+    spoken = False
+    if body.say and body.text and robot.supports(CAP_SAY):
+        if (await _robot_state_text(request)).strip().lower() not in ASLEEP_STATES:
+            await _try(robot.say(body.text))
+            spoken = True
+    return {"ok": True, "kind": body.kind, "color": color, "spoken": spoken}
+
+
 class VolumeBody(BaseModel):
     volume: int = Field(ge=0, le=100)
 
