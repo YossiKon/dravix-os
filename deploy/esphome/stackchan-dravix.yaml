@@ -303,6 +303,16 @@ globals:
   - { id: hs_simon,    type: int, restore_value: true, initial_value: "0" }
   - { id: hs_react,    type: int, restore_value: true, initial_value: "0" }   # best (lowest) reaction ms; 0 = none yet
   - { id: hs_rps,      type: int, restore_value: true, initial_value: "0" }   # total R-P-S wins
+  # ── PONG — you (joystick, left paddle) vs the robot AI (right). First to 7. ──
+  - { id: pg_bx,     type: float, restore_value: false, initial_value: "160" }
+  - { id: pg_by,     type: float, restore_value: false, initial_value: "120" }
+  - { id: pg_vx,     type: float, restore_value: false, initial_value: "3.2" }
+  - { id: pg_vy,     type: float, restore_value: false, initial_value: "2.0" }
+  - { id: pg_py,     type: int,   restore_value: false, initial_value: "98" }   # player paddle top-Y
+  - { id: pg_ay,     type: int,   restore_value: false, initial_value: "98" }   # robot paddle top-Y
+  - { id: pg_ps,     type: int,   restore_value: false, initial_value: "0" }
+  - { id: pg_as,     type: int,   restore_value: false, initial_value: "0" }
+  - { id: pg_alive,  type: bool,  restore_value: false, initial_value: "false" }
   - { id: g_pn,     type: int,  restore_value: false, initial_value: "0" }   # party sway alternator
   # official ESP-NOW remote state (latest parsed packet + throttling)
   - { id: g_rc_yaw,   type: float, restore_value: false, initial_value: "0" }     # target yaw (servo scale)
@@ -1763,17 +1773,17 @@ lvgl:
               - label: { text: "PARTY!", text_font: text_font, text_color: 0xFFC23D, align: CENTER }
             on_click:
               - script.execute: party
-        # bottom row: BREAKOUT + the high-scores table
+        # bottom row: BREAKOUT · PONG · SCORES (three across)
         - button:
             id: btn_g_breakout
-            x: 22
+            x: 8
             y: 186
-            width: 132
+            width: 98
             height: 46
             radius: 10
             bg_color: 0x14463a
             widgets:
-              - label: { text: "BREAKOUT", text_font: text_font, text_color: 0x5dffa0, align: CENTER }
+              - label: { text: "BREAKOUT", text_font: small_font, text_color: 0x5dffa0, align: CENTER }
             on_click:
               - lambda: |-
                   id(bk_mask) = 255; id(bk_score) = 0; id(bk_lives) = 3;
@@ -1782,15 +1792,32 @@ lvgl:
               - lvgl.label.update: { id: bk_msg, text: "" }
               - lvgl.page.show: page_breakout
         - button:
-            id: btn_g_scores
-            x: 166
+            id: btn_g_pong
+            x: 111
             y: 186
-            width: 132
+            width: 98
+            height: 46
+            radius: 10
+            bg_color: 0x1a3a4a
+            widgets:
+              - label: { text: "PONG", text_font: small_font, text_color: 0x9fe0ff, align: CENTER }
+            on_click:
+              - lambda: |-
+                  id(pg_ps) = 0; id(pg_as) = 0;
+                  id(pg_bx) = 160; id(pg_by) = 120; id(pg_vx) = 3.2f; id(pg_vy) = 2.0f;
+                  id(pg_py) = 98; id(pg_ay) = 98; id(pg_alive) = true;
+              - lvgl.label.update: { id: pg_msg, text: "" }
+              - lvgl.page.show: page_pong
+        - button:
+            id: btn_g_scores
+            x: 214
+            y: 186
+            width: 98
             height: 46
             radius: 10
             bg_color: 0x2a2440
             widgets:
-              - label: { text: "SCORES", text_font: text_font, text_color: 0xFFC23D, align: CENTER }
+              - label: { text: "SCORES", text_font: small_font, text_color: 0xFFC23D, align: CENTER }
             on_click:
               - lvgl.label.update: { id: sc_catch,    text: !lambda 'char b[24]; snprintf(b, sizeof(b), "Catch:  %d", id(hs_catch)); return std::string(b);' }
               - lvgl.label.update: { id: sc_flappy,   text: !lambda 'char b[24]; snprintf(b, sizeof(b), "Flappy:  %d", id(hs_flappy)); return std::string(b);' }
@@ -2006,6 +2033,32 @@ lvgl:
               - label: { text: "<", text_font: text_font, text_color: 0x33E6C8, align: CENTER }
             on_click:
               - globals.set: { id: bk_alive, value: "false" }
+              - globals.set: { id: g_card, value: "0" }
+              - lvgl.page.show: page_face
+    # ── PONG — joystick (up/down) moves your paddle; beat the robot to 7 ──
+    - id: page_pong
+      bg_color: 0x05080b
+      bg_opa: COVER
+      scrollable: false
+      scrollbar_mode: "OFF"
+      widgets:
+        - obj: { id: pg_pl,   x: 8,   y: 98,  width: 7, height: 44, radius: 3, bg_color: 0x33E6C8, bg_opa: COVER, border_width: 0 }
+        - obj: { id: pg_pr,   x: 305, y: 98,  width: 7, height: 44, radius: 3, bg_color: 0xff9eb5, bg_opa: COVER, border_width: 0 }
+        - obj: { id: pg_ball, x: 160, y: 120, width: 9, height: 9,  radius: 4, bg_color: 0xFFFFFF, bg_opa: COVER, border_width: 0 }
+        - label: { id: pg_sc,  text: "0 : 0", text_font: title_font, text_color: 0x8b96a4, align: TOP_MID, y: 6 }
+        - label: { id: pg_msg, text: "",      text_font: title_font, text_color: 0x33E6C8, align: CENTER, y: -20 }
+        - button:
+            id: pg_back
+            x: 6
+            y: 6
+            width: 48
+            height: 26
+            radius: 8
+            bg_color: 0x05080b
+            widgets:
+              - label: { text: "<", text_font: text_font, text_color: 0x33E6C8, align: CENTER }
+            on_click:
+              - globals.set: { id: pg_alive, value: "false" }
               - globals.set: { id: g_card, value: "0" }
               - lvgl.page.show: page_face
     # ── HIGH SCORES table — the best each game has seen (persists across reboots) ──
@@ -3673,6 +3726,64 @@ interval:
                 condition: { lambda: 'return random_float() < 0.5;' }
                 then: [ { script.execute: eat } ]
                 else: [ { script.execute: drink } ]
+  # PONG physics — ~25 fps. Joystick pitch moves your paddle; the robot AI tracks the ball
+  # but is capped at 3 px/frame so it's beatable. Only ticks while the page shows + alive.
+  - interval: 40ms
+    then:
+      - if:
+          condition:
+            and:
+              - lvgl.page.is_showing: page_pong
+              - lambda: 'return id(pg_alive);'
+          then:
+            - lambda: |-
+                // your paddle follows the joystick pitch (g_rc_pitch ∈ 158..260)
+                int py = (int) ((id(g_rc_pitch) - 158.0f) * 1.92f);
+                id(pg_py) = py < 2 ? 2 : (py > 194 ? 194 : py);
+                // robot AI: chase the ball, but capped at 3 px/frame
+                int target = (int) id(pg_by) - 18;
+                if (target < 2) target = 2; else if (target > 194) target = 194;
+                int d = target - id(pg_ay);
+                if (d > 3) d = 3; else if (d < -3) d = -3;
+                id(pg_ay) += d;
+                // move the ball
+                id(pg_bx) += id(pg_vx);
+                id(pg_by) += id(pg_vy);
+                // top / bottom walls
+                if (id(pg_by) < 2)   { id(pg_by) = 2;   id(pg_vy) =  fabsf(id(pg_vy)); }
+                if (id(pg_by) > 229) { id(pg_by) = 229; id(pg_vy) = -fabsf(id(pg_vy)); }
+                // your paddle (x 8..15)
+                if (id(pg_vx) < 0 && id(pg_bx) <= 16 && id(pg_bx) >= 4
+                    && id(pg_by) + 9 >= id(pg_py) && id(pg_by) <= id(pg_py) + 44) {
+                  id(pg_vx) = fabsf(id(pg_vx));
+                  id(pg_vy) += (id(pg_by) + 4 - (id(pg_py) + 22)) * 0.06f;
+                }
+                // robot paddle (x 305..312)
+                if (id(pg_vx) > 0 && id(pg_bx) + 9 >= 305 && id(pg_bx) + 9 <= 316
+                    && id(pg_by) + 9 >= id(pg_ay) && id(pg_by) <= id(pg_ay) + 44) {
+                  id(pg_vx) = -fabsf(id(pg_vx));
+                  id(pg_vy) += (id(pg_by) + 4 - (id(pg_ay) + 22)) * 0.06f;
+                }
+                // scoring — off the left = robot point; off the right = your point
+                if (id(pg_bx) < -6)  { id(pg_as) += 1; id(pg_bx) = 160; id(pg_by) = 120; id(pg_vx) =  3.2f; id(pg_vy) = 2.0f; }
+                if (id(pg_bx) > 322) { id(pg_ps) += 1; id(pg_bx) = 160; id(pg_by) = 120; id(pg_vx) = -3.2f; id(pg_vy) = 2.0f; }
+                if (id(pg_ps) >= 7 || id(pg_as) >= 7) id(pg_alive) = false;   // first to 7
+            - lvgl.widget.update: { id: pg_pl,   y: !lambda 'return id(pg_py);' }
+            - lvgl.widget.update: { id: pg_pr,   y: !lambda 'return id(pg_ay);' }
+            - lvgl.widget.update: { id: pg_ball, x: !lambda 'return (int) id(pg_bx);', y: !lambda 'return (int) id(pg_by);' }
+            - lvgl.label.update:  { id: pg_sc, text: !lambda 'char b[16]; snprintf(b, sizeof(b), "%d : %d", id(pg_ps), id(pg_as)); return std::string(b);' }
+            - if:
+                condition: { lambda: 'return !id(pg_alive);' }
+                then:
+                  - if:
+                      condition: { lambda: 'return id(pg_ps) > id(pg_as);' }
+                      then:
+                        - lvgl.label.update: { id: pg_msg, text: "YOU WIN!" }
+                        - script.execute: clap
+                        - script.execute: head_nod
+                      else:
+                        - lvgl.label.update: { id: pg_msg, text: "ROBOT WINS" }
+                        - script.execute: head_shake
   # SLEEP BREATHING — while asleep ON THE CHARGER, the LED bar "breathes" very dimly
   # (the EMO/Vector charger-snooze everyone loves). Gated on Mood LEDs; goes fully
   # dark the moment it wakes or is unplugged.
