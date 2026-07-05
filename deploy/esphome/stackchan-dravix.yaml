@@ -323,6 +323,7 @@ globals:
   - { id: bk_alive, type: bool,  restore_value: false, initial_value: "false" }
   - { id: bk_ev,    type: int,   restore_value: false, initial_value: "0" }     # last event: 1 brick · 2 paddle · 3 hit
   - { id: g_dc_ms,  type: long,  restore_value: false, initial_value: "0" }     # face double-tap: millis of the 1st tap
+  - { id: g_food,   type: int,   restore_value: false, initial_value: "0" }     # which treat is being eaten: 0 cookie·1 cake·2 apple·3 croissant
   - { id: fb_alive, type: bool,  restore_value: false, initial_value: "false" }
   # sleep-breathing LED bookkeeping (so the bar goes dark the moment it wakes)
   - { id: g_breath, type: bool, restore_value: false, initial_value: "false" }
@@ -976,6 +977,12 @@ button:
     id: btn_party
     on_press:
       - script.execute: party
+  # FEED — give the robot a snack; it eats it on screen (paws + a random treat + "nom, yum").
+  - platform: template
+    name: "Feed the robot"
+    id: btn_feed
+    on_press:
+      - script.execute: eat
   - platform: restart
     name: "Reboot"
     id: btn_reboot
@@ -1320,6 +1327,11 @@ lvgl:
               - obj: { id: sweat, align: CENTER, x: 100, y: -60, width: 14, height: 20, radius: 7, bg_color: 0x57c8ff, bg_opa: COVER, border_width: 0, hidden: true }
               - label: { id: dz_l, align: CENTER, x: -58, y: -6, text: "x", text_font: big_font, text_color: 0x14181d, hidden: true }
               - label: { id: dz_r, align: CENTER, x: 58,  y: -6, text: "x", text_font: big_font, text_color: 0x14181d, hidden: true }
+              # ── HANDS + FOOD (Ropet-style) — paws + a treat that rise to the mouth. Hidden until it eats.
+              - obj: { id: hand_l,    align: CENTER, x: -34, y: 92, width: 38, height: 26, radius: 13, bg_color: 0x9a7b5e, bg_opa: COVER, border_width: 0, hidden: true }
+              - obj: { id: hand_r,    align: CENTER, x: 34,  y: 92, width: 38, height: 26, radius: 13, bg_color: 0x9a7b5e, bg_opa: COVER, border_width: 0, hidden: true }
+              - obj: { id: food_item, align: CENTER, x: 0,   y: 86, width: 30, height: 30, radius: 15, bg_color: 0x9c6b3f, bg_opa: COVER, border_width: 0, hidden: true }
+              - obj: { id: food_top,  align: CENTER, x: 0,   y: 72, width: 12, height: 12, radius: 6,  bg_color: 0xff3333, bg_opa: COVER, border_width: 0, hidden: true }
         # zzz while sleeping
         - label:
             id: lbl_zzz
@@ -2308,6 +2320,76 @@ script:
       - script.execute: { id: head_nudge, dx: 0, dy: 12 }         # nuzzle up into your hand
       - delay: 900ms
       - script.execute: head_shake                                # happy little wiggle
+  # ── EATS 🍪 — Ropet-style: paws lift a random treat to the mouth, 2 nibbles + "nom", then a
+  #    happy "yum" nod. Fires from the Feed button, or spontaneously now and then on the face.
+  - id: eat
+    mode: single
+    then:
+      - if:
+          condition: { lambda: 'return id(g_booted) && !id(g_sleep) && !id(g_saver) && !id(g_voice) && !id(g_perm);' }
+          then:
+            - lambda: 'lv_disp_trig_activity(NULL);'
+            - globals.set: { id: g_card, value: "0" }
+            - lvgl.page.show: page_face
+            - globals.set: { id: g_expr, value: "1" }
+            - script.execute: render_face
+            - lambda: 'id(g_food) = (int)(random_float() * 3.999f);'
+            - lvgl.widget.update:
+                id: food_item
+                width: 30
+                height: 30
+                bg_color: !lambda |-
+                  switch (id(g_food)) {
+                    case 0:  return lv_color_hex(0x9c6b3f);   // cookie
+                    case 1:  return lv_color_hex(0xff9eb5);   // cake
+                    case 2:  return lv_color_hex(0xd83b3b);   // apple
+                    default: return lv_color_hex(0xe0a860);   // croissant
+                  }
+            - if:
+                condition: { lambda: 'return id(g_food) == 1 || id(g_food) == 2;' }
+                then:
+                  - lvgl.widget.update: { id: food_top, bg_color: !lambda 'return id(g_food) == 1 ? lv_color_hex(0xff3333) : lv_color_hex(0x4caf50);' }
+                  - lvgl.widget.show: food_top
+                else:
+                  - lvgl.widget.hide: food_top
+            - lvgl.widget.update: { id: food_item, y: 86 }
+            - lvgl.widget.update: { id: food_top, y: 72 }
+            - lvgl.widget.update: { id: hand_l, y: 92 }
+            - lvgl.widget.update: { id: hand_r, y: 92 }
+            - lvgl.widget.show: hand_l
+            - lvgl.widget.show: hand_r
+            - lvgl.widget.show: food_item
+            - delay: 260ms
+            # lift to the mouth
+            - lvgl.widget.update: { id: food_item, y: 66 }
+            - lvgl.widget.update: { id: food_top, y: 52 }
+            - lvgl.widget.update: { id: hand_l, y: 80 }
+            - lvgl.widget.update: { id: hand_r, y: 80 }
+            - delay: 340ms
+            # nibble 1
+            - if:
+                condition: { lambda: 'return id(sw_sfx).state && !id(g_quiet) && !id(g_night);' }
+                then: [ { rtttl.play: "nom:d=32,o=5,b=170:e" } ]
+            - lvgl.widget.hide: food_top
+            - lvgl.widget.update: { id: food_item, width: 20, height: 20 }
+            - delay: 340ms
+            # nibble 2
+            - if:
+                condition: { lambda: 'return id(sw_sfx).state && !id(g_quiet) && !id(g_night);' }
+                then: [ { rtttl.play: "nom:d=32,o=5,b=170:c" } ]
+            - lvgl.widget.update: { id: food_item, width: 10, height: 10 }
+            - delay: 300ms
+            # gone → yum!
+            - lvgl.widget.hide: food_item
+            - globals.set: { id: g_expr, value: "1" }
+            - script.execute: render_face
+            - if:
+                condition: { lambda: 'return id(sw_sfx).state && !id(g_quiet) && !id(g_night);' }
+                then: [ { rtttl.play: "yum:d=16,o=6,b=160:c,e,g" } ]
+            - script.execute: head_nod
+            - delay: 220ms
+            - lvgl.widget.hide: hand_l
+            - lvgl.widget.hide: hand_r
   # ── PLUGGED IN 🔌 — "nom, electricity!": happy face + a green flash when the
   #    charger connects (silent while sleeping — the breathing LEDs take over there).
   - id: plug_react
@@ -3260,6 +3342,17 @@ interval:
                         - script.execute: { id: led_flash, r: 100, g: 8, b: 8 }           # lose → red
                         - script.execute: head_shake
                         - rtttl.play: "lose:d=8,o=5,b=120:g,e,c,c4"                       # sad descent
+  # SPONTANEOUS SNACK — every so often, while you're on the face and it's awake + idle, the
+  # robot gets peckish and eats a little treat on its own (Ropet/Tamagotchi charm).
+  - interval: 113s
+    then:
+      - if:
+          condition:
+            and:
+              - lvgl.page.is_showing: page_face
+              - lambda: 'return !id(g_sleep) && !id(g_saver) && !id(g_voice) && !id(g_busy) && !id(g_perm) && random_float() < 0.25;'
+          then:
+            - script.execute: eat
   # SLEEP BREATHING — while asleep ON THE CHARGER, the LED bar "breathes" very dimly
   # (the EMO/Vector charger-snooze everyone loves). Gated on Mood LEDs; goes fully
   # dark the moment it wakes or is unplugged.
