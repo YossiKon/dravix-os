@@ -172,6 +172,30 @@ def test_reject_sets_idle(tmp_path, monkeypatch):
         get_settings.cache_clear()
 
 
+def test_short_for_robot_two_lines():
+    from dravix.agent_status import _short_for_robot
+
+    assert _short_for_robot("ls") == "ls"                       # short → unchanged
+    assert _short_for_robot("a\n\n  b   c") == "a b c"          # whitespace/newlines collapsed
+    long = _short_for_robot("rm -rf build/ && npm ci && npm run build && deploy --prod --force")
+    assert len(long) <= 44 and long.endswith("..")             # clipped to ~2 lines
+
+
+def test_permission_summary_full_on_dashboard_short_on_robot(tmp_path, monkeypatch):
+    # the stored/dashboard summary stays FULL even though the robot text is compacted
+    app = _app(monkeypatch, tmp_path)
+    try:
+        with TestClient(app) as c:
+            full = "rm -rf build/ && npm ci && npm run build && deploy --prod --force"
+            r = c.post("/api/agent/permission", json={"source": "claude", "summary": full}).json()
+            assert r["summary"] == full                         # dashboard sees the whole thing
+            assert c.get(f"/api/agent/permission/{r['id']}").json()["summary"] == full
+    finally:
+        from dravix.config import get_settings
+
+        get_settings.cache_clear()
+
+
 def test_badge_fits_and_keeps_state():
     from dravix.agent_status import _badge
 

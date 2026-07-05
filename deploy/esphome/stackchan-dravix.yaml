@@ -3285,10 +3285,12 @@ interval:
       # or both (a little diagonal look).
       - if:
           condition:
-            lambda: |-
-              return id(sw_move).state && id(sw_drift).state && !id(g_sleep) && !id(g_saver)
-                     && !id(g_busy) && !id(g_night) && !id(g_focus) && !id(g_quiet) && !id(g_voice)
-                     && !std::isnan(id(servo_x_angle).state) && random_float() < 0.14;
+            and:
+              - lvgl.page.is_showing: page_face      # ONLY glance the head while the FACE is on screen
+              - lambda: |-
+                  return id(sw_move).state && id(sw_drift).state && !id(g_sleep) && !id(g_saver)
+                         && !id(g_busy) && !id(g_night) && !id(g_focus) && !id(g_quiet) && !id(g_voice)
+                         && !std::isnan(id(servo_x_angle).state) && random_float() < 0.14;
           then:
             - number.set:
                 id: servo_x_angle

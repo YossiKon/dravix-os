@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.0.72
+
+- **Shorter approval prompt on the robot.** The Approve/Reject prompt now shows a compact
+  ≤2-line summary (whitespace collapsed, long commands clipped) so it fits the small screen,
+  and the robot speaks the short "I need your approval" line instead of reading out a long
+  command. The **dashboard still shows the full command** (it has room).
+
 ## 0.0.71
 
 - **🖐 Head gestures now do both approve *and* reject** (firmware **v23**). While an

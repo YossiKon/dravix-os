@@ -70,6 +70,14 @@ def palette() -> dict[str, dict]:
     return {s: {"color": lk.led, "glyph": lk.glyph} for s, lk in _LOOKS.items()}
 
 
+def _short_for_robot(text: str, limit: int = 44) -> str:
+    """Compact summary for the robot's small screen — at most ~2 lines. Collapses any
+    whitespace/newlines (a multi-line command becomes one line) and clips long text so it
+    never spills past the prompt box. The dashboard still shows the FULL summary."""
+    one = " ".join((text or "").split())
+    return one if len(one) <= limit else one[: limit - 2].rstrip() + ".."
+
+
 def _badge(name: str, state: str, maxlen: int = 30) -> str:
     """"name: state" for the on-face label, fit into ``maxlen`` by shortening the NAME (never
     the state) so the important part is always readable. "" when there's nothing to show."""
@@ -297,10 +305,12 @@ class AgentPresence:
             if v["decision"] is None or (stamp - (v["decided_dt"] or stamp)).total_seconds() < 60
         }
         self._current = pid
-        # the asking agent is now waiting_permission (becomes the winner → face/LED/speech)…
-        await self.set("waiting_permission", text, source=name, now=stamp)
-        # …plus the Approve/Reject buttons on the robot's screen.
-        await self._show_permission(f"{name}: {text}")
+        # the asking agent is now waiting_permission (the winner → face/LED). Speak the SHORT
+        # default line ("I need your approval"), NOT the long command — text="" keeps the
+        # spoken line and the winner bubble short.
+        await self.set("waiting_permission", "", source=name, now=stamp)
+        # …plus the Approve/Reject buttons + a compact ≤2-line summary on the robot's screen.
+        await self._show_permission(_short_for_robot(f"{name}: {text}"))
         return self.permission_view(pid, now=stamp)
 
     async def decide_permission(
@@ -335,7 +345,7 @@ class AgentPresence:
             )
             if nxt is not None:
                 self._current = nxt["id"]
-                await self._show_permission(f"{nxt['agent']}: {nxt['summary']}")
+                await self._show_permission(_short_for_robot(f"{nxt['agent']}: {nxt['summary']}"))
         # move the asking agent on: approved → back to working, rejected → idle
         await self.set("working" if approved else "idle", "", source=p["agent"], now=stamp)
         return self.permission_view(p["id"], now=stamp)
