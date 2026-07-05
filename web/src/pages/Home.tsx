@@ -115,6 +115,20 @@ export function HomePage(props: { config: RobotConfig | null }) {
       toastErr(e);
     }
   }
+  const [boothBusy, setBoothBusy] = useState(false);
+  async function photobooth() {
+    setBoothBusy(true);
+    try {
+      const r = await apiSend<{ day: string; name: string }>("/api/robot/photobooth", "POST", {});
+      setShot(r);
+      toast(tr("📸 סלפי! נשמר בגלריה", "📸 Selfie! Saved to the gallery"));
+      void refreshSecurity();
+    } catch (e) {
+      toastErr(e);
+    } finally {
+      setBoothBusy(false);
+    }
+  }
   const volTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // don't leave a pending volume PUT behind after unmount
@@ -655,9 +669,14 @@ export function HomePage(props: { config: RobotConfig | null }) {
             </button>
           )}
           {!privacy.private && (
-            <button className="btn mt-3 w-full" onClick={() => void takePhoto()}>
-              {tr("📸 צלם תמונה (הוא יחייך)", "📸 Take a photo (it will smile)")}
-            </button>
+            <div className="mt-3 flex gap-2">
+              <button className="btn flex-1" onClick={() => void takePhoto()}>
+                {tr("📸 צלם", "📸 Photo")}
+              </button>
+              <button className="btn flex-1 disabled:opacity-50" disabled={boothBusy} onClick={() => void photobooth()}>
+                {boothBusy ? tr("3… 2… 1…", "3… 2… 1…") : tr("🎬 סלפי 3-2-1", "🎬 Selfie 3-2-1")}
+              </button>
+            </div>
           )}
           {shot && (
             <img

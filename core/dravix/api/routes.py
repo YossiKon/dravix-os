@@ -829,6 +829,67 @@ async def take_photo_ritual(request: Request):
     return {"ok": True, "day": now.strftime("%Y-%m-%d"), "name": name}
 
 
+@router.post("/api/robot/photobooth")
+async def photobooth(request: Request):
+    """📸 A joyful photobooth: the robot counts "3… 2… 1…" out loud (with faces + LED
+    pulses), flashes the LED bar like a shutter, then snaps the shot into the gallery."""
+    from datetime import datetime
+
+    from ..config import security_dir
+    from ..dal.base import CAP_FACE, CAP_LEDS, CAP_PHOTO, CAP_SAY, Expression
+
+    robot = request.app.state.robot
+    if not robot.supports(CAP_PHOTO):
+        raise HTTPException(status_code=501, detail="this robot has no camera")
+    if await _camera_blocked(request):
+        raise HTTPException(status_code=503, detail="privacy mode is on")
+
+    from ..config import get_settings
+
+    he = (get_settings().language or "en").startswith("he")
+
+    async def _try(coro):
+        try:
+            await coro
+        except Exception:  # noqa: BLE001 — the whole ritual is best-effort theatre
+            pass
+
+    # 3 … 2 … 1 — a face + a spoken number + an amber pulse per beat
+    faces = [Expression.HAPPY, Expression.DOUBT, Expression.HAPPY]
+    for i, n in enumerate((3, 2, 1)):
+        if robot.supports(CAP_FACE):
+            await _try(robot.set_face(faces[i]))
+        if robot.supports(CAP_LEDS):
+            await _try(robot.set_leds("#E69F00", 0.9))
+        if robot.supports(CAP_SAY):
+            await _try(robot.say(str(n)))
+        await asyncio.sleep(0.9)
+    if robot.supports(CAP_SAY):
+        await _try(robot.say("חייכו!" if he else "Say cheese!"))
+    if robot.supports(CAP_LEDS):
+        await _try(robot.set_leds("#FFFFFF", 1.0))  # shutter flash
+    if robot.supports(CAP_FACE):
+        await _try(robot.set_face(Expression.HAPPY))
+
+    try:
+        data = await robot.take_photo()
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=502, detail=f"photo failed: {exc}") from exc
+    finally:
+        if robot.supports(CAP_LEDS):
+            await _try(robot.set_leds("off", 0.0))
+        if robot.supports(CAP_FACE):
+            await _try(robot.set_face(Expression.NEUTRAL))
+    if not data:
+        raise HTTPException(status_code=502, detail="camera returned no frame")
+    now = datetime.now()
+    day_dir = security_dir() / now.strftime("%Y-%m-%d")
+    day_dir.mkdir(parents=True, exist_ok=True)
+    name = f"{now.strftime('%H%M%S')}.jpg"
+    (day_dir / name).write_bytes(data)
+    return {"ok": True, "day": now.strftime("%Y-%m-%d"), "name": name}
+
+
 class VolumeBody(BaseModel):
     volume: int = Field(ge=0, le=100)
 

@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.0.73
+
+- **🎬 Photobooth selfie with a 3-2-1 countdown.** New **Selfie 3-2-1** button on the Camera
+  card (and `POST /api/robot/photobooth`): the robot counts "3… 2… 1…" out loud with matching
+  faces and amber LED pulses, flashes the LED bar white like a shutter, then snaps the shot
+  into the gallery. (First of a batch of new companion-robot features being added; no flashing
+  needed for this one.)
+
 ## 0.0.72
 
 - **Shorter approval prompt on the robot.** The Approve/Reject prompt now shows a compact
