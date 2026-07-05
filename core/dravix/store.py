@@ -208,14 +208,22 @@ class Store:
         display = str(p.get("display", "both"))
         if display not in ("bubble", "badge", "both", "off"):
             display = "both"
-        return {"display": display, "primary": str(p.get("primary", "")).strip()}
+        muted = [str(m) for m in (p.get("muted") or []) if str(m).strip()]
+        return {"display": display, "primary": str(p.get("primary", "")).strip(), "muted": muted}
 
-    def set_agent_prefs(self, display: str | None = None, primary: str | None = None) -> None:
+    def set_agent_prefs(
+        self,
+        display: str | None = None,
+        primary: str | None = None,
+        muted: list[str] | None = None,
+    ) -> None:
         p = self.agent_prefs()
         if display is not None:
             p["display"] = display
         if primary is not None:
             p["primary"] = primary.strip()
+        if muted is not None:
+            p["muted"] = sorted({str(m).strip() for m in muted if str(m).strip()})
         self._data["agent_prefs"] = p
         self.save()
 

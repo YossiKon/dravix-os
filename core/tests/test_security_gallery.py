@@ -37,7 +37,10 @@ def test_days_photos_and_download(tmp_path, monkeypatch):
     app = _app(monkeypatch, tmp_path)
     try:
         with TestClient(app) as c:
-            days = c.get("/api/security/days").json()["days"]
+            body = c.get("/api/security/days").json()
+            # not armed → the recording indicator is present and False
+            assert body["recording"] is False
+            days = body["days"]
             assert [d["day"] for d in days] == ["2026-07-04", "2026-07-03"]  # newest first
             assert days[0]["count"] == 2 and days[0]["has_video"] is False
 

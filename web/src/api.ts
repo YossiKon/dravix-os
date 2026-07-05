@@ -114,6 +114,7 @@ export interface SecurityClip {
 
 export interface SecurityInfo {
   armed: boolean;
+  recording?: boolean;
   total: number;
   photos: SecurityPhoto[];
 }
@@ -140,6 +141,7 @@ export interface AgentStatus {
   agents: AgentEntry[];
   display: string; // bubble | badge | both | off
   primary: string; // pinned agent name, or "" = auto (most urgent)
+  muted: string[]; // agent names whose speech is silenced
   palette: Record<string, { color: string; glyph: string }>;
   permission: AgentPermission | null;
 }

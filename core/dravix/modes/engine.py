@@ -115,6 +115,16 @@ class ModeEngine:
     def _is_disabled(self, name: str) -> bool:
         return self._store is not None and self._store.is_disabled(name)
 
+    def effective_config(self, name: str) -> dict[str, Any]:
+        """One mode's live config = plugin.yaml defaults + the store's overrides."""
+        m = self._modes.get(name)
+        if m is None:
+            return {}
+        config = dict(m.config)
+        if self._store is not None:
+            config.update(self._store.mode_config(name))
+        return config
+
     def list_modes(self) -> list[dict[str, Any]]:
         out: list[dict[str, Any]] = []
         for m in self._modes.values():

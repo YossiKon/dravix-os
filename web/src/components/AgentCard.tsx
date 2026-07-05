@@ -4,6 +4,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { apiGet, apiSend } from "../api";
 import type { AgentEntry, AgentStatus } from "../api";
+import { toastErr } from "../ui";
 import { useI18n } from "../i18n";
 
 const LABELS: Record<string, { he: string; en: string }> = {
@@ -37,6 +38,7 @@ export function AgentCard() {
   const { tr, lang } = useI18n();
   const he = lang === "he";
   const [st, setSt] = useState<AgentStatus | null>(null);
+  const [busy, setBusy] = useState(false);
 
   const refresh = useCallback(() => {
     apiGet<AgentStatus>("/api/agent/status").then(setSt).catch(() => undefined);
@@ -51,43 +53,38 @@ export function AgentCard() {
   const pal = (state: string) => st?.palette?.[state] || FALLBACK[state] || FALLBACK.idle;
   const label = (state: string) => tr(LABELS[state]?.he ?? state, LABELS[state]?.en ?? state);
 
-  async function test(state: string) {
+  // every mutating action goes through this: a shared busy flag (disables buttons) and
+  // surfaced errors (no more silent swallow), refreshing from whatever the server returns.
+  async function act(run: () => Promise<AgentStatus | unknown>, applies = true) {
+    if (busy) return;
+    setBusy(true);
     try {
-      await apiSend("/api/agent/status", "POST", { state, source: "dashboard-test" });
-      refresh();
-    } catch {
-      /* best-effort */
+      const r = await run();
+      if (applies && r && typeof r === "object" && "agents" in (r as object)) setSt(r as AgentStatus);
+      else refresh();
+    } catch (e) {
+      toastErr(e);
+    } finally {
+      setBusy(false);
     }
   }
-  async function dismiss(name: string) {
-    try {
-      setSt(await apiSend<AgentStatus>(`/api/agent/status/${encodeURIComponent(name)}`, "DELETE"));
-    } catch {
-      /* ignore */
-    }
-  }
-  async function clearAll() {
-    try {
-      setSt(await apiSend<AgentStatus>("/api/agent/status/clear", "POST", {}));
-    } catch {
-      /* ignore */
-    }
-  }
-  async function decide(id: string, decision: "approve" | "reject") {
-    try {
-      await apiSend(`/api/agent/permission/${id}/decide`, "POST", { decision });
-      refresh();
-    } catch {
-      /* ignore */
-    }
-  }
-  async function setPref(patch: { display?: string; primary?: string }) {
-    try {
-      setSt(await apiSend<AgentStatus>("/api/agent/prefs", "PUT", patch));
-    } catch {
-      /* ignore */
-    }
-  }
+
+  const test = (state: string) =>
+    act(() => apiSend("/api/agent/status", "POST", { state, source: "dashboard-test" }), false);
+  const dismiss = (name: string) =>
+    act(() => apiSend<AgentStatus>(`/api/agent/status/${encodeURIComponent(name)}`, "DELETE"));
+  const clearAll = () => act(() => apiSend<AgentStatus>("/api/agent/status/clear", "POST", {}));
+  const decide = (id: string, decision: "approve" | "reject") =>
+    act(() => apiSend(`/api/agent/permission/${id}/decide`, "POST", { decision }), false);
+  const setPref = (patch: { display?: string; primary?: string; muted?: string[] }) =>
+    act(() => apiSend<AgentStatus>("/api/agent/prefs", "PUT", patch));
+
+  const muted = new Set(st?.muted ?? []);
+  const toggleMute = (name: string) => {
+    const next = new Set(muted);
+    next.has(name) ? next.delete(name) : next.add(name);
+    return setPref({ muted: [...next] });
+  };
 
   const agents = st?.agents ?? [];
   const winner = st?.winner ?? null;
@@ -122,13 +119,15 @@ export function AgentCard() {
           )}
           <div className="mt-2 flex gap-2">
             <button
-              className="btn flex-1 !bg-[#1f7a4d] !text-white"
+              className="btn flex-1 !bg-[#1f7a4d] !text-white disabled:opacity-50"
+              disabled={busy}
               onClick={() => void decide(perm.id, "approve")}
             >
               {tr("✓ אשר", "✓ Approve")}
             </button>
             <button
-              className="btn flex-1 !bg-[#b5471f] !text-white"
+              className="btn flex-1 !bg-[#b5471f] !text-white disabled:opacity-50"
+              disabled={busy}
               onClick={() => void decide(perm.id, "reject")}
             >
               {tr("✗ דחה", "✗ Reject")}
@@ -151,7 +150,16 @@ export function AgentCard() {
             </div>
             <span className="ms-auto shrink-0 text-[11px] text-mute">{ago(winner.updated_at, he)}</span>
             <button
-              className="shrink-0 text-xs text-mute hover:text-red"
+              className={`shrink-0 text-sm ${muted.has(winner.name) ? "text-amber" : "text-mute hover:text-teal"}`}
+              disabled={busy}
+              onClick={() => void toggleMute(winner.name)}
+              title={muted.has(winner.name) ? tr("בטל השתקה", "Unmute") : tr("השתק", "Mute")}
+            >
+              {muted.has(winner.name) ? "🔇" : "🔊"}
+            </button>
+            <button
+              className="shrink-0 text-xs text-mute hover:text-red disabled:opacity-50"
+              disabled={busy}
               onClick={() => void dismiss(winner.name)}
               title={tr("הסר", "Dismiss")}
             >
@@ -180,7 +188,15 @@ export function AgentCard() {
               <span className="text-xs">{label(a.state)}</span>
               {a.text && <span className="truncate text-[11px] text-mute">· {a.text}</span>}
               <span className="ms-auto shrink-0 text-[10px] text-mute">{ago(a.updated_at, he)}</span>
-              <button className="text-xs text-mute hover:text-red" onClick={() => void dismiss(a.name)} title={tr("הסר", "Dismiss")}>
+              <button
+                className={`text-sm ${muted.has(a.name) ? "text-amber" : "text-mute hover:text-teal"}`}
+                disabled={busy}
+                onClick={() => void toggleMute(a.name)}
+                title={muted.has(a.name) ? tr("בטל השתקה", "Unmute") : tr("השתק", "Mute")}
+              >
+                {muted.has(a.name) ? "🔇" : "🔊"}
+              </button>
+              <button className="text-xs text-mute hover:text-red disabled:opacity-50" disabled={busy} onClick={() => void dismiss(a.name)} title={tr("הסר", "Dismiss")}>
                 ✕
               </button>
             </div>
@@ -201,7 +217,8 @@ export function AgentCard() {
         ).map((o) => (
           <button
             key={o.k}
-            className={`chip ${st?.display === o.k ? "!border-teal !text-teal" : ""}`}
+            disabled={busy}
+            className={`chip disabled:opacity-50 ${st?.display === o.k ? "!border-teal !text-teal" : ""}`}
             onClick={() => void setPref({ display: o.k })}
           >
             {tr(o.he, o.en)}
@@ -213,7 +230,8 @@ export function AgentCard() {
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-xs text-mute">{tr("עדיפות:", "Priority:")}</span>
         <button
-          className={`chip ${!st?.primary ? "!border-teal !text-teal" : ""}`}
+          disabled={busy}
+          className={`chip disabled:opacity-50 ${!st?.primary ? "!border-teal !text-teal" : ""}`}
           onClick={() => void setPref({ primary: "" })}
         >
           {tr("אוטומטי (הכי דחוף)", "Auto (most urgent)")}
@@ -221,7 +239,8 @@ export function AgentCard() {
         {agents.map((a) => (
           <button
             key={a.name}
-            className={`chip ${st?.primary === a.name ? "!border-teal !text-teal" : ""}`}
+            disabled={busy}
+            className={`chip disabled:opacity-50 ${st?.primary === a.name ? "!border-teal !text-teal" : ""}`}
             onClick={() => void setPref({ primary: a.name })}
           >
             📌 <span dir="ltr" className="font-mono">{a.name}</span>
@@ -247,12 +266,12 @@ export function AgentCard() {
       <div className="flex flex-wrap gap-2">
         <span className="self-center text-xs text-mute">{tr("בדיקה:", "Test:")}</span>
         {(["working", "waiting_permission", "question", "done", "error", "idle"] as const).map((s) => (
-          <button key={s} className="chip" onClick={() => void test(s)}>
+          <button key={s} className="chip disabled:opacity-50" disabled={busy} onClick={() => void test(s)}>
             {pal(s).glyph} {label(s)}
           </button>
         ))}
         {agents.length > 0 && (
-          <button className="chip ms-auto" onClick={() => void clearAll()}>
+          <button className="chip ms-auto disabled:opacity-50" disabled={busy} onClick={() => void clearAll()}>
             {tr("🗑 נקה הכל", "🗑 Clear all")}
           </button>
         )}

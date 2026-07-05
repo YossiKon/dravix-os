@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.0.69
+
+- **🔇 Mute a chatty agent on its own.** Each agent on the AI-agent card now has a mute
+  toggle — silence one agent's speech while the others still talk (previously you could only
+  mute *all* speech via display:off). Muted agents still show on the robot and dashboard.
+- **● Recording indicator.** The Security card shows a pulsing **Recording video** badge when
+  the guard is armed *and* set to record video (vs "Armed — photos only"), so you can tell at
+  a glance whether video is being captured.
+- **Snappier, clearer dashboard.** The AI-agent card's buttons now disable while a request is
+  in flight and surface errors instead of failing silently.
+
 ## 0.0.68
 
 - **✋ Approve / reject an AI agent's action from the robot's screen** (firmware **v21**).

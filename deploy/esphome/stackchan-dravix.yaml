@@ -219,6 +219,12 @@ online_image:
     on_error:
       - logger.log: "show-image: download failed"
 
+# ── GAME SOUND — 8-bit beeps through the BSP's I2S speaker (`i2s_speaker`, shared with TTS;
+#    the game only plays them while it's running, when nothing else is using the speaker).
+rtttl:
+  id: game_sfx
+  speaker: i2s_speaker
+
 packages:
   m5stack_stackchan:
     url: https://github.com/m5stack/esphome-yaml
@@ -303,6 +309,17 @@ globals:
   - { id: fb_px,    type: int,   restore_value: false, initial_value: "340" }  # pipe x (px)
   - { id: fb_gap,   type: int,   restore_value: false, initial_value: "90" }   # pipe gap top y
   - { id: fb_score, type: int,   restore_value: false, initial_value: "0" }
+  # ── BREAKOUT (bricks) — joystick paddle · bouncing ball · 8 bricks (bitmask) ──
+  - { id: bk_bx,    type: float, restore_value: false, initial_value: "160" }  # ball x
+  - { id: bk_by,    type: float, restore_value: false, initial_value: "170" }  # ball y
+  - { id: bk_vx,    type: float, restore_value: false, initial_value: "3" }    # ball vel x
+  - { id: bk_vy,    type: float, restore_value: false, initial_value: "-3.4" } # ball vel y
+  - { id: bk_px,    type: int,   restore_value: false, initial_value: "132" }  # paddle left x
+  - { id: bk_score, type: int,   restore_value: false, initial_value: "0" }
+  - { id: bk_lives, type: int,   restore_value: false, initial_value: "3" }
+  - { id: bk_mask,  type: int,   restore_value: false, initial_value: "255" }  # 8 bricks alive (bits 0..7)
+  - { id: bk_alive, type: bool,  restore_value: false, initial_value: "false" }
+  - { id: bk_ev,    type: int,   restore_value: false, initial_value: "0" }     # last event: 1 brick · 2 paddle · 3 hit
   - { id: fb_alive, type: bool,  restore_value: false, initial_value: "false" }
   # sleep-breathing LED bookkeeping (so the bar goes dark the moment it wakes)
   - { id: g_breath, type: bool, restore_value: false, initial_value: "false" }
@@ -899,6 +916,19 @@ button:
   - platform: restart
     name: "Reboot"
     id: btn_reboot
+  # BREAKOUT — start a game on the robot's screen; steer the paddle with the ESP-NOW
+  # joystick. Press from HA / the dashboard (an on-device menu button comes later).
+  - platform: template
+    name: "Play Breakout"
+    id: btn_breakout
+    on_press:
+      - lambda: |-
+          id(bk_mask) = 255; id(bk_score) = 0; id(bk_lives) = 3;
+          id(bk_bx) = 160; id(bk_by) = 170; id(bk_vx) = 3; id(bk_vy) = -3.4f;
+          id(bk_alive) = true;
+      - lvgl.label.update: { id: bk_msg, text: "" }
+      - lvgl.page.show: page_breakout
+      - rtttl.play: "go:d=16,o=6,b=200:e,g,c7"   # launch trill
 
 # ── Behaviour toggles — flip these from Home Assistant / the dravix dashboard ────
 switch:
@@ -1785,6 +1815,43 @@ lvgl:
               - globals.set: { id: g_card, value: "4" }
               - lvgl.page.show: page_games
     # ── VITALS — the robot's "life" needs (dravix pushes the 0-100 values in real time) ──
+    # ── BREAKOUT — move the paddle with the joystick, clear all the bricks ──
+    - id: page_breakout
+      bg_color: 0x05080b
+      bg_opa: COVER
+      scrollable: false
+      scrollbar_mode: "OFF"
+      widgets:
+        # 8 bricks (4 cols × 2 rows) — bk_mask decides which are still standing
+        - obj: { id: bk_b0, x: 8,   y: 30, width: 72, height: 16, radius: 3, bg_color: 0xff5a52, bg_opa: COVER, border_width: 0 }
+        - obj: { id: bk_b1, x: 84,  y: 30, width: 72, height: 16, radius: 3, bg_color: 0xff5a52, bg_opa: COVER, border_width: 0 }
+        - obj: { id: bk_b2, x: 160, y: 30, width: 72, height: 16, radius: 3, bg_color: 0xff5a52, bg_opa: COVER, border_width: 0 }
+        - obj: { id: bk_b3, x: 236, y: 30, width: 72, height: 16, radius: 3, bg_color: 0xff5a52, bg_opa: COVER, border_width: 0 }
+        - obj: { id: bk_b4, x: 8,   y: 52, width: 72, height: 16, radius: 3, bg_color: 0xffc23d, bg_opa: COVER, border_width: 0 }
+        - obj: { id: bk_b5, x: 84,  y: 52, width: 72, height: 16, radius: 3, bg_color: 0xffc23d, bg_opa: COVER, border_width: 0 }
+        - obj: { id: bk_b6, x: 160, y: 52, width: 72, height: 16, radius: 3, bg_color: 0xffc23d, bg_opa: COVER, border_width: 0 }
+        - obj: { id: bk_b7, x: 236, y: 52, width: 72, height: 16, radius: 3, bg_color: 0xffc23d, bg_opa: COVER, border_width: 0 }
+        # paddle + ball
+        - obj: { id: bk_paddle, x: 132, y: 214, width: 56, height: 8,  radius: 4, bg_color: 0x33E6C8, bg_opa: COVER, border_width: 0 }
+        - obj: { id: bk_ball,   x: 160, y: 170, width: 10, height: 10, radius: 5, bg_color: 0xFFFFFF, bg_opa: COVER, border_width: 0 }
+        # HUD
+        - label: { id: bk_sc,  text: "0", text_font: title_font, text_color: 0xFFFFFF, align: TOP_RIGHT, x: -10, y: 4 }
+        - label: { id: bk_lv,  text: "LIVES 3", text_font: small_font, text_color: 0x8b96a4, align: TOP_MID, y: 8 }
+        - label: { id: bk_msg, text: "",  text_font: title_font, text_color: 0x33E6C8, align: CENTER, y: -10 }
+        - button:
+            id: bk_back
+            x: 6
+            y: 6
+            width: 52
+            height: 28
+            radius: 8
+            bg_color: 0x05080b
+            widgets:
+              - label: { text: "<", text_font: text_font, text_color: 0x33E6C8, align: CENTER }
+            on_click:
+              - globals.set: { id: bk_alive, value: "false" }
+              - globals.set: { id: g_card, value: "0" }
+              - lvgl.page.show: page_face
     - id: page_vitals
       bg_color: 0x05080b
       bg_opa: COVER
@@ -2926,6 +2993,105 @@ interval:
                   - lvgl.label.update: { id: fb_lbl, text: "GAME OVER" }
                   - script.execute: { id: led_flash, r: 10, g: 25, b: 100 }   # a sad blue
                   - script.execute: head_shake
+  # BREAKOUT physics — ~25 fps. Joystick paddle (read DIRECTLY, no servo → no delay).
+  # Ticks only while the page shows AND a run is alive; otherwise a single cheap check.
+  - interval: 40ms
+    then:
+      - if:
+          condition:
+            and:
+              - lvgl.page.is_showing: page_breakout
+              - lambda: 'return id(bk_alive);'
+          then:
+            - lambda: |-
+                // paddle follows the ESP-NOW joystick (g_rc_yaw ∈ ±164)
+                int px = 160 + (int) id(g_rc_yaw) - 28;
+                id(bk_px) = px < 2 ? 2 : (px > 262 ? 262 : px);
+                // move the ball
+                id(bk_bx) += id(bk_vx);
+                id(bk_by) += id(bk_vy);
+                // walls
+                if (id(bk_bx) < 2)   { id(bk_bx) = 2;   id(bk_vx) =  fabsf(id(bk_vx)); }
+                if (id(bk_bx) > 308) { id(bk_bx) = 308; id(bk_vx) = -fabsf(id(bk_vx)); }
+                if (id(bk_by) < 24)  { id(bk_by) = 24;  id(bk_vy) =  fabsf(id(bk_vy)); }
+                // paddle bounce (paddle top y=214, 56 wide)
+                if (id(bk_vy) > 0 && id(bk_by) + 10 >= 214 && id(bk_by) <= 220
+                    && id(bk_bx) + 10 >= id(bk_px) && id(bk_bx) <= id(bk_px) + 56) {
+                  id(bk_vy) = -fabsf(id(bk_vy));
+                  id(bk_vx) += (id(bk_bx) + 5 - (id(bk_px) + 28)) * 0.05f;   // put english on it
+                  id(bk_ev) = 2;                                             // paddle save
+                }
+                // brick hit — grid 4×2 (cols step 76 from x8; rows y30 & y52)
+                int cx = (int) id(bk_bx) + 5, cy = (int) id(bk_by) + 5;
+                if (cy >= 30 && cy <= 68) {
+                  int col = (cx - 8) / 76, row = (cy - 30) / 22;
+                  if (col >= 0 && col < 4 && row >= 0 && row < 2) {
+                    int bi = row * 4 + col;
+                    if (id(bk_mask) & (1 << bi)) {
+                      id(bk_mask) &= ~(1 << bi);
+                      id(bk_vy) = -id(bk_vy);
+                      id(bk_score) += 1;
+                      id(bk_ev) = 1;                                    // smashed a brick
+                    }
+                  }
+                }
+                // miss → lose a life; empty mask → you cleared the board
+                if (id(bk_by) > 236) {
+                  id(bk_lives) -= 1;
+                  id(bk_ev) = 3;                                             // the ball beat you
+                  if (id(bk_lives) <= 0) id(bk_alive) = false;
+                  else { id(bk_bx) = 160; id(bk_by) = 170; id(bk_vx) = 3; id(bk_vy) = -3.4f; }
+                }
+                if (id(bk_mask) == 0) id(bk_alive) = false;
+            - lvgl.widget.update: { id: bk_ball,   x: !lambda 'return (int) id(bk_bx);', y: !lambda 'return (int) id(bk_by);' }
+            - lvgl.widget.update: { id: bk_paddle, x: !lambda 'return id(bk_px);' }
+            - lvgl.label.update:  { id: bk_sc, text: !lambda 'char b[8]; snprintf(b, sizeof(b), "%d", id(bk_score)); return std::string(b);' }
+            - if: { condition: { lambda: 'return ((id(bk_mask) >> 0) & 1) != 0;' }, then: [ { lvgl.widget.show: bk_b0 } ], else: [ { lvgl.widget.hide: bk_b0 } ] }
+            - if: { condition: { lambda: 'return ((id(bk_mask) >> 1) & 1) != 0;' }, then: [ { lvgl.widget.show: bk_b1 } ], else: [ { lvgl.widget.hide: bk_b1 } ] }
+            - if: { condition: { lambda: 'return ((id(bk_mask) >> 2) & 1) != 0;' }, then: [ { lvgl.widget.show: bk_b2 } ], else: [ { lvgl.widget.hide: bk_b2 } ] }
+            - if: { condition: { lambda: 'return ((id(bk_mask) >> 3) & 1) != 0;' }, then: [ { lvgl.widget.show: bk_b3 } ], else: [ { lvgl.widget.hide: bk_b3 } ] }
+            - if: { condition: { lambda: 'return ((id(bk_mask) >> 4) & 1) != 0;' }, then: [ { lvgl.widget.show: bk_b4 } ], else: [ { lvgl.widget.hide: bk_b4 } ] }
+            - if: { condition: { lambda: 'return ((id(bk_mask) >> 5) & 1) != 0;' }, then: [ { lvgl.widget.show: bk_b5 } ], else: [ { lvgl.widget.hide: bk_b5 } ] }
+            - if: { condition: { lambda: 'return ((id(bk_mask) >> 6) & 1) != 0;' }, then: [ { lvgl.widget.show: bk_b6 } ], else: [ { lvgl.widget.hide: bk_b6 } ] }
+            - if: { condition: { lambda: 'return ((id(bk_mask) >> 7) & 1) != 0;' }, then: [ { lvgl.widget.show: bk_b7 } ], else: [ { lvgl.widget.hide: bk_b7 } ] }
+            # lives readout — turns red on your last ball
+            - lvgl.label.update:
+                id: bk_lv
+                text: !lambda 'char b[12]; snprintf(b, sizeof(b), "LIVES %d", id(bk_lives)); return std::string(b);'
+                text_color: !lambda 'return id(bk_lives) <= 1 ? lv_color_hex(0xFF5555) : lv_color_hex(0x8b96a4);'
+            # per-event JUICE — LED + an 8-bit beep on every hit; head shake when the ball beats you
+            - if:
+                condition: { lambda: 'return id(bk_ev) == 1;' }
+                then:
+                  - script.execute: { id: led_flash, r: 0, g: 90, b: 80 }                # brick → cyan
+                  - rtttl.play: "bk:d=16,o=7,b=220:c"                                     # bright blip
+            - if:
+                condition: { lambda: 'return id(bk_ev) == 2;' }
+                then:
+                  - script.execute: { id: led_flash, r: 55, g: 55, b: 15 }               # paddle → soft
+                  - rtttl.play: "bk:d=16,o=6,b=220:g"                                     # bloop
+            - if:
+                condition: { lambda: 'return id(bk_ev) == 3;' }
+                then:
+                  - script.execute: { id: led_flash, r: 100, g: 8, b: 8 }                # hit → red
+                  - script.execute: head_shake
+                  - rtttl.play: "bk:d=8,o=4,b=150:c,a#"                                   # sad buzz down
+            - lambda: 'id(bk_ev) = 0;'
+            - if:
+                condition: { lambda: 'return !id(bk_alive);' }
+                then:
+                  - if:
+                      condition: { lambda: 'return id(bk_mask) == 0;' }
+                      then:
+                        - lvgl.label.update: { id: bk_msg, text: "YOU WIN!" }
+                        - script.execute: { id: led_flash, r: 20, g: 100, b: 30 }        # win → green
+                        - script.execute: head_nod                                        # a happy nod
+                        - rtttl.play: "win:d=8,o=6,b=180:c,e,g,c7"                        # victory fanfare
+                      else:
+                        - lvgl.label.update: { id: bk_msg, text: "GAME OVER" }
+                        - script.execute: { id: led_flash, r: 100, g: 8, b: 8 }           # lose → red
+                        - script.execute: head_shake
+                        - rtttl.play: "lose:d=8,o=5,b=120:g,e,c,c4"                       # sad descent
   # SLEEP BREATHING — while asleep ON THE CHARGER, the LED bar "breathes" very dimly
   # (the EMO/Vector charger-snooze everyone loves). Gated on Mood LEDs; goes fully
   # dark the moment it wakes or is unplugged.

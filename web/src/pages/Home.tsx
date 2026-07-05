@@ -685,6 +685,18 @@ export function HomePage(props: { config: RobotConfig | null }) {
               "When armed: saves a frame every few seconds, patrols with its head every few minutes, and you can watch & steer live from here (remotely too, via Home Assistant's remote access).",
             )}
           </p>
+          {sec.armed && (
+            <div className="mb-2 flex items-center gap-2 text-sm">
+              {sec.recording ? (
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-red/15 px-2 py-0.5 font-semibold text-red">
+                  <span className="inline-block h-2.5 w-2.5 animate-pulse rounded-full bg-red" />
+                  {tr("● מקליט וידאו", "● Recording video")}
+                </span>
+              ) : (
+                <span className="text-mute">{tr("🛡 דרוך — תמונות בלבד", "🛡 Armed — photos only")}</span>
+              )}
+            </div>
+          )}
           <button
             className={`btn w-full ${sec.armed ? "btn-danger" : "btn-primary"}`}
             onClick={() => void toggleSecurity()}

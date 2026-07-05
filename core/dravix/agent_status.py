@@ -101,7 +101,7 @@ class AgentPresence:
                 return store.agent_prefs()
             except Exception:  # noqa: BLE001
                 pass
-        return {"display": "both", "primary": ""}
+        return {"display": "both", "primary": "", "muted": []}
 
     # ── winner selection ────────────────────────────────────────────────────────────
     def _live(self, now: datetime.datetime) -> list[tuple[str, dict]]:
@@ -149,6 +149,7 @@ class AgentPresence:
             "agents": agents,
             "display": prefs.get("display", "both"),
             "primary": prefs.get("primary", ""),
+            "muted": prefs.get("muted", []),
             "palette": palette(),
             "permission": self.current_permission(now=stamp),
         }
@@ -230,8 +231,10 @@ class AgentPresence:
                     except Exception:  # noqa: BLE001
                         pass
 
-        # speak only when THIS update is the (changed) winner and it's an attention state
-        want_say = say if say is not None else (look.speak and display in ("bubble", "both"))
+        # speak only when THIS update is the (changed) winner, it's an attention state, and
+        # the agent isn't individually muted (a chatty agent can be silenced on its own)
+        muted = wname in set(self._prefs().get("muted", []))
+        want_say = say if say is not None else (look.speak and display in ("bubble", "both") and not muted)
         is_this_winner = wname == changed_name and wstate == changed_state
         if want_say and is_this_winner and (changed or bool(say)) and robot.supports(CAP_SAY):
             from .config import get_settings

@@ -68,6 +68,7 @@ class AgentStatusBody(BaseModel):
 class AgentPrefsBody(BaseModel):
     display: str | None = None   # bubble | badge | both | off
     primary: str | None = None   # pin an agent name (always wins), or "" for auto (most urgent)
+    muted: list[str] | None = None  # agent names whose speech is silenced (still shown)
 
 
 class AgentPermissionBody(BaseModel):
@@ -294,7 +295,7 @@ async def agent_prefs_set(body: AgentPrefsBody, request: Request):
     display = body.display
     if display is not None and display not in ("bubble", "badge", "both", "off"):
         raise HTTPException(status_code=400, detail="display must be bubble|badge|both|off")
-    store.set_agent_prefs(display=display, primary=body.primary)
+    store.set_agent_prefs(display=display, primary=body.primary, muted=body.muted)
     agent = getattr(request.app.state, "agent", None)
     return agent.snapshot() if agent is not None else {"ok": True}
 
@@ -900,6 +901,14 @@ def _sec_ts(day: str, name: str) -> str:
     return f"{day}T{hms[0:2]}:{hms[2:4]}:{hms[4:6]}"
 
 
+def _sec_recording(request: Request) -> bool:
+    """True while security mode is armed AND set to record continuous video."""
+    engine = _engine(request)
+    return engine.is_active("security") and bool(
+        engine.effective_config("security").get("record_video")
+    )
+
+
 def _sec_day_dir(day: str):
     """Validated day directory (or a 400)."""
     from ..config import security_dir
@@ -945,7 +954,11 @@ async def security_days(request: Request):
                 "bytes": sum(f.stat().st_size for f in files) + sum(f.stat().st_size for f in clips),
                 "has_video": (d / "timelapse.mp4").is_file(),
             })
-    return {"armed": _engine(request).is_active("security"), "days": days}
+    return {
+        "armed": _engine(request).is_active("security"),
+        "recording": _sec_recording(request),
+        "days": days,
+    }
 
 
 @router.get("/api/security/photos")
@@ -975,7 +988,12 @@ async def security_photos(request: Request, limit: int = 24, day: str = ""):
                     "day": d.name, "name": f.name,
                     "size": f.stat().st_size, "ts": _sec_ts(d.name, f.name),
                 })
-    return {"armed": _engine(request).is_active("security"), "total": total, "photos": photos}
+    return {
+        "armed": _engine(request).is_active("security"),
+        "recording": _sec_recording(request),
+        "total": total,
+        "photos": photos,
+    }
 
 
 @router.get("/api/security/photo/{day}/{name}")

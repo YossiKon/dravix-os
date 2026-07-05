@@ -108,6 +108,22 @@ def test_clear_all(tmp_path, monkeypatch):
         get_settings.cache_clear()
 
 
+def test_mute_pref_roundtrip(tmp_path, monkeypatch):
+    app = _app(monkeypatch, tmp_path)
+    try:
+        with TestClient(app) as c:
+            c.post("/api/agent/status", json={"state": "working", "source": "chatty"})
+            snap = c.put("/api/agent/prefs", json={"muted": ["chatty"]}).json()
+            assert snap["muted"] == ["chatty"]
+            assert c.get("/api/agent/status").json()["muted"] == ["chatty"]
+            # unmute
+            assert c.put("/api/agent/prefs", json={"muted": []}).json()["muted"] == []
+    finally:
+        from dravix.config import get_settings
+
+        get_settings.cache_clear()
+
+
 def test_permission_request_decide_flow(tmp_path, monkeypatch):
     app = _app(monkeypatch, tmp_path)
     try:
