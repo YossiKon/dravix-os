@@ -1,0 +1,61 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# dravix-os · AUTO-APPROVE (everything EXCEPT payments)
+# ─────────────────────────────────────────────────────────────────────────────
+# Home Assistant automation. When the dravix AI-agent asks the robot for permission,
+# this AUTO-APPROVES it instantly — UNLESS the request looks like a payment/purchase,
+# which still waits for you to approve by hand on the robot (tap the green "Approve",
+# or touch-and-hold its head ~1s).
+#
+# Nice property: this runs entirely in Home Assistant, so it works RIGHT NOW on your
+# current firmware — it does NOT need the firmware push/flash.
+#
+# ── INSTALL (pick one) ───────────────────────────────────────────────────────
+#  A) Package (recommended):
+#       1. In configuration.yaml add (once):
+#            homeassistant:
+#              packages: !include_dir_named packages
+#       2. Copy this file to:  <config>/packages/dravix-auto-approve.yaml
+#       3. Developer Tools → YAML → "Check configuration" → Restart HA.
+#  B) Or paste the automation below into Settings → Automations → ⋮ → "Edit in YAML".
+#
+# ── VERIFY THE ENTITY ID (important!) ────────────────────────────────────────
+#  Developer Tools → States → search  agent_permission
+#  If your robot's device is named "Dravix" (the recommended setup) it's
+#    text.dravix_agent_permission   ← used below.
+#  If it's still the fresh-flash name, use  text.stackchan_agent_permission
+#  Replace the entity_id in BOTH places below to match what you see.
+# ─────────────────────────────────────────────────────────────────────────────
+
+automation:
+  - id: dravix_auto_approve_non_payment
+    alias: "Dravix: auto-approve agent requests (except payments)"
+    mode: queued
+    max: 10
+    trigger:
+      - platform: state
+        entity_id: text.dravix_agent_permission        # ← change if your entity id differs
+    condition:
+      # Fire only when a NEW request is pending (non-empty) AND it is NOT money-related.
+      # We err on the safe side: ANY payment-ish word → skip auto-approve, ask the human.
+      - condition: template
+        value_template: >-
+          {% set r = (trigger.to_state.state | default('')) | lower %}
+          {% set money = ['pay', 'payment', 'purchase', 'buy', 'checkout', 'credit',
+                          'card', 'invoice', 'charge', 'order', 'subscri', 'refund',
+                          'transfer', 'wallet', 'bank', 'price', 'cost', '$', '€', '£', '₪',
+                          'תשלום', 'לשלם', 'שלם', 'קניה', 'קנייה', 'לקנות', 'אשראי',
+                          'כסף', 'הזמנה', 'מנוי', 'חשבונית', 'העברה', 'בנק', 'מחיר'] %}
+          {% set ns = namespace(is_money=false) %}
+          {% for w in money %}{% if w in r %}{% set ns.is_money = true %}{% endif %}{% endfor %}
+          {{ r | length > 0 and not ns.is_money }}
+    action:
+      # 1) Tell dravix "approved" — the SAME event the robot's Approve button fires.
+      - event: esphome.dravix_permission
+        event_data:
+          decision: approve
+      # 2) Clear the on-screen prompt so it doesn't linger on the robot's face.
+      - service: text.set_value
+        target:
+          entity_id: text.dravix_agent_permission      # ← keep in sync with the trigger
+        data:
+          value: ""

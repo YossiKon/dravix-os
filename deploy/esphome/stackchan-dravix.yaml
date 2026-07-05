@@ -570,8 +570,7 @@ text_sensor:
             - if:
                 condition: { lambda: 'return id(g_perm);' }
                 then:
-                  - globals.set: { id: g_ptouch, value: "true" }
-                  - script.execute: perm_hold
+                  - script.execute: perm_approve
                 else:
                   - script.execute: pet_react
       - if:
@@ -610,8 +609,7 @@ text_sensor:
             - if:
                 condition: { lambda: 'return id(g_perm);' }
                 then:
-                  - globals.set: { id: g_ptouch, value: "true" }
-                  - script.execute: perm_hold
+                  - script.execute: perm_approve
                 else:
                   - script.execute: pet_react
       - if:
@@ -647,8 +645,7 @@ text_sensor:
             - if:
                 condition: { lambda: 'return id(g_perm);' }
                 then:
-                  - globals.set: { id: g_ptouch, value: "true" }
-                  - script.execute: perm_hold
+                  - script.execute: perm_approve
                 else:
                   - script.execute: pet_react
       - if:
@@ -1002,6 +999,7 @@ switch:
   - { platform: template, name: "Sleep when dark",   id: sw_dark,      optimistic: true, restore_mode: RESTORE_DEFAULT_ON }
   - { platform: template, name: "Touch reaction",    id: sw_touch,     optimistic: true, restore_mode: RESTORE_DEFAULT_ON }
   - { platform: template, name: "Speaking LEDs",     id: sw_speak_led, optimistic: true, restore_mode: RESTORE_DEFAULT_ON }
+  - { platform: template, name: "Robot sounds",      id: sw_sfx,       optimistic: true, restore_mode: RESTORE_DEFAULT_ON }   # 8-bit chirps on pet/greet/wake/charger
   - { platform: template, name: "Random blink",      id: sw_blink,     optimistic: true, restore_mode: RESTORE_DEFAULT_ON }
   - { platform: template, name: "Idle head drift",   id: sw_drift,     optimistic: true, restore_mode: RESTORE_DEFAULT_ON }
   - { platform: template, name: "Tap face to talk",  id: sw_tap_talk,  optimistic: true, restore_mode: RESTORE_DEFAULT_ON }
@@ -1356,6 +1354,17 @@ lvgl:
             align: TOP_RIGHT
             x: -6
             y: 4
+        # UPDATE badge — an amber "UPDATE" tag top-left when newer firmware is waiting, so you
+        # see it right on the face without pulling up the status bar. (Install it from HA/ESPHome.)
+        - label:
+            id: upd_badge
+            text: "UPDATE"
+            text_font: small_font
+            text_color: 0xFFC23D
+            align: TOP_LEFT
+            x: 6
+            y: 4
+            hidden: true
         # AI AGENT badge — the winning coding-agent's "name: state" (fw v20). Bottom-left,
         # clear of the top speech bubble; driven by the t_agent text slot, hidden when empty.
         - label:
@@ -1634,10 +1643,10 @@ lvgl:
         - button:
             id: btn_g_catch
             x: 22
-            y: 40
+            y: 36
             width: 132
-            height: 60
-            radius: 12
+            height: 46
+            radius: 10
             bg_color: 0x14324a
             widgets:
               - label: { text: "CATCH ME", text_font: text_font, text_color: 0xFFFFFF, align: CENTER }
@@ -1648,10 +1657,10 @@ lvgl:
         - button:
             id: btn_g_react
             x: 166
-            y: 40
+            y: 36
             width: 132
-            height: 60
-            radius: 12
+            height: 46
+            radius: 10
             bg_color: 0x14324a
             widgets:
               - label: { text: "REACTION", text_font: text_font, text_color: 0xFFFFFF, align: CENTER }
@@ -1661,10 +1670,10 @@ lvgl:
         - button:
             id: btn_g_simon
             x: 22
-            y: 106
+            y: 86
             width: 132
-            height: 60
-            radius: 12
+            height: 46
+            radius: 10
             bg_color: 0x14324a
             widgets:
               - label: { text: "SIMON", text_font: text_font, text_color: 0xFFFFFF, align: CENTER }
@@ -1674,10 +1683,10 @@ lvgl:
         - button:
             id: btn_g_rps
             x: 166
-            y: 106
+            y: 86
             width: 132
-            height: 60
-            radius: 12
+            height: 46
+            radius: 10
             bg_color: 0x14324a
             widgets:
               - label: { text: "R-P-S", text_font: text_font, text_color: 0xFFFFFF, align: CENTER }
@@ -1687,10 +1696,10 @@ lvgl:
         - button:
             id: btn_g_flappy
             x: 22
-            y: 172
+            y: 136
             width: 132
-            height: 60
-            radius: 12
+            height: 46
+            radius: 10
             bg_color: 0x14324a
             widgets:
               - label: { text: "FLAPPY", text_font: text_font, text_color: 0xFFFFFF, align: CENTER }
@@ -1702,15 +1711,33 @@ lvgl:
         - button:
             id: btn_g_party
             x: 166
-            y: 172
+            y: 136
             width: 132
-            height: 60
-            radius: 12
+            height: 46
+            radius: 10
             bg_color: 0x3a2a10
             widgets:
               - label: { text: "PARTY!", text_font: text_font, text_color: 0xFFC23D, align: CENTER }
             on_click:
               - script.execute: party
+        # BREAKOUT — a wide featured button on the bottom row (steer the paddle with the joystick)
+        - button:
+            id: btn_g_breakout
+            x: 22
+            y: 186
+            width: 276
+            height: 46
+            radius: 10
+            bg_color: 0x14463a
+            widgets:
+              - label: { text: "BREAKOUT", text_font: text_font, text_color: 0x5dffa0, align: CENTER }
+            on_click:
+              - lambda: |-
+                  id(bk_mask) = 255; id(bk_score) = 0; id(bk_lives) = 3;
+                  id(bk_bx) = 160; id(bk_by) = 170; id(bk_vx) = 3; id(bk_vy) = -3.4f;
+                  id(bk_alive) = true;
+              - lvgl.label.update: { id: bk_msg, text: "" }
+              - lvgl.page.show: page_breakout
     # ── FLAPPY — tap to flap, slip through the pipe gaps (the official has one too) ──
     - id: page_flappy
       bg_color: 0x0a1420
@@ -2090,6 +2117,17 @@ script:
             - lvgl.widget.hide: perm_box
             - homeassistant.event: { event: esphome.dravix_permission, data: { decision: "reject" } }
             - script.execute: head_shake
+  # APPROVE via a head touch — fires the moment you touch (quick + reliable, no waiting for
+  # release / no HA round-trip race). REJECT is screen-only now (the red button on the prompt).
+  - id: perm_approve
+    then:
+      - if:
+          condition: { lambda: 'return id(g_perm);' }
+          then:
+            - globals.set: { id: g_perm, value: "false" }
+            - lvgl.widget.hide: perm_box
+            - homeassistant.event: { event: esphome.dravix_permission, data: { decision: "approve" } }
+            - script.execute: head_nod            # a "yes" nod to confirm
   # Set both eyes to a shape: width / height / corner-radius / vertical offset.
   # (Eyes are align:CENTER, so size changes keep them centred — no x math needed.)
   - id: set_eyes
@@ -2263,6 +2301,9 @@ script:
       - lvgl.page.show: page_face
       - script.execute: render_face
       - script.execute: { id: led_flash, r: 100, g: 25, b: 45 }   # pink
+      - if:
+          condition: { lambda: 'return id(sw_sfx).state && !id(g_quiet) && !id(g_night);' }
+          then: [ { rtttl.play: "pet:d=16,o=6,b=200:c,e,g" } ]   # a happy little giggle 😊
       - delay: 400ms
       - script.execute: { id: head_nudge, dx: 0, dy: 12 }         # nuzzle up into your hand
       - delay: 900ms
@@ -2278,6 +2319,9 @@ script:
             - globals.set: { id: g_expr, value: "1" }
             - script.execute: render_face
             - script.execute: { id: led_flash, r: 20, g: 100, b: 30 }
+            - if:
+                condition: { lambda: 'return id(sw_sfx).state && !id(g_quiet) && !id(g_night);' }
+                then: [ { rtttl.play: "plug:d=16,o=5,b=200:c,g,c6" } ]   # "nom, electricity!" ⚡
             - delay: 2500ms
             - globals.set: { id: g_expr, value: "0" }
             - script.execute: render_face
@@ -2379,9 +2423,9 @@ script:
       - globals.set: { id: g_card, value: "0" }
       - lvgl.page.show: page_face
       - script.execute: render_face
-      # remember the LEDs (same guard pattern as identify)
+      # remember the LEDs — guard on g_flash too, so a mid-flash colour isn't saved as "resting"
       - if:
-          condition: { lambda: 'return !id(g_voice);' }
+          condition: { lambda: 'return !id(g_voice) && !id(g_flash);' }
           then:
             - lambda: |-
                 auto v = id(stackchan_light_bar).current_values;
@@ -2627,6 +2671,9 @@ script:
             - globals.set: { id: g_expr,  value: "1" }     # happy
             - lvgl.page.show: page_face
             - select.set: { id: robot_mode, option: awake }
+            - if:
+                condition: { lambda: 'return id(sw_sfx).state && !id(g_quiet);' }
+                then: [ { rtttl.play: "hi:d=16,o=6,b=180:e,g,c7" } ]   # a friendly "hello!" 👋
             - delay: 400ms
             - script.execute: { id: head_nudge, dx: 0, dy: 8 }   # perks up at you
             - delay: 500ms
@@ -2635,7 +2682,7 @@ script:
   - id: identify
     then:
       - if:
-          condition: { lambda: 'return !id(g_voice);' }
+          condition: { lambda: 'return !id(g_voice) && !id(g_flash);' }
           then:
             - lambda: |-
                 auto v = id(stackchan_light_bar).current_values;
@@ -2916,6 +2963,18 @@ select:
       - globals.set: { id: g_quiet, value: !lambda 'return x == std::string("quiet");' }
       - globals.set: { id: g_saver, value: "false" }
       - script.execute: render_face
+      # CALM modes (focus / quiet / night) = NO mood LEDs. Those modes DISABLE led_flash, so a
+      # colour that was lit would otherwise stay stuck on — clear the bar (and cancel any pending
+      # flash) on entry so it goes truly dark. (busy keeps its LEDs — led_flash still runs there.)
+      - if:
+          condition:
+            lambda: |-
+              return x == std::string("focus") || x == std::string("quiet")
+                  || x == std::string("night");
+          then:
+            - script.stop: led_flash
+            - globals.set: { id: g_flash, value: "false" }
+            - light.turn_off: stackchan_light_bar
       # GRACEFUL MOTION — the serial-bus servos take a speed setting (the BSP exposes
       # it; the official remote drives them at 600). Calm modes get slow, gentle moves.
       - number.set:
@@ -2980,6 +3039,9 @@ select:
                   - delay: 1400ms
                   - globals.set: { id: g_expr, value: "1" }      # …bright and happy!
                   - script.execute: render_face
+                  - if:
+                      condition: { lambda: 'return id(sw_sfx).state && !id(g_quiet) && !id(g_night);' }
+                      then: [ { rtttl.play: "wake:d=16,o=5,b=170:c,e,g,c6" } ]   # a cheery boot-up 🌅
                   - script.execute: head_shake                    # shakes the sleep off
                   - delay: 1500ms
                   - globals.set: { id: g_expr, value: "0" }
@@ -3445,8 +3507,8 @@ interval:
             lambda: |-
               return id(t_latest_fw).has_state() && !id(t_latest_fw).state.empty()
                      && id(t_latest_fw).state != "${fw_version}";
-          then: [ { lvgl.widget.show: upd_a1 }, { lvgl.widget.show: upd_a2 } ]
-          else: [ { lvgl.widget.hide: upd_a1 }, { lvgl.widget.hide: upd_a2 } ]
+          then: [ { lvgl.widget.show: upd_a1 }, { lvgl.widget.show: upd_a2 }, { lvgl.widget.show: upd_badge } ]
+          else: [ { lvgl.widget.hide: upd_a1 }, { lvgl.widget.hide: upd_a2 }, { lvgl.widget.hide: upd_badge } ]
       # WiFi signal → reveal more bars as it gets stronger
       - if:
           condition: { lambda: 'return id(wifi_db).state < -78;' }
