@@ -296,6 +296,11 @@ globals:
   - { id: sw_sleep, type: bool, restore_value: false, initial_value: "false" }
   - { id: g_card,   type: int,  restore_value: false, initial_value: "0" }
   - { id: g_score,  type: int,  restore_value: false, initial_value: "0" }   # catch-me game score
+  # ── HIGH SCORES — the best each game has seen; restore_value: true → survives reboots ──
+  - { id: hs_catch,    type: int, restore_value: true, initial_value: "0" }
+  - { id: hs_flappy,   type: int, restore_value: true, initial_value: "0" }
+  - { id: hs_breakout, type: int, restore_value: true, initial_value: "0" }
+  - { id: hs_simon,    type: int, restore_value: true, initial_value: "0" }
   - { id: g_pn,     type: int,  restore_value: false, initial_value: "0" }   # party sway alternator
   # official ESP-NOW remote state (latest parsed packet + throttling)
   - { id: g_rc_yaw,   type: float, restore_value: false, initial_value: "0" }     # target yaw (servo scale)
@@ -1632,7 +1637,7 @@ lvgl:
               # the dot is a tiny creature — it has a face 🙂
               - label: { text: "o_o", text_font: small_font, text_color: 0x05080b, align: CENTER }
             on_click:
-              - lambda: 'id(g_score) += 1;'
+              - lambda: 'id(g_score) += 1; if (id(g_score) > id(hs_catch)) id(hs_catch) = id(g_score);'
               - lvgl.label.update:
                   id: lbl_score
                   text: !lambda 'char b[12]; snprintf(b, sizeof(b), "%d", id(g_score)); return std::string(b);'
@@ -1744,12 +1749,12 @@ lvgl:
               - label: { text: "PARTY!", text_font: text_font, text_color: 0xFFC23D, align: CENTER }
             on_click:
               - script.execute: party
-        # BREAKOUT — a wide featured button on the bottom row (steer the paddle with the joystick)
+        # bottom row: BREAKOUT + the high-scores table
         - button:
             id: btn_g_breakout
             x: 22
             y: 186
-            width: 276
+            width: 132
             height: 46
             radius: 10
             bg_color: 0x14463a
@@ -1762,6 +1767,22 @@ lvgl:
                   id(bk_alive) = true;
               - lvgl.label.update: { id: bk_msg, text: "" }
               - lvgl.page.show: page_breakout
+        - button:
+            id: btn_g_scores
+            x: 166
+            y: 186
+            width: 132
+            height: 46
+            radius: 10
+            bg_color: 0x2a2440
+            widgets:
+              - label: { text: "SCORES", text_font: text_font, text_color: 0xFFC23D, align: CENTER }
+            on_click:
+              - lvgl.label.update: { id: sc_catch,    text: !lambda 'char b[24]; snprintf(b, sizeof(b), "Catch:  %d", id(hs_catch)); return std::string(b);' }
+              - lvgl.label.update: { id: sc_flappy,   text: !lambda 'char b[24]; snprintf(b, sizeof(b), "Flappy:  %d", id(hs_flappy)); return std::string(b);' }
+              - lvgl.label.update: { id: sc_breakout, text: !lambda 'char b[24]; snprintf(b, sizeof(b), "Breakout:  %d", id(hs_breakout)); return std::string(b);' }
+              - lvgl.label.update: { id: sc_simon,    text: !lambda 'char b[24]; snprintf(b, sizeof(b), "Simon:  %d", id(hs_simon)); return std::string(b);' }
+              - lvgl.page.show: page_scores
     # ── FLAPPY — tap to flap, slip through the pipe gaps (the official has one too) ──
     - id: page_flappy
       bg_color: 0x0a1420
@@ -1971,6 +1992,30 @@ lvgl:
               - globals.set: { id: bk_alive, value: "false" }
               - globals.set: { id: g_card, value: "0" }
               - lvgl.page.show: page_face
+    # ── HIGH SCORES table — the best each game has seen (persists across reboots) ──
+    - id: page_scores
+      bg_color: 0x05080b
+      bg_opa: COVER
+      scrollable: false
+      scrollbar_mode: "OFF"
+      widgets:
+        - label: { text: "HIGH SCORES", text_font: title_font, styles: accent_txt, align: TOP_MID, y: 6 }
+        - label: { id: sc_catch,    text: "Catch:  0",    text_font: text_font, text_color: 0xFFFFFF, align: TOP_LEFT, x: 30, y: 54 }
+        - label: { id: sc_flappy,   text: "Flappy:  0",   text_font: text_font, text_color: 0xFFFFFF, align: TOP_LEFT, x: 30, y: 92 }
+        - label: { id: sc_breakout, text: "Breakout:  0", text_font: text_font, text_color: 0xFFFFFF, align: TOP_LEFT, x: 30, y: 130 }
+        - label: { id: sc_simon,    text: "Simon:  0",    text_font: text_font, text_color: 0xFFFFFF, align: TOP_LEFT, x: 30, y: 168 }
+        - button:
+            id: btn_sc_back
+            x: 6
+            y: 6
+            width: 52
+            height: 28
+            radius: 8
+            bg_color: 0x05080b
+            widgets:
+              - label: { text: "<", text_font: text_font, text_color: 0x33E6C8, align: CENTER }
+            on_click:
+              - lvgl.page.show: page_games
     - id: page_vitals
       bg_color: 0x05080b
       bg_opa: COVER
@@ -3071,6 +3116,7 @@ script:
                               - script.execute: simon_add
                 else:                                                        # wrong → game over
                   - globals.set: { id: g_saccept, value: "false" }
+                  - lambda: 'if (id(g_slen) - 1 > id(hs_simon)) id(hs_simon) = id(g_slen) - 1;'
                   - lvgl.label.update:
                       id: simon_msg
                       text: !lambda |-
@@ -3405,6 +3451,7 @@ interval:
             - if:
                 condition: { lambda: 'return !id(fb_alive);' }
                 then:
+                  - lambda: 'if (id(fb_score) > id(hs_flappy)) id(hs_flappy) = id(fb_score);'
                   - lvgl.label.update: { id: fb_lbl, text: "GAME OVER" }
                   - script.execute: { id: led_flash, r: 10, g: 25, b: 100 }   # a sad blue
                   - script.execute: head_shake
@@ -3495,6 +3542,7 @@ interval:
             - if:
                 condition: { lambda: 'return !id(bk_alive);' }
                 then:
+                  - lambda: 'if (id(bk_score) > id(hs_breakout)) id(hs_breakout) = id(bk_score);'
                   - if:
                       condition: { lambda: 'return id(bk_mask) == 0;' }
                       then:
