@@ -339,6 +339,17 @@ globals:
   - { id: dm_bp,    type: bool,  restore_value: false, initial_value: "false" }  # fire button, previous frame
   - { id: dm_shot,  type: bool,  restore_value: false, initial_value: "false" }  # a shot was fired this frame
   - { id: dm_run,   type: bool,  restore_value: false, initial_value: "false" }
+  # ── MAPLE-lite — a little platformer: joystick moves, the remote button jumps, stomp mushrooms ──
+  - { id: mp_x,     type: float, restore_value: false, initial_value: "20" }
+  - { id: mp_y,     type: float, restore_value: false, initial_value: "180" }
+  - { id: mp_vy,    type: float, restore_value: false, initial_value: "0" }
+  - { id: mp_mx,    type: float, restore_value: false, initial_value: "200" }  # mushroom x
+  - { id: mp_mdir,  type: int,   restore_value: false, initial_value: "-1" }
+  - { id: mp_sc,    type: int,   restore_value: false, initial_value: "0" }
+  - { id: mp_lives, type: int,   restore_value: false, initial_value: "3" }
+  - { id: mp_bp,    type: bool,  restore_value: false, initial_value: "false" }
+  - { id: mp_grnd,  type: bool,  restore_value: false, initial_value: "false" }  # standing on a platform
+  - { id: mp_run,   type: bool,  restore_value: false, initial_value: "false" }
   - { id: g_pn,     type: int,  restore_value: false, initial_value: "0" }   # party sway alternator
   # official ESP-NOW remote state (latest parsed packet + throttling)
   - { id: g_rc_yaw,   type: float, restore_value: false, initial_value: "0" }     # target yaw (servo scale)
@@ -1755,30 +1766,47 @@ lvgl:
               - script.execute: react_start
         - button:
             id: btn_g_simon
-            x: 22
+            x: 8
             y: 86
-            width: 132
+            width: 98
             height: 46
             radius: 10
             bg_color: 0x14324a
             widgets:
-              - label: { text: "SIMON", text_font: text_font, text_color: 0xFFFFFF, align: CENTER }
+              - label: { text: "SIMON", text_font: small_font, text_color: 0xFFFFFF, align: CENTER }
             on_click:
               - lvgl.page.show: page_simon
               - script.execute: simon_new
         - button:
             id: btn_g_rps
-            x: 166
+            x: 111
             y: 86
-            width: 132
+            width: 98
             height: 46
             radius: 10
             bg_color: 0x14324a
             widgets:
-              - label: { text: "R-P-S", text_font: text_font, text_color: 0xFFFFFF, align: CENTER }
+              - label: { text: "R-P-S", text_font: small_font, text_color: 0xFFFFFF, align: CENTER }
             on_click:
               - lvgl.label.update: { id: rps_msg, text: "Pick one!" }
               - lvgl.page.show: page_rps
+        - button:
+            id: btn_g_maple
+            x: 214
+            y: 86
+            width: 98
+            height: 46
+            radius: 10
+            bg_color: 0x2a1a3a
+            widgets:
+              - label: { text: "MAPLE", text_font: small_font, text_color: 0xff8c1a, align: CENTER }
+            on_click:
+              - lambda: |-
+                  id(mp_sc) = 0; id(mp_lives) = 3; id(mp_x) = 20.0f; id(mp_y) = 180.0f;
+                  id(mp_vy) = 0; id(mp_mx) = 200.0f; id(mp_mdir) = -1; id(mp_bp) = false;
+                  id(mp_grnd) = false; id(mp_run) = true;
+              - lvgl.label.update: { id: mp_msg, text: "" }
+              - lvgl.page.show: page_maple
         - button:
             id: btn_g_flappy
             x: 8
@@ -2100,6 +2128,35 @@ lvgl:
               - label: { text: "<", text_font: text_font, text_color: 0x33E6C8, align: CENTER }
             on_click:
               - globals.set: { id: bk_alive, value: "false" }
+              - globals.set: { id: g_card, value: "0" }
+              - lvgl.page.show: page_face
+    # ── MAPLE-lite — a mini platformer: joystick moves, the button jumps, stomp the mushroom ──
+    - id: page_maple
+      bg_color: 0x0e1830
+      bg_opa: COVER
+      scrollable: false
+      scrollbar_mode: "OFF"
+      widgets:
+        - obj: { id: mp_ground_o, x: 0,   y: 214, width: 320, height: 26, radius: 0, bg_color: 0x6b4a2a, bg_opa: COVER, border_width: 0 }
+        - obj: { id: mp_pa, x: 40,  y: 156, width: 110, height: 10, radius: 3, bg_color: 0x2ea35c, bg_opa: COVER, border_width: 0 }
+        - obj: { id: mp_pb, x: 180, y: 110, width: 110, height: 10, radius: 3, bg_color: 0x2ea35c, bg_opa: COVER, border_width: 0 }
+        - obj: { id: mp_mush,   x: 200, y: 192, width: 22, height: 22, radius: 10, bg_color: 0xff8c1a, bg_opa: COVER, border_width: 2, border_color: 0x8a4a00 }
+        - obj: { id: mp_player, x: 20,  y: 180, width: 20, height: 24, radius: 5,  bg_color: 0xffd24a, bg_opa: COVER, border_width: 2, border_color: 0xc98a00 }
+        - label: { id: mp_lbl,       text: "0",       text_font: title_font, text_color: 0xffd24a, align: TOP_RIGHT, x: -10, y: 4 }
+        - label: { id: mp_lives_lbl, text: "LIVES 3", text_font: small_font, text_color: 0xffd24a, align: TOP_MID,  y: 8 }
+        - label: { id: mp_msg,       text: "",        text_font: title_font, text_color: 0x33E6C8, align: CENTER,   y: -20 }
+        - button:
+            id: mp_back
+            x: 6
+            y: 6
+            width: 48
+            height: 26
+            radius: 8
+            bg_color: 0x0e1830
+            widgets:
+              - label: { text: "<", text_font: text_font, text_color: 0x33E6C8, align: CENTER }
+            on_click:
+              - globals.set: { id: mp_run, value: "false" }
               - globals.set: { id: g_card, value: "0" }
               - lvgl.page.show: page_face
     # ── DOOM-lite — a corridor shooter: joystick aims the crosshair, the remote button fires ──
@@ -3741,7 +3798,7 @@ interval:
                 lv_disp_trig_activity(NULL);
             # button B rising edge → toggle the voice assistant (privacy-respecting)
             - if:
-                condition: { lambda: 'return id(g_rc_btn) != 0 && id(g_rc_prev) == 0 && !id(dm_run);' }   # not while Doom uses the button to shoot
+                condition: { lambda: 'return id(g_rc_btn) != 0 && id(g_rc_prev) == 0 && !id(dm_run) && !id(mp_run);' }   # not while Doom shoots / Maple jumps
                 then:
                   - if:
                       condition: { lambda: 'return id(g_voice);' }
@@ -4127,6 +4184,58 @@ interval:
                 then:
                   - lvgl.label.update: { id: dm_msg, text: "GAME OVER" }
                   - script.execute: { id: led_flash, r: 100, g: 8, b: 8 }
+                  - script.execute: head_shake
+  # MAPLE-lite physics — ~25 fps. Joystick walks, button jumps, gravity + platform landing;
+  # land ON the mushroom to stomp it (score), touch it from the side and you lose a life.
+  - interval: 40ms
+    then:
+      - if:
+          condition:
+            and:
+              - lvgl.page.is_showing: page_maple
+              - lambda: 'return id(mp_run);'
+          then:
+            - lambda: |-
+                float mv = id(g_rc_yaw);
+                if (mv > 40.0f) id(mp_x) += 3.5f;
+                else if (mv < -40.0f) id(mp_x) -= 3.5f;
+                if (id(mp_x) < 2.0f) id(mp_x) = 2.0f;
+                if (id(mp_x) > 298.0f) id(mp_x) = 298.0f;
+                bool jb = (id(g_rc_btn) != 0) && !id(mp_bp);
+                id(mp_bp) = (id(g_rc_btn) != 0);
+                if (jb && id(mp_grnd)) { id(mp_vy) = -9.0f; id(mp_grnd) = false; }
+                id(mp_vy) += 0.55f;
+                if (id(mp_vy) > 11.0f) id(mp_vy) = 11.0f;
+                id(mp_y) += id(mp_vy);
+                id(mp_grnd) = false;
+                float feet = id(mp_y) + 24.0f;
+                if (id(mp_vy) >= 0 && feet >= 214.0f && feet <= 226.0f) { id(mp_y) = 190.0f; id(mp_vy) = 0; id(mp_grnd) = true; }
+                if (id(mp_vy) >= 0 && feet >= 156.0f && feet <= 168.0f && id(mp_x) + 20 > 40.0f  && id(mp_x) < 150.0f) { id(mp_y) = 132.0f; id(mp_vy) = 0; id(mp_grnd) = true; }
+                if (id(mp_vy) >= 0 && feet >= 110.0f && feet <= 122.0f && id(mp_x) + 20 > 180.0f && id(mp_x) < 290.0f) { id(mp_y) = 86.0f;  id(mp_vy) = 0; id(mp_grnd) = true; }
+                if (id(mp_y) > 240.0f) { id(mp_lives) -= 1; id(mp_x) = 20.0f; id(mp_y) = 180.0f; id(mp_vy) = 0; if (id(mp_lives) <= 0) id(mp_run) = false; }
+                id(mp_mx) += id(mp_mdir) * 1.7f;
+                if (id(mp_mx) < 6.0f)   id(mp_mdir) = 1;
+                if (id(mp_mx) > 292.0f) id(mp_mdir) = -1;
+                if (id(mp_x) + 20 > id(mp_mx) && id(mp_x) < id(mp_mx) + 22 && feet >= 190.0f && id(mp_y) < 214.0f) {
+                  if (id(mp_vy) > 0 && feet <= 202.0f) {
+                    id(mp_sc) += 1;
+                    id(mp_vy) = -6.5f;
+                    id(mp_mx) = 20.0f + random_float() * 260.0f;
+                  } else {
+                    id(mp_lives) -= 1;
+                    id(mp_x) = 20.0f; id(mp_y) = 180.0f; id(mp_vy) = 0;
+                    if (id(mp_lives) <= 0) id(mp_run) = false;
+                  }
+                }
+            - lvgl.widget.update: { id: mp_player, x: !lambda 'return (int) id(mp_x);', y: !lambda 'return (int) id(mp_y);' }
+            - lvgl.widget.update: { id: mp_mush,   x: !lambda 'return (int) id(mp_mx);' }
+            - lvgl.label.update:  { id: mp_lbl, text: !lambda 'char b[8]; snprintf(b, sizeof(b), "%d", id(mp_sc)); return std::string(b);' }
+            - lvgl.label.update:  { id: mp_lives_lbl, text: !lambda 'char b[12]; snprintf(b, sizeof(b), "LIVES %d", id(mp_lives)); return std::string(b);' }
+            - if:
+                condition: { lambda: 'return !id(mp_run);' }
+                then:
+                  - lvgl.label.update: { id: mp_msg, text: "GAME OVER" }
+                  - script.execute: { id: led_flash, r: 100, g: 60, b: 15 }
                   - script.execute: head_shake
   # SLEEP BREATHING — while asleep ON THE CHARGER, the LED bar "breathes" very dimly
   # (the EMO/Vector charger-snooze everyone loves). Gated on Mood LEDs; goes fully
