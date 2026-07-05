@@ -39,7 +39,7 @@ substitutions:
   # publishes it to HA ("Firmware version" sensor); the dravix dashboard compares it
   # with the version bundled in the add-on and shows "firmware update available".
   # (Maintainers: bump this on every firmware change. Users: don't touch.)
-  fw_version: "21"
+  fw_version: "22"
   # The ESPHome node name (mDNS hostname + the default entity prefix on a fresh flash).
   # Change it only if you run MORE THAN ONE robot — each needs a unique name. NOTE:
   # changing it on an already-adopted robot registers a NEW device in HA.
@@ -275,6 +275,7 @@ globals:
   - { id: g_talk,   type: bool, restore_value: false, initial_value: "false" }
   - { id: g_tip,    type: bool, restore_value: false, initial_value: "false" }  # a wellness tip is showing
   - { id: g_agent,  type: bool, restore_value: false, initial_value: "false" }  # an AI-agent badge is set
+  - { id: g_perm,   type: bool, restore_value: false, initial_value: "false" }  # an approve/reject prompt is up
   - { id: g_voice,  type: bool, restore_value: false, initial_value: "false" }  # voice pipeline active
   - { id: g_sleep,  type: bool, restore_value: false, initial_value: "false" }
   - { id: g_saver,  type: bool, restore_value: false, initial_value: "false" }
@@ -562,7 +563,18 @@ text_sensor:
                      && !id(g_pet) && id(sw_touch).state;
           then:
             - globals.set: { id: g_pet, value: "true" }
-            - script.execute: pet_react
+            # A head-pet while an Approve/Reject prompt is up = "yes, go ahead" — fires the
+            # same approve event as the on-screen button, then nuzzles happily. Only active
+            # while g_perm (a prompt is showing), so normal petting still just pets.
+            - if:
+                condition: { lambda: 'return id(g_perm);' }
+                then:
+                  - globals.set: { id: g_perm, value: "false" }
+                  - lvgl.widget.hide: perm_box
+                  - homeassistant.event: { event: esphome.dravix_permission, data: { decision: "approve" } }
+                  - script.execute: pet_react
+                else:
+                  - script.execute: pet_react
       - if:
           condition: { lambda: 'return x == "No touch";' }            # released
           then:
@@ -581,7 +593,18 @@ text_sensor:
                      && !id(g_pet) && id(sw_touch).state;
           then:
             - globals.set: { id: g_pet, value: "true" }
-            - script.execute: pet_react
+            # A head-pet while an Approve/Reject prompt is up = "yes, go ahead" — fires the
+            # same approve event as the on-screen button, then nuzzles happily. Only active
+            # while g_perm (a prompt is showing), so normal petting still just pets.
+            - if:
+                condition: { lambda: 'return id(g_perm);' }
+                then:
+                  - globals.set: { id: g_perm, value: "false" }
+                  - lvgl.widget.hide: perm_box
+                  - homeassistant.event: { event: esphome.dravix_permission, data: { decision: "approve" } }
+                  - script.execute: pet_react
+                else:
+                  - script.execute: pet_react
       - if:
           condition: { lambda: 'return x == "No touch";' }
           then:
@@ -598,7 +621,18 @@ text_sensor:
                      && !id(g_pet) && id(sw_touch).state;
           then:
             - globals.set: { id: g_pet, value: "true" }
-            - script.execute: pet_react
+            # A head-pet while an Approve/Reject prompt is up = "yes, go ahead" — fires the
+            # same approve event as the on-screen button, then nuzzles happily. Only active
+            # while g_perm (a prompt is showing), so normal petting still just pets.
+            - if:
+                condition: { lambda: 'return id(g_perm);' }
+                then:
+                  - globals.set: { id: g_perm, value: "false" }
+                  - lvgl.widget.hide: perm_box
+                  - homeassistant.event: { event: esphome.dravix_permission, data: { decision: "approve" } }
+                  - script.execute: pet_react
+                else:
+                  - script.execute: pet_react
       - if:
           condition: { lambda: 'return x == "No touch";' }
           then:
@@ -803,11 +837,13 @@ text:
       - if:
           condition: { lambda: 'return !x.empty();' }
           then:
+            - globals.set: { id: g_perm, value: "true" }   # arms head-touch = Approve
             - lvgl.label.update: { id: perm_txt, text: !lambda 'return x;' }
             - lvgl.page.show: page_face          # so the prompt is actually visible
             - lvgl.widget.show: perm_box
             - script.execute: perm_timeout       # auto-hide after a while (never auto-decides)
           else:
+            - globals.set: { id: g_perm, value: "false" }
             - lvgl.widget.hide: perm_box
   # ── WELLNESS TIP — dravix writes a short tip here; the robot pops it in the speech
   #    bubble, flashes cyan + wiggles so you notice, then auto-hides after ~12s.
@@ -1168,6 +1204,7 @@ lvgl:
                 widgets:
                   - label: { text: "Approve", text_font: small_font, text_color: 0xFFFFFF, align: CENTER }
                 on_click:
+                  - globals.set: { id: g_perm, value: "false" }
                   - homeassistant.event: { event: esphome.dravix_permission, data: { decision: "approve" } }
                   - lvgl.widget.hide: perm_box
             - button:
@@ -1182,6 +1219,7 @@ lvgl:
                 widgets:
                   - label: { text: "Reject", text_font: small_font, text_color: 0xFFFFFF, align: CENTER }
                 on_click:
+                  - globals.set: { id: g_perm, value: "false" }
                   - homeassistant.event: { event: esphome.dravix_permission, data: { decision: "reject" } }
                   - lvgl.widget.hide: perm_box
   on_idle:
@@ -1983,6 +2021,7 @@ script:
     mode: restart
     then:
       - delay: 180s
+      - globals.set: { id: g_perm, value: "false" }
       - lvgl.widget.hide: perm_box
   # Set both eyes to a shape: width / height / corner-radius / vertical offset.
   # (Eyes are align:CENTER, so size changes keep them centred — no x math needed.)

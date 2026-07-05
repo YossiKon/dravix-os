@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.0.70
+
+- **🖐 Pet the robot's head to approve** (firmware **v22**). When an Approve/Reject prompt is
+  up, a pet on the head (touch zones 1–2) approves the action — same as tapping Approve — and
+  the robot nuzzles happily. It only approves while a prompt is showing; the rest of the time
+  a head-pet is just a pet. The back-of-head tickle is unchanged.
+
 ## 0.0.69
 
 - **🔇 Mute a chatty agent on its own.** Each agent on the AI-agent card now has a mute
