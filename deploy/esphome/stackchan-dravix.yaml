@@ -301,6 +301,8 @@ globals:
   - { id: hs_flappy,   type: int, restore_value: true, initial_value: "0" }
   - { id: hs_breakout, type: int, restore_value: true, initial_value: "0" }
   - { id: hs_simon,    type: int, restore_value: true, initial_value: "0" }
+  - { id: hs_react,    type: int, restore_value: true, initial_value: "0" }   # best (lowest) reaction ms; 0 = none yet
+  - { id: hs_rps,      type: int, restore_value: true, initial_value: "0" }   # total R-P-S wins
   - { id: g_pn,     type: int,  restore_value: false, initial_value: "0" }   # party sway alternator
   # official ESP-NOW remote state (latest parsed packet + throttling)
   - { id: g_rc_yaw,   type: float, restore_value: false, initial_value: "0" }     # target yaw (servo scale)
@@ -1782,6 +1784,8 @@ lvgl:
               - lvgl.label.update: { id: sc_flappy,   text: !lambda 'char b[24]; snprintf(b, sizeof(b), "Flappy:  %d", id(hs_flappy)); return std::string(b);' }
               - lvgl.label.update: { id: sc_breakout, text: !lambda 'char b[24]; snprintf(b, sizeof(b), "Breakout:  %d", id(hs_breakout)); return std::string(b);' }
               - lvgl.label.update: { id: sc_simon,    text: !lambda 'char b[24]; snprintf(b, sizeof(b), "Simon:  %d", id(hs_simon)); return std::string(b);' }
+              - lvgl.label.update: { id: sc_react,    text: !lambda 'char b[28]; if (id(hs_react) == 0) return std::string("React:  —"); snprintf(b, sizeof(b), "React:  %d ms", id(hs_react)); return std::string(b);' }
+              - lvgl.label.update: { id: sc_rps,      text: !lambda 'char b[24]; snprintf(b, sizeof(b), "R-P-S wins:  %d", id(hs_rps)); return std::string(b);' }
               - lvgl.page.show: page_scores
     # ── FLAPPY — tap to flap, slip through the pipe gaps (the official has one too) ──
     - id: page_flappy
@@ -2000,10 +2004,12 @@ lvgl:
       scrollbar_mode: "OFF"
       widgets:
         - label: { text: "HIGH SCORES", text_font: title_font, styles: accent_txt, align: TOP_MID, y: 6 }
-        - label: { id: sc_catch,    text: "Catch:  0",    text_font: text_font, text_color: 0xFFFFFF, align: TOP_LEFT, x: 30, y: 54 }
-        - label: { id: sc_flappy,   text: "Flappy:  0",   text_font: text_font, text_color: 0xFFFFFF, align: TOP_LEFT, x: 30, y: 92 }
-        - label: { id: sc_breakout, text: "Breakout:  0", text_font: text_font, text_color: 0xFFFFFF, align: TOP_LEFT, x: 30, y: 130 }
-        - label: { id: sc_simon,    text: "Simon:  0",    text_font: text_font, text_color: 0xFFFFFF, align: TOP_LEFT, x: 30, y: 168 }
+        - label: { id: sc_catch,    text: "Catch:  0",      text_font: small_font, text_color: 0xFFFFFF, align: TOP_LEFT, x: 30, y: 48 }
+        - label: { id: sc_flappy,   text: "Flappy:  0",     text_font: small_font, text_color: 0xFFFFFF, align: TOP_LEFT, x: 30, y: 78 }
+        - label: { id: sc_breakout, text: "Breakout:  0",   text_font: small_font, text_color: 0xFFFFFF, align: TOP_LEFT, x: 30, y: 108 }
+        - label: { id: sc_simon,    text: "Simon:  0",      text_font: small_font, text_color: 0xFFFFFF, align: TOP_LEFT, x: 30, y: 138 }
+        - label: { id: sc_react,    text: "React:  —",      text_font: small_font, text_color: 0xFFFFFF, align: TOP_LEFT, x: 30, y: 168 }
+        - label: { id: sc_rps,      text: "R-P-S wins:  0", text_font: small_font, text_color: 0xFFFFFF, align: TOP_LEFT, x: 30, y: 198 }
         - button:
             id: btn_sc_back
             x: 6
@@ -3037,6 +3043,9 @@ script:
           then:
             - globals.set: { id: g_react, value: "2" }
             - lvgl.widget.update: { id: react_pad, bg_color: 0x123a5a }
+            - lambda: |-
+                long ms = (long) millis() - id(g_react_t);
+                if (id(hs_react) == 0 || ms < id(hs_react)) id(hs_react) = (int) ms;   # best time
             - lvgl.label.update:
                 id: react_txt
                 text: !lambda |-
@@ -3157,6 +3166,7 @@ script:
       - if:
           condition: { lambda: 'return id(g_rps_out) == 1;' }
           then:
+            - lambda: 'id(hs_rps) += 1;'                          # count your wins
             - script.execute: { id: led_flash, r: 100, g: 15, b: 0 }
             - script.execute: head_shake
             - delay: 900ms
