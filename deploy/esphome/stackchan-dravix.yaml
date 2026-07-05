@@ -997,6 +997,18 @@ button:
     id: btn_drink
     on_press:
       - script.execute: drink
+  # DANCE — the robot bops to a beat (head + paws + rainbow LEDs).
+  - platform: template
+    name: "Dance"
+    id: btn_dance
+    on_press:
+      - script.execute: dance
+  # RESET HIGH SCORES — clear the leaderboard from the dashboard.
+  - platform: template
+    name: "Reset high scores"
+    id: btn_reset_scores
+    on_press:
+      - script.execute: reset_scores
   - platform: restart
     name: "Reboot"
     id: btn_reboot
@@ -2004,6 +2016,18 @@ lvgl:
       scrollbar_mode: "OFF"
       widgets:
         - label: { text: "HIGH SCORES", text_font: title_font, styles: accent_txt, align: TOP_MID, y: 6 }
+        - button:
+            id: btn_sc_reset
+            x: 248
+            y: 6
+            width: 66
+            height: 28
+            radius: 8
+            bg_color: 0x3a1414
+            widgets:
+              - label: { text: "RESET", text_font: small_font, text_color: 0xff7b7b, align: CENTER }
+            on_click:
+              - script.execute: reset_scores
         - label: { id: sc_catch,    text: "Catch:  0",      text_font: small_font, text_color: 0xFFFFFF, align: TOP_LEFT, x: 30, y: 48 }
         - label: { id: sc_flappy,   text: "Flappy:  0",     text_font: small_font, text_color: 0xFFFFFF, align: TOP_LEFT, x: 30, y: 78 }
         - label: { id: sc_breakout, text: "Breakout:  0",   text_font: small_font, text_color: 0xFFFFFF, align: TOP_LEFT, x: 30, y: 108 }
@@ -2752,6 +2776,75 @@ script:
           condition: { lambda: 'return !id(g_voice);' }
           then:
             - script.execute: restore_leds
+  # ── RESET SCORES — zero the leaderboard (from the SCORES page or Home Assistant).
+  - id: reset_scores
+    then:
+      - lambda: |-
+          id(hs_catch) = 0; id(hs_flappy) = 0; id(hs_breakout) = 0;
+          id(hs_simon) = 0; id(hs_react) = 0; id(hs_rps) = 0;
+      - lvgl.label.update: { id: sc_catch,    text: "Catch:  0" }
+      - lvgl.label.update: { id: sc_flappy,   text: "Flappy:  0" }
+      - lvgl.label.update: { id: sc_breakout, text: "Breakout:  0" }
+      - lvgl.label.update: { id: sc_simon,    text: "Simon:  0" }
+      - lvgl.label.update: { id: sc_react,    text: "React:  —" }
+      - lvgl.label.update: { id: sc_rps,      text: "R-P-S wins:  0" }
+  # ── DANCE 💃 — bops its head + paws to a beat with rainbow LEDs (from HA / the dashboard).
+  - id: dance
+    mode: single
+    then:
+      - if:
+          condition: { lambda: 'return id(g_booted) && !id(g_sleep) && !id(g_saver) && !id(g_perm);' }
+          then:
+            - select.set: { id: robot_mode, option: awake }
+            - globals.set: { id: g_card, value: "0" }
+            - globals.set: { id: g_expr, value: "1" }
+            - lvgl.page.show: page_face
+            - script.execute: render_face
+            - lambda: 'lv_disp_trig_activity(NULL);'
+            - if:
+                condition: { lambda: 'return !id(g_voice) && !id(g_flash);' }
+                then:
+                  - lambda: |-
+                      auto v = id(stackchan_light_bar).current_values;
+                      id(led_on)  = v.is_on();
+                      id(led_bri) = v.get_brightness();
+                      id(led_r)   = v.get_red();
+                      id(led_g)   = v.get_green();
+                      id(led_b)   = v.get_blue();
+            - light.turn_on: { id: stackchan_light_bar, brightness: 100%, effect: "Rainbow Effect With Custom Values" }
+            - if:
+                condition: { lambda: 'return id(sw_sfx).state && !id(g_quiet) && !id(g_night);' }
+                then: [ { rtttl.play: "dance:d=8,o=5,b=150:c,e,g,c6,g,e,c" } ]
+            - lvgl.widget.update: { id: hand_l, x: -52, y: 20 }
+            - lvgl.widget.update: { id: hand_r, x: 52, y: 20 }
+            - lvgl.widget.show: hand_l
+            - lvgl.widget.show: hand_r
+            - repeat:
+                count: 5
+                then:
+                  - if:
+                      condition: { lambda: 'return id(sw_move).state && !std::isnan(id(servo_x_angle).state);' }
+                      then: [ { number.set: { id: servo_x_angle, value: "16" } } ]
+                  - lvgl.widget.update: { id: hand_l, y: 6 }
+                  - lvgl.widget.update: { id: hand_r, y: 36 }
+                  - delay: 420ms
+                  - if:
+                      condition: { lambda: 'return id(sw_move).state && !std::isnan(id(servo_x_angle).state);' }
+                      then: [ { number.set: { id: servo_x_angle, value: "-16" } } ]
+                  - lvgl.widget.update: { id: hand_l, y: 36 }
+                  - lvgl.widget.update: { id: hand_r, y: 6 }
+                  - delay: 420ms
+            - if:
+                condition: { lambda: 'return id(sw_move).state;' }
+                then: [ { number.set: { id: servo_x_angle, value: "0" } } ]
+            - light.turn_on: { id: stackchan_light_bar, effect: "None" }
+            - if:
+                condition: { lambda: 'return !id(g_voice);' }
+                then: [ { script.execute: restore_leds } ]
+            - lvgl.widget.hide: hand_l
+            - lvgl.widget.hide: hand_r
+            - lvgl.widget.update: { id: hand_l, x: -34, y: 92 }
+            - lvgl.widget.update: { id: hand_r, x: 34, y: 92 }
   # Redraw the pet face from the current state.
   - id: render_face
     then:
