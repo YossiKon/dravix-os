@@ -103,6 +103,26 @@ the endpoint above.
 | `Stop` | it finishes the turn | `done` |
 | `SessionStart` | a session opens | `idle` |
 
+## Approve / reject a tool from the robot
+
+Close the loop: when Claude Code is about to run a tool, the **robot pops Approve / Reject
+buttons** on its screen (fw **v21**) and you tap to allow or block it — no reaching for the
+keyboard. You can decide from the dashboard's AI-agent card too.
+
+1. Copy [`deploy/agent-bridge/dravix-permission.py`](../deploy/agent-bridge/dravix-permission.py)
+   next to the other bridge script.
+2. In `claude-settings.example.json` there's a second `PreToolUse` entry that runs it. **Scope
+   its `matcher`** to the tools you want to gate — `"Bash"` (commands) or `"Bash|Write|Edit"`
+   (commands + file changes). Every matched tool then waits for your tap.
+3. Tap **Approve** → the tool runs. Tap **Reject** → it's blocked. If you don't answer within
+   `DRAVIX_PERM_TIMEOUT` (default 120 s) or the robot is unreachable, it **falls back to Claude
+   Code's normal prompt** — it never hard-blocks you.
+
+Under the hood: the hook POSTs `/api/agent/permission`, the robot (and dashboard) show the
+request, your tap fires `esphome.dravix_permission` back to dravix, and the hook returns
+`allow`/`deny` to Claude Code. The buttons are green **Approve** / vermillion **Reject** with
+the words on them — clear regardless of colour vision.
+
 ## Wiring anything else
 
 Any tool that can run a shell command or make an HTTP call can drive the lamp — there's just

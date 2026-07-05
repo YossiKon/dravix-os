@@ -70,6 +70,16 @@ class AgentPrefsBody(BaseModel):
     primary: str | None = None   # pin an agent name (always wins), or "" for auto (most urgent)
 
 
+class AgentPermissionBody(BaseModel):
+    source: str = ""             # the agent asking
+    tool: str = ""               # what it wants to do (e.g. "Bash")
+    summary: str = ""            # human line shown on the robot (e.g. the command)
+
+
+class AgentDecideBody(BaseModel):
+    decision: str                # approve | reject
+
+
 class ChatBody(BaseModel):
     text: str
     conversation_id: str | None = None
@@ -260,12 +270,21 @@ async def agent_status_get(request: Request):
 
 @router.delete("/api/agent/status/{name}")
 async def agent_status_forget(name: str, request: Request):
-    """Dismiss one agent from the board."""
+    """Dismiss one agent from the board (and clear the robot if it was the winner)."""
     agent = getattr(request.app.state, "agent", None)
     if agent is None:
         raise HTTPException(status_code=503, detail="agent presence not available")
-    agent.forget(name)
+    await agent.forget(name)
     return agent.snapshot()
+
+
+@router.post("/api/agent/status/clear")
+async def agent_status_clear(request: Request):
+    """Drop every agent and reset the robot to idle."""
+    agent = getattr(request.app.state, "agent", None)
+    if agent is None:
+        raise HTTPException(status_code=503, detail="agent presence not available")
+    return await agent.clear()
 
 
 @router.put("/api/agent/prefs")
@@ -278,6 +297,52 @@ async def agent_prefs_set(body: AgentPrefsBody, request: Request):
     store.set_agent_prefs(display=display, primary=body.primary)
     agent = getattr(request.app.state, "agent", None)
     return agent.snapshot() if agent is not None else {"ok": True}
+
+
+# ── on-robot permission approvals — an agent asks, you tap Approve/Reject on the robot ──
+@router.post("/api/agent/permission")
+async def agent_permission_request(body: AgentPermissionBody, request: Request):
+    """An agent asks for a yes/no; the robot shows Approve/Reject (and so does the dashboard).
+
+    Returns the request (with its ``id``); the agent then polls GET
+    /api/agent/permission/{id} until ``decision`` is ``approved`` or ``rejected``."""
+    agent = getattr(request.app.state, "agent", None)
+    if agent is None:
+        raise HTTPException(status_code=503, detail="agent presence not available")
+    return await agent.request_permission(body.source, tool=body.tool, summary=body.summary)
+
+
+@router.get("/api/agent/permission")
+async def agent_permission_current(request: Request):
+    """The permission request currently awaiting a decision (or null)."""
+    agent = getattr(request.app.state, "agent", None)
+    if agent is None:
+        raise HTTPException(status_code=503, detail="agent presence not available")
+    return {"permission": agent.current_permission()}
+
+
+@router.get("/api/agent/permission/{pid}")
+async def agent_permission_poll(pid: str, request: Request):
+    """Poll one request's decision: pending | approved | rejected | expired."""
+    agent = getattr(request.app.state, "agent", None)
+    if agent is None:
+        raise HTTPException(status_code=503, detail="agent presence not available")
+    view = agent.permission_view(pid)
+    if view is None:
+        raise HTTPException(status_code=404, detail="no such permission request")
+    return view
+
+
+@router.post("/api/agent/permission/{pid}/decide")
+async def agent_permission_decide(pid: str, body: AgentDecideBody, request: Request):
+    """Approve/reject a request from the dashboard (the robot's buttons do the same)."""
+    agent = getattr(request.app.state, "agent", None)
+    if agent is None:
+        raise HTTPException(status_code=503, detail="agent presence not available")
+    view = await agent.decide_permission(pid, body.decision)
+    if view is None:
+        raise HTTPException(status_code=404, detail="no such permission request")
+    return view
 
 
 # ── robot wiring: pick the driver + HA entities + head calibration from the UI ──
@@ -505,6 +570,11 @@ async def put_privacy(body: PrivacyBody, request: Request):
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     except Exception as exc:  # noqa: BLE001
         raise HTTPException(status_code=502, detail=str(exc)) from exc
+    # drop the controller's privacy cache so the camera blocks/unblocks THIS instant, not
+    # up to ~1.5s later (no window where the camera still serves after Privacy goes ON).
+    invalidate = getattr(request.app.state.robot, "invalidate_privacy", None)
+    if invalidate is not None:
+        invalidate()
     return {"ok": True, "private": body.private}
 
 
@@ -1339,22 +1409,33 @@ async def robot_camera_stream(request: Request, fps: float = 2.0):
     delay = 1.0 / max(0.2, min(fps, 10.0))
 
     async def frames():
-        while True:
-            if await _camera_blocked(request):
-                break  # privacy flipped on mid-stream → end the stream immediately
-            try:
-                img = await robot.take_photo()
-            except Exception:  # noqa: BLE001
-                img = None
-            if img:
-                yield (
-                    b"--frame\r\nContent-Type: image/jpeg\r\nContent-Length: "
-                    + str(len(img)).encode()
-                    + b"\r\n\r\n"
-                    + img
-                    + b"\r\n"
-                )
-            await asyncio.sleep(delay)
+        misses = 0
+        try:
+            while True:
+                if await request.is_disconnected():
+                    break  # client (browser / ffmpeg) went away — stop doing take_photo work
+                if await _camera_blocked(request):
+                    break  # privacy flipped on mid-stream → end the stream immediately
+                try:
+                    img = await robot.take_photo()
+                except Exception:  # noqa: BLE001
+                    img = None
+                if img:
+                    misses = 0
+                    yield (
+                        b"--frame\r\nContent-Type: image/jpeg\r\nContent-Length: "
+                        + str(len(img)).encode()
+                        + b"\r\n\r\n"
+                        + img
+                        + b"\r\n"
+                    )
+                else:
+                    misses += 1
+                    if misses >= 30:  # camera down for ~a while → end the stream, don't spin
+                        break
+                await asyncio.sleep(delay)
+        except asyncio.CancelledError:  # client disconnect surfaces here — exit quietly
+            return
 
     return StreamingResponse(frames(), media_type="multipart/x-mixed-replace; boundary=frame")
 

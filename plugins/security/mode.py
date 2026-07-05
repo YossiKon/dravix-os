@@ -188,10 +188,16 @@ class SecurityMode(Mode):
                     with contextlib.suppress(ProcessLookupError):
                         proc.kill()
                 raise
+            elapsed = time.monotonic() - started
             # a clip that ended almost immediately means the stream was closed (privacy /
             # quiet mode / no camera) — drop the empty file and back off before retrying.
-            if time.monotonic() - started < 3.0:
+            if elapsed < 3.0:
                 with contextlib.suppress(OSError):
                     if out.is_file() and out.stat().st_size < 1024:
                         out.unlink()
                 await asyncio.sleep(10.0)
+            elif proc.returncode not in (0, None):
+                # ffmpeg errored mid-clip (e.g. the stream dropped after a while) — a short
+                # backoff so a persistently failing stream can't hot-spin the process.
+                self.ctx.log.debug("security: ffmpeg exited %s — backing off", proc.returncode)
+                await asyncio.sleep(5.0)

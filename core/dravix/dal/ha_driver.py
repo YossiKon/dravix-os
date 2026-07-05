@@ -344,6 +344,18 @@ class HARobotDriver(RobotDriver):
         except Exception:  # noqa: BLE001 — a status badge must never break the caller
             pass
 
+    async def set_permission(self, text: str) -> None:
+        """Show/clear the on-robot Approve/Reject prompt (fw v21+ ``t_permission`` slot).
+
+        Non-empty text pops the buttons; "" hides them. Best-effort — no-op without the slot."""
+        ent = self._entities.get("permission_text")
+        if not ent:
+            return
+        try:
+            await self._ha.call_service("text", "set_value", {"entity_id": ent, "value": text[:80]})
+        except Exception:  # noqa: BLE001 — the on-robot prompt must never break the caller
+            pass
+
     async def take_photo(self) -> bytes | None:
         cam = self._entities.get("camera")
         if not cam:

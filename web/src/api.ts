@@ -126,12 +126,22 @@ export interface AgentEntry {
   stale: boolean;
 }
 
+export interface AgentPermission {
+  id: string;
+  agent: string;
+  tool: string;
+  summary: string;
+  decision: string; // pending | approved | rejected | expired
+  created_at: string;
+}
+
 export interface AgentStatus {
   winner: AgentEntry | null;
   agents: AgentEntry[];
   display: string; // bubble | badge | both | off
   primary: string; // pinned agent name, or "" = auto (most urgent)
   palette: Record<string, { color: string; glyph: string }>;
+  permission: AgentPermission | null;
 }
 
 export interface SecurityDay {

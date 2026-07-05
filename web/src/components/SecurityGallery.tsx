@@ -23,12 +23,15 @@ export function SecurityGallery(props: { onChanged?: () => void }) {
   const [clips, setClips] = useState<SecurityClip[]>([]);
   const [busy, setBusy] = useState(false);
 
+  // A pure loader for the day list. Stable identity (empty deps) so the mount effect below
+  // fires exactly once — do NOT signal the parent from here (that caused a refetch loop:
+  // onChanged→setSec→re-render→new refresh→effect→onChanged…). Mutators call onChanged.
+  const onChanged = props.onChanged;
   const refresh = useCallback(() => {
     apiGet<{ days: SecurityDay[] }>("/api/security/days")
       .then((r) => setDays(r.days))
       .catch(() => undefined);
-    props.onChanged?.();
-  }, [props]);
+  }, []);
 
   useEffect(() => refresh(), [refresh]);
 
@@ -38,6 +41,7 @@ export function SecurityGallery(props: { onChanged?: () => void }) {
       return;
     }
     setOpen(day);
+    setPhotos([]); // clear so the grid doesn't flash the previous day's photos while loading
     setClips([]);
     try {
       const r = await apiGet<{ photos: SecurityPhoto[] }>(`/api/security/photos?day=${day}&limit=500`);
@@ -58,6 +62,7 @@ export function SecurityGallery(props: { onChanged?: () => void }) {
       await apiSend(`/api/security/photo/${p.day}/${p.name}`, "DELETE");
       setPhotos((cur) => cur.filter((x) => !(x.day === p.day && x.name === p.name)));
       refresh();
+      onChanged?.();
     } catch (e) {
       toastErr(e);
     }
@@ -68,6 +73,7 @@ export function SecurityGallery(props: { onChanged?: () => void }) {
       await apiSend(`/api/security/video/${c.day}/${c.name}`, "DELETE");
       setClips((cur) => cur.filter((x) => !(x.day === c.day && x.name === c.name)));
       refresh();
+      onChanged?.();
     } catch (e) {
       toastErr(e);
     }
@@ -79,6 +85,7 @@ export function SecurityGallery(props: { onChanged?: () => void }) {
       await apiSend(`/api/security/day/${day}`, "DELETE");
       if (open === day) setOpen(null);
       refresh();
+      onChanged?.();
     } catch (e) {
       toastErr(e);
     }
@@ -90,6 +97,7 @@ export function SecurityGallery(props: { onChanged?: () => void }) {
       await apiSend("/api/security/photos", "DELETE");
       setOpen(null);
       refresh();
+      onChanged?.();
     } catch (e) {
       toastErr(e);
     }
@@ -101,6 +109,7 @@ export function SecurityGallery(props: { onChanged?: () => void }) {
       await apiSend(`/api/security/day/${day}/video`, "POST", {});
       toast(tr("🎬 סרטון טיים-לאפס נוצר", "🎬 Timelapse video built"));
       refresh();
+      onChanged?.();
     } catch (e) {
       toastErr(e);
     } finally {

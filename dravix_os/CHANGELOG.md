@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.0.68
+
+- **✋ Approve / reject an AI agent's action from the robot's screen** (firmware **v21**).
+  When Claude Code is about to run a tool, the robot pops **Approve / Reject** buttons (and
+  speaks); tap one to allow or block it — or decide from the dashboard's AI-agent card. Wire
+  it with the new `deploy/agent-bridge/dravix-permission.py` PreToolUse hook (scope it to the
+  tools you want to gate). Fail-open: if you don't answer in time or the robot is offline, it
+  falls back to Claude Code's normal prompt. Buttons are green **Approve** / vermillion
+  **Reject** with words, so they're clear for any colour vision.
+- **Dashboard AI-agent card**: shows the pending approval with Approve/Reject, a **Clear all**
+  button, and you can now dismiss the single connected agent too.
+- **Fixes from a full review sweep:** the security Gallery no longer hammers the server with a
+  refetch loop while open; **dismissing an agent now actually resets the robot** (face/LED/badge
+  no longer freeze on the removed agent); turning **Privacy ON blocks the camera instantly** (no
+  ~1.5 s window); the on-face agent badge hides in sleep/screensaver and never truncates the
+  state; the security video recorder backs off instead of hot-spinning ffmpeg on a failing
+  stream; the camera stream stops cleanly on client disconnect; agent timestamps are timezone-
+  correct.
+
 ## 0.0.67
 
 - **🤖 Multiple AI agents at once + choose whose status shows.** Connect several agents

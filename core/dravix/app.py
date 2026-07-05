@@ -265,6 +265,13 @@ async def lifespan(app: FastAPI):
                     except Exception:  # noqa: BLE001 — never kill the watcher
                         log.exception("climate control failed")
                     continue
+                # a tap on the robot's Approve/Reject buttons → resolve the pending permission
+                if ev.type == "agent.permission_decision":
+                    try:
+                        await app.state.agent.decide_current(str(ev.data.get("decision") or ""))
+                    except Exception:  # noqa: BLE001 — never kill the watcher
+                        log.exception("agent permission decision failed")
+                    continue
                 if ev.type != "islocal.set":
                     continue
                 enabled = bool(ev.data.get("enabled"))

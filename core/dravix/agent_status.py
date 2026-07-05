@@ -18,6 +18,7 @@ capability-guarded; the agent reaches the add-on over your LAN only, so it respe
 from __future__ import annotations
 
 import datetime
+import uuid
 from dataclasses import dataclass
 
 
@@ -49,16 +50,35 @@ _LOOKS: dict[str, _Look] = {
 
 STATES: tuple[str, ...] = tuple(_LOOKS.keys())
 
+
+def _utcnow() -> datetime.datetime:
+    """Timezone-aware UTC — so the ISO strings we emit carry an offset and the dashboard's
+    'x ago' is correct no matter the browser's timezone."""
+    return datetime.datetime.now(datetime.timezone.utc)
+
+
 # how strongly each state claims the robot (higher wins); ties → most recently updated.
 _PRIORITY: dict[str, int] = {
     "waiting_permission": 5, "question": 4, "error": 3, "working": 2, "done": 1, "idle": 0,
 }
 _STALE_AFTER = 900.0   # seconds; an agent quiet this long stops holding the robot (still listed)
+_PERM_TTL = 300.0      # seconds a permission request stays answerable before it's "expired"
 
 
 def palette() -> dict[str, dict]:
     """The public state→{color,glyph} map (dashboard fetches it to stay in sync)."""
     return {s: {"color": lk.led, "glyph": lk.glyph} for s, lk in _LOOKS.items()}
+
+
+def _badge(name: str, state: str, maxlen: int = 30) -> str:
+    """"name: state" for the on-face label, fit into ``maxlen`` by shortening the NAME (never
+    the state) so the important part is always readable. "" when there's nothing to show."""
+    if state == "idle" or not name:
+        return ""
+    label = state.replace("_", " ")
+    avail = maxlen - len(label) - 2  # ": "
+    short = name if len(name) <= max(1, avail) else name[: max(1, avail - 1)] + "."
+    return f"{short}: {label}"
 
 
 class AgentPresence:
@@ -70,6 +90,8 @@ class AgentPresence:
         self._store = store
         self._agents: dict[str, dict] = {}          # name -> {state, text, updated_dt}
         self._last: tuple[str, str] = ("", "")      # (winner_name, winner_state) last reflected
+        self._perms: dict[str, dict] = {}           # id -> permission request
+        self._current: str | None = None            # the request shown on the robot right now
 
     # ── preferences (dashboard-managed) ─────────────────────────────────────────────
     def _prefs(self) -> dict:
@@ -101,7 +123,7 @@ class AgentPresence:
 
     # ── public API ──────────────────────────────────────────────────────────────────
     def snapshot(self, now: datetime.datetime | None = None) -> dict:
-        stamp = now or datetime.datetime.now()
+        stamp = now or _utcnow()
         agents = []
         for n, r in sorted(self._agents.items(), key=lambda kv: kv[1]["updated_dt"], reverse=True):
             agents.append({
@@ -128,6 +150,7 @@ class AgentPresence:
             "display": prefs.get("display", "both"),
             "primary": prefs.get("primary", ""),
             "palette": palette(),
+            "permission": self.current_permission(now=stamp),
         }
 
     async def set(
@@ -141,7 +164,7 @@ class AgentPresence:
     ) -> dict:
         """Record ``source``'s state and reflect the winning agent on the robot."""
         name = (source or "agent").strip() or "agent"
-        stamp = now or datetime.datetime.now()
+        stamp = now or _utcnow()
         self._agents[name] = {"state": state, "text": (text or "").strip(), "updated_dt": stamp}
         # drop long-dead agents so the registry can't grow without bound
         self._agents = {
@@ -156,12 +179,21 @@ class AgentPresence:
             pass
         return snap
 
-    def forget(self, name: str) -> bool:
-        """Remove one agent (dashboard 'dismiss'). Returns True if it existed."""
+    async def forget(self, name: str, *, now: datetime.datetime | None = None) -> bool:
+        """Remove one agent (dashboard 'dismiss') and re-reflect the robot. Returns True if
+        it existed. Passing the just-removed name as changed_name keeps this SILENT — that
+        name is no longer live, so it can never equal the new winner and trigger speech."""
         existed = self._agents.pop(name, None) is not None
         if existed:
-            self._last = ("", "")  # force a re-reflect on the next update
+            stamp = now or _utcnow()
+            await self._reflect(self._winner(stamp), False, name, "idle")
         return existed
+
+    async def clear(self) -> dict:
+        """Drop every agent and reset the robot to idle (dashboard 'clear all')."""
+        self._agents = {}
+        await self._reflect(None, False, "", "idle")
+        return self.snapshot()
 
     # ── robot reflection ────────────────────────────────────────────────────────────
     async def _reflect(
@@ -193,9 +225,8 @@ class AgentPresence:
             if display in ("badge", "both"):
                 writer = getattr(getattr(robot, "driver", None), "set_agent_text", None)
                 if writer is not None:
-                    badge = "" if (wstate == "idle" or not wname) else f"{wname}: {wstate.replace('_', ' ')}"
                     try:
-                        await writer(badge)
+                        await writer(_badge(wname, wstate))
                     except Exception:  # noqa: BLE001
                         pass
 
@@ -213,3 +244,95 @@ class AgentPresence:
                     await robot.say(line)
                 except Exception:  # noqa: BLE001
                     pass
+
+    # ── on-robot permission approvals ───────────────────────────────────────────────
+    # An agent can ASK for a yes/no ("run this command?"). The robot shows Approve/Reject
+    # buttons (fw v21) and/or the dashboard shows them; the agent polls for the answer. The
+    # robot's tap has no request id, so it resolves whichever request is on-screen now.
+    def current_permission(self, *, now: datetime.datetime | None = None) -> dict | None:
+        if not self._current:
+            return None
+        return self.permission_view(self._current, now=now)
+
+    def permission_view(self, pid: str, *, now: datetime.datetime | None = None) -> dict | None:
+        p = self._perms.get(pid)
+        if p is None:
+            return None
+        stamp = now or _utcnow()
+        expired = p["decision"] is None and (stamp - p["created_dt"]).total_seconds() > _PERM_TTL
+        return {
+            "id": p["id"],
+            "agent": p["agent"],
+            "tool": p["tool"],
+            "summary": p["summary"],
+            "decision": p["decision"] or ("expired" if expired else "pending"),
+            "created_at": p["created_dt"].isoformat(timespec="seconds"),
+        }
+
+    async def _show_permission(self, text: str) -> None:
+        writer = getattr(getattr(self._robot, "driver", None), "set_permission", None)
+        if writer is not None:
+            try:
+                await writer(text[:80])
+            except Exception:  # noqa: BLE001 — the on-robot prompt is best-effort
+                pass
+
+    async def request_permission(
+        self, agent: str, tool: str = "", summary: str = "", *, now: datetime.datetime | None = None,
+    ) -> dict:
+        name = (agent or "agent").strip() or "agent"
+        stamp = now or _utcnow()
+        pid = uuid.uuid4().hex[:8]
+        text = (summary or tool or "Approve?").strip()
+        self._perms[pid] = {
+            "id": pid, "agent": name, "tool": (tool or "").strip(), "summary": text,
+            "created_dt": stamp, "decision": None, "decided_dt": None,
+        }
+        # drop decided requests older than a minute so the map can't grow without bound
+        self._perms = {
+            k: v for k, v in self._perms.items()
+            if v["decision"] is None or (stamp - (v["decided_dt"] or stamp)).total_seconds() < 60
+        }
+        self._current = pid
+        # the asking agent is now waiting_permission (becomes the winner → face/LED/speech)…
+        await self.set("waiting_permission", text, source=name, now=stamp)
+        # …plus the Approve/Reject buttons on the robot's screen.
+        await self._show_permission(f"{name}: {text}")
+        return self.permission_view(pid, now=stamp)
+
+    async def decide_permission(
+        self, pid: str, decision: str, *, now: datetime.datetime | None = None,
+    ) -> dict | None:
+        p = self._perms.get(pid)
+        return await self._apply_decision(p, decision, now=now) if p else None
+
+    async def decide_current(
+        self, decision: str, *, now: datetime.datetime | None = None,
+    ) -> dict | None:
+        """Resolve the request currently shown on the robot (the robot's tap has no id)."""
+        p = self._perms.get(self._current) if self._current else None
+        return await self._apply_decision(p, decision, now=now) if p else None
+
+    async def _apply_decision(
+        self, p: dict, decision: str, *, now: datetime.datetime | None = None,
+    ) -> dict:
+        stamp = now or _utcnow()
+        approved = str(decision).strip().lower() in ("approve", "approved", "allow", "yes", "true", "ok")
+        if p["decision"] is None:
+            p["decision"] = "approved" if approved else "rejected"
+            p["decided_dt"] = stamp
+        if self._current == p["id"]:
+            await self._show_permission("")
+            self._current = None
+            # if another request is still waiting, promote it onto the screen
+            nxt = next(
+                (q for q in self._perms.values()
+                 if q["decision"] is None and (stamp - q["created_dt"]).total_seconds() <= _PERM_TTL),
+                None,
+            )
+            if nxt is not None:
+                self._current = nxt["id"]
+                await self._show_permission(f"{nxt['agent']}: {nxt['summary']}")
+        # move the asking agent on: approved → back to working, rejected → idle
+        await self.set("working" if approved else "idle", "", source=p["agent"], now=stamp)
+        return self.permission_view(p["id"], now=stamp)

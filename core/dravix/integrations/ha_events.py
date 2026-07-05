@@ -159,6 +159,7 @@ class HAEventBridge:
             await ws.send(json.dumps({"id": 1, "type": "subscribe_events", "event_type": "state_changed"}))
             await ws.send(json.dumps({"id": 2, "type": "subscribe_events", "event_type": "esphome.dravix_card"}))
             await ws.send(json.dumps({"id": 3, "type": "subscribe_events", "event_type": "esphome.dravix_climate"}))
+            await ws.send(json.dumps({"id": 4, "type": "subscribe_events", "event_type": "esphome.dravix_permission"}))
             log.info("HA event bridge connected and subscribed")
             async for raw in ws:
                 msg = json.loads(raw)
@@ -177,6 +178,12 @@ class HAEventBridge:
                 # A tap on the robot's CLIMATE page → dravix controls the configured AC.
                 if event.get("event_type") == "esphome.dravix_climate":
                     await self._bus.publish("climate.control", action=str(data.get("action") or ""))
+                    continue
+                # A tap on the robot's Approve/Reject buttons → resolve the pending permission.
+                if event.get("event_type") == "esphome.dravix_permission":
+                    await self._bus.publish(
+                        "agent.permission_decision", decision=str(data.get("decision") or "")
+                    )
                     continue
                 mapped = map_state_changed(data, self._map)
                 if mapped:

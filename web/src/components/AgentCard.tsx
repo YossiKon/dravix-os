@@ -66,6 +66,21 @@ export function AgentCard() {
       /* ignore */
     }
   }
+  async function clearAll() {
+    try {
+      setSt(await apiSend<AgentStatus>("/api/agent/status/clear", "POST", {}));
+    } catch {
+      /* ignore */
+    }
+  }
+  async function decide(id: string, decision: "approve" | "reject") {
+    try {
+      await apiSend(`/api/agent/permission/${id}/decide`, "POST", { decision });
+      refresh();
+    } catch {
+      /* ignore */
+    }
+  }
   async function setPref(patch: { display?: string; primary?: string }) {
     try {
       setSt(await apiSend<AgentStatus>("/api/agent/prefs", "PUT", patch));
@@ -90,8 +105,38 @@ export function AgentCard() {
     );
   };
 
+  const perm = st?.permission && st.permission.decision === "pending" ? st.permission : null;
+
   return (
     <div className="space-y-3">
+      {/* permission prompt — approve/reject a tool right here (also on the robot's screen) */}
+      {perm && (
+        <div className="rounded-2xl border-2 p-3" style={{ borderColor: "#E69F00" }}>
+          <div className="flex items-center gap-2">
+            <span className="text-lg">✋</span>
+            <span dir="ltr" className="font-mono text-sm text-teal">{perm.agent}</span>
+            <span className="font-semibold">{tr("מבקש אישור", "wants approval")}</span>
+          </div>
+          {perm.summary && (
+            <p dir="ltr" className="mt-1 break-words rounded-lg bg-black/30 p-2 font-mono text-xs">{perm.summary}</p>
+          )}
+          <div className="mt-2 flex gap-2">
+            <button
+              className="btn flex-1 !bg-[#1f7a4d] !text-white"
+              onClick={() => void decide(perm.id, "approve")}
+            >
+              {tr("✓ אשר", "✓ Approve")}
+            </button>
+            <button
+              className="btn flex-1 !bg-[#b5471f] !text-white"
+              onClick={() => void decide(perm.id, "reject")}
+            >
+              {tr("✗ דחה", "✗ Reject")}
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* winner banner */}
       <div className="flex items-center gap-3 rounded-2xl border border-line bg-card2 p-3">
         {winner ? (
@@ -105,6 +150,13 @@ export function AgentCard() {
               {winner.text && <p className="truncate text-xs text-mute">{winner.text}</p>}
             </div>
             <span className="ms-auto shrink-0 text-[11px] text-mute">{ago(winner.updated_at, he)}</span>
+            <button
+              className="shrink-0 text-xs text-mute hover:text-red"
+              onClick={() => void dismiss(winner.name)}
+              title={tr("הסר", "Dismiss")}
+            >
+              ✕
+            </button>
           </>
         ) : (
           <span className="text-sm text-mute">
@@ -194,11 +246,16 @@ export function AgentCard() {
 
       <div className="flex flex-wrap gap-2">
         <span className="self-center text-xs text-mute">{tr("בדיקה:", "Test:")}</span>
-        {(["working", "waiting_permission", "question", "done", "idle"] as const).map((s) => (
+        {(["working", "waiting_permission", "question", "done", "error", "idle"] as const).map((s) => (
           <button key={s} className="chip" onClick={() => void test(s)}>
             {pal(s).glyph} {label(s)}
           </button>
         ))}
+        {agents.length > 0 && (
+          <button className="chip ms-auto" onClick={() => void clearAll()}>
+            {tr("🗑 נקה הכל", "🗑 Clear all")}
+          </button>
+        )}
       </div>
     </div>
   );

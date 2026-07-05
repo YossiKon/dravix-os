@@ -92,3 +92,75 @@ def test_unknown_state_rejected(tmp_path, monkeypatch):
         from dravix.config import get_settings
 
         get_settings.cache_clear()
+
+
+def test_clear_all(tmp_path, monkeypatch):
+    app = _app(monkeypatch, tmp_path)
+    try:
+        with TestClient(app) as c:
+            c.post("/api/agent/status", json={"state": "working", "source": "a"})
+            c.post("/api/agent/status", json={"state": "working", "source": "b"})
+            snap = c.post("/api/agent/status/clear").json()
+            assert snap["agents"] == [] and snap["winner"] is None
+    finally:
+        from dravix.config import get_settings
+
+        get_settings.cache_clear()
+
+
+def test_permission_request_decide_flow(tmp_path, monkeypatch):
+    app = _app(monkeypatch, tmp_path)
+    try:
+        with TestClient(app) as c:
+            r = c.post("/api/agent/permission",
+                       json={"source": "claude", "tool": "Bash", "summary": "rm -rf build/"})
+            assert r.status_code == 200
+            req = r.json()
+            pid = req["id"]
+            assert req["decision"] == "pending" and req["agent"] == "claude"
+
+            # asking flips the agent to waiting_permission (the winner) + shows in the snapshot
+            snap = c.get("/api/agent/status").json()
+            assert snap["winner"]["state"] == "waiting_permission"
+            assert snap["permission"]["id"] == pid
+
+            # poll → still pending, then approve → the poll reports approved
+            assert c.get(f"/api/agent/permission/{pid}").json()["decision"] == "pending"
+            decided = c.post(f"/api/agent/permission/{pid}/decide", json={"decision": "approve"}).json()
+            assert decided["decision"] == "approved"
+            assert c.get(f"/api/agent/permission/{pid}").json()["decision"] == "approved"
+
+            # once decided, the prompt clears and the agent goes back to working
+            snap = c.get("/api/agent/status").json()
+            assert snap["permission"] is None
+            assert snap["winner"]["state"] == "working"
+
+            assert c.get("/api/agent/permission/nope").status_code == 404
+            assert c.post("/api/agent/permission/nope/decide", json={"decision": "approve"}).status_code == 404
+    finally:
+        from dravix.config import get_settings
+
+        get_settings.cache_clear()
+
+
+def test_reject_sets_idle(tmp_path, monkeypatch):
+    app = _app(monkeypatch, tmp_path)
+    try:
+        with TestClient(app) as c:
+            pid = c.post("/api/agent/permission", json={"source": "ci", "summary": "deploy?"}).json()["id"]
+            assert c.post(f"/api/agent/permission/{pid}/decide", json={"decision": "reject"}).json()["decision"] == "rejected"
+            assert c.get("/api/agent/status").json()["winner"]["state"] == "idle"
+    finally:
+        from dravix.config import get_settings
+
+        get_settings.cache_clear()
+
+
+def test_badge_fits_and_keeps_state():
+    from dravix.agent_status import _badge
+
+    assert _badge("claude", "working") == "claude: working"
+    assert _badge("", "working") == ""            # no name → no badge
+    assert _badge("x", "idle") == ""               # idle → no badge
+    long = _badge("a-very-long-project-folder-name-indeed", "waiting_permission")
+    assert long.endswith("waiting permission") and len(long) <= 30  # state preserved, name clipped

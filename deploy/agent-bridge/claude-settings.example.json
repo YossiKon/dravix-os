@@ -12,7 +12,9 @@
       { "hooks": [{ "type": "command", "command": "python3 PATH_TO/dravix-notify.py working" }] }
     ],
     "PreToolUse": [
-      { "matcher": "*", "hooks": [{ "type": "command", "command": "python3 PATH_TO/dravix-notify.py working" }] }
+      { "matcher": "*", "hooks": [{ "type": "command", "command": "python3 PATH_TO/dravix-notify.py working" }] },
+      { "//": "APPROVE/REJECT ON THE ROBOT — scope this to the tools you want to gate (e.g. Bash, or Bash|Write|Edit). Each matched tool waits for a robot tap (or the dashboard), then allow/deny. Remove this block if you don't want on-robot approvals.",
+        "matcher": "Bash", "hooks": [{ "type": "command", "command": "python3 PATH_TO/dravix-permission.py" }] }
     ],
     "Notification": [
       { "hooks": [{ "type": "command", "command": "python3 PATH_TO/dravix-notify.py notify" }] }

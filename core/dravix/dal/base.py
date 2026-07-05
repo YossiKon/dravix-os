@@ -197,6 +197,12 @@ class RobotController:
         await self._driver.set_leds(color, brightness)
         await self._bus.publish("robot.leds", color=color, brightness=brightness)
 
+    def invalidate_privacy(self) -> None:
+        """Drop the privacy cache so the next is_private() re-reads immediately — call this
+        the instant privacy is toggled (e.g. the dashboard PUT) to close the ~1.5s window
+        where the camera would otherwise still serve frames after Privacy goes ON."""
+        self._priv_at = 0.0
+
     async def is_private(self) -> bool:
         """True while the robot's Privacy switch is ON. Cached ~1.5s so the camera stream
         can check it every frame without hammering Home Assistant."""
