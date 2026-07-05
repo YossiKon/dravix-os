@@ -313,6 +313,7 @@ globals:
   - { id: pg_ps,     type: int,   restore_value: false, initial_value: "0" }
   - { id: pg_as,     type: int,   restore_value: false, initial_value: "0" }
   - { id: pg_alive,  type: bool,  restore_value: false, initial_value: "false" }
+  - { id: g_tempst,  type: int,   restore_value: false, initial_value: "0" }   # temperature mood: 0 ok · 1 hot · 2 cold
   - { id: g_pn,     type: int,  restore_value: false, initial_value: "0" }   # party sway alternator
   # official ESP-NOW remote state (latest parsed packet + throttling)
   - { id: g_rc_yaw,   type: float, restore_value: false, initial_value: "0" }     # target yaw (servo scale)
@@ -2946,6 +2947,37 @@ script:
             - lvgl.widget.hide: hand_r
             - lvgl.widget.update: { id: hand_l, x: -34, y: 92 }
             - lvgl.widget.update: { id: hand_r, x: 34, y: 92 }
+  # ── FEELS HOT 🥵 — wipes its brow, a sweat drop, a "phew".
+  - id: react_hot
+    then:
+      - if:
+          condition: { lambda: 'return id(g_booted) && !id(g_sleep) && !id(g_saver) && !id(g_voice) && !id(g_perm);' }
+          then:
+            - globals.set: { id: g_card, value: "0" }
+            - lvgl.page.show: page_face
+            - lvgl.widget.show: sweat
+            - if:
+                condition: { lambda: 'return id(sw_sfx).state && !id(g_quiet) && !id(g_night);' }
+                then: [ { rtttl.play: "hot:d=8,o=5,b=110:g,e,c" } ]
+            - script.execute: { id: head_nudge, dx: 0, dy: -8 }   # wipes its brow
+            - delay: 3500ms
+            - lvgl.widget.hide: sweat
+  # ── FEELS COLD 🥶 — a shivery little shake + a "brr".
+  - id: react_cold
+    then:
+      - if:
+          condition: { lambda: 'return id(g_booted) && !id(g_sleep) && !id(g_saver) && !id(g_voice) && !id(g_perm);' }
+          then:
+            - globals.set: { id: g_card, value: "0" }
+            - lvgl.page.show: page_face
+            - if:
+                condition: { lambda: 'return id(sw_sfx).state && !id(g_quiet) && !id(g_night);' }
+                then: [ { rtttl.play: "brr:d=32,o=5,b=210:c,c,c,c,c" } ]
+            - script.execute: head_shake
+            - delay: 200ms
+            - script.execute: head_shake
+            - delay: 200ms
+            - script.execute: head_shake
   # Redraw the pet face from the current state.
   - id: render_face
     then:
@@ -3832,6 +3864,30 @@ interval:
                       else:
                         - lvgl.label.update: { id: pg_msg, text: "ROBOT WINS" }
                         - script.execute: head_shake
+  # TEMPERATURE MOOD — reacts to the chip temperature (axp_temp) crossing a threshold: too warm
+  # → "phew" + sweat; too cool → a shiver. Edge-detected via g_tempst, only while on the face.
+  # (Thresholds are for the AXP chip, which runs warm — tune 46/33 to taste for your room.)
+  - interval: 30s
+    then:
+      - if:
+          condition:
+            and:
+              - lvgl.page.is_showing: page_face
+              - lambda: 'return id(axp_temp).has_state() && id(axp_temp).state > 46.0 && id(g_tempst) != 1 && !id(g_sleep) && !id(g_saver) && !id(g_voice);'
+          then:
+            - globals.set: { id: g_tempst, value: "1" }
+            - script.execute: react_hot
+      - if:
+          condition:
+            and:
+              - lvgl.page.is_showing: page_face
+              - lambda: 'return id(axp_temp).has_state() && id(axp_temp).state < 33.0 && id(g_tempst) != 2 && !id(g_sleep) && !id(g_saver) && !id(g_voice);'
+          then:
+            - globals.set: { id: g_tempst, value: "2" }
+            - script.execute: react_cold
+      - if:
+          condition: { lambda: 'return id(axp_temp).has_state() && id(axp_temp).state >= 35.0 && id(axp_temp).state <= 44.0;' }
+          then: [ { globals.set: { id: g_tempst, value: "0" } } ]
   # SLEEP BREATHING — while asleep ON THE CHARGER, the LED bar "breathes" very dimly
   # (the EMO/Vector charger-snooze everyone loves). Gated on Mood LEDs; goes fully
   # dark the moment it wakes or is unplugged.
