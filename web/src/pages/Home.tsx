@@ -5,7 +5,6 @@ import type { Live, RobotConfig, SecurityInfo } from "../api";
 import { RobotFace, stateLabel } from "../components/RobotFace";
 import { Joystick } from "../components/Joystick";
 import { SecurityGallery } from "../components/SecurityGallery";
-import { AgentCard } from "../components/AgentCard";
 import { Section, Spinner, toast, toastErr } from "../ui";
 import { useI18n } from "../i18n";
 
@@ -456,11 +455,6 @@ export function HomePage(props: { config: RobotConfig | null }) {
             </button>
           )}
         </div>
-      </Section>
-
-      {/* ── agent status lamp ── */}
-      <Section title={tr("🤖 סוכן AI", "🤖 AI agent")} delay={85}>
-        <AgentCard />
       </Section>
 
       {/* ── games + tricks ── */}

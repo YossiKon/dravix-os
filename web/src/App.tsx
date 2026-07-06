@@ -7,13 +7,15 @@ import { ScreensPage } from "./pages/Screens";
 import { VitalsPage } from "./pages/Vitals";
 import { ClimatePage } from "./pages/Climate";
 import { SettingsPage } from "./pages/Settings";
+import { AgentPage } from "./pages/Agent";
 import { Toaster } from "./ui";
 import { useI18n } from "./i18n";
 
-type Tab = "home" | "screens" | "vitals" | "climate" | "settings";
+type Tab = "home" | "agent" | "screens" | "vitals" | "climate" | "settings";
 
 const TABS: { id: Tab; he: string; en: string; icon: string }[] = [
   { id: "home", he: "בית", en: "Home", icon: "🏠" },
+  { id: "agent", he: "סוכן", en: "Agent", icon: "🤖" },
   { id: "screens", he: "מסכים", en: "Screens", icon: "🗂" },
   { id: "vitals", he: "חיים", en: "Life", icon: "💗" },
   { id: "climate", he: "מזגן", en: "Climate", icon: "❄" },
@@ -108,6 +110,7 @@ export default function App() {
       {/* page */}
       <main className="px-4 pb-28 pt-2">
         {tab === "home" && <HomePage config={config} />}
+        {tab === "agent" && <AgentPage />}
         {tab === "screens" && <ScreensPage entities={entities} />}
         {tab === "vitals" && <VitalsPage />}
         {tab === "climate" && <ClimatePage entities={entities} />}
