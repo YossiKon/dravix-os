@@ -20,7 +20,7 @@
 #  SWIPE:  down → status · up → face · left/right → 3 cards + the CATCH-ME game.
 #  GAME "CATCH ME!": a teal dot runs around the screen — tap it to score; every 10
 #  catches the robot celebrates (green LEDs + a happy head wiggle).
-#  SINGLE-tap face = STOP everything (speech/dance/LEDs → clean) · DOUBLE-tap = AI listen (toggle) · LONG-PRESS = sleep.
+#  TRIPLE-tap face = STOP everything · DOUBLE-tap = AI listen (toggle) · single tap = nothing · LONG-PRESS = sleep.
 #  Publishes live state to HA:  sensor State (awake/listening/speaking/screensaver/sleep),
 #  Last heard (STT), Last reply (TTS) — the dravix dashboard shows these in real time.
 #  Buttons: Identify (find the robot — cyan flashes) · Reboot.
@@ -395,7 +395,8 @@ globals:
   - { id: bk_mask,  type: int,   restore_value: false, initial_value: "255" }  # 8 bricks alive (bits 0..7)
   - { id: bk_alive, type: bool,  restore_value: false, initial_value: "false" }
   - { id: bk_ev,    type: int,   restore_value: false, initial_value: "0" }     # last event: 1 brick · 2 paddle · 3 hit
-  - { id: g_dc_ms,  type: long,  restore_value: false, initial_value: "0" }     # face double-tap: millis of the 1st tap
+  - { id: g_dc_ms,  type: long,  restore_value: false, initial_value: "0" }     # face tap: millis of the previous tap
+  - { id: g_tapc,   type: int,   restore_value: false, initial_value: "0" }     # face tap streak: 2 = AI, 3 = STOP
   - { id: g_food,   type: int,   restore_value: false, initial_value: "0" }     # which treat is being eaten: 0 cookie·1 cake·2 apple·3 croissant
   - { id: g_lowbatt, type: bool, restore_value: false, initial_value: "false" }  # low-battery worried beep already fired
   - { id: fb_alive, type: bool,  restore_value: false, initial_value: "false" }
@@ -2516,15 +2517,23 @@ script:
       - globals.set: { id: g_voice,  value: "false" }
       - light.turn_off: stackchan_light_bar     # no LEDs — back to a clean state
       - script.execute: render_face             # redraw the current mode's face
-  - id: tap_single            # fires the STOP only if a 2nd tap didn't arrive (→ that's a double)
+  - id: tap_single            # settle timer: a settled DOUBLE (2 taps) toggles the AI; 1 tap = nothing
     mode: restart
     then:
-      - delay: 350ms
+      - delay: 380ms
       - if:
-          condition: { lambda: 'return id(g_dc_ms) != 0;' }
+          condition: { lambda: 'return id(g_tapc) == 2;' }
           then:
-            - globals.set: { id: g_dc_ms, value: "0" }
-            - script.execute: panic_stop
+            - if:
+                condition: { lambda: 'return id(g_voice);' }
+                then:
+                  - voice_assistant.stop
+                else:
+                  - if:
+                      condition: { switch.is_off: sw_privacy }
+                      then: [ voice_assistant.start ]
+      - globals.set: { id: g_tapc, value: "0" }
+      - globals.set: { id: g_dc_ms, value: "0" }
   # After ~25s the alert image goes away and the face comes back.
   - id: img_timeout
     mode: restart
@@ -4667,8 +4676,8 @@ touchscreen:
                   return id(g_perm) && !id(sw_sleep) && adx < 40 && ady < 40 && dur < 700;
           then:
             - script.execute: perm_tap_approve
-      # FACE TAP: SINGLE tap = STOP everything (panic); DOUBLE tap (2nd within ~350ms) = toggle
-      # the AI (start listening / cancel). Only on the face page, gated by "Tap face to talk".
+      # FACE TAP: TRIPLE tap (3 within ~350ms each) = STOP everything (panic); DOUBLE tap = toggle
+      # the AI (start listening / cancel); a single tap does nothing. Gated by "Tap face to talk".
       # Suppressed while a permission prompt is up (then a tap = approve, above).
       - if:
           condition:
@@ -4681,23 +4690,20 @@ touchscreen:
                   long dur = (long) millis() - id(g_tms);
                   return !id(sw_sleep) && adx < 40 && ady < 40 && dur < 700 && !id(g_perm);
           then:
+            - lambda: |-
+                if ((long) millis() - id(g_dc_ms) < 350) id(g_tapc) += 1;
+                else id(g_tapc) = 1;
+                id(g_dc_ms) = (long) millis();
             - if:
-                condition: { lambda: 'return id(g_dc_ms) != 0 && ((long) millis() - id(g_dc_ms)) < 350;' }
+                condition: { lambda: 'return id(g_tapc) >= 3;' }
                 then:
-                  # ── DOUBLE tap → toggle the voice assistant ──
-                  - globals.set: { id: g_dc_ms, value: "0" }
+                  # ── TRIPLE tap → STOP everything ──
                   - script.stop: tap_single
-                  - if:
-                      condition: { lambda: 'return id(g_voice);' }
-                      then:
-                        - voice_assistant.stop
-                      else:
-                        - if:
-                            condition: { switch.is_off: sw_privacy }
-                            then: [ voice_assistant.start ]
+                  - globals.set: { id: g_tapc, value: "0" }
+                  - globals.set: { id: g_dc_ms, value: "0" }
+                  - script.execute: panic_stop
                 else:
-                  # ── first tap → arm the single-tap STOP (fires if no 2nd tap arrives) ──
-                  - globals.set: { id: g_dc_ms, value: !lambda 'return (long) millis();' }
+                  # ── 1 or 2 taps → wait a beat (tap_single decides: a settled double = AI) ──
                   - script.execute: tap_single
       # swipe DOWN → status
       - if:
