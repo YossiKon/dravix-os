@@ -3546,7 +3546,7 @@ script:
             - lvgl.widget.update: { id: react_pad, bg_color: 0x123a5a }
             - lambda: |-
                 long ms = (long) millis() - id(g_react_t);
-                if (id(hs_react) == 0 || ms < id(hs_react)) id(hs_react) = (int) ms;   # best time
+                if (id(hs_react) == 0 || ms < id(hs_react)) id(hs_react) = (int) ms;   // best time
             - lvgl.label.update:
                 id: react_txt
                 text: !lambda |-
