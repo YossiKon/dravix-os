@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.0.75
+
+- **🙂 Greets you by name.** The welcome mode now says who it sees — "Welcome back, Yossi!" —
+  from either the arriving Home Assistant person's name **or Frigate face recognition** (it
+  polls Frigate for a recognised face `sub_label` while active). A configured **primary**
+  person gets an extra-warm greeting (love face + a happy double-bob). All local; falls back
+  to a plain "Welcome back!" when no name is known. Configure `use_frigate_faces`,
+  `frigate_camera`, `primary`, and the `{name}` greeting line from the dashboard's Modes editor.
+
 ## 0.0.74
 
 - **📢 Physical notifications from Home Assistant.** New `POST /api/robot/notify` — the robot

@@ -52,6 +52,46 @@ class Frigate:
             return await self._ha.camera_snapshot(camera)
         raise RuntimeError("Frigate not configured (need a HomeAssistant client or DRAVIX_FRIGATE_URL)")
 
+    async def latest_face(self, camera: str = "", within_s: float = 30.0) -> str | None:
+        """The most recently RECOGNISED face on ``camera`` (Frigate's ``sub_label``), or None.
+
+        Frigate's face recognition tags a person event with a ``sub_label`` = the known
+        person's name (sometimes ``[name, score]``). Needs a DIRECT Frigate base URL (the
+        events API). Only events started within ``within_s`` seconds count, so we greet a
+        fresh arrival, not a stale one. Returns the name string (e.g. "yossi") or None when
+        nothing recognised.
+        """
+        if not self._base:
+            return None
+        client = self._client or httpx.AsyncClient(timeout=5.0)
+        try:
+            params: dict = {"label": "person", "limit": 5, "include_thumbnails": 0}
+            if camera:
+                params["camera"] = camera
+            r = await client.get(f"{self._base}/api/events", params=params)
+            r.raise_for_status()
+            events = r.json()
+        except Exception as e:  # noqa: BLE001 — a poll failure just means "no face this tick"
+            log.debug("frigate latest_face(%s) failed: %s", camera, e)
+            return None
+        finally:
+            if self._client is None:
+                await client.aclose()
+        import time as _t
+
+        now = _t.time()
+        for ev in events or []:
+            start = ev.get("start_time") or 0
+            if within_s and start and (now - float(start)) > within_s:
+                continue
+            sub = ev.get("sub_label")
+            if isinstance(sub, (list, tuple)) and sub:
+                sub = sub[0]
+            name = str(sub or "").strip()
+            if name and name.lower() not in ("none", "unknown", ""):
+                return name
+        return None
+
     async def latest_person(
         self,
         camera: str,

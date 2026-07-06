@@ -4,6 +4,10 @@ kind: ambient
 entrypoint: mode:WelcomeMode
 enabled: true
 config:
-  line: "Welcome home!"          # spoken greeting (English)
-  line_he: "ברוך הבא הביתה!"     # spoken greeting when the language is Hebrew
-  min_gap_min: 15                # don't re-celebrate the same person within this window
+  line: "Welcome back, {name}!"      # spoken greeting (English); {name} = the person's name
+  line_he: "ברוך שובך, {name}!"      # spoken greeting when the language is Hebrew
+  min_gap_min: 15                    # don't re-celebrate the same person within this window
+  use_frigate_faces: true            # also greet by name from Frigate face recognition (if set up)
+  frigate_camera: ""                 # which camera to watch for faces ("" = any); needs a Frigate URL
+  face_poll_s: 6                     # how often to check Frigate for a recognised face (seconds)
+  primary: ""                        # this person's name gets an extra-warm greeting (love + fistbump)

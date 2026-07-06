@@ -1,53 +1,140 @@
-"""Welcome-home celebration (the beloved Vector behavior, done the smart-home way).
+"""Welcome-home celebration — now BY NAME (the beloved Vector "greets you by name" moment).
 
-Vector "gets excited when you come home" by seeing you. We know EARLIER: the moment a
-Home Assistant ``person.*`` entity flips to ``home``, the event bridge publishes
-``presence.home`` — and the robot lights up, perks its head toward the door, shows the
-love face and greets out loud.
+Two ways to know who arrived, both fully local:
+  * a Home Assistant ``person.*`` entity flips to ``home`` → ``presence.home`` (the name is
+    the person's friendly name);
+  * Frigate **face recognition** — while active this ambient mode polls Frigate for a
+    recognised face (``sub_label``) and greets that person.
 
-Runs as an AMBIENT mode (alongside whatever else is active). Quiet rules:
-  * per-person throttle (``min_gap_min``) so a flapping phone doesn't spam the party;
-  * skipped entirely while the robot reports a do-not-disturb state
-    (focus / quiet / night / busy) — coming home wakes it from sleep/screensaver though.
+The robot wakes, perks toward the door, shows the love face, LEDs green and says e.g.
+"Welcome back, Yossi!". A configured ``primary`` person gets an extra-warm greeting.
+
+Quiet rules: a per-name throttle (``min_gap_min``) so a flapping phone / a lingering face
+doesn't spam the party, and skipped while the robot reports a do-not-disturb state
+(focus/quiet/night/busy) — arriving still wakes it from sleep/screensaver.
 """
 from __future__ import annotations
 
+import asyncio
 import time
 
-import asyncio
+import httpx
 
 from dravix.config import get_settings
 from dravix.dal.base import CAP_FACE, CAP_HEAD, CAP_LEDS, CAP_SAY, Expression
 from dravix.events import Event
+from dravix.integrations.frigate import Frigate
 from dravix.modes import Mode, ModeMeta
 
 _DND_STATES = {"focus", "quiet", "night", "busy"}
 
 
+def _pretty(name: str) -> str:
+    """"yossi" / "person.yossi" → "Yossi" (a friendly capitalised first name)."""
+    n = (name or "").strip().split(".")[-1].replace("_", " ").strip()
+    return (n[:1].upper() + n[1:]) if n else n
+
+
+def _greeting_line(base: str, name: str, he: bool) -> str:
+    """Build the spoken greeting. ``base`` may contain ``{name}``; otherwise the name is
+    appended. Falls back to a sensible default when there's no name (so a ``{name}`` template
+    with an unknown person never says a dangling comma)."""
+    base = (base or "").strip()
+    if name:
+        if "{name}" in base:
+            return base.replace("{name}", name).strip()
+        if base:
+            return f"{base} {name}".strip()
+        return f"ברוך שובך, {name}!" if he else f"Welcome back, {name}!"
+    # no name known
+    if base and "{name}" not in base:
+        return base
+    return "ברוך שובך!" if he else "Welcome back!"
+
+
 class WelcomeMode(Mode):
     meta = ModeMeta(
         name="welcome",
-        description="Celebrates when someone arrives home (HA person → home)",
+        description="Greets people by name when they arrive (HA person → home, or Frigate face)",
         kind="ambient",
     )
 
     def __init__(self, ctx) -> None:  # noqa: ANN001 — ctx is ModeContext
         super().__init__(ctx)
-        self._last: dict[str, float] = {}  # person entity -> last celebration (monotonic)
+        self._last: dict[str, float] = {}  # name -> last celebration (monotonic)
+        self._task: asyncio.Task | None = None
+        self._client: httpx.AsyncClient | None = None
+        self._frigate: Frigate | None = None
 
+    # ── Frigate face polling (optional, self-contained) ─────────────────────────────
+    async def on_enter(self) -> None:
+        if not bool(self.ctx.config.get("use_frigate_faces", True)):
+            return
+        url = str(self.ctx.config.get("frigate_url") or get_settings().frigate_url or "").strip()
+        if not url:
+            return  # no Frigate → HA-person greetings still work via on_event
+        self._client = httpx.AsyncClient(timeout=5.0)
+        self._frigate = Frigate(self.ctx.ha, base_url=url, client=self._client)
+        self._task = asyncio.create_task(self._face_loop(), name="dravix-welcome-faces")
+        self.ctx.log.info("welcome: watching Frigate for known faces via %s", url)
+
+    async def on_exit(self) -> None:
+        if self._task is not None:
+            self._task.cancel()
+            try:
+                await self._task
+            except asyncio.CancelledError:
+                pass
+            self._task = None
+        if self._client is not None:
+            await self._client.aclose()
+            self._client = None
+        self._frigate = None
+
+    async def _face_loop(self) -> None:
+        cam = str(self.ctx.config.get("frigate_camera") or "").strip()
+        poll = max(2.0, float(self.ctx.config.get("face_poll_s", 6)))
+        while True:
+            try:
+                name = await self._frigate.latest_face(cam) if self._frigate else None
+                if name:
+                    await self._maybe_greet(_pretty(name))
+            except Exception as exc:  # noqa: BLE001 — a poll failure must not stop the loop
+                self.ctx.log.debug("welcome: face poll failed: %s", exc)
+            await asyncio.sleep(poll)
+
+    # ── HA person → home ────────────────────────────────────────────────────────────
     async def on_event(self, event: Event) -> None:
         if event.type != "presence.home":
             return
-        person = str(event.data.get("entity_id") or "someone")
+        entity = str(event.data.get("entity_id") or "")
+        await self._maybe_greet(await self._friendly_name(entity))
+
+    async def _friendly_name(self, entity_id: str) -> str:
+        """The person's display name — HA friendly_name if we can read it, else derived."""
+        if entity_id and self.ctx.ha is not None:
+            try:
+                st = await self.ctx.ha.get_state(entity_id)
+                fn = (st.get("attributes") or {}).get("friendly_name")
+                if fn:
+                    return _pretty(str(fn))
+            except Exception:  # noqa: BLE001 — fall back to the entity id
+                pass
+        return _pretty(entity_id) or ""
+
+    # ── the greeting ────────────────────────────────────────────────────────────────
+    async def _maybe_greet(self, name: str) -> None:
+        key = name or "someone"
         gap_s = max(0.0, float(self.ctx.config.get("min_gap_min", 15))) * 60.0
         now = time.monotonic()
-        if now - self._last.get(person, -1e12) < gap_s:
+        if now - self._last.get(key, -1e12) < gap_s:
             return
         if await self._do_not_disturb():
             return
-        self._last[person] = now
-        await self._celebrate()
-        self.ctx.log.info("welcome: celebrated %s arriving home", person)
+        self._last[key] = now
+        primary = _pretty(str(self.ctx.config.get("primary") or ""))
+        await self._celebrate(name, warm=bool(primary) and name.lower() == primary.lower())
+        self.ctx.log.info("welcome: greeted %s", key)
 
     async def _do_not_disturb(self) -> bool:
         reader = getattr(self.ctx.robot.driver, "get_text", None)
@@ -59,30 +146,29 @@ class WelcomeMode(Mode):
             return False
         return (state or "").strip().lower() in _DND_STATES
 
-    async def _celebrate(self) -> None:
+    async def _celebrate(self, name: str, warm: bool = False) -> None:
         robot = self.ctx.robot
         cfg = self.ctx.config
-        # coming home should WAKE it — otherwise the head-perk below is dropped by the
-        # driver and a dark, sleeping robot greets you as a disembodied voice
-        if await self.ctx.is_asleep():
+        if await self.ctx.is_asleep():  # coming home should WAKE it
             setter = getattr(robot.driver, "set_mode", None)
             if setter is not None:
                 try:
                     await setter("awake")
                     await asyncio.sleep(0.4)
-                except Exception:  # noqa: BLE001 — best-effort
+                except Exception:  # noqa: BLE001
                     pass
         if robot.supports(CAP_FACE):
             await robot.set_face(Expression.LOVE)
         if robot.supports(CAP_LEDS):
-            await robot.set_leds("green", 0.8)
+            await robot.set_leds("green", 1.0 if warm else 0.8)
         if robot.supports(CAP_HEAD):
-            # perk up toward the door — a clear "I noticed you!" pose
-            await robot.move_head(0.0, 0.5, speed=1.0)
-        # NB the parens: `(a if he else b) or ""` — without them a Hebrew user who cleared
-        # line_he would get the robot literally saying the string "None".
+            await robot.move_head(0.0, 0.5, speed=1.0)  # perk up toward the door
+            if warm:  # a happy extra bob for your favourite person
+                await asyncio.sleep(0.35)
+                await robot.move_head(0.0, 0.2, speed=1.0)
         he = (get_settings().language or "en").startswith("he")
-        line = str((cfg.get("line_he") if he else cfg.get("line")) or "").strip()
+        base = str((cfg.get("line_he") if he else cfg.get("line")) or "").strip()
+        line = _greeting_line(base, name, he)
         if line and robot.supports(CAP_SAY):
             try:
                 await robot.say(line)
