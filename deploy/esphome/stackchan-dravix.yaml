@@ -350,6 +350,24 @@ globals:
   - { id: mp_bp,    type: bool,  restore_value: false, initial_value: "false" }
   - { id: mp_grnd,  type: bool,  restore_value: false, initial_value: "false" }  # standing on a platform
   - { id: mp_run,   type: bool,  restore_value: false, initial_value: "false" }
+  # ── PERMISSIONS log — the current request + the last 3 decisions (shown on the Permissions page) ──
+  - id: perm_cur
+    type: std::string
+    restore_value: false
+    initial_value: '""'
+  - id: perm_h0
+    type: std::string
+    restore_value: false
+    initial_value: '""'
+  - id: perm_h1
+    type: std::string
+    restore_value: false
+    initial_value: '""'
+  - id: perm_h2
+    type: std::string
+    restore_value: false
+    initial_value: '""'
+  - { id: perm_dec, type: int, restore_value: false, initial_value: "0" }   # last decision: 1 approve · 2 reject
   - { id: g_pn,     type: int,  restore_value: false, initial_value: "0" }   # party sway alternator
   # official ESP-NOW remote state (latest parsed packet + throttling)
   - { id: g_rc_yaw,   type: float, restore_value: false, initial_value: "0" }     # target yaw (servo scale)
@@ -925,6 +943,14 @@ text:
             - lvgl.page.show: page_face          # so the prompt is actually visible
             - lvgl.widget.show: perm_box
             - script.execute: perm_timeout       # auto-hide after a while (never auto-decides)
+            - globals.set: { id: perm_cur, value: !lambda 'return x;' }   # remember it for the log
+            # ATTENTION — perk up toward you + pulse the LEDs amber + a gentle chime, so a pending
+            # request never goes unnoticed (dravix still waits for YOU to decide — no auto-approve).
+            - script.execute: { id: led_flash, r: 100, g: 62, b: 0 }
+            - if:
+                condition: { lambda: 'return id(sw_sfx).state && !id(g_quiet) && !id(g_night);' }
+                then: [ { rtttl.play: "perm:d=8,o=6,b=150:c,e,g" } ]
+            - script.execute: { id: head_nudge, dx: 0, dy: 8 }
           else:
             - globals.set: { id: g_perm, value: "false" }
             - lvgl.widget.hide: perm_box
@@ -1057,6 +1083,13 @@ button:
     on_press:
       - globals.set: { id: g_card, value: "0" }
       - lvgl.page.show: page_colors
+  # PERMISSIONS LOG — open the recent AI-agent decisions.
+  - platform: template
+    name: "Permissions log"
+    id: btn_perms
+    on_press:
+      - globals.set: { id: g_card, value: "0" }
+      - lvgl.page.show: page_perms
   # RESET HIGH SCORES — clear the leaderboard from the dashboard.
   - platform: template
     name: "Reset high scores"
@@ -1321,6 +1354,8 @@ lvgl:
                 on_click:
                   - globals.set: { id: g_perm, value: "false" }
                   - homeassistant.event: { event: esphome.dravix_permission, data: { decision: "approve" } }
+                  - globals.set: { id: perm_dec, value: "1" }
+                  - script.execute: perm_log
                   - lvgl.widget.hide: perm_box
             - button:
                 id: perm_no
@@ -1336,6 +1371,8 @@ lvgl:
                 on_click:
                   - globals.set: { id: g_perm, value: "false" }
                   - homeassistant.event: { event: esphome.dravix_permission, data: { decision: "reject" } }
+                  - globals.set: { id: perm_dec, value: "2" }
+                  - script.execute: perm_log
                   - lvgl.widget.hide: perm_box
   on_idle:
     # After 3 min of no touch, drift back to the FACE from any other screen (cards / games /
@@ -2251,6 +2288,31 @@ lvgl:
               - globals.set: { id: pg_alive, value: "false" }
               - globals.set: { id: g_card, value: "0" }
               - lvgl.page.show: page_face
+    # ── PERMISSIONS log — the last few AI-agent decisions (opened from the "Permissions log" button) ──
+    - id: page_perms
+      bg_color: 0x05080b
+      bg_opa: COVER
+      scrollable: false
+      scrollbar_mode: "OFF"
+      widgets:
+        - label: { text: "PERMISSIONS", text_font: title_font, styles: accent_txt, align: TOP_MID, y: 6 }
+        - label: { text: "recent AI-agent decisions", text_font: small_font, text_color: 0x8b96a4, align: TOP_MID, y: 42 }
+        - label: { id: pl_0, text: "—", text_font: small_font, text_color: 0xFFFFFF, align: TOP_LEFT, x: 16, y: 78,  width: 290, long_mode: DOT }
+        - label: { id: pl_1, text: "—", text_font: small_font, text_color: 0xb0b0b0, align: TOP_LEFT, x: 16, y: 118, width: 290, long_mode: DOT }
+        - label: { id: pl_2, text: "—", text_font: small_font, text_color: 0x8b96a4, align: TOP_LEFT, x: 16, y: 158, width: 290, long_mode: DOT }
+        - button:
+            id: pl_back
+            x: 6
+            y: 6
+            width: 48
+            height: 28
+            radius: 8
+            bg_color: 0x05080b
+            widgets:
+              - label: { text: "<", text_font: text_font, text_color: 0x33E6C8, align: CENTER }
+            on_click:
+              - globals.set: { id: g_card, value: "0" }
+              - lvgl.page.show: page_face
     # ── HIGH SCORES table — the best each game has seen (persists across reboots) ──
     - id: page_scores
       bg_color: 0x05080b
@@ -2510,6 +2572,8 @@ script:
             - globals.set: { id: g_perm, value: "false" }
             - lvgl.widget.hide: perm_box
             - homeassistant.event: { event: esphome.dravix_permission, data: { decision: "approve" } }
+            - globals.set: { id: perm_dec, value: "1" }
+            - script.execute: perm_log
             - script.execute: head_nod            # a "yes" nod to confirm
   # Set both eyes to a shape: width / height / corner-radius / vertical offset.
   # (Eyes are align:CENTER, so size changes keep them centred — no x math needed.)
@@ -3160,6 +3224,16 @@ script:
             - script.execute: head_shake
             - delay: 200ms
             - script.execute: head_shake
+  # ── PERMISSIONS log — prepend the latest decision (OK/NO + the request) and refresh the page.
+  - id: perm_log
+    then:
+      - lambda: |-
+          id(perm_h2) = id(perm_h1);
+          id(perm_h1) = id(perm_h0);
+          id(perm_h0) = (id(perm_dec) == 1 ? std::string("OK   ") : std::string("NO   ")) + id(perm_cur);
+      - lvgl.label.update: { id: pl_0, text: !lambda 'return id(perm_h0);' }
+      - lvgl.label.update: { id: pl_1, text: !lambda 'return id(perm_h1);' }
+      - lvgl.label.update: { id: pl_2, text: !lambda 'return id(perm_h2);' }
   # Redraw the pet face from the current state.
   - id: render_face
     then:
