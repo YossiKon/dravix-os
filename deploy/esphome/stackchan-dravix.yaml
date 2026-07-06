@@ -3902,13 +3902,20 @@ interval:
                             condition: { switch.is_off: sw_privacy }
                             then: [ voice_assistant.start ]
             - lambda: 'id(g_rc_prev) = id(g_rc_btn);'
-            - number.set:
-                id: servo_x_angle
-                value: !lambda 'return id(g_rc_yaw);'
-            - delay: 140ms
-            - number.set:
-                id: n_head_pitch
-                value: !lambda 'return id(g_rc_pitch);'
+            # The joystick only steers the HEAD on the face page. During a game it drives the
+            # game (paddle / aim / walk) — the games read g_rc_yaw/pitch directly — so the head
+            # stays still instead of mirroring your play.
+            - if:
+                condition:
+                  lvgl.page.is_showing: page_face
+                then:
+                  - number.set:
+                      id: servo_x_angle
+                      value: !lambda 'return id(g_rc_yaw);'
+                  - delay: 140ms
+                  - number.set:
+                      id: n_head_pitch
+                      value: !lambda 'return id(g_rc_pitch);'
             - lambda: 'id(g_rc_busy) = false;'
   # HAND-TURN DETECTION — the serial servos report their true position back into the
   # angle numbers, so when a hand twists the head the numbers change with NO command.
