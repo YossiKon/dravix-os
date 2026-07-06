@@ -243,6 +243,14 @@ class Store:
         self._data["robot_entities"] = {k: v for k, v in (entities or {}).items() if v}
         self.save()
 
+    def personality(self) -> dict[str, Any]:
+        """The slow temperament vector (see personality.py) — persisted across restarts."""
+        return dict(self._data.get("personality", {}))
+
+    def set_personality(self, data: dict[str, Any]) -> None:
+        self._data["personality"] = dict(data or {})
+        self.save()
+
     def head_calibration(self) -> dict[str, Any]:
         return dict(self._data.get("head_calibration", {}))
 

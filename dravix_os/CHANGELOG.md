@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.0.76
+
+- **🌱 It becomes its own over weeks.** A new hidden **temperament** slowly drifts (a small,
+  capped step **once per day**) toward how the robot was treated — three axes: calm↔excitable,
+  shy↔bold, independent↔clingy — so no two units end up the same. It's the slow counterpart to
+  the fast mood, fully local and persistent. See it grow on the dashboard's **Life** tab
+  ("🌱 Temperament") and via `GET /api/personality` (also in `/api/status`).
+
 ## 0.0.75
 
 - **🙂 Greets you by name.** The welcome mode now says who it sees — "Welcome back, Yossi!" —

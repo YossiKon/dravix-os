@@ -132,7 +132,19 @@ async def status(request: Request):
     agent = getattr(request.app.state, "agent", None)
     if agent is not None:
         data["agent"] = agent.snapshot()
+    personality = getattr(request.app.state, "personality", None)
+    if personality is not None:
+        data["personality"] = personality.snapshot()
     return data
+
+
+@router.get("/api/personality")
+async def get_personality(request: Request):
+    """The robot's slowly-evolving temperament (see personality.py)."""
+    personality = getattr(request.app.state, "personality", None)
+    if personality is None:
+        raise HTTPException(status_code=503, detail="personality not available")
+    return personality.snapshot()
 
 
 @router.get("/api/modes")

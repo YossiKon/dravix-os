@@ -223,6 +223,9 @@ async def lifespan(app: FastAPI):
     from .agent_status import AgentPresence
 
     app.state.agent = AgentPresence(controller, bus, store)
+    from .personality import Personality
+
+    app.state.personality = Personality(store)
 
     # ── isLocal ⇄ the robot's own "Local only" switch ─────────────────────────────
     # The choice can be made ON the robot (the LOCAL button on its status bar). The HA
@@ -317,11 +320,27 @@ async def lifespan(app: FastAPI):
 
     climate_task = asyncio.create_task(_climate_pusher(), name="dravix-climate")
 
+    async def _personality_drift() -> None:
+        """Slowly fold the robot's mood into its long-horizon temperament (once/day drift)."""
+        while True:
+            await asyncio.sleep(20 * 60)
+            try:
+                m = mood.snapshot()
+                app.state.personality.observe(
+                    float(m.get("valence", 0.0)),
+                    float(m.get("arousal", 0.3)),
+                    float(m.get("affection", 0.3)),
+                )
+            except Exception:  # noqa: BLE001 — never die
+                pass
+
+    personality_task = asyncio.create_task(_personality_drift(), name="dravix-personality")
+
     try:
         yield
     finally:
         log.info("shutting down dravix-os")
-        for t in (islocal_task, fw_notify_task, climate_task):
+        for t in (islocal_task, fw_notify_task, climate_task, personality_task):
             t.cancel()
             try:
                 await t

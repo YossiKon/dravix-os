@@ -1,7 +1,7 @@
 // Life — the robot's needs (energy/food/fun/calm), care buttons, and wellness tips.
 import { useCallback, useEffect, useState } from "react";
 import { apiGet, apiSend } from "../api";
-import type { Vitals } from "../api";
+import type { Personality, Vitals } from "../api";
 import { Section, toast, toastErr } from "../ui";
 import { useI18n } from "../i18n";
 
@@ -22,6 +22,7 @@ const ACTIONS: { action: string; he: string; en: string; okHe: string; okEn: str
 export function VitalsPage() {
   const { tr } = useI18n();
   const [v, setV] = useState<Vitals | null>(null);
+  const [pers, setPers] = useState<Personality | null>(null);
   const [busy, setBusy] = useState("");
   const [failed, setFailed] = useState(false);
   const [tips, setTips] = useState<string | null>(null); // null = not user-edited yet
@@ -43,6 +44,7 @@ export function VitalsPage() {
         setFailed(false);
       })
       .catch(() => setFailed(true));
+    apiGet<Personality>("/api/personality").then(setPers).catch(() => undefined);
   }, []);
 
   useEffect(() => {
@@ -108,6 +110,47 @@ export function VitalsPage() {
           </div>
         )}
       </Section>
+
+      {pers && pers.axes.length > 0 && (
+        <Section title={tr("🌱 האופי", "🌱 Temperament")} delay={40}>
+          <p className="mb-3 text-xs text-mute">
+            {pers.settled
+              ? tr(
+                  `נבנה לאורך ${pers.days} ימים — האופי מתעצב לאט לפי איך שמתייחסים אליו.`,
+                  `Shaped over ${pers.days} days — it drifts slowly with how it's treated.`,
+                )
+              : tr(
+                  `עדיין מתגבש (${pers.days} ימים) — ייקח שבועות עד שיהיה לו אופי משלו.`,
+                  `Still forming (${pers.days} days) — it takes weeks to become its own.`,
+                )}
+          </p>
+          <div className="space-y-3">
+            {pers.axes.map((a) => {
+              const pct = ((a.value + 1) / 2) * 100; // -1..+1 → 0..100
+              const leans = a.value < -0.15 ? "left" : a.value > 0.15 ? "right" : "mid";
+              return (
+                <div key={a.key}>
+                  <div className="mb-1 flex items-center justify-between text-xs">
+                    <span className={leans === "left" ? "font-semibold text-teal" : "text-mute"}>
+                      {tr(a.left_he, a.left_en)}
+                    </span>
+                    <span className={leans === "right" ? "font-semibold text-teal" : "text-mute"}>
+                      {tr(a.right_he, a.right_en)}
+                    </span>
+                  </div>
+                  <div className="relative h-2.5 rounded-full bg-line">
+                    <div className="absolute inset-y-0 left-1/2 w-px bg-line-2" />
+                    <div
+                      className="absolute top-1/2 h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-card bg-teal transition-all"
+                      style={{ left: `${pct}%` }}
+                    />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </Section>
+      )}
 
       <Section title={tr("טיפול", "Care")} delay={60}>
         <div className="grid grid-cols-2 gap-2">

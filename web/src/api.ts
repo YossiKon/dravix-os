@@ -179,3 +179,18 @@ export interface Vitals {
   lowest: string;
   nudges: boolean;
 }
+
+export interface PersonalityAxis {
+  key: string;
+  value: number; // -1..+1
+  left_he: string;
+  left_en: string;
+  right_he: string;
+  right_en: string;
+}
+
+export interface Personality {
+  axes: PersonalityAxis[];
+  days: number;
+  settled: boolean;
+}
