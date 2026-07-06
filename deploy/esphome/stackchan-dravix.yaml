@@ -368,6 +368,7 @@ globals:
     restore_value: false
     initial_value: '""'
   - { id: perm_dec, type: int, restore_value: false, initial_value: "0" }   # last decision: 1 approve · 2 reject
+  - { id: g_apulse, type: bool, restore_value: false, initial_value: "false" }  # AI-agent "working" pulse phase
   - { id: g_pn,     type: int,  restore_value: false, initial_value: "0" }   # party sway alternator
   # official ESP-NOW remote state (latest parsed packet + throttling)
   - { id: g_rc_yaw,   type: float, restore_value: false, initial_value: "0" }     # target yaw (servo scale)
@@ -2575,6 +2576,15 @@ script:
             - globals.set: { id: perm_dec, value: "1" }
             - script.execute: perm_log
             - script.execute: head_nod            # a "yes" nod to confirm
+  # APPROVE from a face TAP — waits 200 ms first, so a tap on the red Reject button wins the race
+  # (Reject flips g_perm off, and this then no-ops). Head-touch still approves instantly.
+  - id: perm_tap_approve
+    mode: restart
+    then:
+      - delay: 200ms
+      - if:
+          condition: { lambda: 'return id(g_perm);' }
+          then: [ { script.execute: perm_approve } ]
   # Set both eyes to a shape: width / height / corner-radius / vertical offset.
   # (Eyes are align:CENTER, so size changes keep them centred — no x math needed.)
   - id: set_eyes
@@ -4311,6 +4321,17 @@ interval:
                   - lvgl.label.update: { id: mp_msg, text: "GAME OVER" }
                   - script.execute: { id: led_flash, r: 100, g: 60, b: 15 }
                   - script.execute: head_shake
+  # AI-AGENT "WORKING" PULSE — while an agent is active (its status badge is up), gently pulse
+  # the badge's colour so you can tell at a glance the AI is doing something.
+  - interval: 550ms
+    then:
+      - if:
+          condition: { lambda: 'return id(g_agent) && !id(g_sleep) && !id(g_saver);' }
+          then:
+            - globals.set: { id: g_apulse, value: !lambda 'return !id(g_apulse);' }
+            - lvgl.label.update:
+                id: lbl_agent
+                text_color: !lambda 'return id(g_apulse) ? lv_color_hex(0x5dffe0) : lv_color_hex(0x1f8a7a);'
   # SLEEP BREATHING — while asleep ON THE CHARGER, the LED bar "breathes" very dimly
   # (the EMO/Vector charger-snooze everyone loves). Gated on Mood LEDs; goes fully
   # dark the moment it wakes or is unplugged.
@@ -4634,8 +4655,21 @@ touchscreen:
                   return !id(sw_sleep) && !id(g_voice) && adx < 40 && ady < 40 && dur > 1200;
           then:
             - select.set: { id: robot_mode, option: sleep }
+      # PERMISSION up? A quick tap on the face = APPROVE (Reject = the red button on the prompt).
+      - if:
+          condition:
+            and:
+              - lvgl.page.is_showing: page_face
+              - lambda: |-
+                  int dx = id(sw_x1) - id(sw_x0), dy = id(sw_y1) - id(sw_y0);
+                  int adx = dx < 0 ? -dx : dx, ady = dy < 0 ? -dy : dy;
+                  long dur = (long) millis() - id(g_tms);
+                  return id(g_perm) && !id(sw_sleep) && adx < 40 && ady < 40 && dur < 700;
+          then:
+            - script.execute: perm_tap_approve
       # FACE TAP: SINGLE tap = STOP everything (panic); DOUBLE tap (2nd within ~350ms) = toggle
       # the AI (start listening / cancel). Only on the face page, gated by "Tap face to talk".
+      # Suppressed while a permission prompt is up (then a tap = approve, above).
       - if:
           condition:
             and:
@@ -4645,7 +4679,7 @@ touchscreen:
                   int dx = id(sw_x1) - id(sw_x0), dy = id(sw_y1) - id(sw_y0);
                   int adx = dx < 0 ? -dx : dx, ady = dy < 0 ? -dy : dy;
                   long dur = (long) millis() - id(g_tms);
-                  return !id(sw_sleep) && adx < 40 && ady < 40 && dur < 700;
+                  return !id(sw_sleep) && adx < 40 && ady < 40 && dur < 700 && !id(g_perm);
           then:
             - if:
                 condition: { lambda: 'return id(g_dc_ms) != 0 && ((long) millis() - id(g_dc_ms)) < 350;' }
