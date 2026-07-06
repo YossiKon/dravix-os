@@ -369,6 +369,15 @@ globals:
     initial_value: '""'
   - { id: perm_dec, type: int, restore_value: false, initial_value: "0" }   # last decision: 1 approve · 2 reject
   - { id: g_apulse, type: bool, restore_value: false, initial_value: "false" }  # AI-agent "working" pulse phase
+  # ── DOOM-3D — a real first-person raycaster: joystick turns/walks, the button shoots ──
+  - { id: r3_px,   type: float, restore_value: false, initial_value: "2.5" }   # player x (map units)
+  - { id: r3_py,   type: float, restore_value: false, initial_value: "2.5" }   # player y
+  - { id: r3_pa,   type: float, restore_value: false, initial_value: "0.6" }   # player angle (radians)
+  - { id: r3_hp,   type: int,   restore_value: false, initial_value: "100" }
+  - { id: r3_ammo, type: int,   restore_value: false, initial_value: "50" }
+  - { id: r3_bp,   type: bool,  restore_value: false, initial_value: "false" } # fire button, previous frame
+  - { id: r3_flash, type: int,  restore_value: false, initial_value: "0" }     # muzzle-flash frames left
+  - { id: r3_run,  type: bool,  restore_value: false, initial_value: "false" }
   - { id: g_pn,     type: int,  restore_value: false, initial_value: "0" }   # party sway alternator
   # official ESP-NOW remote state (latest parsed packet + throttling)
   - { id: g_rc_yaw,   type: float, restore_value: false, initial_value: "0" }     # target yaw (servo scale)
@@ -1885,10 +1894,10 @@ lvgl:
               - label: { text: "DOOM", text_font: small_font, text_color: 0xff7b7b, align: CENTER }
             on_click:
               - lambda: |-
-                  id(dm_sc) = 0; id(dm_lives) = 3; id(dm_es) = 10.0f; id(dm_ex) = 160.0f;
-                  id(dm_bp) = false; id(dm_run) = true;
-              - lvgl.label.update: { id: dm_msg, text: "" }
-              - lvgl.page.show: page_doom
+                  id(r3_px) = 2.5f; id(r3_py) = 2.5f; id(r3_pa) = 0.6f;
+                  id(r3_hp) = 100; id(r3_ammo) = 50; id(r3_bp) = false;
+                  id(r3_flash) = 0; id(r3_run) = true;
+              - lvgl.page.show: page_doom3d
         # bottom row: BREAKOUT · PONG · SCORES (three across)
         - button:
             id: btn_g_breakout
@@ -2196,6 +2205,76 @@ lvgl:
               - label: { text: "<", text_font: text_font, text_color: 0x33E6C8, align: CENTER }
             on_click:
               - globals.set: { id: mp_run, value: "false" }
+              - globals.set: { id: g_card, value: "0" }
+              - lvgl.page.show: page_face
+    # ── DOOM-3D — a REAL first-person raycaster. 40 vertical wall columns the loop resizes +
+    #    shades each frame; the two background bands are the ceiling + floor; the gun is bottom-
+    #    centre. Joystick turns/walks, the remote button shoots. ──
+    - id: page_doom3d
+      bg_color: 0x000000
+      bg_opa: COVER
+      scrollable: false
+      scrollbar_mode: "OFF"
+      widgets:
+        - obj: { id: d3_ceil,  x: 0, y: 0,   width: 320, height: 100, radius: 0, bg_color: 0x232a3a, bg_opa: COVER, border_width: 0 }
+        - obj: { id: d3_floor, x: 0, y: 100, width: 320, height: 100, radius: 0, bg_color: 0x37291c, bg_opa: COVER, border_width: 0 }
+        - obj: { id: dw00, x: 0,   y: 60, width: 8, height: 80, radius: 0, bg_color: 0x606060, bg_opa: COVER, border_width: 0 }
+        - obj: { id: dw01, x: 8,   y: 60, width: 8, height: 80, radius: 0, bg_color: 0x606060, bg_opa: COVER, border_width: 0 }
+        - obj: { id: dw02, x: 16,  y: 60, width: 8, height: 80, radius: 0, bg_color: 0x606060, bg_opa: COVER, border_width: 0 }
+        - obj: { id: dw03, x: 24,  y: 60, width: 8, height: 80, radius: 0, bg_color: 0x606060, bg_opa: COVER, border_width: 0 }
+        - obj: { id: dw04, x: 32,  y: 60, width: 8, height: 80, radius: 0, bg_color: 0x606060, bg_opa: COVER, border_width: 0 }
+        - obj: { id: dw05, x: 40,  y: 60, width: 8, height: 80, radius: 0, bg_color: 0x606060, bg_opa: COVER, border_width: 0 }
+        - obj: { id: dw06, x: 48,  y: 60, width: 8, height: 80, radius: 0, bg_color: 0x606060, bg_opa: COVER, border_width: 0 }
+        - obj: { id: dw07, x: 56,  y: 60, width: 8, height: 80, radius: 0, bg_color: 0x606060, bg_opa: COVER, border_width: 0 }
+        - obj: { id: dw08, x: 64,  y: 60, width: 8, height: 80, radius: 0, bg_color: 0x606060, bg_opa: COVER, border_width: 0 }
+        - obj: { id: dw09, x: 72,  y: 60, width: 8, height: 80, radius: 0, bg_color: 0x606060, bg_opa: COVER, border_width: 0 }
+        - obj: { id: dw10, x: 80,  y: 60, width: 8, height: 80, radius: 0, bg_color: 0x606060, bg_opa: COVER, border_width: 0 }
+        - obj: { id: dw11, x: 88,  y: 60, width: 8, height: 80, radius: 0, bg_color: 0x606060, bg_opa: COVER, border_width: 0 }
+        - obj: { id: dw12, x: 96,  y: 60, width: 8, height: 80, radius: 0, bg_color: 0x606060, bg_opa: COVER, border_width: 0 }
+        - obj: { id: dw13, x: 104, y: 60, width: 8, height: 80, radius: 0, bg_color: 0x606060, bg_opa: COVER, border_width: 0 }
+        - obj: { id: dw14, x: 112, y: 60, width: 8, height: 80, radius: 0, bg_color: 0x606060, bg_opa: COVER, border_width: 0 }
+        - obj: { id: dw15, x: 120, y: 60, width: 8, height: 80, radius: 0, bg_color: 0x606060, bg_opa: COVER, border_width: 0 }
+        - obj: { id: dw16, x: 128, y: 60, width: 8, height: 80, radius: 0, bg_color: 0x606060, bg_opa: COVER, border_width: 0 }
+        - obj: { id: dw17, x: 136, y: 60, width: 8, height: 80, radius: 0, bg_color: 0x606060, bg_opa: COVER, border_width: 0 }
+        - obj: { id: dw18, x: 144, y: 60, width: 8, height: 80, radius: 0, bg_color: 0x606060, bg_opa: COVER, border_width: 0 }
+        - obj: { id: dw19, x: 152, y: 60, width: 8, height: 80, radius: 0, bg_color: 0x606060, bg_opa: COVER, border_width: 0 }
+        - obj: { id: dw20, x: 160, y: 60, width: 8, height: 80, radius: 0, bg_color: 0x606060, bg_opa: COVER, border_width: 0 }
+        - obj: { id: dw21, x: 168, y: 60, width: 8, height: 80, radius: 0, bg_color: 0x606060, bg_opa: COVER, border_width: 0 }
+        - obj: { id: dw22, x: 176, y: 60, width: 8, height: 80, radius: 0, bg_color: 0x606060, bg_opa: COVER, border_width: 0 }
+        - obj: { id: dw23, x: 184, y: 60, width: 8, height: 80, radius: 0, bg_color: 0x606060, bg_opa: COVER, border_width: 0 }
+        - obj: { id: dw24, x: 192, y: 60, width: 8, height: 80, radius: 0, bg_color: 0x606060, bg_opa: COVER, border_width: 0 }
+        - obj: { id: dw25, x: 200, y: 60, width: 8, height: 80, radius: 0, bg_color: 0x606060, bg_opa: COVER, border_width: 0 }
+        - obj: { id: dw26, x: 208, y: 60, width: 8, height: 80, radius: 0, bg_color: 0x606060, bg_opa: COVER, border_width: 0 }
+        - obj: { id: dw27, x: 216, y: 60, width: 8, height: 80, radius: 0, bg_color: 0x606060, bg_opa: COVER, border_width: 0 }
+        - obj: { id: dw28, x: 224, y: 60, width: 8, height: 80, radius: 0, bg_color: 0x606060, bg_opa: COVER, border_width: 0 }
+        - obj: { id: dw29, x: 232, y: 60, width: 8, height: 80, radius: 0, bg_color: 0x606060, bg_opa: COVER, border_width: 0 }
+        - obj: { id: dw30, x: 240, y: 60, width: 8, height: 80, radius: 0, bg_color: 0x606060, bg_opa: COVER, border_width: 0 }
+        - obj: { id: dw31, x: 248, y: 60, width: 8, height: 80, radius: 0, bg_color: 0x606060, bg_opa: COVER, border_width: 0 }
+        - obj: { id: dw32, x: 256, y: 60, width: 8, height: 80, radius: 0, bg_color: 0x606060, bg_opa: COVER, border_width: 0 }
+        - obj: { id: dw33, x: 264, y: 60, width: 8, height: 80, radius: 0, bg_color: 0x606060, bg_opa: COVER, border_width: 0 }
+        - obj: { id: dw34, x: 272, y: 60, width: 8, height: 80, radius: 0, bg_color: 0x606060, bg_opa: COVER, border_width: 0 }
+        - obj: { id: dw35, x: 280, y: 60, width: 8, height: 80, radius: 0, bg_color: 0x606060, bg_opa: COVER, border_width: 0 }
+        - obj: { id: dw36, x: 288, y: 60, width: 8, height: 80, radius: 0, bg_color: 0x606060, bg_opa: COVER, border_width: 0 }
+        - obj: { id: dw37, x: 296, y: 60, width: 8, height: 80, radius: 0, bg_color: 0x606060, bg_opa: COVER, border_width: 0 }
+        - obj: { id: dw38, x: 304, y: 60, width: 8, height: 80, radius: 0, bg_color: 0x606060, bg_opa: COVER, border_width: 0 }
+        - obj: { id: dw39, x: 312, y: 60, width: 8, height: 80, radius: 0, bg_color: 0x606060, bg_opa: COVER, border_width: 0 }
+        - obj: { id: d3_gun,    x: 128, y: 152, width: 64, height: 50, radius: 6, bg_color: 0x2b2b2b, bg_opa: COVER, border_width: 2, border_color: 0x0e0e0e }
+        - obj: { id: d3_barrel, x: 150, y: 138, width: 20, height: 18, radius: 3, bg_color: 0x1a1a1a, bg_opa: COVER, border_width: 0 }
+        - obj: { id: d3_muzzle, x: 148, y: 120, width: 24, height: 20, radius: 10, bg_color: 0xffd23a, bg_opa: COVER, border_width: 0, hidden: true }
+        - label: { id: d3_cross, text: "+", text_font: title_font, text_color: 0xE8E8E8, align: CENTER, y: -22 }
+        - label: { id: d3_hud, text: "HP 100    AMMO 50", text_font: small_font, text_color: 0x33E6C8, align: BOTTOM_MID, y: -3 }
+        - button:
+            id: d3_back
+            x: 6
+            y: 6
+            width: 44
+            height: 26
+            radius: 8
+            bg_color: 0x000000
+            widgets:
+              - label: { text: "<", text_font: text_font, text_color: 0x33E6C8, align: CENTER }
+            on_click:
+              - globals.set: { id: r3_run, value: "false" }
               - globals.set: { id: g_card, value: "0" }
               - lvgl.page.show: page_face
     # ── DOOM-lite — a corridor shooter: joystick aims the crosshair, the remote button fires ──
@@ -3891,7 +3970,7 @@ interval:
                 lv_disp_trig_activity(NULL);
             # button B rising edge → toggle the voice assistant (privacy-respecting)
             - if:
-                condition: { lambda: 'return id(g_rc_btn) != 0 && id(g_rc_prev) == 0 && !id(dm_run) && !id(mp_run);' }   # not while Doom shoots / Maple jumps
+                condition: { lambda: 'return id(g_rc_btn) != 0 && id(g_rc_prev) == 0 && !id(dm_run) && !id(mp_run) && !id(r3_run);' }   # not while a game uses the button
                 then:
                   - if:
                       condition: { lambda: 'return id(g_voice);' }
@@ -4348,6 +4427,94 @@ interval:
             - lvgl.label.update:
                 id: lbl_agent
                 text_color: !lambda 'return id(g_apulse) ? lv_color_hex(0x5dffe0) : lv_color_hex(0x1f8a7a);'
+  # DOOM-3D raycaster — ~15 fps. Joystick turns (yaw) + walks (pitch, with wall collision), the
+  # button shoots. Each of the 40 wall columns is one ray: march it across the 8x8 map, then size
+  # + shade the column by the fisheye-corrected hit distance (E/W faces a touch darker for depth).
+  - interval: 66ms
+    then:
+      - if:
+          condition:
+            and:
+              - lvgl.page.is_showing: page_doom3d
+              - lambda: 'return id(r3_run);'
+          then:
+            - lambda: |-
+                static const uint8_t M[8][8] = {
+                  {1,1,1,1,1,1,1,1},
+                  {1,0,0,0,0,0,0,1},
+                  {1,0,0,1,1,0,0,1},
+                  {1,0,0,0,0,0,0,1},
+                  {1,0,1,0,0,1,0,1},
+                  {1,0,0,0,0,0,0,1},
+                  {1,0,0,0,0,0,0,1},
+                  {1,1,1,1,1,1,1,1},
+                };
+                static lv_obj_t* COL[40] = {
+                  id(dw00),id(dw01),id(dw02),id(dw03),id(dw04),id(dw05),id(dw06),id(dw07),
+                  id(dw08),id(dw09),id(dw10),id(dw11),id(dw12),id(dw13),id(dw14),id(dw15),
+                  id(dw16),id(dw17),id(dw18),id(dw19),id(dw20),id(dw21),id(dw22),id(dw23),
+                  id(dw24),id(dw25),id(dw26),id(dw27),id(dw28),id(dw29),id(dw30),id(dw31),
+                  id(dw32),id(dw33),id(dw34),id(dw35),id(dw36),id(dw37),id(dw38),id(dw39),
+                };
+                float yaw = id(g_rc_yaw);
+                if (yaw > 30.0f) id(r3_pa) += 0.05f;
+                else if (yaw < -30.0f) id(r3_pa) -= 0.05f;
+                float pit = id(g_rc_pitch);
+                float mv = (pit < 188.0f) ? 0.07f : ((pit > 232.0f) ? -0.07f : 0.0f);
+                if (mv != 0.0f) {
+                  float nx = id(r3_px) + cosf(id(r3_pa)) * mv;
+                  float ny = id(r3_py) + sinf(id(r3_pa)) * mv;
+                  int px0 = (int) id(r3_px), py0 = (int) id(r3_py);
+                  int nxc = (int) nx, nyc = (int) ny;
+                  if (px0 >= 0 && px0 < 8 && py0 >= 0 && py0 < 8) {
+                    if (nxc >= 0 && nxc < 8 && M[py0][nxc] == 0) id(r3_px) = nx;
+                    if (nyc >= 0 && nyc < 8 && M[nyc][px0] == 0) id(r3_py) = ny;
+                  }
+                }
+                bool sb = (id(g_rc_btn) != 0) && !id(r3_bp);
+                id(r3_bp) = (id(g_rc_btn) != 0);
+                if (sb && id(r3_ammo) > 0) { id(r3_ammo) -= 1; id(r3_flash) = 3; }
+                if (id(r3_flash) > 0) id(r3_flash) -= 1;
+                const float FOV = 1.05f;
+                for (int i = 0; i < 40; i++) {
+                  float ra = id(r3_pa) - FOV * 0.5f + FOV * ((float) i / 39.0f);
+                  float rc = cosf(ra), rs = sinf(ra);
+                  float dist = 0.0f; int side = 0;
+                  for (int s = 0; s < 160; s++) {
+                    dist += 0.05f;
+                    float x = id(r3_px) + rc * dist;
+                    float y = id(r3_py) + rs * dist;
+                    int mx = (int) x, my = (int) y;
+                    if (mx < 0 || mx >= 8 || my < 0 || my >= 8) break;
+                    if (M[my][mx] != 0) {
+                      float fx = x - mx; if (fx > 0.5f) fx = 1.0f - fx;
+                      float fy = y - my; if (fy > 0.5f) fy = 1.0f - fy;
+                      side = (fx < fy) ? 0 : 1;
+                      break;
+                    }
+                  }
+                  float corr = dist * cosf(ra - id(r3_pa));
+                  if (corr < 0.2f) corr = 0.2f;
+                  int h = (int) (150.0f / corr);
+                  if (h > 200) h = 200;
+                  if (h < 2) h = 2;
+                  int yy = 100 - h / 2;
+                  int sh = 210 - (int) (corr * 20.0f);
+                  if (sh < 45) sh = 45;
+                  if (sh > 210) sh = 210;
+                  if (side != 0) sh = sh * 65 / 100;
+                  uint32_t col = ((uint32_t) sh << 16) | ((uint32_t) (sh * 7 / 10) << 8) | (uint32_t) (sh * 5 / 10);
+                  lv_obj_set_height(COL[i], h);
+                  lv_obj_set_y(COL[i], yy);
+                  lv_obj_set_style_bg_color(COL[i], lv_color_hex(col), 0);
+                }
+            - if:
+                condition: { lambda: 'return id(r3_flash) > 0;' }
+                then: [ { lvgl.widget.show: d3_muzzle } ]
+                else: [ { lvgl.widget.hide: d3_muzzle } ]
+            - lvgl.label.update:
+                id: d3_hud
+                text: !lambda 'char b[28]; snprintf(b, sizeof(b), "HP %d    AMMO %d", id(r3_hp), id(r3_ammo)); return std::string(b);'
   # SLEEP BREATHING — while asleep ON THE CHARGER, the LED bar "breathes" very dimly
   # (the EMO/Vector charger-snooze everyone loves). Gated on Mood LEDs; goes fully
   # dark the moment it wakes or is unplugged.
