@@ -378,6 +378,21 @@ globals:
   - { id: r3_bp,   type: bool,  restore_value: false, initial_value: "false" } # fire button, previous frame
   - { id: r3_flash, type: int,  restore_value: false, initial_value: "0" }     # muzzle-flash frames left
   - { id: r3_run,  type: bool,  restore_value: false, initial_value: "false" }
+  - id: en_x
+    type: float[4]
+    restore_value: false
+    initial_value: "std::array<float, 4>{}"
+  - id: en_y
+    type: float[4]
+    restore_value: false
+    initial_value: "std::array<float, 4>{}"
+  - id: en_alive
+    type: int[4]
+    restore_value: false
+    initial_value: "std::array<int, 4>{}"
+  - { id: r3_kills, type: int,  restore_value: false, initial_value: "0" }
+  - { id: r3_hit,   type: int,  restore_value: false, initial_value: "0" }   # damage-flash frames
+  - { id: r3_over,  type: bool, restore_value: false, initial_value: "false" }
   - { id: g_pn,     type: int,  restore_value: false, initial_value: "0" }   # party sway alternator
   # official ESP-NOW remote state (latest parsed packet + throttling)
   - { id: g_rc_yaw,   type: float, restore_value: false, initial_value: "0" }     # target yaw (servo scale)
@@ -1896,7 +1911,13 @@ lvgl:
               - lambda: |-
                   id(r3_px) = 2.5f; id(r3_py) = 2.5f; id(r3_pa) = 0.6f;
                   id(r3_hp) = 100; id(r3_ammo) = 50; id(r3_bp) = false;
-                  id(r3_flash) = 0; id(r3_run) = true;
+                  id(r3_flash) = 0; id(r3_kills) = 0; id(r3_hit) = 0; id(r3_over) = false;
+                  id(en_x)[0] = 5.5f; id(en_y)[0] = 5.5f; id(en_alive)[0] = 1;
+                  id(en_x)[1] = 6.5f; id(en_y)[1] = 1.5f; id(en_alive)[1] = 1;
+                  id(en_x)[2] = 1.5f; id(en_y)[2] = 5.5f; id(en_alive)[2] = 1;
+                  id(en_x)[3] = 5.5f; id(en_y)[3] = 3.5f; id(en_alive)[3] = 1;
+                  id(r3_run) = true;
+              - lvgl.label.update: { id: d3_over, text: "" }
               - lvgl.page.show: page_doom3d
         # bottom row: BREAKOUT · PONG · SCORES (three across)
         - button:
@@ -2258,11 +2279,17 @@ lvgl:
         - obj: { id: dw37, x: 296, y: 60, width: 8, height: 80, radius: 0, bg_color: 0x606060, bg_opa: COVER, border_width: 0 }
         - obj: { id: dw38, x: 304, y: 60, width: 8, height: 80, radius: 0, bg_color: 0x606060, bg_opa: COVER, border_width: 0 }
         - obj: { id: dw39, x: 312, y: 60, width: 8, height: 80, radius: 0, bg_color: 0x606060, bg_opa: COVER, border_width: 0 }
+        - obj: { id: e_spr0, x: 150, y: 90, width: 30, height: 40, radius: 8, bg_color: 0x9a2617, bg_opa: COVER, border_width: 2, border_color: 0x2a0a04, hidden: true }
+        - obj: { id: e_spr1, x: 150, y: 90, width: 30, height: 40, radius: 8, bg_color: 0x9a2617, bg_opa: COVER, border_width: 2, border_color: 0x2a0a04, hidden: true }
+        - obj: { id: e_spr2, x: 150, y: 90, width: 30, height: 40, radius: 8, bg_color: 0x9a2617, bg_opa: COVER, border_width: 2, border_color: 0x2a0a04, hidden: true }
+        - obj: { id: e_spr3, x: 150, y: 90, width: 30, height: 40, radius: 8, bg_color: 0x9a2617, bg_opa: COVER, border_width: 2, border_color: 0x2a0a04, hidden: true }
         - obj: { id: d3_gun,    x: 128, y: 152, width: 64, height: 50, radius: 6, bg_color: 0x2b2b2b, bg_opa: COVER, border_width: 2, border_color: 0x0e0e0e }
         - obj: { id: d3_barrel, x: 150, y: 138, width: 20, height: 18, radius: 3, bg_color: 0x1a1a1a, bg_opa: COVER, border_width: 0 }
         - obj: { id: d3_muzzle, x: 148, y: 120, width: 24, height: 20, radius: 10, bg_color: 0xffd23a, bg_opa: COVER, border_width: 0, hidden: true }
         - label: { id: d3_cross, text: "+", text_font: title_font, text_color: 0xE8E8E8, align: CENTER, y: -22 }
         - label: { id: d3_hud, text: "HP 100    AMMO 50", text_font: small_font, text_color: 0x33E6C8, align: BOTTOM_MID, y: -3 }
+        - obj: { id: d3_blood, x: 0, y: 0, width: 320, height: 240, radius: 0, bg_color: 0xcc0000, bg_opa: 40%, border_width: 0, hidden: true }
+        - label: { id: d3_over, text: "", text_font: title_font, text_color: 0xff5555, align: CENTER, y: 6 }
         - button:
             id: d3_back
             x: 6
@@ -4473,8 +4500,10 @@ interval:
                 }
                 bool sb = (id(g_rc_btn) != 0) && !id(r3_bp);
                 id(r3_bp) = (id(g_rc_btn) != 0);
-                if (sb && id(r3_ammo) > 0) { id(r3_ammo) -= 1; id(r3_flash) = 3; }
+                bool shot = false;
+                if (sb && id(r3_ammo) > 0) { id(r3_ammo) -= 1; id(r3_flash) = 3; shot = true; }
                 if (id(r3_flash) > 0) id(r3_flash) -= 1;
+                static float zbuf[40];
                 const float FOV = 1.05f;
                 for (int i = 0; i < 40; i++) {
                   float ra = id(r3_pa) - FOV * 0.5f + FOV * ((float) i / 39.0f);
@@ -4504,17 +4533,71 @@ interval:
                   if (sh > 210) sh = 210;
                   if (side != 0) sh = sh * 65 / 100;
                   uint32_t col = ((uint32_t) sh << 16) | ((uint32_t) (sh * 7 / 10) << 8) | (uint32_t) (sh * 5 / 10);
+                  zbuf[i] = corr;
                   lv_obj_set_height(COL[i], h);
                   lv_obj_set_y(COL[i], yy);
                   lv_obj_set_style_bg_color(COL[i], lv_color_hex(col), 0);
                 }
+                static lv_obj_t* ESP[4] = { id(e_spr0), id(e_spr1), id(e_spr2), id(e_spr3) };
+                int hitT = -1; float hitA = 0.16f;
+                for (int e = 0; e < 4; e++) {
+                  if (id(en_alive)[e] == 0) { lv_obj_add_flag(ESP[e], LV_OBJ_FLAG_HIDDEN); continue; }
+                  float ex = id(en_x)[e], ey = id(en_y)[e];
+                  float ddx = id(r3_px) - ex, ddy = id(r3_py) - ey;
+                  float ed = sqrtf(ddx * ddx + ddy * ddy);
+                  if (ed > 0.7f) {
+                    float mxs = ex + (ddx / ed) * 0.018f, mys = ey + (ddy / ed) * 0.018f;
+                    if ((int) ey >= 0 && (int) ey < 8 && (int) mxs >= 0 && (int) mxs < 8 && M[(int) ey][(int) mxs] == 0) ex = mxs;
+                    if ((int) mys >= 0 && (int) mys < 8 && (int) ex >= 0 && (int) ex < 8 && M[(int) mys][(int) ex] == 0) ey = mys;
+                    id(en_x)[e] = ex; id(en_y)[e] = ey;
+                  } else if (id(r3_hit) == 0) {
+                    id(r3_hp) -= 4; id(r3_hit) = 3;
+                  }
+                  float dx = ex - id(r3_px), dy = ey - id(r3_py);
+                  float edist = sqrtf(dx * dx + dy * dy);
+                  float eang = atan2f(dy, dx) - id(r3_pa);
+                  while (eang >  3.14159f) eang -= 6.28318f;
+                  while (eang < -3.14159f) eang += 6.28318f;
+                  if (fabsf(eang) > FOV * 0.55f || edist < 0.25f) { lv_obj_add_flag(ESP[e], LV_OBJ_FLAG_HIDDEN); continue; }
+                  int zc = (int) ((eang / (FOV * 0.5f) * 0.5f + 0.5f) * 39.0f);
+                  if (zc < 0) zc = 0;
+                  if (zc > 39) zc = 39;
+                  if (edist > zbuf[zc] + 0.3f) { lv_obj_add_flag(ESP[e], LV_OBJ_FLAG_HIDDEN); continue; }
+                  int sx = (int) (160.0f + (eang / (FOV * 0.5f)) * 160.0f);
+                  int esz = (int) (150.0f / edist);
+                  if (esz > 200) esz = 200;
+                  if (esz < 8) esz = 8;
+                  int ew = esz * 3 / 4;
+                  int eyp = 100 - esz / 2 + esz / 8;
+                  lv_obj_set_size(ESP[e], ew, esz);
+                  lv_obj_set_pos(ESP[e], sx - ew / 2, eyp);
+                  lv_obj_clear_flag(ESP[e], LV_OBJ_FLAG_HIDDEN);
+                  if (fabsf(eang) < hitA) { hitA = fabsf(eang); hitT = e; }
+                }
+                if (shot && hitT >= 0) {
+                  id(en_alive)[hitT] = 0;
+                  id(r3_kills) += 1;
+                  lv_obj_add_flag(ESP[hitT], LV_OBJ_FLAG_HIDDEN);
+                }
+                if (id(r3_hit) > 0) id(r3_hit) -= 1;
+                if (id(r3_hp) <= 0 && !id(r3_over)) { id(r3_hp) = 0; id(r3_over) = true; id(r3_run) = false; }
             - if:
                 condition: { lambda: 'return id(r3_flash) > 0;' }
                 then: [ { lvgl.widget.show: d3_muzzle } ]
                 else: [ { lvgl.widget.hide: d3_muzzle } ]
+            - if:
+                condition: { lambda: 'return id(r3_hit) > 0;' }
+                then: [ { lvgl.widget.show: d3_blood } ]
+                else: [ { lvgl.widget.hide: d3_blood } ]
+            - if:
+                condition: { lambda: 'return id(r3_over);' }
+                then:
+                  - lvgl.label.update: { id: d3_over, text: "YOU DIED" }
+                  - lvgl.widget.hide: d3_muzzle
+                  - script.execute: { id: led_flash, r: 100, g: 5, b: 0 }
             - lvgl.label.update:
                 id: d3_hud
-                text: !lambda 'char b[28]; snprintf(b, sizeof(b), "HP %d    AMMO %d", id(r3_hp), id(r3_ammo)); return std::string(b);'
+                text: !lambda 'char b[40]; snprintf(b, sizeof(b), "HP %d  AMMO %d  KILLS %d", id(r3_hp), id(r3_ammo), id(r3_kills)); return std::string(b);'
   # SLEEP BREATHING — while asleep ON THE CHARGER, the LED bar "breathes" very dimly
   # (the EMO/Vector charger-snooze everyone loves). Gated on Mood LEDs; goes fully
   # dark the moment it wakes or is unplugged.
