@@ -139,6 +139,24 @@ class HARobotDriver(RobotDriver):
         except Exception:  # noqa: BLE001 — best-effort; the picker just won't pre-highlight
             return None
 
+    async def set_background(self, option: str) -> None:
+        """Set the themed backdrop behind the face (select.X_face -> select.X_face_background)."""
+        face = self._entities.get("face_select")
+        if not face:
+            raise NotImplementedError("no face_select entity configured")
+        await self._ha.call_service(
+            "select", "select_option", {"entity_id": f"{face}_background", "option": option}
+        )
+
+    async def background_current(self) -> str | None:
+        face = self._entities.get("face_select")
+        if not face:
+            return None
+        try:
+            return (await self._ha.get_state(f"{face}_background")).get("state")
+        except Exception:  # noqa: BLE001 — best-effort highlight
+            return None
+
     async def mode_options(self) -> list[str] | None:
         """The mode select's REAL options (from its HA attributes), or None if unknown —
         lets the API report what the firmware actually accepts instead of a guessed set."""

@@ -36,26 +36,36 @@ const ACCESSORIES: [string, string, string][] = [
   ["Flower", "🌸", "פרח"],
 ];
 
-function AccessoryPicker() {
+const BACKGROUNDS: [string, string, string][] = [
+  ["None", "🚫", "בלי"],
+  ["Space", "🌌", "חלל"],
+  ["Sunset", "🌅", "שקיעה"],
+  ["Ocean", "🌊", "אוקיינוס"],
+  ["Matrix", "🟩", "מטריקס"],
+  ["Party", "🎉", "מסיבה"],
+];
+
+// One grid, reused for accessories + backgrounds — POSTs {option} to its endpoint.
+function CosmeticPicker({ endpoint, items }: { endpoint: string; items: [string, string, string][] }) {
   const { tr } = useI18n();
   const [cur, setCur] = useState("None");
   const [busy, setBusy] = useState(false);
   useEffect(() => {
-    apiGet<{ current: string | null }>("/api/robot/accessory")
+    apiGet<{ current: string | null }>(endpoint)
       .then((r) => (r.current ? setCur(r.current) : undefined))
       .catch(() => undefined);
-  }, []);
+  }, [endpoint]);
   const pick = (opt: string) => {
     if (busy) return;
     setBusy(true);
     setCur(opt);
-    apiSend("/api/robot/accessory", "POST", { option: opt })
+    apiSend(endpoint, "POST", { option: opt })
       .catch(() => undefined)
       .finally(() => setBusy(false));
   };
   return (
     <div className="grid grid-cols-4 gap-2">
-      {ACCESSORIES.map(([opt, emoji, he]) => (
+      {items.map(([opt, emoji, he]) => (
         <button
           key={opt}
           type="button"
@@ -85,7 +95,11 @@ export function ControlsPage() {
       </p>
 
       <Section title={tr("🎭 אקססוריז לפרצוף", "🎭 Face accessories")} delay={10}>
-        <AccessoryPicker />
+        <CosmeticPicker endpoint="/api/robot/accessory" items={ACCESSORIES} />
+      </Section>
+
+      <Section title={tr("🖼️ רקע לפרצוף", "🖼️ Face background")} delay={15}>
+        <CosmeticPicker endpoint="/api/robot/background" items={BACKGROUNDS} />
       </Section>
 
       <Section title={tr("🖥️ מסך-המגע (הפרצוף)", "🖥️ Touchscreen (the face)")} delay={20}>

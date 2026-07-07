@@ -283,6 +283,39 @@ async def set_robot_accessory(body: AccessoryBody, request: Request):
     return {"ok": True, "option": body.option}
 
 
+# The themed face backdrops the firmware's "Face background" select offers (default None).
+_BACKGROUNDS = ["None", "Space", "Sunset", "Ocean", "Matrix", "Party"]
+
+
+@router.get("/api/robot/background")
+async def get_robot_background(request: Request):
+    drv = request.app.state.robot.driver
+    getter = getattr(drv, "background_current", None)
+    try:
+        cur = await getter() if getter else None
+    except Exception:  # noqa: BLE001 — best-effort highlight
+        cur = None
+    return {"current": cur, "options": _BACKGROUNDS}
+
+
+@router.post("/api/robot/background")
+async def set_robot_background(body: AccessoryBody, request: Request):
+    """Set the themed backdrop behind the robot's face from the dashboard."""
+    if body.option not in _BACKGROUNDS:
+        raise HTTPException(status_code=400, detail=f"unknown background {body.option!r}")
+    drv = request.app.state.robot.driver
+    setter = getattr(drv, "set_background", None)
+    if setter is None:
+        raise HTTPException(status_code=409, detail="active backend has no background control")
+    try:
+        await setter(body.option)
+    except NotImplementedError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return {"ok": True, "option": body.option}
+
+
 @router.put("/api/robot/idle-motion")
 async def set_idle_motion(body: IdleMotionBody, request: Request):
     """Enable/disable the robot's automatic idle head movement (manual control is unaffected)."""

@@ -46,6 +46,12 @@ class MockDriver(RobotDriver):
     async def accessory_current(self) -> str | None:
         return "None"
 
+    async def set_background(self, option: str) -> None:
+        log.info("[mock] set_background(%s)", option)
+
+    async def background_current(self) -> str | None:
+        return "None"
+
     async def take_photo(self) -> bytes | None:
         log.info("[mock] take_photo() -> None")
         return None
