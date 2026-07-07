@@ -1475,10 +1475,46 @@ lvgl:
               - label: { id: dz_l, align: CENTER, x: -58, y: -6, text: "x", text_font: big_font, text_color: 0x14181d, hidden: true }
               - label: { id: dz_r, align: CENTER, x: 58,  y: -6, text: "x", text_font: big_font, text_color: 0x14181d, hidden: true }
               # ── HANDS + FOOD (Ropet-style) — paws + a treat that rise to the mouth. Hidden until it eats.
-              - obj: { id: hand_l,    align: CENTER, x: -34, y: 92, width: 38, height: 26, radius: 13, bg_color: 0x9a7b5e, bg_opa: COVER, border_width: 0, hidden: true }
-              - obj: { id: hand_r,    align: CENTER, x: 34,  y: 92, width: 38, height: 26, radius: 13, bg_color: 0x9a7b5e, bg_opa: COVER, border_width: 0, hidden: true }
+              - obj:
+                  id: hand_l
+                  align: CENTER
+                  x: -34
+                  y: 92
+                  width: 38
+                  height: 26
+                  radius: 7
+                  bg_color: 0x9aa4b0
+                  bg_opa: COVER
+                  border_width: 2
+                  border_color: 0x565c68
+                  hidden: true
+                  widgets:   # metallic robot gripper — two dark seams split it into 3 fingers
+                    - obj: { id: hl_hi, x: 3, y: 2, width: 32, height: 4, radius: 2, bg_color: 0xc9d0da, bg_opa: COVER, border_width: 0 }
+                    - obj: { id: hl_g1, x: 11, y: 5, width: 3, height: 18, radius: 1, bg_color: 0x4a4f5a, bg_opa: COVER, border_width: 0 }
+                    - obj: { id: hl_g2, x: 24, y: 5, width: 3, height: 18, radius: 1, bg_color: 0x4a4f5a, bg_opa: COVER, border_width: 0 }
+              - obj:
+                  id: hand_r
+                  align: CENTER
+                  x: 34
+                  y: 92
+                  width: 38
+                  height: 26
+                  radius: 7
+                  bg_color: 0x9aa4b0
+                  bg_opa: COVER
+                  border_width: 2
+                  border_color: 0x565c68
+                  hidden: true
+                  widgets:
+                    - obj: { id: hr_hi, x: 3, y: 2, width: 32, height: 4, radius: 2, bg_color: 0xc9d0da, bg_opa: COVER, border_width: 0 }
+                    - obj: { id: hr_g1, x: 11, y: 5, width: 3, height: 18, radius: 1, bg_color: 0x4a4f5a, bg_opa: COVER, border_width: 0 }
+                    - obj: { id: hr_g2, x: 24, y: 5, width: 3, height: 18, radius: 1, bg_color: 0x4a4f5a, bg_opa: COVER, border_width: 0 }
               - obj: { id: food_item, align: CENTER, x: 0,   y: 86, width: 30, height: 30, radius: 15, bg_color: 0x9c6b3f, bg_opa: COVER, border_width: 0, hidden: true }
               - obj: { id: food_top,  align: CENTER, x: 0,   y: 72, width: 12, height: 12, radius: 6,  bg_color: 0xff3333, bg_opa: COVER, border_width: 0, hidden: true }
+              # floating love hearts while it eats (the font has no ♥ glyph, so these are shaped objs)
+              - obj: { id: heart1, align: CENTER, x: -20, y: 46, width: 13, height: 13, radius: 6, bg_color: 0xff4d6a, bg_opa: COVER, border_width: 0, hidden: true }
+              - obj: { id: heart2, align: CENTER, x: 2,   y: 52, width: 10, height: 10, radius: 5, bg_color: 0xff6f88, bg_opa: COVER, border_width: 0, hidden: true }
+              - obj: { id: heart3, align: CENTER, x: 22,  y: 40, width: 16, height: 16, radius: 8, bg_color: 0xff4d6a, bg_opa: COVER, border_width: 0, hidden: true }
               # a glass of water (glass body + a blue fill that drops as it drinks)
               - obj: { id: drink_glass, align: CENTER, x: 0, y: 86, width: 26, height: 34, radius: 4, bg_color: 0xBFE8FF, bg_opa: COVER, border_width: 2, border_color: 0xFFFFFF, hidden: true }
               - obj: { id: drink_water, align: CENTER, x: 0, y: 96, width: 20, height: 18, radius: 2, bg_color: 0x4FC3F7, bg_opa: COVER, border_width: 0, hidden: true }
@@ -2911,22 +2947,27 @@ script:
             - lambda: 'id(g_food) = (int)(random_float() * 3.999f);'
             - lvgl.widget.update:
                 id: food_item
-                width: 30
-                height: 30
+                width:  !lambda 'return id(g_food) == 3 ? 40 : 30;'    # croissant is wider + flatter
+                height: !lambda 'return id(g_food) == 3 ? 22 : 30;'
+                radius: !lambda 'return id(g_food) == 1 ? 5 : (id(g_food) == 3 ? 11 : 15);'   # cake = slice
                 bg_color: !lambda |-
                   switch (id(g_food)) {
-                    case 0:  return lv_color_hex(0x9c6b3f);   // cookie
-                    case 1:  return lv_color_hex(0xff9eb5);   // cake
-                    case 2:  return lv_color_hex(0xd83b3b);   // apple
-                    default: return lv_color_hex(0xe0a860);   // croissant
+                    case 0:  return lv_color_hex(0xc79457);   // cookie — golden tan
+                    case 1:  return lv_color_hex(0xffc2d2);   // cake — pink frosting
+                    case 2:  return lv_color_hex(0xe23b3b);   // apple — glossy red
+                    default: return lv_color_hex(0xe6a94e);   // croissant — golden brown
                   }
-            - if:
-                condition: { lambda: 'return id(g_food) == 1 || id(g_food) == 2;' }
-                then:
-                  - lvgl.widget.update: { id: food_top, bg_color: !lambda 'return id(g_food) == 1 ? lv_color_hex(0xff3333) : lv_color_hex(0x4caf50);' }
-                  - lvgl.widget.show: food_top
-                else:
-                  - lvgl.widget.hide: food_top
+            # a topping for EVERY treat: cookie chip · cake cherry · apple leaf · croissant fold
+            - lvgl.widget.update:
+                id: food_top
+                bg_color: !lambda |-
+                  switch (id(g_food)) {
+                    case 0:  return lv_color_hex(0x5a3418);   // choc chip
+                    case 1:  return lv_color_hex(0xff3355);   // cherry
+                    case 2:  return lv_color_hex(0x4caf50);   // leaf
+                    default: return lv_color_hex(0xb9791f);   // fold
+                  }
+            - lvgl.widget.show: food_top
             - lvgl.widget.update: { id: food_item, y: 86 }
             - lvgl.widget.update: { id: food_top, y: 72 }
             - lvgl.widget.update: { id: hand_l, y: 92 }
@@ -2940,6 +2981,12 @@ script:
             - lvgl.widget.update: { id: food_top, y: 52 }
             - lvgl.widget.update: { id: hand_l, y: 80 }
             - lvgl.widget.update: { id: hand_r, y: 80 }
+            - lvgl.widget.update: { id: heart1, y: 46 }
+            - lvgl.widget.update: { id: heart2, y: 52 }
+            - lvgl.widget.update: { id: heart3, y: 40 }
+            - lvgl.widget.show: heart1
+            - lvgl.widget.show: heart2
+            - lvgl.widget.show: heart3
             - delay: 340ms
             # nibble 1
             - if:
@@ -2947,15 +2994,24 @@ script:
                 then: [ { rtttl.play: "nom:d=32,o=5,b=170:e" } ]
             - lvgl.widget.hide: food_top
             - lvgl.widget.update: { id: food_item, width: 20, height: 20 }
+            - lvgl.widget.update: { id: heart1, y: 18 }
+            - lvgl.widget.update: { id: heart2, y: 26 }
+            - lvgl.widget.update: { id: heart3, y: 12 }
             - delay: 340ms
             # nibble 2
             - if:
                 condition: { lambda: 'return id(sw_sfx).state && !id(g_quiet) && !id(g_night);' }
                 then: [ { rtttl.play: "nom:d=32,o=5,b=170:c" } ]
             - lvgl.widget.update: { id: food_item, width: 10, height: 10 }
+            - lvgl.widget.update: { id: heart1, y: -12 }
+            - lvgl.widget.update: { id: heart2, y: -4 }
+            - lvgl.widget.update: { id: heart3, y: -20 }
             - delay: 300ms
             # gone → yum!
             - lvgl.widget.hide: food_item
+            - lvgl.widget.hide: heart1
+            - lvgl.widget.hide: heart2
+            - lvgl.widget.hide: heart3
             - globals.set: { id: g_expr, value: "1" }
             - script.execute: render_face
             - if:
