@@ -40,6 +40,12 @@ class MockDriver(RobotDriver):
     async def set_leds(self, color: str, brightness: float = 1.0) -> None:
         log.info("[mock] set_leds(%s, %.2f)", color, brightness)
 
+    async def set_accessory(self, option: str) -> None:
+        log.info("[mock] set_accessory(%s)", option)
+
+    async def accessory_current(self) -> str | None:
+        return "None"
+
     async def take_photo(self) -> bytes | None:
         log.info("[mock] take_photo() -> None")
         return None

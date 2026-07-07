@@ -114,6 +114,31 @@ class HARobotDriver(RobotDriver):
             "select", "select_option", {"entity_id": sel, "option": mode}
         )
 
+    def _accessory_eid(self) -> str | None:
+        """The firmware's ``face_accessory`` select sits on the same device as the Face select,
+        so we derive it: select.X_face -> select.X_face_accessory (no extra config needed)."""
+        face = self._entities.get("face_select")
+        return f"{face}_accessory" if face else None
+
+    async def set_accessory(self, option: str) -> None:
+        """Put a cosmetic (glasses / hat / …) on the face, or 'None' to clear it."""
+        sel = self._accessory_eid()
+        if not sel:
+            raise NotImplementedError("no face_select entity configured")
+        await self._ha.call_service(
+            "select", "select_option", {"entity_id": sel, "option": option}
+        )
+
+    async def accessory_current(self) -> str | None:
+        """The accessory shown now (to highlight it in the dashboard), or None if unknown."""
+        sel = self._accessory_eid()
+        if not sel:
+            return None
+        try:
+            return (await self._ha.get_state(sel)).get("state")
+        except Exception:  # noqa: BLE001 — best-effort; the picker just won't pre-highlight
+            return None
+
     async def mode_options(self) -> list[str] | None:
         """The mode select's REAL options (from its HA attributes), or None if unknown —
         lets the API report what the firmware actually accepts instead of a guessed set."""
@@ -285,9 +310,13 @@ class HARobotDriver(RobotDriver):
         # original app's text messages). Best-effort — older firmware has no such slot.
         bubble = self._entities.get("bubble_text")
         if bubble:
+            from ..bidi import for_robot
+
             try:
+                # the DISPLAYED bubble gets RTL-reordered (the robot's screen has no BIDI);
+                # TTS below still receives the untouched logical text.
                 await self._ha.call_service(
-                    "text", "set_value", {"entity_id": bubble, "value": text[:120]}
+                    "text", "set_value", {"entity_id": bubble, "value": for_robot(text)[:120]}
                 )
             except Exception:  # noqa: BLE001 — showing text must never block speaking
                 pass
@@ -339,8 +368,10 @@ class HARobotDriver(RobotDriver):
         ent = self._entities.get("agent_text")
         if not ent:
             return
+        from ..bidi import for_robot
+
         try:
-            await self._ha.call_service("text", "set_value", {"entity_id": ent, "value": text[:32]})
+            await self._ha.call_service("text", "set_value", {"entity_id": ent, "value": for_robot(text)[:32]})
         except Exception:  # noqa: BLE001 — a status badge must never break the caller
             pass
 
@@ -351,8 +382,10 @@ class HARobotDriver(RobotDriver):
         ent = self._entities.get("permission_text")
         if not ent:
             return
+        from ..bidi import for_robot
+
         try:
-            await self._ha.call_service("text", "set_value", {"entity_id": ent, "value": text[:80]})
+            await self._ha.call_service("text", "set_value", {"entity_id": ent, "value": for_robot(text)[:80]})
         except Exception:  # noqa: BLE001 — the on-robot prompt must never break the caller
             pass
 

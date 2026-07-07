@@ -57,6 +57,10 @@ class ModeBody(BaseModel):
     mode: str  # awake | busy | sleep
 
 
+class AccessoryBody(BaseModel):
+    option: str  # None | Glasses | Sunglasses | Top hat | Cap | Crown | Bow tie | Headphones | Halo | Monocle | Flower
+
+
 class AgentStatusBody(BaseModel):
     # working | waiting_permission | question | done | error | idle
     state: str
@@ -240,6 +244,43 @@ async def set_robot_mode(body: ModeBody, request: Request):
             ) from exc
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     return {"ok": True, "mode": mode}
+
+
+# The face cosmetics the firmware's "Face accessory" select offers (default None).
+_ACCESSORIES = [
+    "None", "Glasses", "Sunglasses", "Top hat", "Cap", "Crown",
+    "Bow tie", "Headphones", "Halo", "Monocle", "Flower",
+]
+
+
+@router.get("/api/robot/accessory")
+async def get_robot_accessory(request: Request):
+    """The cosmetic shown now + the full list the dashboard picker renders."""
+    drv = request.app.state.robot.driver
+    getter = getattr(drv, "accessory_current", None)
+    try:
+        cur = await getter() if getter else None
+    except Exception:  # noqa: BLE001 — best-effort highlight
+        cur = None
+    return {"current": cur, "options": _ACCESSORIES}
+
+
+@router.post("/api/robot/accessory")
+async def set_robot_accessory(body: AccessoryBody, request: Request):
+    """Put a cosmetic on the robot's face (or 'None' to clear it) from the dashboard."""
+    if body.option not in _ACCESSORIES:
+        raise HTTPException(status_code=400, detail=f"unknown accessory {body.option!r}")
+    drv = request.app.state.robot.driver
+    setter = getattr(drv, "set_accessory", None)
+    if setter is None:
+        raise HTTPException(status_code=409, detail="active backend has no accessory control")
+    try:
+        await setter(body.option)
+    except NotImplementedError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return {"ok": True, "option": body.option}
 
 
 @router.put("/api/robot/idle-motion")

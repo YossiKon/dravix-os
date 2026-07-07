@@ -1,5 +1,7 @@
 // Dravix — Controls & gestures reference. Every way to drive the robot: the touchscreen face,
 // the wireless joystick, the permission prompt, and the physical touch / proximity sensors.
+import { useEffect, useState } from "react";
+import { apiGet, apiSend } from "../api";
 import { Section } from "../ui";
 import { useI18n } from "../i18n";
 
@@ -19,6 +21,58 @@ function Rows({ rows }: { rows: Row[] }) {
   );
 }
 
+// Face cosmetics — one tap sends /api/robot/accessory; the robot shows it (default None = bare).
+const ACCESSORIES: [string, string, string][] = [
+  ["None", "🚫", "בלי"],
+  ["Glasses", "👓", "משקפיים"],
+  ["Sunglasses", "🕶️", "משקפי שמש"],
+  ["Top hat", "🎩", "צילינדר"],
+  ["Cap", "🧢", "כובע"],
+  ["Crown", "👑", "כתר"],
+  ["Bow tie", "🎀", "פפיון"],
+  ["Headphones", "🎧", "אוזניות"],
+  ["Halo", "😇", "הילה"],
+  ["Monocle", "🧐", "מונוקל"],
+  ["Flower", "🌸", "פרח"],
+];
+
+function AccessoryPicker() {
+  const { tr } = useI18n();
+  const [cur, setCur] = useState("None");
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    apiGet<{ current: string | null }>("/api/robot/accessory")
+      .then((r) => (r.current ? setCur(r.current) : undefined))
+      .catch(() => undefined);
+  }, []);
+  const pick = (opt: string) => {
+    if (busy) return;
+    setBusy(true);
+    setCur(opt);
+    apiSend("/api/robot/accessory", "POST", { option: opt })
+      .catch(() => undefined)
+      .finally(() => setBusy(false));
+  };
+  return (
+    <div className="grid grid-cols-4 gap-2">
+      {ACCESSORIES.map(([opt, emoji, he]) => (
+        <button
+          key={opt}
+          type="button"
+          disabled={busy}
+          onClick={() => pick(opt)}
+          className={`flex flex-col items-center gap-1 rounded-xl border py-2 text-xs transition active:scale-95 disabled:opacity-60 ${
+            cur === opt ? "border-teal bg-card2 text-teal" : "border-line bg-card2/40 text-mute"
+          }`}
+        >
+          <span className="text-2xl leading-none">{emoji}</span>
+          {tr(he, opt)}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 export function ControlsPage() {
   const { tr } = useI18n();
   return (
@@ -29,6 +83,10 @@ export function ControlsPage() {
           "Every way to control the robot — touchscreen, joystick, head and proximity.",
         )}
       </p>
+
+      <Section title={tr("🎭 אקססוריז לפרצוף", "🎭 Face accessories")} delay={10}>
+        <AccessoryPicker />
+      </Section>
 
       <Section title={tr("🖥️ מסך-המגע (הפרצוף)", "🖥️ Touchscreen (the face)")} delay={20}>
         <Rows
