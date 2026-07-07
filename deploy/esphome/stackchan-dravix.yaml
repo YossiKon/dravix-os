@@ -170,6 +170,7 @@ espnow:
           id(g_rc_yaw)   = yaw * 164.0f / 1280.0f;
           id(g_rc_pitch) = 158.0f + pitch * 102.0f / 900.0f;
           id(g_rc_btn)   = data[off + 7];
+          id(g_rc_btna)  = data[off + 0];
           id(g_rc_fresh) = true;
           break;
         }
@@ -184,6 +185,7 @@ espnow:
           id(g_rc_yaw)   = yaw * 164.0f / 1280.0f;
           id(g_rc_pitch) = 158.0f + pitch * 102.0f / 900.0f;
           id(g_rc_btn)   = data[off + 7];
+          id(g_rc_btna)  = data[off + 0];
           id(g_rc_fresh) = true;
           break;
         }
@@ -398,6 +400,7 @@ globals:
   - { id: g_rc_yaw,   type: float, restore_value: false, initial_value: "0" }     # target yaw (servo scale)
   - { id: g_rc_pitch, type: float, restore_value: false, initial_value: "165" }   # target pitch (158..260)
   - { id: g_rc_btn,   type: int,   restore_value: false, initial_value: "0" }
+  - { id: g_rc_btna,  type: int,   restore_value: false, initial_value: "0" }   # 2nd remote button / stick-click (packet byte 0)
   - { id: g_rc_prev,  type: int,   restore_value: false, initial_value: "0" }
   - { id: g_rc_fresh, type: bool,  restore_value: false, initial_value: "false" }
   - { id: g_rc_busy,  type: bool,  restore_value: false, initial_value: "false" }
@@ -4509,8 +4512,9 @@ interval:
                     if (nyc >= 0 && nyc < 8 && M[nyc][px0] == 0) id(r3_py) = ny;
                   }
                 }
-                bool sb = (id(g_rc_btn) != 0) && !id(r3_bp);
-                id(r3_bp) = (id(g_rc_btn) != 0);
+                bool pressed = (id(g_rc_btn) != 0) || (id(g_rc_btna) != 0);
+                bool sb = pressed && !id(r3_bp);
+                id(r3_bp) = pressed;
                 bool shot = false;
                 if (sb && id(r3_ammo) > 0) { id(r3_ammo) -= 1; id(r3_flash) = 3; shot = true; }
                 if (id(r3_flash) > 0) id(r3_flash) -= 1;
