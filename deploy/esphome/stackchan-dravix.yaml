@@ -374,6 +374,7 @@ globals:
   - { id: g_apulse, type: bool, restore_value: false, initial_value: "false" }  # AI-agent "working" pulse phase
   - { id: g_gloves, type: bool, restore_value: false, initial_value: "false" }  # boxing-gloves accessory is on → arms the auto-punch
   - { id: g_wink,   type: bool, restore_value: false, initial_value: "false" }  # this blink is a one-eyed wink
+  - { id: g_ant,    type: bool, restore_value: false, initial_value: "false" }  # antennae accessory is on (arms the wiggle)
   # ── DOOM-3D — a real first-person raycaster: joystick turns/walks, the button shoots ──
   - { id: r3_px,   type: float, restore_value: false, initial_value: "2.5" }   # player x (map units)
   - { id: r3_py,   type: float, restore_value: false, initial_value: "2.5" }   # player y
@@ -1583,11 +1584,11 @@ lvgl:
               - obj: { id: sp_2, align: CENTER, x: 92,  y: -28, width: 7, height: 7, radius: 3, bg_color: 0xfff2a0, bg_opa: COVER, border_width: 0, hidden: true }
               - obj: { id: sp_3, align: CENTER, x: -82, y: 46,  width: 7, height: 7, radius: 3, bg_color: 0xfff2a0, bg_opa: COVER, border_width: 0, hidden: true }
               - obj: { id: sp_4, align: CENTER, x: 86,  y: 42,  width: 9, height: 9, radius: 4, bg_color: 0xffe14a, bg_opa: COVER, border_width: 0, hidden: true }
-              # ── antennae (always on; wiggle gently) ──
-              - obj: { id: ant_l, align: CENTER, x: -54, y: -84, width: 4, height: 18, radius: 2, bg_color: 0x1f9e88, bg_opa: COVER, border_width: 0 }
-              - obj: { id: ant_r, align: CENTER, x: 54,  y: -84, width: 4, height: 18, radius: 2, bg_color: 0x1f9e88, bg_opa: COVER, border_width: 0 }
-              - obj: { id: ant_lb, align: CENTER, x: -54, y: -94, width: 11, height: 11, radius: 6, bg_color: 0x33E6C8, bg_opa: COVER, border_width: 0 }
-              - obj: { id: ant_rb, align: CENTER, x: 54,  y: -94, width: 11, height: 11, radius: 6, bg_color: 0x33E6C8, bg_opa: COVER, border_width: 0 }
+              # ── antennae — an OPT-IN accessory (hidden by default so the plain face stays clean) ──
+              - obj: { id: ant_l, align: CENTER, x: -54, y: -84, width: 4, height: 18, radius: 2, bg_color: 0x1f9e88, bg_opa: COVER, border_width: 0, hidden: true }
+              - obj: { id: ant_r, align: CENTER, x: 54,  y: -84, width: 4, height: 18, radius: 2, bg_color: 0x1f9e88, bg_opa: COVER, border_width: 0, hidden: true }
+              - obj: { id: ant_lb, align: CENTER, x: -54, y: -94, width: 11, height: 11, radius: 6, bg_color: 0x33E6C8, bg_opa: COVER, border_width: 0, hidden: true }
+              - obj: { id: ant_rb, align: CENTER, x: 54,  y: -94, width: 11, height: 11, radius: 6, bg_color: 0x33E6C8, bg_opa: COVER, border_width: 0, hidden: true }
               # a glass of water (glass body + a blue fill that drops as it drinks)
               - obj: { id: drink_glass, align: CENTER, x: 0, y: 86, width: 26, height: 34, radius: 4, bg_color: 0xBFE8FF, bg_opa: COVER, border_width: 2, border_color: 0xFFFFFF, hidden: true }
               - obj: { id: drink_water, align: CENTER, x: 0, y: 96, width: 20, height: 18, radius: 2, bg_color: 0x4FC3F7, bg_opa: COVER, border_width: 0, hidden: true }
@@ -4017,7 +4018,7 @@ select:
     id: sel_accessory
     optimistic: true
     entity_category: config
-    options: ["None", "Glasses", "Sunglasses", "Top hat", "Cap", "Crown", "Bow tie", "Headphones", "Halo", "Monocle", "Flower", "Mongkhon", "Boxing gloves", "Fight band", "Fight shorts", "Cat ears", "Beard", "Eye patch", "Mustache", "Shirt", "Necklace", "Gold chain"]
+    options: ["None", "Glasses", "Sunglasses", "Top hat", "Cap", "Crown", "Bow tie", "Headphones", "Halo", "Monocle", "Flower", "Mongkhon", "Boxing gloves", "Fight band", "Fight shorts", "Cat ears", "Beard", "Eye patch", "Mustache", "Shirt", "Necklace", "Gold chain", "Antennae"]
     initial_option: "None"
     on_value:
       - lvgl.widget.hide: acc_lens_l
@@ -4071,6 +4072,11 @@ select:
       - lvgl.widget.hide: acc_mts_w
       - lvgl.widget.hide: acc_mts_s
       - globals.set: { id: g_gloves, value: "false" }
+      - globals.set: { id: g_ant, value: "false" }
+      - lvgl.widget.hide: ant_l
+      - lvgl.widget.hide: ant_r
+      - lvgl.widget.hide: ant_lb
+      - lvgl.widget.hide: ant_rb
       - if:
           condition: { lambda: 'return x == "Glasses";' }
           then:
@@ -4192,6 +4198,14 @@ select:
           then:
             - lvgl.widget.show: acc_bling
             - lvgl.widget.show: acc_bling2
+      - if:
+          condition: { lambda: 'return x == "Antennae";' }
+          then:
+            - lvgl.widget.show: ant_l
+            - lvgl.widget.show: ant_r
+            - lvgl.widget.show: ant_lb
+            - lvgl.widget.show: ant_rb
+            - globals.set: { id: g_ant, value: "true" }
   - platform: template
     name: "Face"
     id: robot_face
@@ -5042,7 +5056,7 @@ interval:
           condition:
             and:
               - lvgl.page.is_showing: page_face
-              - lambda: 'return !id(g_sleep);'
+              - lambda: 'return !id(g_sleep) && id(g_ant);'
           then:
             - lvgl.widget.update: { id: ant_lb, x: !lambda 'return (id(g_anim) % 2) ? -58 : -50;' }
             - lvgl.widget.update: { id: ant_rb, x: !lambda 'return (id(g_anim) % 2) ? 50 : 58;' }
