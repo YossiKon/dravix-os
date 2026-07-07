@@ -3033,6 +3033,41 @@ script:
             - script.execute: head_shake                                # happy little wiggle
   # ── EATS 🍪 — Ropet-style: paws lift a random treat to the mouth, 2 nibbles + "nom", then a
   #    happy "yum" nod. Fires from the Feed button, or spontaneously now and then on the face.
+  # ── FLOATING LOVE-HEARTS 💗 — three hearts drift up from the cheeks and fade out over ~1.7s.
+  #    Reuses the eat animation's heart objs (no new widgets). Fired by the interval below while
+  #    it's happy/in-love. Resets the hearts to their resting spot so eating still works.
+  - id: float_hearts
+    mode: single
+    then:
+      - if:
+          condition: { lambda: 'return !id(g_sleep) && !id(g_saver) && !id(g_listen) && !id(g_talk) && !id(g_think);' }
+          then:
+            - lvgl.widget.update: { id: heart1, y: 48, bg_opa: COVER }
+            - lvgl.widget.update: { id: heart2, y: 54, bg_opa: COVER }
+            - lvgl.widget.update: { id: heart3, y: 42, bg_opa: COVER }
+            - lvgl.widget.show: heart1
+            - lvgl.widget.show: heart2
+            - lvgl.widget.show: heart3
+            - delay: 450ms
+            - lvgl.widget.update: { id: heart1, y: 16, bg_opa: 70% }
+            - lvgl.widget.update: { id: heart2, y: 24, bg_opa: 70% }
+            - lvgl.widget.update: { id: heart3, y: 10, bg_opa: 70% }
+            - delay: 450ms
+            - lvgl.widget.update: { id: heart1, y: -16, bg_opa: 30% }
+            - lvgl.widget.update: { id: heart2, y: -6,  bg_opa: 30% }
+            - lvgl.widget.update: { id: heart3, y: -22, bg_opa: 30% }
+            - delay: 450ms
+            - lvgl.widget.update: { id: heart1, y: -48, bg_opa: TRANSP }
+            - lvgl.widget.update: { id: heart2, y: -38, bg_opa: TRANSP }
+            - lvgl.widget.update: { id: heart3, y: -54, bg_opa: TRANSP }
+            - delay: 350ms
+            - lvgl.widget.hide: heart1
+            - lvgl.widget.hide: heart2
+            - lvgl.widget.hide: heart3
+            # restore the resting position + full opacity so the eat animation still finds them
+            - lvgl.widget.update: { id: heart1, y: 46, bg_opa: COVER }
+            - lvgl.widget.update: { id: heart2, y: 52, bg_opa: COVER }
+            - lvgl.widget.update: { id: heart3, y: 40, bg_opa: COVER }
   - id: eat
     mode: single
     then:
@@ -3728,26 +3763,20 @@ script:
       #    a sweat drop while busy. Shown only on an idle face; hidden in every
       #    other state so they never linger.
       - if:
-          condition:
-            lambda: |-
-              return !id(g_sleep) && !id(g_listen) && !id(g_talk) && !id(g_blink)
-                     && !id(g_saver) && !id(g_focus) && id(g_expr) == 3;
+          condition: { lambda: 'return false;' }   # eyebrows removed — expression via eyes/mouth/blush only
           then: [ { lvgl.widget.show: brow_l }, { lvgl.widget.show: brow_r } ]
           else: [ { lvgl.widget.hide: brow_l }, { lvgl.widget.hide: brow_r } ]
       - if:
-          condition:
-            lambda: |-
-              return !id(g_sleep) && !id(g_listen) && !id(g_talk) && !id(g_blink)
-                     && !id(g_saver) && !id(g_focus) && id(g_expr) == 7;
+          condition: { lambda: 'return false;' }   # dizzy stars removed
           then: [ { lvgl.widget.show: dz_l }, { lvgl.widget.show: dz_r } ]
           else: [ { lvgl.widget.hide: dz_l }, { lvgl.widget.hide: dz_r } ]
       - if:
-          condition: { lambda: 'return id(g_busy) && !id(g_sleep) && !id(g_saver);' }
+          condition: { lambda: 'return false;' }   # busy sweat-drop removed
           then: [ { lvgl.widget.show: sweat } ]
           else: [ { lvgl.widget.hide: sweat } ]
       # sparkles pop when it's happy or in love (and idle)
       - if:
-          condition: { lambda: 'return (id(g_expr) == 1 || id(g_expr) == 6) && !id(g_sleep) && !id(g_saver) && !id(g_listen) && !id(g_talk) && !id(g_think);' }
+          condition: { lambda: 'return false;' }   # sparkles removed — replaced by the floating hearts below
           then:
             - lvgl.widget.show: sp_1
             - lvgl.widget.show: sp_2
@@ -5070,6 +5099,13 @@ interval:
           then:
             - lvgl.widget.update: { id: ant_lb, x: !lambda 'return (id(g_anim) % 2) ? -58 : -50;' }
             - lvgl.widget.update: { id: ant_rb, x: !lambda 'return (id(g_anim) % 2) ? 50 : 58;' }
+  # floating love-hearts: rise + fade while happy/in-love, on the face, and only if the hearts
+  # aren't already busy (eat animation) — and never in sleep/screensaver.
+  - interval: 3800ms
+    then:
+      - if:
+          condition: { lambda: 'return (id(g_expr) == 1 || id(g_expr) == 6) && !id(g_sleep) && !id(g_saver) && !id(g_listen) && !id(g_talk) && !id(g_think) && lv_scr_act() == id(page_face) && lv_obj_has_flag(id(heart1), LV_OBJ_FLAG_HIDDEN);' }
+          then: [ { script.execute: float_hearts } ]
   # SLEEP BREATHING — while asleep ON THE CHARGER, the LED bar "breathes" very dimly
   # (the EMO/Vector charger-snooze everyone loves). Gated on Mood LEDs; goes fully
   # dark the moment it wakes or is unplugged.
