@@ -1515,6 +1515,16 @@ lvgl:
               - obj: { id: heart1, align: CENTER, x: -20, y: 46, width: 13, height: 13, radius: 6, bg_color: 0xff4d6a, bg_opa: COVER, border_width: 0, hidden: true }
               - obj: { id: heart2, align: CENTER, x: 2,   y: 52, width: 10, height: 10, radius: 5, bg_color: 0xff6f88, bg_opa: COVER, border_width: 0, hidden: true }
               - obj: { id: heart3, align: CENTER, x: 22,  y: 40, width: 16, height: 16, radius: 8, bg_color: 0xff4d6a, bg_opa: COVER, border_width: 0, hidden: true }
+              # ── ACCESSORIES (dashboard/HA-toggled via the "Face accessory" select; default None) ──
+              - obj: { id: acc_lens_l, align: CENTER, x: -58, y: 0,  width: 54, height: 48, radius: 24, bg_color: 0x14181d, bg_opa: TRANSP, border_width: 5, border_color: 0x14181d, hidden: true }
+              - obj: { id: acc_lens_r, align: CENTER, x: 58,  y: 0,  width: 54, height: 48, radius: 24, bg_color: 0x14181d, bg_opa: TRANSP, border_width: 5, border_color: 0x14181d, hidden: true }
+              - obj: { id: acc_bridge, align: CENTER, x: 0,   y: -2, width: 30, height: 6,  radius: 0,  bg_color: 0x14181d, bg_opa: COVER, border_width: 0, hidden: true }
+              - obj: { id: acc_hat_b,  align: CENTER, x: 0, y: -52, width: 158, height: 14, radius: 4, bg_color: 0x20222c, bg_opa: COVER, border_width: 0, hidden: true }   # top-hat brim
+              - obj: { id: acc_hat_t,  align: CENTER, x: 0, y: -78, width: 92,  height: 40, radius: 3, bg_color: 0x20222c, bg_opa: COVER, border_width: 0, hidden: true }   # top-hat crown
+              - obj: { id: acc_hat_r,  align: CENTER, x: 0, y: -64, width: 92,  height: 8,  radius: 0, bg_color: 0xB5471F, bg_opa: COVER, border_width: 0, hidden: true }   # hat band
+              - obj: { id: acc_bow_l,  align: CENTER, x: -16, y: 86, width: 22, height: 26, radius: 3, bg_color: 0xc0392b, bg_opa: COVER, border_width: 0, hidden: true }   # bow-tie wings
+              - obj: { id: acc_bow_r,  align: CENTER, x: 16,  y: 86, width: 22, height: 26, radius: 3, bg_color: 0xc0392b, bg_opa: COVER, border_width: 0, hidden: true }
+              - obj: { id: acc_bow_c,  align: CENTER, x: 0,   y: 86, width: 12, height: 18, radius: 2, bg_color: 0x8e2a1e, bg_opa: COVER, border_width: 0, hidden: true }   # knot
               # a glass of water (glass body + a blue fill that drops as it drinks)
               - obj: { id: drink_glass, align: CENTER, x: 0, y: 86, width: 26, height: 34, radius: 4, bg_color: 0xBFE8FF, bg_opa: COVER, border_width: 2, border_color: 0xFFFFFF, hidden: true }
               - obj: { id: drink_water, align: CENTER, x: 0, y: 96, width: 20, height: 18, radius: 2, bg_color: 0x4FC3F7, bg_opa: COVER, border_width: 0, hidden: true }
@@ -3856,6 +3866,52 @@ script:
             - delay: 900ms
             - script.execute: { id: head_nudge, dx: -14, dy: 0 }   # ...huffy turn away
 select:
+  # ── FACE ACCESSORY — pick a cosmetic from the dashboard / HA. Default None (bare face). ──
+  - platform: template
+    name: "Face accessory"
+    id: sel_accessory
+    optimistic: true
+    entity_category: config
+    options: ["None", "Glasses", "Sunglasses", "Top hat", "Bow tie"]
+    initial_option: "None"
+    on_value:
+      - lvgl.widget.hide: acc_lens_l
+      - lvgl.widget.hide: acc_lens_r
+      - lvgl.widget.hide: acc_bridge
+      - lvgl.widget.hide: acc_hat_b
+      - lvgl.widget.hide: acc_hat_t
+      - lvgl.widget.hide: acc_hat_r
+      - lvgl.widget.hide: acc_bow_l
+      - lvgl.widget.hide: acc_bow_r
+      - lvgl.widget.hide: acc_bow_c
+      - if:
+          condition: { lambda: 'return x == "Glasses";' }
+          then:
+            - lvgl.widget.update: { id: acc_lens_l, bg_opa: TRANSP }
+            - lvgl.widget.update: { id: acc_lens_r, bg_opa: TRANSP }
+            - lvgl.widget.show: acc_lens_l
+            - lvgl.widget.show: acc_lens_r
+            - lvgl.widget.show: acc_bridge
+      - if:
+          condition: { lambda: 'return x == "Sunglasses";' }
+          then:
+            - lvgl.widget.update: { id: acc_lens_l, bg_opa: COVER }
+            - lvgl.widget.update: { id: acc_lens_r, bg_opa: COVER }
+            - lvgl.widget.show: acc_lens_l
+            - lvgl.widget.show: acc_lens_r
+            - lvgl.widget.show: acc_bridge
+      - if:
+          condition: { lambda: 'return x == "Top hat";' }
+          then:
+            - lvgl.widget.show: acc_hat_b
+            - lvgl.widget.show: acc_hat_t
+            - lvgl.widget.show: acc_hat_r
+      - if:
+          condition: { lambda: 'return x == "Bow tie";' }
+          then:
+            - lvgl.widget.show: acc_bow_l
+            - lvgl.widget.show: acc_bow_r
+            - lvgl.widget.show: acc_bow_c
   - platform: template
     name: "Face"
     id: robot_face
