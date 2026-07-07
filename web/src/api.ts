@@ -142,6 +142,7 @@ export interface AgentStatus {
   display: string; // bubble | badge | both | off
   primary: string; // pinned agent name, or "" = auto (most urgent)
   muted: string[]; // agent names whose speech is silenced
+  approvals: boolean; // master on/off for on-robot tool approvals
   palette: Record<string, { color: string; glyph: string }>;
   permission: AgentPermission | null;
 }

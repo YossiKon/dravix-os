@@ -124,10 +124,28 @@ def test_mute_pref_roundtrip(tmp_path, monkeypatch):
         get_settings.cache_clear()
 
 
+def test_approvals_off_by_default_never_gates(tmp_path, monkeypatch):
+    # the master kill-switch defaults OFF: a permission request short-circuits so an installed
+    # hook can never block (robot_ready False → the bridge falls straight through)
+    app = _app(monkeypatch, tmp_path)
+    try:
+        with TestClient(app) as c:
+            assert c.get("/api/agent/status").json()["approvals"] is False
+            r = c.post("/api/agent/permission", json={"source": "claude", "summary": "rm -rf build/"}).json()
+            assert r["decision"] == "disabled" and r["robot_ready"] is False
+            assert "id" not in r                                   # no request was created
+            assert c.get("/api/agent/status").json()["permission"] is None
+    finally:
+        from dravix.config import get_settings
+
+        get_settings.cache_clear()
+
+
 def test_permission_request_decide_flow(tmp_path, monkeypatch):
     app = _app(monkeypatch, tmp_path)
     try:
         with TestClient(app) as c:
+            c.put("/api/agent/prefs", json={"approvals": True})   # turn the kill-switch ON
             r = c.post("/api/agent/permission",
                        json={"source": "claude", "tool": "Bash", "summary": "rm -rf build/"})
             assert r.status_code == 200
@@ -163,6 +181,7 @@ def test_reject_sets_idle(tmp_path, monkeypatch):
     app = _app(monkeypatch, tmp_path)
     try:
         with TestClient(app) as c:
+            c.put("/api/agent/prefs", json={"approvals": True})
             pid = c.post("/api/agent/permission", json={"source": "ci", "summary": "deploy?"}).json()["id"]
             assert c.post(f"/api/agent/permission/{pid}/decide", json={"decision": "reject"}).json()["decision"] == "rejected"
             assert c.get("/api/agent/status").json()["winner"]["state"] == "idle"
@@ -186,6 +205,7 @@ def test_permission_summary_full_on_dashboard_short_on_robot(tmp_path, monkeypat
     app = _app(monkeypatch, tmp_path)
     try:
         with TestClient(app) as c:
+            c.put("/api/agent/prefs", json={"approvals": True})
             full = "rm -rf build/ && npm ci && npm run build && deploy --prod --force"
             r = c.post("/api/agent/permission", json={"source": "claude", "summary": full}).json()
             assert r["summary"] == full                         # dashboard sees the whole thing

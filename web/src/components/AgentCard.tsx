@@ -76,7 +76,7 @@ export function AgentCard() {
   const clearAll = () => act(() => apiSend<AgentStatus>("/api/agent/status/clear", "POST", {}));
   const decide = (id: string, decision: "approve" | "reject") =>
     act(() => apiSend(`/api/agent/permission/${id}/decide`, "POST", { decision }), false);
-  const setPref = (patch: { display?: string; primary?: string; muted?: string[] }) =>
+  const setPref = (patch: { display?: string; primary?: string; muted?: string[]; approvals?: boolean }) =>
     act(() => apiSend<AgentStatus>("/api/agent/prefs", "PUT", patch));
 
   const muted = new Set(st?.muted ?? []);
@@ -203,6 +203,28 @@ export function AgentCard() {
           ))}
         </div>
       )}
+
+      {/* MASTER kill-switch: approve/reject tools from the robot. OFF = never blocks your agent. */}
+      <div className="flex items-center gap-2 rounded-xl border border-line bg-card2 px-3 py-2">
+        <span className="text-sm">🔐</span>
+        <div className="min-w-0">
+          <div className="text-sm font-semibold">{tr("אישור פעולות מהרובוט", "Approve tools from the robot")}</div>
+          <div className="text-[11px] text-mute">
+            {st?.approvals
+              ? tr("פועל — פקודות ממתינות לאישור שלך", "On — commands wait for your approval")
+              : tr("כבוי — לא חוסם את הסוכן אף פעם", "Off — never blocks your agent")}
+          </div>
+        </div>
+        <button
+          className={`ms-auto shrink-0 rounded-full px-3 py-1 text-xs font-semibold transition disabled:opacity-50 ${
+            st?.approvals ? "bg-teal text-black" : "bg-line text-mute"
+          }`}
+          disabled={busy}
+          onClick={() => void setPref({ approvals: !st?.approvals })}
+        >
+          {st?.approvals ? tr("פועל", "ON") : tr("כבוי", "OFF")}
+        </button>
+      </div>
 
       {/* display mode — bubble (spoken) / badge (on-screen, needs fw v20) / both / off */}
       <div className="flex flex-wrap items-center gap-2">

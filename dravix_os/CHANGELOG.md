@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.0.78
+
+- **🔐 Master on/off for on-robot approvals — right on the dashboard.** A new toggle on the
+  AI-agent card turns the whole approve-tools-from-the-robot mechanism on or off, **no
+  `settings.json` needed**. It's **OFF by default**: with it off, a permission request
+  short-circuits on the server (nothing shown on the robot, `robot_ready:false`), so even an
+  installed `PreToolUse` hook **can never block your agent**. Flip it **on** only when you want
+  commands to wait for your tap. (Persisted; also in `/api/status` + `PUT /api/agent/prefs`.)
+
 ## 0.0.77
 
 - **Fix: the on-robot approval could stall your agent.** The permission hook makes each matched

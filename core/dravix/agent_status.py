@@ -109,7 +109,7 @@ class AgentPresence:
                 return store.agent_prefs()
             except Exception:  # noqa: BLE001
                 pass
-        return {"display": "both", "primary": "", "muted": []}
+        return {"display": "both", "primary": "", "muted": [], "approvals": False}
 
     # ── winner selection ────────────────────────────────────────────────────────────
     def _live(self, now: datetime.datetime) -> list[tuple[str, dict]]:
@@ -158,6 +158,7 @@ class AgentPresence:
             "display": prefs.get("display", "both"),
             "primary": prefs.get("primary", ""),
             "muted": prefs.get("muted", []),
+            "approvals": prefs.get("approvals", False),
             "palette": palette(),
             "permission": self.current_permission(now=stamp),
         }
@@ -304,6 +305,11 @@ class AgentPresence:
     async def request_permission(
         self, agent: str, tool: str = "", summary: str = "", *, now: datetime.datetime | None = None,
     ) -> dict:
+        # MASTER kill-switch (dashboard): when approvals are OFF, don't gate at all — no
+        # request, no robot prompt. robot_ready=False makes the agent's hook fall straight
+        # through to Claude Code's normal flow, so an installed hook can never block you.
+        if not self._prefs().get("approvals", False):
+            return {"decision": "disabled", "robot_ready": False}
         name = (agent or "agent").strip() or "agent"
         stamp = now or _utcnow()
         pid = uuid.uuid4().hex[:8]

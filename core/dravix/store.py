@@ -209,13 +209,21 @@ class Store:
         if display not in ("bubble", "badge", "both", "off"):
             display = "both"
         muted = [str(m) for m in (p.get("muted") or []) if str(m).strip()]
-        return {"display": display, "primary": str(p.get("primary", "")).strip(), "muted": muted}
+        return {
+            "display": display,
+            "primary": str(p.get("primary", "")).strip(),
+            "muted": muted,
+            # MASTER kill-switch for on-robot tool approvals. Default OFF so an installed
+            # PreToolUse hook can NEVER block the agent unless the user turns it on here.
+            "approvals": bool(p.get("approvals", False)),
+        }
 
     def set_agent_prefs(
         self,
         display: str | None = None,
         primary: str | None = None,
         muted: list[str] | None = None,
+        approvals: bool | None = None,
     ) -> None:
         p = self.agent_prefs()
         if display is not None:
@@ -224,6 +232,8 @@ class Store:
             p["primary"] = primary.strip()
         if muted is not None:
             p["muted"] = sorted({str(m).strip() for m in muted if str(m).strip()})
+        if approvals is not None:
+            p["approvals"] = bool(approvals)
         self._data["agent_prefs"] = p
         self.save()
 

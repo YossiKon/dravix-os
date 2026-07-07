@@ -69,6 +69,7 @@ class AgentPrefsBody(BaseModel):
     display: str | None = None   # bubble | badge | both | off
     primary: str | None = None   # pin an agent name (always wins), or "" for auto (most urgent)
     muted: list[str] | None = None  # agent names whose speech is silenced (still shown)
+    approvals: bool | None = None   # master on/off for on-robot tool approvals (default off)
 
 
 class AgentPermissionBody(BaseModel):
@@ -307,7 +308,9 @@ async def agent_prefs_set(body: AgentPrefsBody, request: Request):
     display = body.display
     if display is not None and display not in ("bubble", "badge", "both", "off"):
         raise HTTPException(status_code=400, detail="display must be bubble|badge|both|off")
-    store.set_agent_prefs(display=display, primary=body.primary, muted=body.muted)
+    store.set_agent_prefs(
+        display=display, primary=body.primary, muted=body.muted, approvals=body.approvals
+    )
     agent = getattr(request.app.state, "agent", None)
     return agent.snapshot() if agent is not None else {"ok": True}
 
