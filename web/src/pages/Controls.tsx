@@ -53,6 +53,7 @@ const BACKGROUNDS: [string, string, string][] = [
   ["Ocean", "🌊", "אוקיינוס"],
   ["Matrix", "🟩", "מטריקס"],
   ["Party", "🎉", "מסיבה"],
+  ["Arena", "🥊", "זירה"],
 ];
 
 // One grid, reused for accessories + backgrounds — POSTs {option} to its endpoint.

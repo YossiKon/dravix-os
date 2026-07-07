@@ -287,7 +287,7 @@ async def set_robot_accessory(body: AccessoryBody, request: Request):
 
 
 # The themed face backdrops the firmware's "Face background" select offers (default None).
-_BACKGROUNDS = ["None", "Space", "Sunset", "Ocean", "Matrix", "Party"]
+_BACKGROUNDS = ["None", "Space", "Sunset", "Ocean", "Matrix", "Party", "Arena"]
 
 
 @router.get("/api/robot/background")

@@ -1451,6 +1451,8 @@ lvgl:
             radius: 0
             border_width: 0
             bg_color: 0x000000
+            bg_grad_color: 0x000000
+            bg_grad_dir: VER
             bg_opa: COVER
         # background stars (shown only for the "Space" background; behind the face)
         - obj: { id: bg_star1, x: 30,  y: 28,  width: 4, height: 4, radius: 2, bg_color: 0xffffff, bg_opa: COVER, border_width: 0, hidden: true }
@@ -3920,7 +3922,7 @@ select:
     id: sel_background
     optimistic: true
     entity_category: config
-    options: ["None", "Space", "Sunset", "Ocean", "Matrix", "Party"]
+    options: ["None", "Space", "Sunset", "Ocean", "Matrix", "Party", "Arena"]
     initial_option: "None"
     on_value:
       - lvgl.widget.hide: bg_star1
@@ -3932,11 +3934,20 @@ select:
       - lvgl.widget.update:
           id: bg_rect
           bg_color: !lambda |-
-            if (x == "Space")  return lv_color_hex(0x080c18);
-            if (x == "Sunset") return lv_color_hex(0x2a1410);
-            if (x == "Ocean")  return lv_color_hex(0x061a2a);
-            if (x == "Matrix") return lv_color_hex(0x03120a);
-            if (x == "Party")  return lv_color_hex(0x160828);
+            if (x == "Space")  return lv_color_hex(0x0a1830);
+            if (x == "Sunset") return lv_color_hex(0x6a3016);
+            if (x == "Ocean")  return lv_color_hex(0x0d4a70);
+            if (x == "Matrix") return lv_color_hex(0x0c3418);
+            if (x == "Party")  return lv_color_hex(0x300a48);
+            if (x == "Arena")  return lv_color_hex(0x5a1818);
+            return lv_color_hex(0x000000);
+          bg_grad_color: !lambda |-
+            if (x == "Space")  return lv_color_hex(0x02040c);
+            if (x == "Sunset") return lv_color_hex(0x1e0a30);
+            if (x == "Ocean")  return lv_color_hex(0x03101e);
+            if (x == "Matrix") return lv_color_hex(0x020a04);
+            if (x == "Party")  return lv_color_hex(0x1e0722);
+            if (x == "Arena")  return lv_color_hex(0x0a0404);
             return lv_color_hex(0x000000);
       - if:
           condition: { lambda: 'return x == "Space";' }
