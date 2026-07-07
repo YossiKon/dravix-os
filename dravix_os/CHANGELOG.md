@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.0.77
+
+- **Fix: the on-robot approval could stall your agent.** The permission hook makes each matched
+  tool WAIT for you to tap Approve — if the robot wasn't being watched, commands stalled for the
+  full 120 s timeout. Now: (1) the default timeout is a short **20 s**; (2) the hook **fails open
+  instantly when the robot is offline** (the add-on reports `robot_ready`, no one to tap → don't
+  block); (3) the approval hook is now **opt-in / off by default** in the example config (only
+  the non-blocking status lamp is on by default), with a loud warning and how-to-disable in
+  docs/agent-bridge.md. If it's blocking you now: remove the `dravix-permission.py` `PreToolUse`
+  entry from `~/.claude/settings.json` (the status-lamp hooks never block).
+
 ## 0.0.76
 
 - **🌱 It becomes its own over weeks.** A new hidden **temperament** slowly drifts (a small,

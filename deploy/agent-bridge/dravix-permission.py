@@ -86,9 +86,11 @@ def main() -> None:
     base = os.environ.get("DRAVIX_URL", "http://localhost:8800").rstrip("/")
     token = os.environ.get("DRAVIX_TOKEN", "").strip()
     try:
-        deadline = time.time() + float(os.environ.get("DRAVIX_PERM_TIMEOUT", "120"))
+        # SHORT by default so a missed tap never freezes your agent for long. This hook makes
+        # each matched tool WAIT for your approval — keep the window small.
+        deadline = time.time() + float(os.environ.get("DRAVIX_PERM_TIMEOUT", "20"))
     except ValueError:
-        deadline = time.time() + 120
+        deadline = time.time() + 20
 
     tool, summary = _summary(payload)
     try:
@@ -98,6 +100,10 @@ def main() -> None:
         return  # robot/add-on unreachable → say nothing → Claude Code's normal flow
     pid = created.get("id")
     if not pid:
+        return
+    # FAIL OPEN FAST: if the robot isn't reachable there's realistically no one to tap Approve,
+    # so don't stall — fall straight through to Claude Code's normal prompt.
+    if created.get("robot_ready") is False:
         return
 
     while time.time() < deadline:

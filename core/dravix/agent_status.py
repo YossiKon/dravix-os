@@ -288,6 +288,19 @@ class AgentPresence:
             except Exception:  # noqa: BLE001 — the on-robot prompt is best-effort
                 pass
 
+    async def _robot_ready(self) -> bool:
+        """Is the robot actually reachable to show a prompt? Used so the agent's permission
+        hook can FAIL OPEN FAST (not stall) when there's realistically no one to tap — e.g.
+        the robot is offline. The live state sensor is our reachability proxy (None = offline);
+        backends without one (mock) are treated as ready so behaviour/tests are unchanged."""
+        reader = getattr(getattr(self._robot, "driver", None), "get_text", None)
+        if reader is None:
+            return True
+        try:
+            return (await reader("state_sensor")) is not None
+        except Exception:  # noqa: BLE001 — can't tell → assume not reachable, fail open fast
+            return False
+
     async def request_permission(
         self, agent: str, tool: str = "", summary: str = "", *, now: datetime.datetime | None = None,
     ) -> dict:
@@ -311,7 +324,11 @@ class AgentPresence:
         await self.set("waiting_permission", "", source=name, now=stamp)
         # …plus the Approve/Reject buttons + a compact ≤2-line summary on the robot's screen.
         await self._show_permission(_short_for_robot(f"{name}: {text}"))
-        return self.permission_view(pid, now=stamp)
+        view = self.permission_view(pid, now=stamp)
+        # tell the caller whether the robot can realistically be tapped, so its hook can fail
+        # open fast instead of stalling for the whole timeout when the robot is offline.
+        view["robot_ready"] = await self._robot_ready()
+        return view
 
     async def decide_permission(
         self, pid: str, decision: str, *, now: datetime.datetime | None = None,

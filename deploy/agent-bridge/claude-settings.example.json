@@ -1,20 +1,19 @@
 {
-  "//": "Claude Code hooks that drive the dravix robot status lamp. Merge the 'hooks' and",
-  "//2": "'env' blocks into your ~/.claude/settings.json (or .claude/settings.json in a project).",
-  "//3": "Replace PATH_TO with the real path to dravix-notify.py. On Windows use \"python\";",
-  "//4": "on macOS/Linux use \"python3\". Set DRAVIX_URL/DRAVIX_TOKEN to reach your add-on.",
+  "//": "Claude Code hooks that drive the dravix robot STATUS LAMP (safe — never blocks your agent).",
+  "//2": "Merge the 'hooks' and 'env' blocks into ~/.claude/settings.json (or a project's .claude/settings.json).",
+  "//3": "Replace PATH_TO with the real path. On Windows use \"python\"; on macOS/Linux use \"python3\".",
+  "//4": "Set DRAVIX_URL/DRAVIX_TOKEN to reach your add-on.",
   "env": {
     "DRAVIX_URL": "http://localhost:8800",
-    "DRAVIX_TOKEN": ""
+    "DRAVIX_TOKEN": "",
+    "DRAVIX_PERM_TIMEOUT": "20"
   },
   "hooks": {
     "UserPromptSubmit": [
       { "hooks": [{ "type": "command", "command": "python3 PATH_TO/dravix-notify.py working" }] }
     ],
     "PreToolUse": [
-      { "matcher": "*", "hooks": [{ "type": "command", "command": "python3 PATH_TO/dravix-notify.py working" }] },
-      { "//": "APPROVE/REJECT ON THE ROBOT — scope this to the tools you want to gate (e.g. Bash, or Bash|Write|Edit). Each matched tool waits for a robot tap (or the dashboard), then allow/deny. Remove this block if you don't want on-robot approvals.",
-        "matcher": "Bash", "hooks": [{ "type": "command", "command": "python3 PATH_TO/dravix-permission.py" }] }
+      { "matcher": "*", "hooks": [{ "type": "command", "command": "python3 PATH_TO/dravix-notify.py working" }] }
     ],
     "Notification": [
       { "hooks": [{ "type": "command", "command": "python3 PATH_TO/dravix-notify.py notify" }] }
@@ -25,5 +24,11 @@
     "SessionStart": [
       { "hooks": [{ "type": "command", "command": "python3 PATH_TO/dravix-notify.py idle" }] }
     ]
+  },
+
+  "_APPROVE_ON_ROBOT_OPT_IN": {
+    "warning": "OPTIONAL and OFF by default. This makes each matched tool WAIT until you tap Approve on the robot (or the dashboard). If you enable it and then aren't watching the robot, every matched command pauses up to DRAVIX_PERM_TIMEOUT seconds. Only add it if you truly want on-robot approvals.",
+    "how": "To enable: add the object below as a SECOND entry in the PreToolUse array above, and pick a NARROW matcher (not '*'). It fails open fast if the robot is offline. Keep DRAVIX_PERM_TIMEOUT small (e.g. 20).",
+    "entry": { "matcher": "Bash", "hooks": [{ "type": "command", "command": "python3 PATH_TO/dravix-permission.py" }] }
   }
 }

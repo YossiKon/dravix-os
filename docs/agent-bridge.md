@@ -103,24 +103,33 @@ the endpoint above.
 | `Stop` | it finishes the turn | `done` |
 | `SessionStart` | a session opens | `idle` |
 
-## Approve / reject a tool from the robot
+## Approve / reject a tool from the robot (OPT-IN — off by default)
 
 Close the loop: when Claude Code is about to run a tool, the **robot pops Approve / Reject
-buttons** on its screen (fw **v21**) and you tap to allow or block it — no reaching for the
-keyboard. You can decide from the dashboard's AI-agent card too.
+buttons** on its screen (fw **v21**) and you tap to allow or block it. You can decide from the
+dashboard's AI-agent card too.
+
+> ⚠️ **This one makes your agent WAIT.** Unlike the status lamp, the approval hook *pauses*
+> every matched tool until you approve. If you enable it and then aren't watching the robot,
+> each matched command stalls (up to `DRAVIX_PERM_TIMEOUT`) before falling back. So it's **off
+> by default** — you add it deliberately. Safeguards: the timeout defaults to a short **20 s**,
+> and it **fails open instantly if the robot is offline** (no one to tap → don't block).
+
+To enable:
 
 1. Copy [`deploy/agent-bridge/dravix-permission.py`](../deploy/agent-bridge/dravix-permission.py)
    next to the other bridge script.
-2. In `claude-settings.example.json` there's a second `PreToolUse` entry that runs it. **Scope
-   its `matcher`** to the tools you want to gate — `"Bash"` (commands) or `"Bash|Write|Edit"`
-   (commands + file changes). Every matched tool then waits for your tap.
-3. Tap **Approve** → the tool runs. Tap **Reject** → it's blocked. **Or decide with your hand
-   on the robot's head** (touch zones 1–2, fw **v23**): a **quick tap → Approve** (it nuzzles
-   happily), a **3-second hold → Reject** (it shakes its head "no"). This only happens while a
-   prompt is showing; the rest of the time a head touch is just a pet, and the back-of-head
-   tickle is unchanged. If you don't answer within `DRAVIX_PERM_TIMEOUT` (default 120 s) or the
-   robot is unreachable, it **falls back to Claude Code's normal prompt** — it never hard-blocks
-   you.
+2. Add the `_APPROVE_ON_ROBOT_OPT_IN.entry` object from `claude-settings.example.json` as a
+   **second** `PreToolUse` entry, with a **narrow `matcher`** (e.g. `"Bash"` — never `"*"`).
+3. Keep `DRAVIX_PERM_TIMEOUT` small (20 s). Tap **Approve** → runs; **Reject** → blocked. **Or
+   decide with your hand on the robot's head** (touch zones 1–2, fw **v23**): a **quick tap →
+   Approve** (nuzzle), a **3-second hold → Reject** (head-shake). This only happens while a
+   prompt is showing; otherwise a head touch is just a pet.
+
+**To turn it off / if it's blocking you:** remove that second `PreToolUse` entry from your
+`~/.claude/settings.json` (the status-lamp hooks are separate and never block). Or set
+`DRAVIX_PERM_TIMEOUT` very low. If it times out or the robot is unreachable it **falls back to
+Claude Code's normal prompt** — it never hard-blocks you.
 
 Under the hood: the hook POSTs `/api/agent/permission`, the robot (and dashboard) show the
 request, your tap fires `esphome.dravix_permission` back to dravix, and the hook returns
