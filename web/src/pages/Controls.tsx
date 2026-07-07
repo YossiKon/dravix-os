@@ -45,7 +45,6 @@ const ACCESSORIES: [string, string, string][] = [
   ["Shirt", "👔", "חולצה"],
   ["Necklace", "📿", "שרשרת"],
   ["Gold chain", "⛓️", "שרשרת זהב"],
-  ["Antennae", "📡", "אנטנות"],
 ];
 
 const BACKGROUNDS: [string, string, string][] = [

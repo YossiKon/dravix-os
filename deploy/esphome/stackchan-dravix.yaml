@@ -4018,7 +4018,7 @@ select:
     id: sel_accessory
     optimistic: true
     entity_category: config
-    options: ["None", "Glasses", "Sunglasses", "Top hat", "Cap", "Crown", "Bow tie", "Headphones", "Halo", "Monocle", "Flower", "Mongkhon", "Boxing gloves", "Fight band", "Fight shorts", "Cat ears", "Beard", "Eye patch", "Mustache", "Shirt", "Necklace", "Gold chain", "Antennae"]
+    options: ["None", "Glasses", "Sunglasses", "Top hat", "Cap", "Crown", "Bow tie", "Headphones", "Halo", "Monocle", "Flower", "Mongkhon", "Boxing gloves", "Fight band", "Fight shorts", "Cat ears", "Beard", "Eye patch", "Mustache", "Shirt", "Necklace", "Gold chain"]
     initial_option: "None"
     on_value:
       - lvgl.widget.hide: acc_lens_l
@@ -4072,11 +4072,6 @@ select:
       - lvgl.widget.hide: acc_mts_w
       - lvgl.widget.hide: acc_mts_s
       - globals.set: { id: g_gloves, value: "false" }
-      - globals.set: { id: g_ant, value: "false" }
-      - lvgl.widget.hide: ant_l
-      - lvgl.widget.hide: ant_r
-      - lvgl.widget.hide: ant_lb
-      - lvgl.widget.hide: ant_rb
       - if:
           condition: { lambda: 'return x == "Glasses";' }
           then:
@@ -4198,14 +4193,6 @@ select:
           then:
             - lvgl.widget.show: acc_bling
             - lvgl.widget.show: acc_bling2
-      - if:
-          condition: { lambda: 'return x == "Antennae";' }
-          then:
-            - lvgl.widget.show: ant_l
-            - lvgl.widget.show: ant_r
-            - lvgl.widget.show: ant_lb
-            - lvgl.widget.show: ant_rb
-            - globals.set: { id: g_ant, value: "true" }
   - platform: template
     name: "Face"
     id: robot_face
