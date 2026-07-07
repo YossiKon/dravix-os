@@ -1452,6 +1452,13 @@ lvgl:
             border_width: 0
             bg_color: 0x000000
             bg_opa: COVER
+        # background stars (shown only for the "Space" background; behind the face)
+        - obj: { id: bg_star1, x: 30,  y: 28,  width: 4, height: 4, radius: 2, bg_color: 0xffffff, bg_opa: COVER, border_width: 0, hidden: true }
+        - obj: { id: bg_star2, x: 284, y: 40,  width: 3, height: 3, radius: 2, bg_color: 0xffffff, bg_opa: COVER, border_width: 0, hidden: true }
+        - obj: { id: bg_star3, x: 58,  y: 206, width: 3, height: 3, radius: 2, bg_color: 0xcfe4ff, bg_opa: COVER, border_width: 0, hidden: true }
+        - obj: { id: bg_star4, x: 294, y: 196, width: 4, height: 4, radius: 2, bg_color: 0xffffff, bg_opa: COVER, border_width: 0, hidden: true }
+        - obj: { id: bg_star5, x: 158, y: 16,  width: 3, height: 3, radius: 2, bg_color: 0xffe9a8, bg_opa: COVER, border_width: 0, hidden: true }
+        - obj: { id: bg_star6, x: 18,  y: 118, width: 3, height: 3, radius: 2, bg_color: 0xffffff, bg_opa: COVER, border_width: 0, hidden: true }
         # ── the pet face: everything lives in face_box so it can "look around" as one ──
         - obj:
             id: face_box
@@ -3880,6 +3887,39 @@ script:
             - delay: 900ms
             - script.execute: { id: head_nudge, dx: -14, dy: 0 }   # ...huffy turn away
 select:
+  # ── FACE BACKGROUND — a themed backdrop behind the face. Default None (black). ──
+  - platform: template
+    name: "Face background"
+    id: sel_background
+    optimistic: true
+    entity_category: config
+    options: ["None", "Space", "Sunset", "Ocean", "Matrix", "Party"]
+    initial_option: "None"
+    on_value:
+      - lvgl.widget.hide: bg_star1
+      - lvgl.widget.hide: bg_star2
+      - lvgl.widget.hide: bg_star3
+      - lvgl.widget.hide: bg_star4
+      - lvgl.widget.hide: bg_star5
+      - lvgl.widget.hide: bg_star6
+      - lvgl.widget.update:
+          id: bg_rect
+          bg_color: !lambda |-
+            if (x == "Space")  return lv_color_hex(0x080c18);
+            if (x == "Sunset") return lv_color_hex(0x2a1410);
+            if (x == "Ocean")  return lv_color_hex(0x061a2a);
+            if (x == "Matrix") return lv_color_hex(0x03120a);
+            if (x == "Party")  return lv_color_hex(0x160828);
+            return lv_color_hex(0x000000);
+      - if:
+          condition: { lambda: 'return x == "Space";' }
+          then:
+            - lvgl.widget.show: bg_star1
+            - lvgl.widget.show: bg_star2
+            - lvgl.widget.show: bg_star3
+            - lvgl.widget.show: bg_star4
+            - lvgl.widget.show: bg_star5
+            - lvgl.widget.show: bg_star6
   # ── FACE ACCESSORY — pick a cosmetic from the dashboard / HA. Default None (bare face). ──
   - platform: template
     name: "Face accessory"
