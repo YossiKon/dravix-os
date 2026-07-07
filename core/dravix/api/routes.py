@@ -251,6 +251,8 @@ _ACCESSORIES = [
     "None", "Glasses", "Sunglasses", "Top hat", "Cap", "Crown",
     "Bow tie", "Headphones", "Halo", "Monocle", "Flower",
     "Mongkhon", "Boxing gloves", "Fight band",
+    "Cat ears", "Beard", "Eye patch", "Mustache",
+    "Shirt", "Necklace", "Gold chain",
 ]
 
 

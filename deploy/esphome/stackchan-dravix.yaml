@@ -1556,6 +1556,23 @@ lvgl:
               - obj: { id: acc_fb, align: CENTER, x: 0, y: -38, width: 132, height: 14, radius: 3, bg_color: 0xc0392b, bg_opa: COVER, border_width: 0, hidden: true }   # fight headband
               - obj: { id: acc_fb_s, align: CENTER, x: 0, y: -38, width: 132, height: 4, radius: 0, bg_color: 0xf0c040, bg_opa: COVER, border_width: 0, hidden: true }   # gold stripe
               - obj: { id: acc_fb_k, align: CENTER, x: -66, y: -38, width: 14, height: 22, radius: 3, bg_color: 0xc0392b, bg_opa: COVER, border_width: 0, hidden: true }   # side knot
+              # ── fun set: cat ears / beard / eye patch / mustache ──
+              - obj: { id: acc_ce_l, align: CENTER, x: -50, y: -60, width: 26, height: 28, radius: 6, bg_color: 0x33292f, bg_opa: COVER, border_width: 0, hidden: true }   # cat ear
+              - obj: { id: acc_ce_r, align: CENTER, x: 50,  y: -60, width: 26, height: 28, radius: 6, bg_color: 0x33292f, bg_opa: COVER, border_width: 0, hidden: true }
+              - obj: { id: acc_ce_li, align: CENTER, x: -50, y: -56, width: 12, height: 16, radius: 4, bg_color: 0xff9eb5, bg_opa: COVER, border_width: 0, hidden: true }   # inner ear
+              - obj: { id: acc_ce_ri, align: CENTER, x: 50,  y: -56, width: 12, height: 16, radius: 4, bg_color: 0xff9eb5, bg_opa: COVER, border_width: 0, hidden: true }
+              - obj: { id: acc_beard, align: CENTER, x: 0, y: 84, width: 84, height: 36, radius: 18, bg_color: 0x4a3b2a, bg_opa: COVER, border_width: 0, hidden: true }   # beard
+              - obj: { id: acc_ep, align: CENTER, x: -58, y: 0, width: 54, height: 48, radius: 8, bg_color: 0x141414, bg_opa: COVER, border_width: 0, hidden: true }   # eye patch
+              - obj: { id: acc_ep_s, align: CENTER, x: 0, y: -16, width: 168, height: 5, radius: 0, bg_color: 0x141414, bg_opa: COVER, border_width: 0, hidden: true }   # patch strap
+              - obj: { id: acc_mu, align: CENTER, x: 0, y: 50, width: 60, height: 14, radius: 7, bg_color: 0x2a1a10, bg_opa: COVER, border_width: 0, hidden: true }   # mustache
+              # ── body / neck at the bottom of the face: shirt + collar / necklace / gold chain ──
+              - obj: { id: acc_shirt, align: CENTER, x: 0, y: 98, width: 232, height: 24, radius: 6, bg_color: 0x3a6ea5, bg_opa: COVER, border_width: 0, hidden: true }   # shirt
+              - obj: { id: acc_col_l, align: CENTER, x: -20, y: 82, width: 24, height: 20, radius: 3, bg_color: 0xeef2f6, bg_opa: COVER, border_width: 0, hidden: true }   # collar
+              - obj: { id: acc_col_r, align: CENTER, x: 20,  y: 82, width: 24, height: 20, radius: 3, bg_color: 0xeef2f6, bg_opa: COVER, border_width: 0, hidden: true }
+              - obj: { id: acc_nk, align: CENTER, x: 0, y: 80, width: 72, height: 10, radius: 5, bg_color: 0xf2c14e, bg_opa: COVER, border_width: 0, hidden: true }   # necklace band
+              - obj: { id: acc_nk_p, align: CENTER, x: 0, y: 92, width: 14, height: 16, radius: 4, bg_color: 0xf2c14e, bg_opa: COVER, border_width: 0, hidden: true }   # pendant
+              - obj: { id: acc_bling, align: CENTER, x: 0, y: 82, width: 104, height: 14, radius: 7, bg_color: 0xffd54a, bg_opa: COVER, border_width: 2, border_color: 0xc79a2a, hidden: true }   # gold chain
+              - obj: { id: acc_bling2, align: CENTER, x: 0, y: 96, width: 66, height: 12, radius: 6, bg_color: 0xffd54a, bg_opa: COVER, border_width: 2, border_color: 0xc79a2a, hidden: true }
               # a glass of water (glass body + a blue fill that drops as it drinks)
               - obj: { id: drink_glass, align: CENTER, x: 0, y: 86, width: 26, height: 34, radius: 4, bg_color: 0xBFE8FF, bg_opa: COVER, border_width: 2, border_color: 0xFFFFFF, hidden: true }
               - obj: { id: drink_water, align: CENTER, x: 0, y: 96, width: 20, height: 18, radius: 2, bg_color: 0x4FC3F7, bg_opa: COVER, border_width: 0, hidden: true }
@@ -3936,7 +3953,7 @@ select:
     id: sel_accessory
     optimistic: true
     entity_category: config
-    options: ["None", "Glasses", "Sunglasses", "Top hat", "Cap", "Crown", "Bow tie", "Headphones", "Halo", "Monocle", "Flower", "Mongkhon", "Boxing gloves", "Fight band"]
+    options: ["None", "Glasses", "Sunglasses", "Top hat", "Cap", "Crown", "Bow tie", "Headphones", "Halo", "Monocle", "Flower", "Mongkhon", "Boxing gloves", "Fight band", "Cat ears", "Beard", "Eye patch", "Mustache", "Shirt", "Necklace", "Gold chain"]
     initial_option: "None"
     on_value:
       - lvgl.widget.hide: acc_lens_l
@@ -3971,6 +3988,21 @@ select:
       - lvgl.widget.hide: acc_fb
       - lvgl.widget.hide: acc_fb_s
       - lvgl.widget.hide: acc_fb_k
+      - lvgl.widget.hide: acc_ce_l
+      - lvgl.widget.hide: acc_ce_r
+      - lvgl.widget.hide: acc_ce_li
+      - lvgl.widget.hide: acc_ce_ri
+      - lvgl.widget.hide: acc_beard
+      - lvgl.widget.hide: acc_ep
+      - lvgl.widget.hide: acc_ep_s
+      - lvgl.widget.hide: acc_mu
+      - lvgl.widget.hide: acc_shirt
+      - lvgl.widget.hide: acc_col_l
+      - lvgl.widget.hide: acc_col_r
+      - lvgl.widget.hide: acc_nk
+      - lvgl.widget.hide: acc_nk_p
+      - lvgl.widget.hide: acc_bling
+      - lvgl.widget.hide: acc_bling2
       - if:
           condition: { lambda: 'return x == "Glasses";' }
           then:
@@ -4049,6 +4081,42 @@ select:
             - lvgl.widget.show: acc_fb
             - lvgl.widget.show: acc_fb_s
             - lvgl.widget.show: acc_fb_k
+      - if:
+          condition: { lambda: 'return x == "Cat ears";' }
+          then:
+            - lvgl.widget.show: acc_ce_l
+            - lvgl.widget.show: acc_ce_r
+            - lvgl.widget.show: acc_ce_li
+            - lvgl.widget.show: acc_ce_ri
+      - if:
+          condition: { lambda: 'return x == "Beard";' }
+          then:
+            - lvgl.widget.show: acc_beard
+      - if:
+          condition: { lambda: 'return x == "Eye patch";' }
+          then:
+            - lvgl.widget.show: acc_ep
+            - lvgl.widget.show: acc_ep_s
+      - if:
+          condition: { lambda: 'return x == "Mustache";' }
+          then:
+            - lvgl.widget.show: acc_mu
+      - if:
+          condition: { lambda: 'return x == "Shirt";' }
+          then:
+            - lvgl.widget.show: acc_shirt
+            - lvgl.widget.show: acc_col_l
+            - lvgl.widget.show: acc_col_r
+      - if:
+          condition: { lambda: 'return x == "Necklace";' }
+          then:
+            - lvgl.widget.show: acc_nk
+            - lvgl.widget.show: acc_nk_p
+      - if:
+          condition: { lambda: 'return x == "Gold chain";' }
+          then:
+            - lvgl.widget.show: acc_bling
+            - lvgl.widget.show: acc_bling2
   - platform: template
     name: "Face"
     id: robot_face

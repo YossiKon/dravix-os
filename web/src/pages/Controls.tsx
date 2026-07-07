@@ -37,6 +37,13 @@ const ACCESSORIES: [string, string, string][] = [
   ["Mongkhon", "🥋", "מונגקון"],
   ["Boxing gloves", "🥊", "כפפות אגרוף"],
   ["Fight band", "🇹🇭", "סרט לחימה"],
+  ["Cat ears", "🐱", "אוזני חתול"],
+  ["Beard", "🧔", "זקן"],
+  ["Eye patch", "🏴‍☠️", "טלאי עין"],
+  ["Mustache", "🥸", "שפם"],
+  ["Shirt", "👔", "חולצה"],
+  ["Necklace", "📿", "שרשרת"],
+  ["Gold chain", "⛓️", "שרשרת זהב"],
 ];
 
 const BACKGROUNDS: [string, string, string][] = [
