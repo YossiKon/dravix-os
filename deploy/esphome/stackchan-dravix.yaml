@@ -116,6 +116,16 @@ esp32:
       # Also route TLS / encryption (mbedTLS) buffers to PSRAM — these are big and only needed
       # during secure connections, so they don't belong in the scarce internal RAM either.
       CONFIG_MBEDTLS_EXTERNAL_MEM_ALLOC: "y"
+      # BOOT-OOM FIX (2026-07-07): the extra accessory/card/chip widgets this session finally
+      # re-exhausted the internal heap — the board got WiFi but crashed during LVGL widget
+      # creation before the API even came up (HA showed the device online yet every entity
+      # "unavailable"; ESPHome API port 6053 = "Connect call failed"). Let the GENERAL allocator
+      # spill to PSRAM too: anything larger than 4KB (LVGL draw/label buffers, big objects) goes
+      # to the 8MB PSRAM instead of the ~300KB internal heap, while 40KB stays reserved internal
+      # for DMA-only buffers. Keeps every feature — no pages/games removed.
+      CONFIG_SPIRAM_USE_MALLOC: "y"
+      CONFIG_SPIRAM_MALLOC_ALWAYSINTERNAL: "4096"
+      CONFIG_SPIRAM_MALLOC_RESERVE_INTERNAL: "40960"
       # TASK-WATCHDOG RESET FIX (diagnosed live 2026-07-04: Reset Reason = "task
       # watchdog", loop ~170ms, full-screen LVGL flush = 61ms each). This firmware's
       # main loop is legitimately heavy (LVGL + wake-word inference + I2C sensors +
