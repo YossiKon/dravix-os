@@ -2756,6 +2756,7 @@ script:
       - script.stop: identify
       - globals.set: { id: g_flash,  value: "false" }
       - globals.set: { id: g_listen, value: "false" }
+      - globals.set: { id: g_think,  value: "false" }   # else STOP mid-"thinking" leaves the face + HA state stuck
       - globals.set: { id: g_talk,   value: "false" }
       - globals.set: { id: g_voice,  value: "false" }
       - light.turn_off: stackchan_light_bar     # no LEDs — back to a clean state

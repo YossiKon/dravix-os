@@ -1733,7 +1733,17 @@ async def put_screens(body: ScreensBody, request: Request):
         entities = card.get("entities", [])
         if not isinstance(entities, list) or any(not isinstance(e, str) for e in entities):
             raise HTTPException(status_code=400, detail="card 'entities' must be a list of ids")
-        clean.append({"title": str(card.get("title", "")), "entities": entities})
+        # Keep the per-entity {x,y} layout from the drag editor (validated). Without this the
+        # whole free-positioning feature was silently dropped here before reaching the store —
+        # the robot only ever saw the default stacked rows. Filter to known entities + numeric xy.
+        raw_layout = card.get("layout") or {}
+        layout: dict = {}
+        if isinstance(raw_layout, dict):
+            for eid, xy in raw_layout.items():
+                if (eid in entities and isinstance(xy, (list, tuple)) and len(xy) == 2
+                        and all(isinstance(v, (int, float)) for v in xy)):
+                    layout[eid] = [int(xy[0]), int(xy[1])]
+        clean.append({"title": str(card.get("title", "")), "entities": entities, "layout": layout})
     request.app.state.store.set_screens(clean)  # the pusher reads these live
     return {"screens": request.app.state.store.screens()}
 

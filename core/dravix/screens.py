@@ -159,6 +159,12 @@ class ScreenPusher:
             if not text:
                 onoff = _onoff(entity_id, state)
                 text = f"{name}   {onoff}" if onoff is not None else f"{name}  {state}"
+            # "\n" and "|" are OUR row/position delimiters — an entity's own name/state must never
+            # inject them: a newline would split one entity into two firmware rows, shifting every
+            # row below it so a tap fires the WRONG device; a "|" could be mis-parsed as a position
+            # prefix. Also cap each row so the "x,y|" prefixes below can't be sliced by the 160-char
+            # body cap (which would drop a position and print a stray coordinate fragment).
+            text = text.replace("\n", " ").replace("\r", " ").replace("|", "/")[:32]
             # free-positioning prefix "x,y|" (from the dashboard drag editor); the firmware
             # moves that row to (x, y). No layout entry → no prefix → the default stacked rows.
             pos = layout.get(entity_id)
