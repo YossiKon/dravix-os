@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.0.79
+
+- **🩺 New "Diagnostics" tab — see WHY the robot freezes/resets, right on the dashboard.** Live robot
+  health, read off Home Assistant every 5 s with **zero extra load on the robot** (the ESPHome debug
+  sensors already publish): **Free RAM (heap)**, Largest Block, **Loop Time**, **Uptime**, Free PSRAM,
+  WiFi, and the **last Reset Reason** — colour-coded (red when heap is low, loop-time spikes, or uptime
+  stays low = it's resetting). Plus an **add-on Logs viewer** (in-memory ring buffer, newest last) with
+  an all/warnings filter and a **Copy-all** button, so errors can be captured and sent along.
+- **🖱️ Screens is now a drag-and-drop layout editor.** Each card is a live 320×240 preview of the
+  robot's screen — drag entities anywhere (pointer-based, works on touch) and the robot places each row
+  exactly there, Mushroom-style with a colour chip by state.
+- **🔒 Fix: a card tap could hit the WRONG device.** An entity whose name/state contained a newline
+  split into two rows, shifting every row below it, so a tap fired the wrong entity (e.g. a lock instead
+  of a lamp). Now sanitized. Also fixes the drag-editor layout being silently dropped by the API before
+  it reached the robot, and STOP (triple-tap) not clearing the "thinking" state.
+
 ## 0.0.78
 
 - **🔐 Master on/off for on-robot approvals — right on the dashboard.** A new toggle on the
