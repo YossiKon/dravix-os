@@ -373,6 +373,7 @@ globals:
   - { id: perm_dec, type: int, restore_value: false, initial_value: "0" }   # last decision: 1 approve · 2 reject
   - { id: g_apulse, type: bool, restore_value: false, initial_value: "false" }  # AI-agent "working" pulse phase
   - { id: g_gloves, type: bool, restore_value: false, initial_value: "false" }  # boxing-gloves accessory is on → arms the auto-punch
+  - { id: g_wink,   type: bool, restore_value: false, initial_value: "false" }  # this blink is a one-eyed wink
   # ── DOOM-3D — a real first-person raycaster: joystick turns/walks, the button shoots ──
   - { id: r3_px,   type: float, restore_value: false, initial_value: "2.5" }   # player x (map units)
   - { id: r3_py,   type: float, restore_value: false, initial_value: "2.5" }   # player y
@@ -1579,6 +1580,16 @@ lvgl:
               - obj: { id: acc_mts, align: CENTER, x: 0, y: 100, width: 170, height: 22, radius: 4, bg_color: 0xc02020, bg_opa: COVER, border_width: 0, hidden: true }   # Muay Thai trunks
               - obj: { id: acc_mts_w, align: CENTER, x: 0, y: 90, width: 170, height: 10, radius: 2, bg_color: 0xf0c040, bg_opa: COVER, border_width: 0, hidden: true }   # waistband
               - obj: { id: acc_mts_s, align: CENTER, x: 0, y: 102, width: 6, height: 20, radius: 0, bg_color: 0x3a0a0a, bg_opa: COVER, border_width: 0, hidden: true }   # leg split
+              # ── sparkles (shown while happy / in love) ──
+              - obj: { id: sp_1, align: CENTER, x: -92, y: -36, width: 9, height: 9, radius: 4, bg_color: 0xffe14a, bg_opa: COVER, border_width: 0, hidden: true }
+              - obj: { id: sp_2, align: CENTER, x: 92,  y: -28, width: 7, height: 7, radius: 3, bg_color: 0xfff2a0, bg_opa: COVER, border_width: 0, hidden: true }
+              - obj: { id: sp_3, align: CENTER, x: -82, y: 46,  width: 7, height: 7, radius: 3, bg_color: 0xfff2a0, bg_opa: COVER, border_width: 0, hidden: true }
+              - obj: { id: sp_4, align: CENTER, x: 86,  y: 42,  width: 9, height: 9, radius: 4, bg_color: 0xffe14a, bg_opa: COVER, border_width: 0, hidden: true }
+              # ── antennae (always on; wiggle gently) ──
+              - obj: { id: ant_l, align: CENTER, x: -54, y: -84, width: 4, height: 18, radius: 2, bg_color: 0x1f9e88, bg_opa: COVER, border_width: 0 }
+              - obj: { id: ant_r, align: CENTER, x: 54,  y: -84, width: 4, height: 18, radius: 2, bg_color: 0x1f9e88, bg_opa: COVER, border_width: 0 }
+              - obj: { id: ant_lb, align: CENTER, x: -54, y: -94, width: 11, height: 11, radius: 6, bg_color: 0x33E6C8, bg_opa: COVER, border_width: 0 }
+              - obj: { id: ant_rb, align: CENTER, x: 54,  y: -94, width: 11, height: 11, radius: 6, bg_color: 0x33E6C8, bg_opa: COVER, border_width: 0 }
               # a glass of water (glass body + a blue fill that drops as it drinks)
               - obj: { id: drink_glass, align: CENTER, x: 0, y: 86, width: 26, height: 34, radius: 4, bg_color: 0xBFE8FF, bg_opa: COVER, border_width: 2, border_color: 0xFFFFFF, hidden: true }
               - obj: { id: drink_water, align: CENTER, x: 0, y: 96, width: 20, height: 18, radius: 2, bg_color: 0x4FC3F7, bg_opa: COVER, border_width: 0, hidden: true }
@@ -3582,10 +3593,16 @@ script:
           condition: { lambda: 'return id(g_sleep);' }
           then:
             - script.execute: { id: set_eyes, w: 60, h: 10, r: 5, dy: 8 }
-      - if:  # blink
+      - if:  # blink — or a one-eyed wink
           condition: { lambda: 'return !id(g_sleep) && id(g_blink);' }
           then:
-            - script.execute: { id: set_eyes, w: 64, h: 10, r: 5, dy: 0 }
+            - if:
+                condition: { lambda: 'return id(g_wink);' }
+                then:
+                  - lvgl.widget.update: { id: eye_l, width: 64, height: 10, radius: 5, y: 0 }
+                  - lvgl.widget.update: { id: eye_r, width: 64, height: 60, radius: 22, y: 0 }
+                else:
+                  - script.execute: { id: set_eyes, w: 64, h: 10, r: 5, dy: 0 }
       - if:  # listening → big curious eyes
           condition: { lambda: 'return !id(g_sleep) && !id(g_blink) && id(g_listen);' }
           then:
@@ -3694,6 +3711,19 @@ script:
           condition: { lambda: 'return id(g_busy) && !id(g_sleep) && !id(g_saver);' }
           then: [ { lvgl.widget.show: sweat } ]
           else: [ { lvgl.widget.hide: sweat } ]
+      # sparkles pop when it's happy or in love (and idle)
+      - if:
+          condition: { lambda: 'return (id(g_expr) == 1 || id(g_expr) == 6) && !id(g_sleep) && !id(g_saver) && !id(g_listen) && !id(g_talk) && !id(g_think);' }
+          then:
+            - lvgl.widget.show: sp_1
+            - lvgl.widget.show: sp_2
+            - lvgl.widget.show: sp_3
+            - lvgl.widget.show: sp_4
+          else:
+            - lvgl.widget.hide: sp_1
+            - lvgl.widget.hide: sp_2
+            - lvgl.widget.hide: sp_3
+            - lvgl.widget.hide: sp_4
       # Publish the live state to HA (only when it actually changed).
       - lambda: |-
           std::string s = id(g_sleep)  ? "sleep"
@@ -5003,6 +5033,17 @@ interval:
               - lambda: 'return id(g_gloves) && !id(g_sleep) && !id(g_saver) && !id(g_voice) && !id(g_flash) && random_float() < 0.55;'
           then:
             - script.execute: punch
+  # ANTENNAE wiggle — the two head antennae sway their tips gently (face page, awake).
+  - interval: 700ms
+    then:
+      - if:
+          condition:
+            and:
+              - lvgl.page.is_showing: page_face
+              - lambda: 'return !id(g_sleep);'
+          then:
+            - lvgl.widget.update: { id: ant_lb, x: !lambda 'return (id(g_anim) % 2) ? -58 : -50;' }
+            - lvgl.widget.update: { id: ant_rb, x: !lambda 'return (id(g_anim) % 2) ? 50 : 58;' }
   # SLEEP BREATHING — while asleep ON THE CHARGER, the LED bar "breathes" very dimly
   # (the EMO/Vector charger-snooze everyone loves). Gated on Mood LEDs; goes fully
   # dark the moment it wakes or is unplugged.
@@ -5031,10 +5072,12 @@ interval:
           condition:
             lambda: 'return id(sw_blink).state && !id(g_sleep) && !id(g_talk) && !id(g_listen) && random_float() < 0.22;'
           then:
+            - globals.set: { id: g_wink, value: !lambda 'return random_float() < 0.30;' }   # ~1 in 3 is a wink
             - globals.set: { id: g_blink, value: "true" }
             - script.execute: render_face
             - delay: 160ms
             - globals.set: { id: g_blink, value: "false" }
+            - globals.set: { id: g_wink, value: "false" }
             - script.execute: render_face
   # Sleep "zzz" + talking mouth + screensaver breathing animation.
   - interval: 600ms
