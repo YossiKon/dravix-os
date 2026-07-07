@@ -2287,7 +2287,18 @@ lvgl:
         - obj: { id: d3_barrel, x: 150, y: 138, width: 20, height: 18, radius: 3, bg_color: 0x1a1a1a, bg_opa: COVER, border_width: 0 }
         - obj: { id: d3_muzzle, x: 148, y: 120, width: 24, height: 20, radius: 10, bg_color: 0xffd23a, bg_opa: COVER, border_width: 0, hidden: true }
         - label: { id: d3_cross, text: "+", text_font: title_font, text_color: 0xE8E8E8, align: CENTER, y: -22 }
-        - label: { id: d3_hud, text: "HP 100    AMMO 50", text_font: small_font, text_color: 0x33E6C8, align: BOTTOM_MID, y: -3 }
+        - obj:   { id: d3_bartop, x: 0, y: 196, width: 320, height: 3,  radius: 0, bg_color: 0x8a744a, bg_opa: COVER, border_width: 0 }
+        - obj:   { id: d3_bar,    x: 0, y: 199, width: 320, height: 41, radius: 0, bg_color: 0x33281a, bg_opa: COVER, border_width: 0 }
+        - label: { id: d3_ammo_n,  text: "50",  text_font: text_font,  text_color: 0xffcf7a, align: TOP_LEFT,  x: 12,  y: 202 }
+        - label: { text: "AMMO",                text_font: small_font, text_color: 0x9a8352, align: TOP_LEFT,  x: 12,  y: 224 }
+        - label: { id: d3_hp_n,    text: "100", text_font: text_font,  text_color: 0xff8a6a, align: TOP_LEFT,  x: 72,  y: 202 }
+        - label: { text: "HEALTH",              text_font: small_font, text_color: 0x9a8352, align: TOP_LEFT,  x: 72,  y: 224 }
+        - obj:   { id: d3_face,  x: 145, y: 201, width: 30, height: 36, radius: 3, bg_color: 0xc0895a, bg_opa: COVER, border_width: 2, border_color: 0x2a1808 }
+        - obj:   { id: d3_eyeL,  x: 151, y: 210, width: 5,  height: 6,  radius: 0, bg_color: 0x201008, bg_opa: COVER, border_width: 0 }
+        - obj:   { id: d3_eyeR,  x: 163, y: 210, width: 5,  height: 6,  radius: 0, bg_color: 0x201008, bg_opa: COVER, border_width: 0 }
+        - obj:   { id: d3_mouth, x: 151, y: 227, width: 18, height: 4,  radius: 0, bg_color: 0x3a1810, bg_opa: COVER, border_width: 0 }
+        - label: { id: d3_kills_n, text: "0",   text_font: text_font,  text_color: 0xffcf7a, align: TOP_RIGHT, x: -14, y: 202 }
+        - label: { text: "KILLS",               text_font: small_font, text_color: 0x9a8352, align: TOP_RIGHT, x: -14, y: 224 }
         - obj: { id: d3_blood, x: 0, y: 0, width: 320, height: 240, radius: 0, bg_color: 0xcc0000, bg_opa: 40%, border_width: 0, hidden: true }
         - label: { id: d3_over, text: "", text_font: title_font, text_color: 0xff5555, align: CENTER, y: 6 }
         - button:
@@ -4467,14 +4478,14 @@ interval:
           then:
             - lambda: |-
                 static const uint8_t M[8][8] = {
-                  {1,1,1,1,1,1,1,1},
-                  {1,0,0,0,0,0,0,1},
-                  {1,0,0,1,1,0,0,1},
-                  {1,0,0,0,0,0,0,1},
-                  {1,0,1,0,0,1,0,1},
-                  {1,0,0,0,0,0,0,1},
-                  {1,0,0,0,0,0,0,1},
-                  {1,1,1,1,1,1,1,1},
+                  {2,2,2,2,2,2,2,2},
+                  {2,0,0,0,0,0,0,3},
+                  {2,0,0,1,1,0,0,3},
+                  {2,0,0,0,0,0,0,3},
+                  {2,0,1,0,0,1,0,3},
+                  {2,0,0,0,0,0,0,3},
+                  {2,0,0,0,0,0,0,3},
+                  {2,2,2,2,2,2,2,2},
                 };
                 static lv_obj_t* COL[40] = {
                   id(dw00),id(dw01),id(dw02),id(dw03),id(dw04),id(dw05),id(dw06),id(dw07),
@@ -4508,7 +4519,7 @@ interval:
                 for (int i = 0; i < 40; i++) {
                   float ra = id(r3_pa) - FOV * 0.5f + FOV * ((float) i / 39.0f);
                   float rc = cosf(ra), rs = sinf(ra);
-                  float dist = 0.0f; int side = 0;
+                  float dist = 0.0f; int side = 0; int wtype = 1;
                   for (int s = 0; s < 160; s++) {
                     dist += 0.05f;
                     float x = id(r3_px) + rc * dist;
@@ -4516,6 +4527,7 @@ interval:
                     int mx = (int) x, my = (int) y;
                     if (mx < 0 || mx >= 8 || my < 0 || my >= 8) break;
                     if (M[my][mx] != 0) {
+                      wtype = M[my][mx];
                       float fx = x - mx; if (fx > 0.5f) fx = 1.0f - fx;
                       float fy = y - my; if (fy > 0.5f) fy = 1.0f - fy;
                       side = (fx < fy) ? 0 : 1;
@@ -4532,7 +4544,11 @@ interval:
                   if (sh < 45) sh = 45;
                   if (sh > 210) sh = 210;
                   if (side != 0) sh = sh * 65 / 100;
-                  uint32_t col = ((uint32_t) sh << 16) | ((uint32_t) (sh * 7 / 10) << 8) | (uint32_t) (sh * 5 / 10);
+                  uint32_t r = sh, g = sh, b = sh;
+                  if (wtype == 2)      { r = (uint32_t)(sh * 60 / 100); g = (uint32_t)(sh * 68 / 100); b = (uint32_t) sh; }               // steel-blue tech
+                  else if (wtype == 3) { r = (uint32_t)(sh * 45 / 100); g = (uint32_t) sh;             b = (uint32_t)(sh * 45 / 100); }    // green tech
+                  else                 { r = (uint32_t) sh;             g = (uint32_t)(sh * 62 / 100); b = (uint32_t)(sh * 40 / 100); }    // brown
+                  uint32_t col = (r << 16) | (g << 8) | b;
                   zbuf[i] = corr;
                   lv_obj_set_height(COL[i], h);
                   lv_obj_set_y(COL[i], yy);
@@ -4595,9 +4611,17 @@ interval:
                   - lvgl.label.update: { id: d3_over, text: "YOU DIED" }
                   - lvgl.widget.hide: d3_muzzle
                   - script.execute: { id: led_flash, r: 100, g: 5, b: 0 }
-            - lvgl.label.update:
-                id: d3_hud
-                text: !lambda 'char b[40]; snprintf(b, sizeof(b), "HP %d  AMMO %d  KILLS %d", id(r3_hp), id(r3_ammo), id(r3_kills)); return std::string(b);'
+            - lvgl.label.update: { id: d3_ammo_n,  text: !lambda 'char b[8]; snprintf(b, sizeof(b), "%d", id(r3_ammo)); return std::string(b);' }
+            - lvgl.label.update: { id: d3_hp_n,    text: !lambda 'char b[8]; snprintf(b, sizeof(b), "%d", id(r3_hp) < 0 ? 0 : id(r3_hp)); return std::string(b);' }
+            - lvgl.label.update: { id: d3_kills_n, text: !lambda 'char b[8]; snprintf(b, sizeof(b), "%d", id(r3_kills)); return std::string(b);' }
+            - lvgl.widget.update:
+                id: d3_face
+                bg_color: !lambda |-
+                  if (id(r3_hit) > 0) return lv_color_hex(0xd85a4a);
+                  int hp = id(r3_hp);
+                  if (hp < 30) return lv_color_hex(0xa8674a);
+                  if (hp < 60) return lv_color_hex(0xb87e56);
+                  return lv_color_hex(0xc0895a);
   # SLEEP BREATHING — while asleep ON THE CHARGER, the LED bar "breathes" very dimly
   # (the EMO/Vector charger-snooze everyone loves). Gated on Mood LEDs; goes fully
   # dark the moment it wakes or is unplugged.
