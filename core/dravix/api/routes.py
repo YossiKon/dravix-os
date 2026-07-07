@@ -250,7 +250,7 @@ async def set_robot_mode(body: ModeBody, request: Request):
 _ACCESSORIES = [
     "None", "Glasses", "Sunglasses", "Top hat", "Cap", "Crown",
     "Bow tie", "Headphones", "Halo", "Monocle", "Flower",
-    "Mongkhon", "Boxing gloves", "Fight band",
+    "Mongkhon", "Boxing gloves", "Fight band", "Fight shorts",
     "Cat ears", "Beard", "Eye patch", "Mustache",
     "Shirt", "Necklace", "Gold chain",
 ]

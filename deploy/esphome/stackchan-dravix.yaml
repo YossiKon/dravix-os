@@ -372,6 +372,7 @@ globals:
     initial_value: '""'
   - { id: perm_dec, type: int, restore_value: false, initial_value: "0" }   # last decision: 1 approve · 2 reject
   - { id: g_apulse, type: bool, restore_value: false, initial_value: "false" }  # AI-agent "working" pulse phase
+  - { id: g_gloves, type: bool, restore_value: false, initial_value: "false" }  # boxing-gloves accessory is on → arms the auto-punch
   # ── DOOM-3D — a real first-person raycaster: joystick turns/walks, the button shoots ──
   - { id: r3_px,   type: float, restore_value: false, initial_value: "2.5" }   # player x (map units)
   - { id: r3_py,   type: float, restore_value: false, initial_value: "2.5" }   # player y
@@ -1575,6 +1576,9 @@ lvgl:
               - obj: { id: acc_nk_p, align: CENTER, x: 0, y: 92, width: 14, height: 16, radius: 4, bg_color: 0xf2c14e, bg_opa: COVER, border_width: 0, hidden: true }   # pendant
               - obj: { id: acc_bling, align: CENTER, x: 0, y: 82, width: 104, height: 14, radius: 7, bg_color: 0xffd54a, bg_opa: COVER, border_width: 2, border_color: 0xc79a2a, hidden: true }   # gold chain
               - obj: { id: acc_bling2, align: CENTER, x: 0, y: 96, width: 66, height: 12, radius: 6, bg_color: 0xffd54a, bg_opa: COVER, border_width: 2, border_color: 0xc79a2a, hidden: true }
+              - obj: { id: acc_mts, align: CENTER, x: 0, y: 100, width: 170, height: 22, radius: 4, bg_color: 0xc02020, bg_opa: COVER, border_width: 0, hidden: true }   # Muay Thai trunks
+              - obj: { id: acc_mts_w, align: CENTER, x: 0, y: 90, width: 170, height: 10, radius: 2, bg_color: 0xf0c040, bg_opa: COVER, border_width: 0, hidden: true }   # waistband
+              - obj: { id: acc_mts_s, align: CENTER, x: 0, y: 102, width: 6, height: 20, radius: 0, bg_color: 0x3a0a0a, bg_opa: COVER, border_width: 0, hidden: true }   # leg split
               # a glass of water (glass body + a blue fill that drops as it drinks)
               - obj: { id: drink_glass, align: CENTER, x: 0, y: 86, width: 26, height: 34, radius: 4, bg_color: 0xBFE8FF, bg_opa: COVER, border_width: 2, border_color: 0xFFFFFF, hidden: true }
               - obj: { id: drink_water, align: CENTER, x: 0, y: 96, width: 20, height: 18, radius: 2, bg_color: 0x4FC3F7, bg_opa: COVER, border_width: 0, hidden: true }
@@ -3490,6 +3494,23 @@ script:
       - lvgl.label.update: { id: pl_0, text: !lambda 'return id(perm_h0);' }
       - lvgl.label.update: { id: pl_1, text: !lambda 'return id(perm_h1);' }
       - lvgl.label.update: { id: pl_2, text: !lambda 'return id(perm_h2);' }
+  # PUNCH — while wearing the boxing gloves, throw a quick right jab (glove darts in + back).
+  - id: punch
+    mode: single
+    then:
+      - if:
+          condition: { lambda: 'return id(g_gloves);' }
+          then:
+            - lvgl.widget.update: { id: acc_gv_r,  x: 30, y: 4 }
+            - lvgl.widget.update: { id: acc_gv_rc, x: 30, y: 24 }
+            - if:
+                condition: { lambda: 'return id(sw_sfx).state && !id(g_quiet) && !id(g_night);' }
+                then: [ { rtttl.play: "pow:d=16,o=4,b=210:c,g" } ]
+            - script.execute: { id: led_flash, r: 100, g: 15, b: 10 }
+            - script.execute: { id: head_nudge, dx: 8, dy: 4 }
+            - delay: 130ms
+            - lvgl.widget.update: { id: acc_gv_r,  x: 74, y: 44 }
+            - lvgl.widget.update: { id: acc_gv_rc, x: 74, y: 64 }
   # Redraw the pet face from the current state.
   - id: render_face
     then:
@@ -3964,7 +3985,7 @@ select:
     id: sel_accessory
     optimistic: true
     entity_category: config
-    options: ["None", "Glasses", "Sunglasses", "Top hat", "Cap", "Crown", "Bow tie", "Headphones", "Halo", "Monocle", "Flower", "Mongkhon", "Boxing gloves", "Fight band", "Cat ears", "Beard", "Eye patch", "Mustache", "Shirt", "Necklace", "Gold chain"]
+    options: ["None", "Glasses", "Sunglasses", "Top hat", "Cap", "Crown", "Bow tie", "Headphones", "Halo", "Monocle", "Flower", "Mongkhon", "Boxing gloves", "Fight band", "Fight shorts", "Cat ears", "Beard", "Eye patch", "Mustache", "Shirt", "Necklace", "Gold chain"]
     initial_option: "None"
     on_value:
       - lvgl.widget.hide: acc_lens_l
@@ -4014,6 +4035,10 @@ select:
       - lvgl.widget.hide: acc_nk_p
       - lvgl.widget.hide: acc_bling
       - lvgl.widget.hide: acc_bling2
+      - lvgl.widget.hide: acc_mts
+      - lvgl.widget.hide: acc_mts_w
+      - lvgl.widget.hide: acc_mts_s
+      - globals.set: { id: g_gloves, value: "false" }
       - if:
           condition: { lambda: 'return x == "Glasses";' }
           then:
@@ -4086,6 +4111,13 @@ select:
             - lvgl.widget.show: acc_gv_r
             - lvgl.widget.show: acc_gv_lc
             - lvgl.widget.show: acc_gv_rc
+            - globals.set: { id: g_gloves, value: "true" }   # arms the auto-punch
+      - if:
+          condition: { lambda: 'return x == "Fight shorts";' }
+          then:
+            - lvgl.widget.show: acc_mts
+            - lvgl.widget.show: acc_mts_w
+            - lvgl.widget.show: acc_mts_s
       - if:
           condition: { lambda: 'return x == "Fight band";' }
           then:
@@ -4961,6 +4993,16 @@ interval:
                   if (hp < 30) return lv_color_hex(0xa8674a);
                   if (hp < 60) return lv_color_hex(0xb87e56);
                   return lv_color_hex(0xc0895a);
+  # AUTO-PUNCH — with the gloves on, a chance every few seconds to throw a jab (face page only).
+  - interval: 3200ms
+    then:
+      - if:
+          condition:
+            and:
+              - lvgl.page.is_showing: page_face
+              - lambda: 'return id(g_gloves) && !id(g_sleep) && !id(g_saver) && !id(g_voice) && !id(g_flash) && random_float() < 0.55;'
+          then:
+            - script.execute: punch
   # SLEEP BREATHING — while asleep ON THE CHARGER, the LED bar "breathes" very dimly
   # (the EMO/Vector charger-snooze everyone loves). Gated on Mood LEDs; goes fully
   # dark the moment it wakes or is unplugged.
