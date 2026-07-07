@@ -1546,6 +1546,16 @@ lvgl:
               - obj: { id: acc_mono_c, align: CENTER, x: 40, y: 34, width: 3, height: 30, radius: 1, bg_color: 0xd0a838, bg_opa: COVER, border_width: 0, hidden: true }   # chain
               - obj: { id: acc_fl_p, align: CENTER, x: -92, y: -44, width: 28, height: 28, radius: 14, bg_color: 0xff6f91, bg_opa: COVER, border_width: 0, hidden: true }   # flower petals
               - obj: { id: acc_fl_c, align: CENTER, x: -92, y: -44, width: 12, height: 12, radius: 6, bg_color: 0xffd54f, bg_opa: COVER, border_width: 0, hidden: true }   # flower centre
+              # ── Muay Thai (Thai boxing) ──
+              - obj: { id: acc_mk, align: CENTER, x: 0, y: -56, width: 100, height: 32, radius: 16, bg_color: 0xd8c69a, bg_opa: TRANSP, border_width: 6, border_color: 0xd8c69a, hidden: true }   # mongkhon head-ring
+              - obj: { id: acc_mk_k, align: CENTER, x: 0, y: -72, width: 20, height: 16, radius: 7, bg_color: 0xd8c69a, bg_opa: COVER, border_width: 0, hidden: true }   # mongkhon front knot
+              - obj: { id: acc_gv_l, align: CENTER, x: -74, y: 44, width: 36, height: 40, radius: 17, bg_color: 0xd42424, bg_opa: COVER, border_width: 2, border_color: 0x8a1818, hidden: true }   # left glove
+              - obj: { id: acc_gv_r, align: CENTER, x: 74,  y: 44, width: 36, height: 40, radius: 17, bg_color: 0xd42424, bg_opa: COVER, border_width: 2, border_color: 0x8a1818, hidden: true }   # right glove
+              - obj: { id: acc_gv_lc, align: CENTER, x: -74, y: 64, width: 26, height: 8, radius: 3, bg_color: 0xf0f0f0, bg_opa: COVER, border_width: 0, hidden: true }   # glove cuff
+              - obj: { id: acc_gv_rc, align: CENTER, x: 74,  y: 64, width: 26, height: 8, radius: 3, bg_color: 0xf0f0f0, bg_opa: COVER, border_width: 0, hidden: true }
+              - obj: { id: acc_fb, align: CENTER, x: 0, y: -38, width: 132, height: 14, radius: 3, bg_color: 0xc0392b, bg_opa: COVER, border_width: 0, hidden: true }   # fight headband
+              - obj: { id: acc_fb_s, align: CENTER, x: 0, y: -38, width: 132, height: 4, radius: 0, bg_color: 0xf0c040, bg_opa: COVER, border_width: 0, hidden: true }   # gold stripe
+              - obj: { id: acc_fb_k, align: CENTER, x: -66, y: -38, width: 14, height: 22, radius: 3, bg_color: 0xc0392b, bg_opa: COVER, border_width: 0, hidden: true }   # side knot
               # a glass of water (glass body + a blue fill that drops as it drinks)
               - obj: { id: drink_glass, align: CENTER, x: 0, y: 86, width: 26, height: 34, radius: 4, bg_color: 0xBFE8FF, bg_opa: COVER, border_width: 2, border_color: 0xFFFFFF, hidden: true }
               - obj: { id: drink_water, align: CENTER, x: 0, y: 96, width: 20, height: 18, radius: 2, bg_color: 0x4FC3F7, bg_opa: COVER, border_width: 0, hidden: true }
@@ -3926,7 +3936,7 @@ select:
     id: sel_accessory
     optimistic: true
     entity_category: config
-    options: ["None", "Glasses", "Sunglasses", "Top hat", "Cap", "Crown", "Bow tie", "Headphones", "Halo", "Monocle", "Flower"]
+    options: ["None", "Glasses", "Sunglasses", "Top hat", "Cap", "Crown", "Bow tie", "Headphones", "Halo", "Monocle", "Flower", "Mongkhon", "Boxing gloves", "Fight band"]
     initial_option: "None"
     on_value:
       - lvgl.widget.hide: acc_lens_l
@@ -3952,6 +3962,15 @@ select:
       - lvgl.widget.hide: acc_mono_c
       - lvgl.widget.hide: acc_fl_p
       - lvgl.widget.hide: acc_fl_c
+      - lvgl.widget.hide: acc_mk
+      - lvgl.widget.hide: acc_mk_k
+      - lvgl.widget.hide: acc_gv_l
+      - lvgl.widget.hide: acc_gv_r
+      - lvgl.widget.hide: acc_gv_lc
+      - lvgl.widget.hide: acc_gv_rc
+      - lvgl.widget.hide: acc_fb
+      - lvgl.widget.hide: acc_fb_s
+      - lvgl.widget.hide: acc_fb_k
       - if:
           condition: { lambda: 'return x == "Glasses";' }
           then:
@@ -4012,6 +4031,24 @@ select:
           then:
             - lvgl.widget.show: acc_fl_p
             - lvgl.widget.show: acc_fl_c
+      - if:
+          condition: { lambda: 'return x == "Mongkhon";' }
+          then:
+            - lvgl.widget.show: acc_mk
+            - lvgl.widget.show: acc_mk_k
+      - if:
+          condition: { lambda: 'return x == "Boxing gloves";' }
+          then:
+            - lvgl.widget.show: acc_gv_l
+            - lvgl.widget.show: acc_gv_r
+            - lvgl.widget.show: acc_gv_lc
+            - lvgl.widget.show: acc_gv_rc
+      - if:
+          condition: { lambda: 'return x == "Fight band";' }
+          then:
+            - lvgl.widget.show: acc_fb
+            - lvgl.widget.show: acc_fb_s
+            - lvgl.widget.show: acc_fb_k
   - platform: template
     name: "Face"
     id: robot_face

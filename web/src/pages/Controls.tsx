@@ -34,6 +34,9 @@ const ACCESSORIES: [string, string, string][] = [
   ["Halo", "😇", "הילה"],
   ["Monocle", "🧐", "מונוקל"],
   ["Flower", "🌸", "פרח"],
+  ["Mongkhon", "🥋", "מונגקון"],
+  ["Boxing gloves", "🥊", "כפפות אגרוף"],
+  ["Fight band", "🇹🇭", "סרט לחימה"],
 ];
 
 const BACKGROUNDS: [string, string, string][] = [
