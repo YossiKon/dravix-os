@@ -5227,6 +5227,25 @@ interval:
       - lvgl.label.update: { id: lbl_c3_r1, text: !lambda 'std::string b = id(t_c3_body).state; size_t s = 0; for (int i = 0; i < 1; i++) { size_t p = b.find(10, s); if (p == std::string::npos) return std::string(""); s = p + 1; } size_t e = b.find(10, s); return b.substr(s, e == std::string::npos ? std::string::npos : e - s);' }
       - lvgl.label.update: { id: lbl_c3_r2, text: !lambda 'std::string b = id(t_c3_body).state; size_t s = 0; for (int i = 0; i < 2; i++) { size_t p = b.find(10, s); if (p == std::string::npos) return std::string(""); s = p + 1; } size_t e = b.find(10, s); return b.substr(s, e == std::string::npos ? std::string::npos : e - s);' }
       - lvgl.label.update: { id: lbl_c3_r3, text: !lambda 'std::string b = id(t_c3_body).state; size_t s = 0; for (int i = 0; i < 3; i++) { size_t p = b.find(10, s); if (p == std::string::npos) return std::string(""); s = p + 1; } size_t e = b.find(10, s); return b.substr(s, e == std::string::npos ? std::string::npos : e - s);' }
+      # FREE POSITIONING (dashboard drag-and-drop) — a row whose text starts with "x,y|" jumps
+      # to (x,y) as a small 150x46 card; without the prefix it keeps the default full-width stack
+      # (backward compatible). The "x,y|" prefix is stripped so only the entity text is shown.
+      - lambda: |-
+          auto place = [](lv_obj_t* row, lv_obj_t* lbl) {
+            const char* t = lv_label_get_text(lbl);
+            std::string s = t ? t : "";
+            size_t bar = s.find('|');
+            if (bar == std::string::npos) return;
+            std::string pos = s.substr(0, bar);
+            size_t comma = pos.find(',');
+            if (comma == std::string::npos) return;
+            lv_obj_set_size(row, 150, 46);
+            lv_obj_set_pos(row, atoi(pos.substr(0, comma).c_str()), atoi(pos.substr(comma + 1).c_str()));
+            lv_label_set_text(lbl, s.substr(bar + 1).c_str());
+          };
+          place(id(c1_r0), id(lbl_c1_r0)); place(id(c1_r1), id(lbl_c1_r1)); place(id(c1_r2), id(lbl_c1_r2)); place(id(c1_r3), id(lbl_c1_r3));
+          place(id(c2_r0), id(lbl_c2_r0)); place(id(c2_r1), id(lbl_c2_r1)); place(id(c2_r2), id(lbl_c2_r2)); place(id(c2_r3), id(lbl_c2_r3));
+          place(id(c3_r0), id(lbl_c3_r0)); place(id(c3_r1), id(lbl_c3_r1)); place(id(c3_r2), id(lbl_c3_r2)); place(id(c3_r3), id(lbl_c3_r3));
       # Mushroom-style chip colour per row, read from the row's own text: active → amber,
       # off/closed/locked → grey, sensor/other → blue, empty → blends into the card.
       - lambda: |-

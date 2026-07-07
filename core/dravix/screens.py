@@ -135,6 +135,7 @@ class ScreenPusher:
                 log.debug("screen card %d push failed: %s", n, exc)
 
     def _render_body(self, card: dict[str, Any], smap: dict[str, dict]) -> str:
+        layout = card.get("layout") or {}  # {entity_id: [x, y]} from the dashboard drag editor
         lines: list[str] = []
         for entity_id in (card.get("entities", []) or [])[:ROW_COUNT]:
             st = smap.get(entity_id)
@@ -143,6 +144,7 @@ class ScreenPusher:
             attrs = st.get("attributes") or {}
             name = str(attrs.get("friendly_name") or entity_id)[:NAME_MAX]
             state = st.get("state", "")
+            text = ""
             # Climate entities read nicer as "Name  cool 24>21" (mode + current>target)
             # than the bare hvac state; fall back to the plain line if attrs are missing.
             if entity_id.startswith("climate."):
@@ -150,15 +152,22 @@ class ScreenPusher:
                     current = attrs.get("current_temperature")
                     target = attrs.get("temperature")
                     if current is not None and target is not None:
-                        lines.append(
-                            f"{name}  {state} {float(current):.0f}>{float(target):.0f}"
-                        )
-                        continue
+                        text = f"{name}  {state} {float(current):.0f}>{float(target):.0f}"
                 except Exception as exc:  # noqa: BLE001 — never let one card break the loop
                     log.debug("climate format for %s failed: %s", entity_id, exc)
             # toggleable entities read as a clean ON/OFF (the row is a tappable button)
-            onoff = _onoff(entity_id, state)
-            lines.append(f"{name}   {onoff}" if onoff is not None else f"{name}  {state}")
+            if not text:
+                onoff = _onoff(entity_id, state)
+                text = f"{name}   {onoff}" if onoff is not None else f"{name}  {state}"
+            # free-positioning prefix "x,y|" (from the dashboard drag editor); the firmware
+            # moves that row to (x, y). No layout entry → no prefix → the default stacked rows.
+            pos = layout.get(entity_id)
+            if isinstance(pos, (list, tuple)) and len(pos) == 2:
+                try:
+                    text = f"{int(pos[0])},{int(pos[1])}|{text}"
+                except (ValueError, TypeError):
+                    pass
+            lines.append(text)
         return "\n".join(lines)
 
     async def handle_tap(self, card: int, row: int) -> None:
