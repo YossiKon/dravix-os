@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.0.80
+
+- **🗂 Screen cards now SNAP to a grid — no more overlapping.** In the drag editor each card locks to a
+  2×4 grid, so they can never sit on top of each other; drag to arrange and they slot in cleanly. (The
+  Mushroom look + colour chips come from the **robot firmware** — re-flash the ESPHome firmware so the
+  robot shows the styled cards instead of the raw text.)
+
 ## 0.0.79
 
 - **🩺 New "Diagnostics" tab — see WHY the robot freezes/resets, right on the dashboard.** Live robot

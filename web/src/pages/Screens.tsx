@@ -28,9 +28,22 @@ function chipColor(entityId: string): string {
   return "#8b96a4";
 }
 
-const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
+// Snap to a fixed 2-col × 4-row grid so cards can NEVER sit on top of each other.
+const GRID_SLOTS: [number, number][] = [
+  [8, 8], [162, 8], [8, 58], [162, 58], [8, 108], [162, 108], [8, 158], [162, 158],
+];
+const nearestSlot = (x: number, y: number): [number, number] =>
+  GRID_SLOTS.reduce((best, s) =>
+    Math.hypot(s[0] - x, s[1] - y) < Math.hypot(best[0] - x, best[1] - y) ? s : best,
+  );
+const nearestFreeSlot = (x: number, y: number, taken: Set<string>): [number, number] => {
+  const sorted = [...GRID_SLOTS].sort(
+    (a, b) => Math.hypot(a[0] - x, a[1] - y) - Math.hypot(b[0] - x, b[1] - y),
+  );
+  return sorted.find((s) => !taken.has(`${s[0]},${s[1]}`)) ?? sorted[0];
+};
 const posOf = (card: Card, id: string, idx: number): [number, number] =>
-  card.layout?.[id] ?? [10, 8 + idx * ((SCREEN_H - 16) / MAX_PER_CARD)];
+  card.layout?.[id] ?? GRID_SLOTS[idx] ?? [8, 8];
 
 function CardCanvas(props: {
   card: Card;
@@ -55,9 +68,18 @@ function CardCanvas(props: {
   function moveEvt(e: React.PointerEvent) {
     if (!drag.current) return;
     const p = robotXY(e.clientX, e.clientY);
-    const x = clamp(Math.round(p.x - drag.current.offX), 0, SCREEN_W - CARD_W);
-    const y = clamp(Math.round(p.y - drag.current.offY), 0, SCREEN_H - CARD_H);
-    props.onMove(drag.current.id, x, y);
+    const rawX = p.x - drag.current.offX;
+    const rawY = p.y - drag.current.offY;
+    const dragId = drag.current.id;
+    // slots the OTHER cards occupy → snap the dragged one to the nearest FREE slot (never overlap)
+    const taken = new Set(
+      props.card.entities
+        .map((eid, i) => [eid, posOf(props.card, eid, i)] as const)
+        .filter(([eid]) => eid !== dragId)
+        .map(([, pos]) => nearestSlot(pos[0], pos[1]).join(",")),
+    );
+    const [sx, sy] = nearestFreeSlot(rawX, rawY, taken);
+    props.onMove(dragId, sx, sy);
   }
 
   return (
@@ -155,12 +177,9 @@ export function ScreensPage(props: { entities: HAEntity[] }) {
     setCards((cur) =>
       cur.map((c, j) => {
         if (j !== i || c.entities.includes(id) || c.entities.length >= MAX_PER_CARD) return c;
-        const idx = c.entities.length;
-        return {
-          ...c,
-          entities: [...c.entities, id],
-          layout: { ...c.layout, [id]: [10, Math.round(8 + idx * ((SCREEN_H - 16) / MAX_PER_CARD))] },
-        };
+        const taken = new Set(c.entities.map((e, k) => nearestSlot(...posOf(c, e, k)).join(",")));
+        const [nx, ny] = nearestFreeSlot(8, 8, taken);
+        return { ...c, entities: [...c.entities, id], layout: { ...c.layout, [id]: [nx, ny] } };
       }),
     );
 
@@ -180,8 +199,8 @@ export function ScreensPage(props: { entities: HAEntity[] }) {
     <div className="space-y-4">
       <p className="text-sm text-mute">
         {tr(
-          `כל כרטיס הוא preview של מסך הרובוט — גרור את הישויות לכל מקום (עד ${MAX_PER_CARD} לכרטיס). מחליקים ימין/שמאל על הרובוט לעבור בין הכרטיסים; נגיעה בישות מפעילה/מכבה.`,
-          `Each card is a live preview of the robot's screen — drag the entities anywhere (up to ${MAX_PER_CARD} per card). Swipe left/right on the robot to switch cards; a tap on an entity toggles it.`,
+          `כל כרטיס הוא preview של מסך הרובוט — גרור את הישויות לסידור (הן ננעלות לרשת ולא נערמות אחת על השנייה, עד ${MAX_PER_CARD} לכרטיס). מחליקים ימין/שמאל על הרובוט לעבור בין הכרטיסים; נגיעה בישות מפעילה/מכבה.`,
+          `Each card is a live preview of the robot's screen — drag the entities to arrange them (they snap to a grid and never overlap, up to ${MAX_PER_CARD} per card). Swipe left/right on the robot to switch cards; a tap on an entity toggles it.`,
         )}
       </p>
 
