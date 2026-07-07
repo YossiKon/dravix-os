@@ -67,6 +67,35 @@ class HARobotDriver(RobotDriver):
     def set_calibration(self, calibration: dict[str, Any]) -> None:
         self._calib = calibration or {}
 
+    async def robot_health(self) -> dict[str, Any]:
+        """The robot's own ESPHome debug diagnostics — Heap Free / Largest Block / Loop Time /
+        PSRAM Free / Reset Reason / Uptime / WiFi — read straight off HA. No extra load on the
+        robot: those sensors already publish on their own interval; we just read the last value.
+        Matched by entity-id suffix so a device rename never breaks it."""
+        try:
+            states = await self._ha.states()
+        except Exception as exc:  # noqa: BLE001 — HA hiccup; empty → dashboard shows "—"
+            log.debug("robot_health: state fetch failed: %s", exc)
+            return {}
+        want = {  # entity-id suffix → our key
+            "heap_free": "heap_free",
+            "heap_largest_block": "heap_block",
+            "loop_time": "loop_time",
+            "psram_free": "psram_free",
+            "reset_reason": "reset_reason",
+            "uptime": "uptime",
+            "wifi_signal": "wifi",
+        }
+        out: dict[str, Any] = {}
+        for st in states:
+            eid = str(st.get("entity_id", ""))
+            if not eid.startswith("sensor."):
+                continue
+            for suffix, key in want.items():
+                if key not in out and eid.endswith("_" + suffix):
+                    out[key] = st.get("state")
+        return out
+
     async def connect(self) -> None:
         if not await self._ha.ping():
             raise ConnectionError("Home Assistant not reachable / token invalid")

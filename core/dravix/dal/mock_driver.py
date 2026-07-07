@@ -52,6 +52,17 @@ class MockDriver(RobotDriver):
     async def background_current(self) -> str | None:
         return "None"
 
+    async def robot_health(self) -> dict[str, Any]:
+        return {
+            "heap_free": "146800",
+            "heap_block": "102400",
+            "loop_time": "16",
+            "psram_free": "7929856",
+            "reset_reason": "Software reset (mock)",
+            "uptime": "3720",
+            "wifi": "-54",
+        }
+
     async def take_photo(self) -> bytes | None:
         log.info("[mock] take_photo() -> None")
         return None

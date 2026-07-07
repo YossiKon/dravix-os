@@ -1748,6 +1748,31 @@ async def put_screens(body: ScreensBody, request: Request):
     return {"screens": request.app.state.store.screens()}
 
 
+# ── diagnostics (robot memory/health + add-on logs, for the Diagnostics tab) ──
+@router.get("/api/robot/health")
+async def get_robot_health(request: Request):
+    """The robot's live ESPHome debug metrics — heap free / largest block / loop time / PSRAM /
+    reset reason / uptime / WiFi — read off HA (no extra load on the robot)."""
+    drv = request.app.state.robot.driver
+    fn = getattr(drv, "robot_health", None)
+    if fn is None:
+        return {"supported": False, "metrics": {}}
+    try:
+        metrics = await fn()
+    except Exception as exc:  # noqa: BLE001 — never 500 the dashboard over a diagnostics read
+        return {"supported": True, "metrics": {}, "error": str(exc)}
+    return {"supported": True, "metrics": metrics}
+
+
+@router.get("/api/logs")
+async def get_logs(level: str | None = None):
+    """Recent add-on logs (in-memory ring buffer) for the Diagnostics tab, newest last.
+    ``level`` filters to that severity and above (e.g. ?level=WARNING)."""
+    from ..logging import recent_logs
+
+    return {"logs": recent_logs(level)}
+
+
 # ── climate (AC / thermostat control) ─────────────────────────────────────────
 class ClimateSetBody(BaseModel):
     entity_id: str

@@ -9,10 +9,11 @@ import { ClimatePage } from "./pages/Climate";
 import { SettingsPage } from "./pages/Settings";
 import { AgentPage } from "./pages/Agent";
 import { ControlsPage } from "./pages/Controls";
+import { DiagnosticsPage } from "./pages/Diagnostics";
 import { Toaster } from "./ui";
 import { useI18n } from "./i18n";
 
-type Tab = "home" | "agent" | "screens" | "vitals" | "climate" | "controls" | "settings";
+type Tab = "home" | "agent" | "screens" | "vitals" | "climate" | "controls" | "diag" | "settings";
 
 const TABS: { id: Tab; he: string; en: string; icon: string }[] = [
   { id: "home", he: "בית", en: "Home", icon: "🏠" },
@@ -21,6 +22,7 @@ const TABS: { id: Tab; he: string; en: string; icon: string }[] = [
   { id: "vitals", he: "חיים", en: "Life", icon: "💗" },
   { id: "climate", he: "מזגן", en: "Climate", icon: "❄" },
   { id: "controls", he: "שליטה", en: "Controls", icon: "🕹" },
+  { id: "diag", he: "אבחון", en: "Diag", icon: "🩺" },
   { id: "settings", he: "הגדרות", en: "Settings", icon: "⚙" },
 ];
 
@@ -117,6 +119,7 @@ export default function App() {
         {tab === "vitals" && <VitalsPage />}
         {tab === "climate" && <ClimatePage entities={entities} />}
         {tab === "controls" && <ControlsPage />}
+        {tab === "diag" && <DiagnosticsPage />}
         {tab === "settings" && (
           <SettingsPage config={config} entities={entities} version={version} onConfigChanged={refreshConfig} />
         )}
