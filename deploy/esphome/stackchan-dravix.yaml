@@ -275,6 +275,7 @@ globals:
   - { id: g_blink,  type: bool, restore_value: false, initial_value: "false" }
   - { id: g_listen, type: bool, restore_value: false, initial_value: "false" }
   - { id: g_talk,   type: bool, restore_value: false, initial_value: "false" }
+  - { id: g_think,  type: bool, restore_value: false, initial_value: "false" }   # AI is processing — between your words and its reply
   - { id: g_tip,    type: bool, restore_value: false, initial_value: "false" }  # a wellness tip is showing
   - { id: g_agent,  type: bool, restore_value: false, initial_value: "false" }  # an AI-agent badge is set
   - { id: g_perm,   type: bool, restore_value: false, initial_value: "false" }  # an approve/reject prompt is up
@@ -3453,6 +3454,11 @@ script:
           then:
             - script.execute: { id: set_eyes, w: 74, h: 86, r: 28, dy: -2 }
             - script.execute: { id: set_mouth, w: 22, h: 8, r: 4, dy: 66 }
+      - if:  # thinking → eyes drift up, pondering the reply (between your words and its answer)
+          condition: { lambda: 'return !id(g_sleep) && !id(g_blink) && !id(g_listen) && id(g_think);' }
+          then:
+            - script.execute: { id: set_eyes, w: 56, h: 52, r: 22, dy: -14 }
+            - script.execute: { id: set_mouth, w: 18, h: 6, r: 3, dy: 58 }
       - if:  # speaking → mouth opens and closes
           condition: { lambda: 'return !id(g_sleep) && !id(g_blink) && !id(g_listen) && id(g_talk);' }
           then:
@@ -3464,7 +3470,7 @@ script:
                 height: !lambda 'return (id(g_anim) % 2) ? 26 : 10;'
                 y: 62
       - if:  # SCREENSAVER → slow dozy "breathing" eyes (they half-close and open)
-          condition: { lambda: 'return !id(g_sleep) && !id(g_blink) && !id(g_listen) && !id(g_talk) && id(g_saver);' }
+          condition: { lambda: 'return !id(g_sleep) && !id(g_blink) && !id(g_listen) && !id(g_talk) && !id(g_think) && id(g_saver);' }
           then:
             - lvgl.widget.update:
                 id: eye_l
@@ -3480,12 +3486,12 @@ script:
                 height: !lambda 'const int b[] = {46, 38, 30, 38}; return b[id(g_anim) % 4];'
             - script.execute: { id: set_mouth, w: 30, h: 6, r: 3, dy: 66 }
       - if:  # FOCUS → steady, narrowed concentrating eyes
-          condition: { lambda: 'return !id(g_sleep) && !id(g_blink) && !id(g_listen) && !id(g_talk) && !id(g_saver) && id(g_focus);' }
+          condition: { lambda: 'return !id(g_sleep) && !id(g_blink) && !id(g_listen) && !id(g_talk) && !id(g_think) && !id(g_saver) && id(g_focus);' }
           then:
             - script.execute: { id: set_eyes, w: 58, h: 40, r: 16, dy: 0 }
             - script.execute: { id: set_mouth, w: 28, h: 6, r: 3, dy: 64 }
       - if:  # idle → the chosen expression
-          condition: { lambda: 'return !id(g_sleep) && !id(g_blink) && !id(g_listen) && !id(g_talk) && !id(g_saver) && !id(g_focus);' }
+          condition: { lambda: 'return !id(g_sleep) && !id(g_blink) && !id(g_listen) && !id(g_talk) && !id(g_think) && !id(g_saver) && !id(g_focus);' }
           then:
             - if:  # neutral
                 condition: { lambda: 'return id(g_expr) == 0;' }
@@ -3555,6 +3561,7 @@ script:
       - lambda: |-
           std::string s = id(g_sleep)  ? "sleep"
                         : id(g_listen) ? "listening"
+                        : id(g_think)  ? "thinking"
                         : id(g_talk)   ? "speaking"
                         : id(g_saver)  ? "screensaver"
                         : id(g_night)  ? "night"
@@ -5079,14 +5086,21 @@ voice_assistant:
     - script.execute: render_face          # the LISTENING FACE (big curious eyes) — no label
     - script.execute: { id: head_nudge, dx: 0, dy: 6 }   # perks up attentively, like it leans in
   on_stt_end:
-    # Publish what the robot HEARD (shows live on the dashboard + HA).
+    # You finished talking → STOP "listening" and show a "THINKING" face (cyan LEDs) until the
+    # reply starts. Publish what the robot HEARD (shows live on the dashboard + HA).
     - text_sensor.template.publish: { id: st_heard, state: !lambda 'return x;' }
+    - globals.set: { id: g_listen, value: "false" }
+    - globals.set: { id: g_think,  value: "true" }
+    - light.turn_on: { id: stackchan_light_bar, red: 0.15, green: 0.7, blue: 1.0, brightness: 0.7 }
+    - script.execute: render_face
+    - script.execute: { id: head_nudge, dx: 12, dy: -6 }   # tilts up, pondering
   on_tts_start:
     # AI is speaking → "talking" mouth face, stays YELLOW the whole turn (listen + speak).
     - lambda: 'lv_disp_trig_activity(NULL);'
     - text_sensor.template.publish: { id: st_reply, state: !lambda 'return x;' }
     - lvgl.label.update: { id: speech_txt, text: !lambda 'return x;' }   # show what the AI says
     - globals.set: { id: g_listen, value: "false" }
+    - globals.set: { id: g_think, value: "false" }
     - globals.set: { id: g_talk, value: "true" }
     - script.execute: leds_yellow
     - script.execute: render_face
@@ -5094,6 +5108,7 @@ voice_assistant:
     # AI finished the turn → back to the previous face + the previous LEDs (or off).
     - globals.set: { id: g_listen, value: "false" }
     - globals.set: { id: g_talk, value: "false" }
+    - globals.set: { id: g_think, value: "false" }
     - globals.set: { id: g_voice, value: "false" }
     - script.execute: render_face
     - script.execute: restore_leds
@@ -5104,6 +5119,7 @@ voice_assistant:
     # Pipeline error → NEVER stay stuck on yellow/listening; clean up and re-arm the wake word.
     - globals.set: { id: g_listen, value: "false" }
     - globals.set: { id: g_talk, value: "false" }
+    - globals.set: { id: g_think, value: "false" }
     - globals.set: { id: g_voice, value: "false" }
     - script.execute: render_face
     - script.execute: restore_leds
