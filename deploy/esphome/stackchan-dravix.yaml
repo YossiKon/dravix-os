@@ -5107,7 +5107,10 @@ interval:
   - interval: 3800ms
     then:
       - if:
-          condition: { lambda: 'return (id(g_expr) == 1 || id(g_expr) == 6) && !id(g_sleep) && !id(g_saver) && !id(g_listen) && !id(g_talk) && !id(g_think) && lv_scr_act() == id(page_face) && lv_obj_has_flag(id(fheart), LV_OBJ_FLAG_HIDDEN);' }
+          condition:
+            and:
+              - lvgl.page.is_showing: page_face
+              - lambda: 'return (id(g_expr) == 1 || id(g_expr) == 6) && !id(g_sleep) && !id(g_saver) && !id(g_listen) && !id(g_talk) && !id(g_think) && lv_obj_has_flag(id(fheart), LV_OBJ_FLAG_HIDDEN);'
           then: [ { script.execute: float_hearts } ]
   # SLEEP BREATHING — while asleep ON THE CHARGER, the LED bar "breathes" very dimly
   # (the EMO/Vector charger-snooze everyone loves). Gated on Mood LEDs; goes fully
