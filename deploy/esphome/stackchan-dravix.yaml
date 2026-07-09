@@ -1535,24 +1535,6 @@ lvgl:
               - obj: { id: heart1, align: CENTER, x: -20, y: 46, width: 13, height: 13, radius: 6, bg_color: 0xff4d6a, bg_opa: COVER, border_width: 0, hidden: true }
               - obj: { id: heart2, align: CENTER, x: 2,   y: 52, width: 10, height: 10, radius: 5, bg_color: 0xff6f88, bg_opa: COVER, border_width: 0, hidden: true }
               - obj: { id: heart3, align: CENTER, x: 22,  y: 40, width: 16, height: 16, radius: 8, bg_color: 0xff4d6a, bg_opa: COVER, border_width: 0, hidden: true }
-              # a REAL heart shape — two round lobes + a 45°-rotated square for the point —
-              # in a transparent container so one 'opa' fade + one 'y' move animate the whole heart
-              - obj:
-                  id: fheart
-                  align: CENTER
-                  x: 0
-                  y: 18
-                  width: 48
-                  height: 48
-                  bg_opa: TRANSP
-                  border_width: 0
-                  pad_all: 0
-                  scrollbar_mode: "OFF"
-                  hidden: true
-                  widgets:
-                    - obj: { id: fh_p, align: CENTER, x: 0,  y: 4,  width: 26, height: 26, radius: 3,  bg_color: 0xff4d6a, bg_opa: COVER, border_width: 0, transform_rotation: 45deg }
-                    - obj: { id: fh_l, align: CENTER, x: -9, y: -8, width: 21, height: 21, radius: 11, bg_color: 0xff4d6a, bg_opa: COVER, border_width: 0 }
-                    - obj: { id: fh_r, align: CENTER, x: 9,  y: -8, width: 21, height: 21, radius: 11, bg_color: 0xff4d6a, bg_opa: COVER, border_width: 0 }
               # ── ACCESSORIES (dashboard/HA-toggled via the "Face accessory" select; default None) ──
               - obj: { id: acc_lens_l, align: CENTER, x: -58, y: 0,  width: 54, height: 48, radius: 24, bg_color: 0x14181d, bg_opa: TRANSP, border_width: 5, border_color: 0x14181d, hidden: true }
               - obj: { id: acc_lens_r, align: CENTER, x: 58,  y: 0,  width: 54, height: 48, radius: 24, bg_color: 0x14181d, bg_opa: TRANSP, border_width: 5, border_color: 0x14181d, hidden: true }
@@ -3051,26 +3033,6 @@ script:
             - script.execute: head_shake                                # happy little wiggle
   # ── EATS 🍪 — Ropet-style: paws lift a random treat to the mouth, 2 nibbles + "nom", then a
   #    happy "yum" nod. Fires from the Feed button, or spontaneously now and then on the face.
-  # ── FLOATING LOVE-HEARTS 💗 — three hearts drift up from the cheeks and fade out over ~1.7s.
-  #    Reuses the eat animation's heart objs (no new widgets). Fired by the interval below while
-  #    it's happy/in-love. Resets the hearts to their resting spot so eating still works.
-  - id: float_hearts
-    mode: single
-    then:
-      - if:
-          condition: { lambda: 'return !id(g_sleep) && !id(g_saver) && !id(g_listen) && !id(g_talk) && !id(g_think);' }
-          then:
-            - lvgl.widget.update: { id: fheart, y: 18, opa: COVER }
-            - lvgl.widget.show: fheart
-            - delay: 800ms                                        # pops in and lingers a moment
-            - lvgl.widget.update: { id: fheart, y: -6, opa: COVER }
-            - delay: 650ms
-            - lvgl.widget.update: { id: fheart, y: -30, opa: 55% }
-            - delay: 650ms
-            - lvgl.widget.update: { id: fheart, y: -56, opa: TRANSP }   # …and fades away up top
-            - delay: 350ms
-            - lvgl.widget.hide: fheart
-            - lvgl.widget.update: { id: fheart, y: 18, opa: COVER }     # reset for next time
   - id: eat
     mode: single
     then:
@@ -5102,16 +5064,6 @@ interval:
           then:
             - lvgl.widget.update: { id: ant_lb, x: !lambda 'return (id(g_anim) % 2) ? -58 : -50;' }
             - lvgl.widget.update: { id: ant_rb, x: !lambda 'return (id(g_anim) % 2) ? 50 : 58;' }
-  # floating love-hearts: rise + fade while happy/in-love, on the face, and only if the hearts
-  # aren't already busy (eat animation) — and never in sleep/screensaver.
-  - interval: 3800ms
-    then:
-      - if:
-          condition:
-            and:
-              - lvgl.page.is_showing: page_face
-              - lambda: 'return (id(g_expr) == 1 || id(g_expr) == 6) && !id(g_sleep) && !id(g_saver) && !id(g_listen) && !id(g_talk) && !id(g_think) && lv_obj_has_flag(id(fheart), LV_OBJ_FLAG_HIDDEN);'
-          then: [ { script.execute: float_hearts } ]
   # SLEEP BREATHING — while asleep ON THE CHARGER, the LED bar "breathes" very dimly
   # (the EMO/Vector charger-snooze everyone loves). Gated on Mood LEDs; goes fully
   # dark the moment it wakes or is unplugged.
