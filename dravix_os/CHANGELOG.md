@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.0.82
+
+- **😐 The idle face no longer gets stuck on "happy" (blushing).** The mood engine now shows a happy
+  face only when the mood is *clearly* positive (threshold raised 0.25 → 0.45), and ambient presence /
+  the robot talking nudge the mood a lot less. So the face sits **neutral by default** and varies with
+  real interactions (a pet, a chat) instead of staying blushing all the time. *(The restored **confused
+  "x-eyes + ?" face** is a robot-firmware change — re-flash ESPHome to get it.)*
+
 ## 0.0.81
 
 - **🔤 Hebrew on the robot's cards + AC page now reads the right way round.** The robot's LVGL screen

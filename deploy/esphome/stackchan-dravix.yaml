@@ -1492,8 +1492,9 @@ lvgl:
               - line: { id: brow_l, points: ["70, 58", "128, 76"], line_width: 7, line_color: 0x14181d, line_rounded: true, hidden: true }
               - line: { id: brow_r, points: ["192, 76", "250, 58"], line_width: 7, line_color: 0x14181d, line_rounded: true, hidden: true }
               - obj: { id: sweat, align: CENTER, x: 100, y: -60, width: 14, height: 20, radius: 7, bg_color: 0x57c8ff, bg_opa: COVER, border_width: 0, hidden: true }
-              - label: { id: dz_l, align: CENTER, x: -58, y: -6, text: "x", text_font: big_font, text_color: 0x14181d, hidden: true }
-              - label: { id: dz_r, align: CENTER, x: 58,  y: -6, text: "x", text_font: big_font, text_color: 0x14181d, hidden: true }
+              - label: { id: dz_l, align: CENTER, x: -58, y: -6, text: "x", text_font: big_font, text_color: 0x33E6C8, hidden: true }
+              - label: { id: dz_r, align: CENTER, x: 58,  y: -6, text: "x", text_font: big_font, text_color: 0x33E6C8, hidden: true }
+              - label: { id: q_mark, align: CENTER, x: 74, y: -66, text: "?", text_font: big_font, text_color: 0xffd54a, hidden: true }   # confused "?" above the head
               # ── HANDS + FOOD (Ropet-style) — paws + a treat that rise to the mouth. Hidden until it eats.
               - obj:
                   id: hand_l
@@ -3731,10 +3732,13 @@ script:
           condition: { lambda: 'return false;' }   # eyebrows removed — expression via eyes/mouth/blush only
           then: [ { lvgl.widget.show: brow_l }, { lvgl.widget.show: brow_r } ]
           else: [ { lvgl.widget.hide: brow_l }, { lvgl.widget.hide: brow_r } ]
-      - if:
-          condition: { lambda: 'return false;' }   # dizzy stars removed
-          then: [ { lvgl.widget.show: dz_l }, { lvgl.widget.show: dz_r } ]
-          else: [ { lvgl.widget.hide: dz_l }, { lvgl.widget.hide: dz_r } ]
+      - if:  # CONFUSED / dizzy — teal x-eyes + a "?" above the head (only on an idle face)
+          condition:
+            lambda: |-
+              return !id(g_sleep) && !id(g_listen) && !id(g_talk) && !id(g_blink)
+                     && !id(g_saver) && !id(g_focus) && id(g_expr) == 7;
+          then: [ { lvgl.widget.show: dz_l }, { lvgl.widget.show: dz_r }, { lvgl.widget.show: q_mark } ]
+          else: [ { lvgl.widget.hide: dz_l }, { lvgl.widget.hide: dz_r }, { lvgl.widget.hide: q_mark } ]
       - if:
           condition: { lambda: 'return false;' }   # busy sweat-drop removed
           then: [ { lvgl.widget.show: sweat } ]

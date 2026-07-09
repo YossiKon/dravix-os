@@ -28,14 +28,14 @@ log = get_logger("mood")
 
 # event type -> (d_valence, d_arousal, d_affection, emote_on_fire | None)
 _NUDGES: dict[str, tuple[float, float, float, str | None]] = {
-    "robot.say": (0.05, 0.05, 0.03, None),
+    "robot.say": (0.02, 0.05, 0.03, None),
     "user.spoke": (0.08, 0.10, 0.05, None),
     "touch.pet": (0.25, 0.15, 0.20, "love"),
     "touch.tap": (0.05, 0.20, 0.02, "curious"),
     "robot.touched": (0.10, 0.15, 0.10, "happy"),
     "guard.alert": (-0.10, 0.40, 0.00, None),
     "ha.motion": (0.00, 0.15, 0.00, None),
-    "presence.detected": (0.05, 0.10, 0.02, None),
+    "presence.detected": (0.02, 0.10, 0.02, None),
     "frigate.shown": (-0.02, 0.20, 0.00, None),
 }
 _INTERACTIONS = {"user.spoke", "touch.pet", "touch.tap", "robot.touched"}
@@ -113,8 +113,8 @@ class MoodEngine:
     def expression(self) -> Expression:
         if self._night and self.arousal < 0.4:
             return Expression.SLEEPY
-        if self.valence > 0.25:
-            return Expression.HAPPY
+        if self.valence > 0.45:  # only a CLEARLY positive mood shows a happy face — otherwise
+            return Expression.HAPPY  # it sits neutral, so the face doesn't get stuck on "happy"
         if self.valence < -0.3 and self.arousal > 0.55:
             return Expression.ANGRY
         if self.valence < -0.2:
