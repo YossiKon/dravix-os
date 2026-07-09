@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.0.81
+
+- **🔤 Hebrew on the robot's cards + AC page now reads the right way round.** The robot's LVGL screen
+  has no bidirectional-text support, so logical-order Hebrew rendered **reversed / unreadable**. dravix
+  already reordered greetings, wellness tips, speech and the permission line to visual order — but the
+  **3 display cards** (titles + entity rows) and the **climate/AC page** (name + info) were missing that
+  step, so their Hebrew came out backwards. Both now go through the same visual-reorder before being
+  sent to the robot (ASCII / numbers are left untouched, and TTS still speaks the original text).
+
 ## 0.0.80
 
 - **🗂 Screen cards now SNAP to a grid — no more overlapping.** In the drag editor each card locks to a

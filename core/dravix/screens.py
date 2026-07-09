@@ -23,6 +23,7 @@ from __future__ import annotations
 import asyncio
 from typing import TYPE_CHECKING, Any
 
+from .bidi import for_robot
 from .logging import get_logger
 
 if TYPE_CHECKING:
@@ -127,7 +128,7 @@ class ScreenPusher:
             try:
                 # truncate to the firmware slots' max_length (30 / 160) — an over-long
                 # value fails text.set_value validation and the card would stay stale
-                title = str(card.get("title", ""))[:30] if card else ""
+                title = for_robot(str(card.get("title", ""))[:30]) if card else ""
                 body = self._render_body(card, smap)[:160] if card else ""
                 await self._sync_text(title_ent, title, smap)
                 await self._sync_text(body_ent, body, smap)
@@ -165,6 +166,7 @@ class ScreenPusher:
             # prefix. Also cap each row so the "x,y|" prefixes below can't be sliced by the 160-char
             # body cap (which would drop a position and print a stray coordinate fragment).
             text = text.replace("\n", " ").replace("\r", " ").replace("|", "/")[:32]
+            text = for_robot(text)  # Hebrew → visual order (the robot's LVGL has no BiDi)
             # free-positioning prefix "x,y|" (from the dashboard drag editor); the firmware
             # moves that row to (x, y). No layout entry → no prefix → the default stacked rows.
             pos = layout.get(entity_id)

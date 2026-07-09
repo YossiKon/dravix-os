@@ -51,6 +51,8 @@ async def push_status(ha, entity: str, discovered: dict) -> None:
         log.debug("climate push: %s", exc)
         return
     attrs = st.get("attributes") or {}
+    from .bidi import for_robot  # Hebrew AC names → visual order (the robot's LVGL has no BiDi)
+
     name = str(attrs.get("friendly_name") or entity)[:24]
     mode = str(st.get("state") or "")
     info = f"now {_fmt_temp(attrs.get('current_temperature'))}   {mode}"
@@ -59,9 +61,9 @@ async def push_status(ha, entity: str, discovered: dict) -> None:
         info += f"   fan: {fan}"
     big = "off" if mode in ("off", "") else _fmt_temp(attrs.get("temperature"))
     try:
-        await ha.call_service("text", "set_value", {"entity_id": name_e, "value": name})
+        await ha.call_service("text", "set_value", {"entity_id": name_e, "value": for_robot(name)})
         await ha.call_service("text", "set_value", {"entity_id": set_e, "value": big})
-        await ha.call_service("text", "set_value", {"entity_id": info_e, "value": info[:60]})
+        await ha.call_service("text", "set_value", {"entity_id": info_e, "value": for_robot(info[:60])})
     except Exception as exc:  # noqa: BLE001
         log.debug("climate push write: %s", exc)
 
