@@ -385,8 +385,6 @@ globals:
   - { id: g_apulse, type: bool, restore_value: false, initial_value: "false" }  # AI-agent "working" pulse phase
   - { id: g_gloves, type: bool, restore_value: false, initial_value: "false" }  # boxing-gloves accessory is on → arms the auto-punch
   - { id: g_wink,   type: bool, restore_value: false, initial_value: "false" }  # this blink is a one-eyed wink
-  - { id: g_amp_muted, type: bool, restore_value: false, initial_value: "false" }  # AW88298 idle-mute state (kills the idle speaker hiss)
-  - { id: g_amp_idle,  type: int,  restore_value: false, initial_value: "0" }       # consecutive 100ms ticks the speaker has been idle
   - { id: g_ant,    type: bool, restore_value: false, initial_value: "false" }  # antennae accessory is on (arms the wiggle)
   # ── DOOM-3D — a real first-person raycaster: joystick turns/walks, the button shoots ──
   - { id: r3_px,   type: float, restore_value: false, initial_value: "2.5" }   # player x (map units)
@@ -5121,31 +5119,6 @@ interval:
             - globals.set: { id: g_blink, value: "false" }
             - globals.set: { id: g_wink, value: "false" }
             - script.execute: render_face
-  # AMP idle-mute — the AW88298 amp hisses when powered but idle. Mute the DAC whenever the
-  # speaker isn't playing (after ~500ms linger so we never clip between TTS chunks) and unmute
-  # it the instant audio starts. Covers every audio source (TTS, announcements, game beeps).
-  - interval: 100ms
-    then:
-      - if:
-          condition:
-            speaker.is_playing: i2s_speaker
-          then:
-            - globals.set: { id: g_amp_idle, value: "0" }
-            - if:
-                condition: { lambda: 'return id(g_amp_muted);' }
-                then:
-                  - audio_dac.mute_off: aw88298_dac
-                  - globals.set: { id: g_amp_muted, value: "false" }
-          else:
-            - if:
-                condition: { lambda: 'return !id(g_amp_muted);' }
-                then:
-                  - globals.set: { id: g_amp_idle, value: !lambda 'return id(g_amp_idle) + 1;' }
-                  - if:
-                      condition: { lambda: 'return id(g_amp_idle) >= 5;' }
-                      then:
-                        - audio_dac.mute_on: aw88298_dac
-                        - globals.set: { id: g_amp_muted, value: "true" }
   # Sleep "zzz" + talking mouth + screensaver breathing animation.
   - interval: 600ms
     then:
