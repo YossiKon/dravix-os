@@ -405,7 +405,9 @@ export function SettingsPage(props: {
       return;
     }
     try {
-      await apiSend("/api/import", "POST", data);
+      // /api/import expects {store: {...}}; our own backup file is the bare store dict.
+      const body = data && typeof data === "object" && "store" in (data as object) ? data : { store: data };
+      await apiSend("/api/import", "POST", body);
       toast(tr("שוחזר! חלק מהשינויים דורשים ריסטארט לתוסף", "Restored! Some changes need an add-on restart"));
       props.onConfigChanged();
     } catch (e) {
@@ -1007,7 +1009,7 @@ export function SettingsPage(props: {
 
         <Toggle
           label={tr("תנועת ראש עצמאית (כשהוא משועמם)", "Autonomous head motion (when bored)")}
-          on={Boolean(app?.store.idle_motion ?? true)}
+          on={Boolean(app?.store.idle_motion ?? false)}
           onChange={(v) => void setIdle(v)}
         />
       </Section>

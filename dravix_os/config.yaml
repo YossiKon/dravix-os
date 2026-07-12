@@ -1,5 +1,5 @@
 name: dravix-os
-version: "0.0.82"
+version: "0.0.83"
 slug: dravix_os
 description: Companion OS for the M5Stack StackChan robot (local-first)
 url: https://github.com/YossiKon/dravix-os
@@ -25,7 +25,7 @@ options:
   # dravix ESPHome firmware on the StackChan (see docs/esphome-local-control.md).
   robot_driver: ha
   # When robot_driver=ha, the StackChan ESPHome entity ids (leave blank what you don't have):
-  robot_entity_face: ""          # select.* — expression (neutral|happy|sad|angry|sleepy|doubt)
+  robot_entity_face: ""          # select.* — expression (neutral|happy|sad|angry|sleepy|doubt|love|dizzy)
   robot_entity_head_yaw: ""      # number.* — head left/right
   robot_entity_head_pitch: ""    # number.* — head up/down
   robot_entity_media_player: ""  # media_player.* — the speaker TTS plays on
@@ -39,6 +39,9 @@ options:
   ai_provider: ha_assist
   # Language for the robot's wellness tips etc. (the dashboard has its own live toggle).
   language: en
+  # Reorders Hebrew to visual order for the robot's screen (it has no BIDI support).
+  # Leave on; set false ONLY if the firmware ever enables LV_USE_BIDI.
+  robot_rtl_fix: true
   idle_motion: false             # dravix's own idle glances; OFF by default — the firmware glances on its own and freezes in sleep/focus/quiet (on = double motion)
   # Seeds the dashboard's isLocal toggle on the VERY FIRST run only — from then on the
   # toggle is the user's explicit choice and this option is ignored (never auto-flips).
@@ -59,6 +62,7 @@ schema:
   ha_token: "str?"
   ai_provider: "list(ha_assist|claude|openai|ollama)"
   language: "list(en|he)"
+  robot_rtl_fix: bool
   idle_motion: bool
   local_only: bool
   frigate_url: "str?"

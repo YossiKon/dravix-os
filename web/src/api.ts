@@ -4,8 +4,16 @@ async function unwrap<T>(r: Response): Promise<T> {
   if (!r.ok) {
     let detail = "";
     try {
-      const body = (await r.json()) as { detail?: string };
-      detail = body.detail ?? "";
+      const body = (await r.json()) as { detail?: unknown };
+      const d = body.detail;
+      if (typeof d === "string") detail = d;
+      // FastAPI validation errors are an array of {msg, loc, ...} — surface the messages,
+      // not "[object Object]".
+      else if (Array.isArray(d))
+        detail = d
+          .map((it) => (it && typeof it === "object" && "msg" in it ? String((it as { msg: unknown }).msg) : JSON.stringify(it)))
+          .join("; ");
+      else if (d != null) detail = JSON.stringify(d);
     } catch {
       /* not json */
     }
@@ -14,15 +22,22 @@ async function unwrap<T>(r: Response): Promise<T> {
   return (await r.json()) as T;
 }
 
-export function apiGet<T>(url: string): Promise<T> {
-  return fetch(url).then((r) => unwrap<T>(r));
+// A hung backend must not leave spinners stuck forever — every call gets a deadline.
+export function apiGet<T>(url: string, timeoutMs = 15000): Promise<T> {
+  return fetch(url, { signal: AbortSignal.timeout(timeoutMs) }).then((r) => unwrap<T>(r));
 }
 
-export function apiSend<T>(url: string, method: "POST" | "PUT" | "DELETE", body?: unknown): Promise<T> {
+export function apiSend<T>(
+  url: string,
+  method: "POST" | "PUT" | "DELETE",
+  body?: unknown,
+  timeoutMs = 60000,
+): Promise<T> {
   return fetch(url, {
     method,
     headers: { "Content-Type": "application/json" },
     body: body === undefined ? undefined : JSON.stringify(body),
+    signal: AbortSignal.timeout(timeoutMs),
   }).then((r) => unwrap<T>(r));
 }
 

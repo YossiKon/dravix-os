@@ -44,6 +44,12 @@ class Settings(BaseSettings):
         "en", validation_alias=AliasChoices("DRAVIX_LANG", "DRAVIX_LANGUAGE")
     )
 
+    # The robot's LVGL screen has no bidirectional-text support, so Hebrew would render
+    # left-to-right (reversed). When true (default), dravix reorders Hebrew to VISUAL order
+    # before sending it to the robot's text slots — TTS still gets the correct logical text.
+    # Set false if the firmware ever enables LV_USE_BIDI (otherwise it double-reverses).
+    robot_rtl_fix: bool = True
+
     # Robot (StackChan)
     robot_driver: str = "mock"  # mcp | ha | mock
     robot_mcp_url: str = ""
@@ -67,7 +73,9 @@ class Settings(BaseSettings):
     # idle motion off avoids two systems fighting over the head. Turn on for the mock/other backends.
 
     # Pet reaction: when petted, tilt the head up (pleased) then return after a hold.
-    pet_head_raise: float = 30.0  # degrees up on a pet (0 disables the head-lift)
+    # Degrees up on a pet (0 disables the head-lift). Values ≤1 are taken as an already-
+    # normalized fraction of travel; pethead converts degrees to the -1..1 head API.
+    pet_head_raise: float = 30.0
     pet_head_hold_s: float = 10.0  # seconds to hold up before returning to centre
 
     # Home Assistant

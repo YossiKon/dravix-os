@@ -78,17 +78,19 @@
       <select id="face">
         <option>neutral</option><option>happy</option><option>sad</option>
         <option>angry</option><option>sleepy</option><option>doubt</option>
+        <option>love</option><option>dizzy</option>
       </select>
       <button class="ghost" onclick="setFace()">Set face</button>
     </div>
     <div class="row" style="margin-bottom:6px">
       <label style="width:46px;color:var(--muted)">yaw</label>
-      <input type="range" id="yaw" min="-90" max="90" value="0" class="grow" oninput="yawv.textContent=this.value">
+      <!-- the API takes normalized -1..1, not degrees -->
+      <input type="range" id="yaw" min="-1" max="1" step="0.1" value="0" class="grow" oninput="yawv.textContent=this.value">
       <span id="yawv" class="chip">0</span>
     </div>
     <div class="row" style="margin-bottom:10px">
       <label style="width:46px;color:var(--muted)">pitch</label>
-      <input type="range" id="pitch" min="-45" max="45" value="0" class="grow" oninput="pitchv.textContent=this.value">
+      <input type="range" id="pitch" min="-1" max="1" step="0.1" value="0" class="grow" oninput="pitchv.textContent=this.value">
       <span id="pitchv" class="chip">0</span>
     </div>
     <button class="ghost" onclick="moveHead()">Move head</button>
@@ -115,7 +117,7 @@ function logLine(m){ logEl.textContent = `[${new Date().toLocaleTimeString()}] $
 async function api(path, opts){
   const r = await fetch(path, { headers:{'Content-Type':'application/json'}, ...opts });
   const body = await r.json().catch(()=> ({}));
-  if(!r.ok) throw new Error(body.detail || r.statusText);
+  if(!r.ok) throw new Error(typeof body.detail === 'string' ? body.detail : (body.detail ? JSON.stringify(body.detail) : r.statusText));
   return body;
 }
 async function refresh(){

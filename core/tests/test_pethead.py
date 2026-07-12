@@ -32,7 +32,9 @@ async def test_pet_raises_head_then_returns():
     await asyncio.sleep(0.15)  # raise, hold, then return
     await beh.stop()
 
-    assert driver.moves[0] == (0.0, 30.0)  # tilted up on the pet
+    # DEGREES in config are normalized to the -1..1 head API (30° → 1/3 of travel) —
+    # passing 30.0 raw used to clamp to 1.0 and slam the head to FULL pitch on a pet.
+    assert driver.moves[0] == (0.0, 30.0 / 90.0)  # gently tilted up on the pet
     assert driver.moves[-1] == (0.0, 0.0)  # returned to centre after the hold
 
 
@@ -52,5 +54,5 @@ async def test_repeated_petting_keeps_head_up_without_respamming():
     await beh.stop()
 
     # Only ONE raise (not one per pet), then a single return — kind to the servo bus.
-    assert driver.moves.count((0.0, 25.0)) == 1
+    assert driver.moves.count((0.0, 25.0 / 90.0)) == 1
     assert driver.moves[-1] == (0.0, 0.0)

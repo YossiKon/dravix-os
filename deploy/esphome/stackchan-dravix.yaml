@@ -39,7 +39,7 @@ substitutions:
   # publishes it to HA ("Firmware version" sensor); the dravix dashboard compares it
   # with the version bundled in the add-on and shows "firmware update available".
   # (Maintainers: bump this on every firmware change. Users: don't touch.)
-  fw_version: "23"
+  fw_version: "24"
   # The ESPHome node name (mDNS hostname + the default entity prefix on a fresh flash).
   # Change it only if you run MORE THAN ONE robot — each needs a unique name. NOTE:
   # changing it on an already-adopted robot registers a NEW device in HA.
@@ -283,6 +283,8 @@ globals:
   # face state
   - { id: g_expr,   type: int,  restore_value: false, initial_value: "0" }
   - { id: g_face_rest, type: int, restore_value: false, initial_value: "0" }  # mood/select RESTING face; a reaction's happy/blush settles back to this on idle (so a pet's blush doesn't stick)
+  - { id: g_bg_last, type: int, restore_value: false, initial_value: "-1" }   # last bg colour render_face painted — skip the full-screen invalidation when unchanged
+  - { id: g_sweat,  type: bool, restore_value: false, initial_value: "false" }  # react_hot's sweat drop is up (so render_face doesn't hide it mid-reaction)
   - { id: g_blink,  type: bool, restore_value: false, initial_value: "false" }
   - { id: g_listen, type: bool, restore_value: false, initial_value: "false" }
   - { id: g_talk,   type: bool, restore_value: false, initial_value: "false" }
@@ -2780,12 +2782,39 @@ script:
       - script.stop: led_flash
       - script.stop: party                      # stop the disco / dance
       - script.stop: identify
+      # …and EVERY other animation — "stop everything" used to leave a dance bopping with
+      # rainbow LEDs (its own restore then overrode the turn-off below).
+      - script.stop: dance
+      - script.stop: eat
+      - script.stop: drink
+      - script.stop: tickle
+      - script.stop: boop_react
+      - script.stop: wave_react
+      - script.stop: hand_react
+      - script.stop: greet
+      - script.stop: wave
+      - script.stop: shy
+      - script.stop: clap
       - globals.set: { id: g_flash,  value: "false" }
       - globals.set: { id: g_listen, value: "false" }
       - globals.set: { id: g_think,  value: "false" }   # else STOP mid-"thinking" leaves the face + HA state stuck
       - globals.set: { id: g_talk,   value: "false" }
       - globals.set: { id: g_voice,  value: "false" }
-      - light.turn_off: stackchan_light_bar     # no LEDs — back to a clean state
+      - globals.set: { id: g_sweat,  value: "false" }
+      # a stopped eat/drink cleans up only at its END — tidy its props here
+      - lvgl.widget.hide: hand_l
+      - lvgl.widget.hide: hand_r
+      - lvgl.widget.hide: food_item
+      - lvgl.widget.hide: food_top
+      - lvgl.widget.hide: heart1
+      - lvgl.widget.hide: heart2
+      - lvgl.widget.hide: heart3
+      - lvgl.widget.hide: drink_glass
+      - lvgl.widget.hide: drink_water
+      - lvgl.widget.update: { id: hand_l, x: -34, y: 92 }   # paws back to their home spot
+      - lvgl.widget.update: { id: hand_r, x: 34, y: 92 }
+      - light.turn_on: { id: stackchan_light_bar, effect: "None" }   # cancel a running LED effect…
+      - light.turn_off: stackchan_light_bar     # …then no LEDs — back to a clean state
       - script.execute: render_face             # redraw the current mode's face
   - id: tap_single            # settle timer: a settled DOUBLE (2 taps) toggles the AI; 1 tap = nothing
     mode: restart
@@ -2939,8 +2968,10 @@ script:
                   float v = id(n_head_pitch).state + dy;
                   return v < 158 ? 158 : (v > 260 ? 260 : v);
   # A quick left-right "no!" shake (angry / playful). Silent in the calm modes.
+  # mode: single — the steps are RELATIVE (-12/+24/-12 sums to zero), so a restart
+  # mid-sequence left the head permanently off-centre by ±12° per collision.
   - id: head_shake
-    mode: restart
+    mode: single
     then:
       - lambda: 'id(g_move_ms) = (long) millis();'
       - if:
@@ -2962,9 +2993,9 @@ script:
                 id: servo_x_angle
                 value: !lambda 'float v = id(servo_x_angle).state - 12; return v < -164 ? -164 : v;'
   # A gentle up-down "yes" nod (agree / acknowledge / greet). PITCH via n_head_pitch
-  # (158..260). Silent in the calm modes.
+  # (158..260). Silent in the calm modes. mode: single — same drift-on-restart risk as head_shake.
   - id: head_nod
-    mode: restart
+    mode: single
     then:
       - lambda: 'id(g_move_ms) = (long) millis();'
       - if:
@@ -3034,7 +3065,11 @@ script:
           condition: { lambda: 'return !id(g_sleep) && !id(g_saver);' }   # DND: in sleep/screensaver ONLY a screen tap or "Ok Nabu" wakes it
           then:
             - lambda: 'lv_disp_trig_activity(NULL);'
-            - select.set: { id: robot_mode, option: awake }
+            # a pet must NOT cancel night/focus/quiet (it used to flip them to awake —
+            # backlight to full, mood LEDs re-armed). It still blushes, gently.
+            - if:
+                condition: { lambda: 'return !id(g_night) && !id(g_focus) && !id(g_quiet);' }
+                then: [ { select.set: { id: robot_mode, option: awake } } ]
             - globals.set: { id: g_expr, value: "1" }     # happy (cheeks show)
             - globals.set: { id: g_card, value: "0" }
             - lvgl.page.show: page_face
@@ -3298,7 +3333,10 @@ script:
                 condition: { lambda: 'return id(sw_sfx).state && !id(g_quiet) && !id(g_night);' }
                 then: [ { rtttl.play: "plug:d=16,o=5,b=200:c,g,c6" } ]   # "nom, electricity!" ⚡
             - delay: 2500ms
-            - globals.set: { id: g_expr, value: "0" }
+            # settle to the mood's RESTING face, not forced-neutral — this reaction never
+            # trig_activity's, so the on_idle settle may already have fired and a mood face
+            # set from HA would silently vanish until the next touch.
+            - globals.set: { id: g_expr, value: !lambda 'return id(g_face_rest);' }
             - script.execute: render_face
       - delay: 30s   # a flaky charger connection can't turn this into a disco
   # ── WAVE 👋 — a hand waving at the sensor: wakes up, waves BACK with its head,
@@ -3310,7 +3348,9 @@ script:
           condition: { lambda: 'return !id(g_sleep) && !id(g_saver);' }   # DND: don't wake on a wave in sleep/screensaver
           then:
             - lambda: 'lv_disp_trig_activity(NULL);'
-            - select.set: { id: robot_mode, option: awake }   # waving = you want its attention
+            - if:  # waving = you want its attention — but it must not cancel night/focus/quiet
+                condition: { lambda: 'return !id(g_night) && !id(g_focus) && !id(g_quiet);' }
+                then: [ { select.set: { id: robot_mode, option: awake } } ]
             - globals.set: { id: g_expr, value: "1" }         # happy
             - globals.set: { id: g_card, value: "0" }
             - lvgl.page.show: page_face
@@ -3320,7 +3360,7 @@ script:
             - delay: 900ms
             - script.execute: head_shake
             - delay: 2000ms
-            - globals.set: { id: g_expr, value: "0" }
+            - globals.set: { id: g_expr, value: !lambda 'return id(g_face_rest);' }   # back to the mood's resting face
             - script.execute: render_face
             - delay: 6s                                       # throttle
   # ── BOOP 👉 — a finger right up at the proximity sensor: love-eyes + a happy nod.
@@ -3336,7 +3376,7 @@ script:
       - script.execute: head_nod
       - script.execute: shy                          # 🙈 bashful — covers its eyes
       - delay: 2500ms
-      - globals.set: { id: g_expr, value: "0" }
+      - globals.set: { id: g_expr, value: !lambda 'return id(g_face_rest);' }   # back to the mood's resting face
       - script.execute: render_face
       - delay: 8s                                    # throttle boops
   # ── HAND-TURN REACTION — someone physically turned the head: a startled "hey!?",
@@ -3357,7 +3397,7 @@ script:
             - globals.set: { id: g_expr, value: "1" }      # ...okay, that was fun actually
             - script.execute: render_face
             - delay: 2000ms
-            - globals.set: { id: g_expr, value: "0" }
+            - globals.set: { id: g_expr, value: !lambda 'return id(g_face_rest);' }   # back to the mood's resting face
             - script.execute: render_face
             - delay: 12s                                   # throttle: at most once per ~15s
   # ── IR GLANCE — someone pressed a TV/AC remote: glance over, quizzical, then back.
@@ -3378,7 +3418,7 @@ script:
             - script.execute: render_face
             - delay: 1600ms
             - lvgl.widget.update: { id: face_box, x: 0, y: 0 }
-            - globals.set: { id: g_expr, value: "0" }
+            - globals.set: { id: g_expr, value: !lambda 'return id(g_face_rest);' }   # back to the mood's resting face
             - script.execute: render_face
       - delay: 20s
   # ── TICKLE (touch zone 3, back of the head) — giggly, faster than a calm pet ──
@@ -3389,7 +3429,9 @@ script:
           condition: { lambda: 'return !id(g_sleep) && !id(g_saver);' }   # DND: don't wake on a tickle in sleep/screensaver
           then:
             - lambda: 'lv_disp_trig_activity(NULL);'
-            - select.set: { id: robot_mode, option: awake }
+            - if:  # a tickle must not cancel night/focus/quiet either
+                condition: { lambda: 'return !id(g_night) && !id(g_focus) && !id(g_quiet);' }
+                then: [ { select.set: { id: robot_mode, option: awake } } ]
             - globals.set: { id: g_expr, value: "1" }     # happy (cheeks show)
             - globals.set: { id: g_card, value: "0" }
             - lvgl.page.show: page_face
@@ -3522,12 +3564,15 @@ script:
           then:
             - globals.set: { id: g_card, value: "0" }
             - lvgl.page.show: page_face
+            # via g_sweat so render_face (blinks etc.) can't hide the drop mid-reaction
+            - globals.set: { id: g_sweat, value: "true" }
             - lvgl.widget.show: sweat
             - if:
                 condition: { lambda: 'return id(sw_sfx).state && !id(g_quiet) && !id(g_night);' }
                 then: [ { rtttl.play: "hot:d=8,o=5,b=110:g,e,c" } ]
             - script.execute: { id: head_nudge, dx: 0, dy: -8 }   # wipes its brow
             - delay: 3500ms
+            - globals.set: { id: g_sweat, value: "false" }
             - lvgl.widget.hide: sweat
   # ── FEELS COLD 🥶 — a shivery little shake + a "brr".
   - id: react_cold
@@ -3575,27 +3620,72 @@ script:
   # Redraw the pet face from the current state.
   - id: render_face
     then:
-      # Background: awake = WHITE + dark eyes · night = black + dim teal · saver/sleep = black + teal.
-      - lvgl.widget.update:
-          id: bg_rect
-          bg_color: !lambda 'return (!id(g_sleep) && !id(g_saver) && !id(g_night)) ? lv_color_hex(0xFFFFFF) : lv_color_hex(0x000000);'
+      # Background: awake = white OR the "Face background" theme · night/saver/sleep = black.
+      # Painted ONLY when the colour actually changed — an LVGL style write invalidates the
+      # full 320×240 even when the value is identical, and render_face runs on every blink.
+      # (This also used to hard-code WHITE, stomping the theme select within seconds.)
+      - if:
+          condition:
+            lambda: |-
+              int c;
+              if (id(g_sleep) || id(g_saver) || id(g_night)) c = 0x000000;
+              else {
+                auto s = id(sel_background).state;
+                c = (s == "Space")  ? 0x0a1830
+                  : (s == "Sunset") ? 0x6a3016
+                  : (s == "Ocean")  ? 0x0d4a70
+                  : (s == "Matrix") ? 0x0c3418
+                  : (s == "Party")  ? 0x300a48
+                  : (s == "Arena")  ? 0x5a1818
+                  : 0xFFFFFF;
+              }
+              if (c == id(g_bg_last)) return false;
+              id(g_bg_last) = c;
+              return true;
+          then:
+            - lvgl.widget.update:
+                id: bg_rect
+                bg_color: !lambda 'return lv_color_hex(id(g_bg_last));'
+      # stars belong to the "Space" theme — awake only (a sleeping face is dead-still black)
+      - if:
+          condition:
+            lambda: |-
+              return id(sel_background).state == "Space"
+                     && !id(g_sleep) && !id(g_saver) && !id(g_night);
+          then:
+            - lvgl.widget.show: bg_star1
+            - lvgl.widget.show: bg_star2
+            - lvgl.widget.show: bg_star3
+            - lvgl.widget.show: bg_star4
+            - lvgl.widget.show: bg_star5
+            - lvgl.widget.show: bg_star6
+          else:
+            - lvgl.widget.hide: bg_star1
+            - lvgl.widget.hide: bg_star2
+            - lvgl.widget.hide: bg_star3
+            - lvgl.widget.hide: bg_star4
+            - lvgl.widget.hide: bg_star5
+            - lvgl.widget.hide: bg_star6
       - lvgl.widget.update:
           id: eye_l
           bg_color: !lambda |-
             if (id(g_sleep) || id(g_saver)) return lv_color_hex(0x33E6C8);
             if (id(g_night)) return lv_color_hex(0x1f9e88);
+            if (id(sel_background).state != "None") return lv_color_hex(0xF2F5F7);  // light eyes on a dark theme
             return lv_color_hex(0x14181d);
       - lvgl.widget.update:
           id: eye_r
           bg_color: !lambda |-
             if (id(g_sleep) || id(g_saver)) return lv_color_hex(0x33E6C8);
             if (id(g_night)) return lv_color_hex(0x1f9e88);
+            if (id(sel_background).state != "None") return lv_color_hex(0xF2F5F7);
             return lv_color_hex(0x14181d);
       - lvgl.widget.update:
           id: mouth
           bg_color: !lambda |-
             if (id(g_sleep) || id(g_saver)) return lv_color_hex(0x33E6C8);
             if (id(g_night)) return lv_color_hex(0x1f9e88);
+            if (id(sel_background).state != "None") return lv_color_hex(0xF2F5F7);
             return lv_color_hex(0x14181d);
       # privacy badge
       - lvgl.label.update:
@@ -3626,11 +3716,12 @@ script:
             if (!id(g_sleep)) return std::string("");
             const char* z[] = {"z", "z z", "z z z", ""};
             return std::string(z[id(g_anim) % 4]);
-      # pink cheeks on a happy or in-love idle face (and greet)
+      # pink cheeks on a happy or in-love idle face (and greet). Blinks DON'T hide them —
+      # the cheeks sit below the eyes, and hiding them made the face flicker on every blink.
       - if:
           condition:
             lambda: |-
-              return !id(g_sleep) && !id(g_listen) && !id(g_talk) && !id(g_blink)
+              return !id(g_sleep) && !id(g_listen) && !id(g_talk) && !id(g_think)
                      && !id(g_saver) && !id(g_focus) && (id(g_expr) == 1 || id(g_expr) == 6);
           then: [ { lvgl.widget.show: cheek_l }, { lvgl.widget.show: cheek_r } ]
           else: [ { lvgl.widget.hide: cheek_l }, { lvgl.widget.hide: cheek_r } ]
@@ -3747,15 +3838,36 @@ script:
           condition: { lambda: 'return false;' }   # eyebrows removed — expression via eyes/mouth/blush only
           then: [ { lvgl.widget.show: brow_l }, { lvgl.widget.show: brow_r } ]
           else: [ { lvgl.widget.hide: brow_l }, { lvgl.widget.hide: brow_r } ]
-      - if:  # CONFUSED / dizzy — teal x-eyes + a "?" above the head (only on an idle face)
+      - if:  # CONFUSED / dizzy — x-eyes + a "?" above the head (only on an idle face).
+             # Colours follow the background: dark marks on the white awake face, bright
+             # teal/yellow on dark themes/night — teal-on-white was near-invisible (~1.8:1).
+             # Blinks don't hide them: x-eyes don't blink (the blink itself skips expr 7).
           condition:
             lambda: |-
-              return !id(g_sleep) && !id(g_listen) && !id(g_talk) && !id(g_blink)
+              return !id(g_sleep) && !id(g_listen) && !id(g_talk)
                      && !id(g_saver) && !id(g_focus) && id(g_expr) == 7;
-          then: [ { lvgl.widget.show: dz_l }, { lvgl.widget.show: dz_r }, { lvgl.widget.show: q_mark } ]
+          then:
+            - lvgl.label.update:
+                id: dz_l
+                text_color: !lambda |-
+                  bool dark_bg = id(g_night) || id(sel_background).state != "None";
+                  return lv_color_hex(dark_bg ? 0x33E6C8 : 0x14181d);
+            - lvgl.label.update:
+                id: dz_r
+                text_color: !lambda |-
+                  bool dark_bg = id(g_night) || id(sel_background).state != "None";
+                  return lv_color_hex(dark_bg ? 0x33E6C8 : 0x14181d);
+            - lvgl.label.update:
+                id: q_mark
+                text_color: !lambda |-
+                  bool dark_bg = id(g_night) || id(sel_background).state != "None";
+                  return lv_color_hex(dark_bg ? 0xffd54a : 0xB5471F);
+            - lvgl.widget.show: dz_l
+            - lvgl.widget.show: dz_r
+            - lvgl.widget.show: q_mark
           else: [ { lvgl.widget.hide: dz_l }, { lvgl.widget.hide: dz_r }, { lvgl.widget.hide: q_mark } ]
-      - if:
-          condition: { lambda: 'return false;' }   # busy sweat-drop removed
+      - if:  # sweat drop — owned by react_hot (g_sweat), so a blink can't wipe it mid-reaction
+          condition: { lambda: 'return id(g_sweat) && !id(g_sleep) && !id(g_saver);' }
           then: [ { lvgl.widget.show: sweat } ]
           else: [ { lvgl.widget.hide: sweat } ]
       # sparkles pop when it's happy or in love (and idle)
@@ -3794,11 +3906,12 @@ script:
       - if: { condition: { lambda: 'return id(g_card) == 6;' }, then: [ { lvgl.page.show: page_climate } ] }
       - if: { condition: { lambda: 'return id(g_card) <= 0 || id(g_card) > 6;' }, then: [ { lvgl.page.show: page_face } ] }
   # Greet: someone approached → wake up + a happy face + perk the head up.
-  # (Skipped at night and in focus mode — do-not-disturb.)
+  # (Skipped at night / in focus — do-not-disturb — AND while asleep/screensaver: the sleep
+  # contract is "only a tap or the wake word wakes it", not someone walking past at night.)
   - id: greet
     then:
       - if:
-          condition: { lambda: 'return !id(g_night) && !id(g_focus);' }
+          condition: { lambda: 'return !id(g_night) && !id(g_focus) && !id(g_sleep) && !id(g_saver);' }
           then:
             - lambda: 'lv_disp_trig_activity(NULL);'   # reset the screensaver/sleep idle timer
             - globals.set: { id: g_card,  value: "0" }
@@ -4023,31 +4136,9 @@ select:
     options: ["None", "Space", "Sunset", "Ocean", "Matrix", "Party", "Arena"]
     initial_option: "None"
     on_value:
-      - lvgl.widget.hide: bg_star1
-      - lvgl.widget.hide: bg_star2
-      - lvgl.widget.hide: bg_star3
-      - lvgl.widget.hide: bg_star4
-      - lvgl.widget.hide: bg_star5
-      - lvgl.widget.hide: bg_star6
-      - lvgl.widget.update:
-          id: bg_rect
-          bg_color: !lambda |-
-            if (x == "Space")  return lv_color_hex(0x0a1830);
-            if (x == "Sunset") return lv_color_hex(0x6a3016);
-            if (x == "Ocean")  return lv_color_hex(0x0d4a70);
-            if (x == "Matrix") return lv_color_hex(0x0c3418);
-            if (x == "Party")  return lv_color_hex(0x300a48);
-            if (x == "Arena")  return lv_color_hex(0x5a1818);
-            return lv_color_hex(0x000000);
-      - if:
-          condition: { lambda: 'return x == "Space";' }
-          then:
-            - lvgl.widget.show: bg_star1
-            - lvgl.widget.show: bg_star2
-            - lvgl.widget.show: bg_star3
-            - lvgl.widget.show: bg_star4
-            - lvgl.widget.show: bg_star5
-            - lvgl.widget.show: bg_star6
+      # render_face owns the background now (theme colour, stars, eye contrast) — it used
+      # to be painted here and then stomped back to white by the very next render.
+      - script.execute: render_face
   # ── FACE ACCESSORY — pick a cosmetic from the dashboard / HA. Default None (bare face). ──
   - platform: template
     name: "Face accessory"
@@ -4405,7 +4496,7 @@ select:
                       then: [ { rtttl.play: "wake:d=16,o=5,b=170:c,e,g,c6" } ]   # a cheery boot-up 🌅
                   - script.execute: head_shake                    # shakes the sleep off
                   - delay: 1500ms
-                  - globals.set: { id: g_expr, value: "0" }
+                  - globals.set: { id: g_expr, value: !lambda 'return id(g_face_rest);' }   # back to the mood's resting face
                   - script.execute: render_face
             # ALWAYS clear the saved droop on waking — even when Body language is off,
             # otherwise the next sleep skips its droop and a later wake restores stale pitch
@@ -4639,7 +4730,8 @@ interval:
           condition:
             and:
               - lvgl.page.is_showing: page_face
-              - lambda: 'return !id(g_sleep) && !id(g_saver) && !id(g_voice) && !id(g_busy) && !id(g_perm) && random_float() < 0.25;'
+              # (night/focus/quiet included — no spontaneous snacking in do-not-disturb)
+              - lambda: 'return !id(g_sleep) && !id(g_saver) && !id(g_voice) && !id(g_busy) && !id(g_perm) && !id(g_night) && !id(g_focus) && !id(g_quiet) && random_float() < 0.25;'
           then:
             - if:
                 condition: { lambda: 'return random_float() < 0.5;' }
@@ -5105,12 +5197,13 @@ interval:
                 then:
                   - light.turn_off: stackchan_light_bar
                   - globals.set: { id: g_breath, value: "false" }
-  # Random blink (never while sleeping / listening / talking).
+  # Random blink (never while sleeping / listening / talking — nor on the dizzy x-eyes,
+  # which aren't real eyes and used to flash full-width slits over the x-es every blink).
   - interval: 1s
     then:
       - if:
           condition:
-            lambda: 'return id(sw_blink).state && !id(g_sleep) && !id(g_talk) && !id(g_listen) && random_float() < 0.22;'
+            lambda: 'return id(sw_blink).state && !id(g_sleep) && !id(g_talk) && !id(g_listen) && !id(g_saver) && id(g_expr) != 7 && random_float() < 0.22;'
           then:
             - globals.set: { id: g_wink, value: "false" }   # winks disabled — always blink with BOTH eyes
             - globals.set: { id: g_blink, value: "true" }
@@ -5124,7 +5217,9 @@ interval:
     then:
       - globals.set: { id: g_anim, value: !lambda 'return id(g_anim) + 1;' }
       - if:
-          condition: { lambda: 'return id(g_sleep) || id(g_talk) || id(g_saver);' }
+          # in sleep, keep animating only while the backlight is still on (it goes fully off
+          # ~2s in) — re-rendering an invisible zzz all night is pure SPI/CPU churn.
+          condition: { lambda: 'return id(g_talk) || id(g_saver) || (id(g_sleep) && id(lcd_backlight).current_values.is_on());' }
           then: [ { script.execute: render_face } ]
       # BREATHING — the whole face rises/settles on a slow ~5s sine (the original's
       # breath modifier). Idle awake only; pauses for 5s after any glance so the
@@ -5573,7 +5668,11 @@ voice_assistant:
               id(led_g)   = v.get_green();
               id(led_b)   = v.get_blue();
     - globals.set: { id: g_flash, value: "false" }   # flash cancelled; save is now ours
-    - select.set: { id: robot_mode, option: awake }
+    # the wake word DOES wake a sleeping robot — but a question asked in night/focus/quiet
+    # must not silently cancel that mode (it kept dropping focus/night to awake).
+    - if:
+        condition: { lambda: 'return id(g_sleep) || (!id(g_night) && !id(g_focus) && !id(g_quiet));' }
+        then: [ { select.set: { id: robot_mode, option: awake } } ]
     - globals.set: { id: g_listen, value: "true" }
     - globals.set: { id: g_voice, value: "true" }
     - lvgl.page.show: page_face

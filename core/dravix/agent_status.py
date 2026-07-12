@@ -17,9 +17,14 @@ capability-guarded; the agent reaches the add-on over your LAN only, so it respe
 """
 from __future__ import annotations
 
+import asyncio
 import datetime
 import uuid
 from dataclasses import dataclass
+
+from .logging import get_logger
+
+log = get_logger("agent")
 
 
 @dataclass(frozen=True)
@@ -100,6 +105,42 @@ class AgentPresence:
         self._last: tuple[str, str] = ("", "")      # (winner_name, winner_state) last reflected
         self._perms: dict[str, dict] = {}           # id -> permission request
         self._current: str | None = None            # the request shown on the robot right now
+        self._sweep_task: asyncio.Task | None = None
+
+    async def start(self) -> None:
+        """Start the staleness sweeper. Reflection otherwise only happens on incoming
+        updates — a crashed agent would hold its face / bright LED on the robot forever."""
+        self._sweep_task = asyncio.create_task(self._sweeper(), name="dravix-agent-sweep")
+
+    async def stop(self) -> None:
+        if self._sweep_task is not None:
+            self._sweep_task.cancel()
+            try:
+                await self._sweep_task
+            except asyncio.CancelledError:
+                pass
+
+    async def _sweeper(self) -> None:
+        while True:
+            await asyncio.sleep(60)
+            try:
+                now = _utcnow()
+                # release the robot when the winning agent went stale (crashed / abandoned)
+                win = self._winner(now)
+                key = (win[0], win[1]["state"]) if win else ("", "idle")
+                if key != self._last:
+                    await self._reflect(win, False, "", "")
+                # expire the on-robot permission prompt server-side too (the firmware
+                # auto-hides its buttons, but the pending request must stop being current)
+                if self._current:
+                    cur = self.permission_view(self._current, now=now)
+                    if cur is None or cur["decision"] == "expired":
+                        self._current = None
+                        await self._show_permission("")
+            except asyncio.CancelledError:
+                raise
+            except Exception:  # noqa: BLE001 — the sweeper must survive robot blips
+                log.exception("agent sweep failed")
 
     # ── preferences (dashboard-managed) ─────────────────────────────────────────────
     def _prefs(self) -> dict:
@@ -206,10 +247,30 @@ class AgentPresence:
         return self.snapshot()
 
     # ── robot reflection ────────────────────────────────────────────────────────────
+    async def _quiet(self) -> bool:
+        """The robot's ON-DEVICE do-not-disturb states — the same hard rule mood and
+        vitals follow: no faces, LEDs or speech in sleep / night / focus / quiet.
+        A 3 a.m. 'done' report must not light up and talk in the bedroom."""
+        from .dal.base import QUIET_STATES
+
+        getter = getattr(getattr(self._robot, "driver", None), "get_text", None)
+        if getter is None:
+            return False
+        try:
+            state = await getter("state_sensor")
+        except Exception:  # noqa: BLE001
+            return False
+        return (state or "").strip().lower() in QUIET_STATES
+
     async def _reflect(
         self, winner: tuple[str, dict] | None, say: bool | None, changed_name: str, changed_state: str,
     ) -> None:
         from .dal.base import CAP_FACE, CAP_LEDS, CAP_SAY
+
+        if await self._quiet():
+            # dashboard still shows everything; _last is left alone so the robot catches
+            # up on the first update (or sweep) after it wakes.
+            return
 
         wname = winner[0] if winner else ""
         wstate = winner[1]["state"] if winner else "idle"
@@ -248,7 +309,14 @@ class AgentPresence:
         if want_say and is_this_winner and (changed or bool(say)) and robot.supports(CAP_SAY):
             from .config import get_settings
 
-            he = (get_settings().language or "en").startswith("he")
+            # the dashboard's live language toggle (store) wins over the add-on option
+            lang = ""
+            if self._store is not None and hasattr(self._store, "language"):
+                try:
+                    lang = self._store.language() or ""
+                except Exception:  # noqa: BLE001
+                    pass
+            he = (lang or get_settings().language or "en").startswith("he")
             base = wtext or (look.say_he if he else look.say_en)
             if base:
                 line = f"{wname}: {base}" if (wname and wname != "agent") else base
@@ -285,6 +353,8 @@ class AgentPresence:
         writer = getattr(getattr(self._robot, "driver", None), "set_permission", None)
         if writer is not None:
             try:
+                # logical text as-is — the DRIVER owns the RTL reorder (ha_driver applies
+                # bidi.for_robot; applying it here too would double-reverse the Hebrew)
                 await writer(text[:80])
             except Exception:  # noqa: BLE001 — the on-robot prompt is best-effort
                 pass

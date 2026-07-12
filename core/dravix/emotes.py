@@ -23,9 +23,9 @@ EMOTES: dict[str, list[dict[str, Any]]] = {
         {"head": [0, 0]},
     ],
     "love": [
-        {"face": "happy", "leds": ["magenta", 0.9]},
+        {"face": "love", "leds": ["magenta", 0.9]},  # the firmware has a real ♥_♥ face — use it
         {"head": [0, -0.2], "wait": 0.3},
-        {"head": [0, 0.1]},
+        {"head": [0, 0]},
     ],
     "sad": [
         {"face": "sad", "leds": ["blue", 0.2]},
@@ -80,10 +80,10 @@ EMOTES: dict[str, list[dict[str, Any]]] = {
         {"head": [0, 0.1], "wait": 0.2},
         {"head": [0, 0]},
     ],
-    "yawn": [  # tired — a slow droop + dim amber
+    "yawn": [  # tired — a slow droop + dim amber (the sleep mode's own droop takes over from here)
         {"face": "sleepy", "leds": ["amber", 0.15]},
         {"head": [0, -0.3], "wait": 0.5},
-        {"head": [0, -0.1]},
+        {"head": [0, 0]},
     ],
     "calm": [  # soothe — settle to neutral, soft blue, gentle centre
         {"face": "neutral", "leds": ["blue", 0.25]},
@@ -114,12 +114,14 @@ async def play_emote(robot: RobotController, name: str) -> None:
     steps = EMOTES.get(name)
     if steps is None:
         raise KeyError(name)
+    used_leds = False
     for step in steps:
         if "face" in step and robot.supports(CAP_FACE):
             await robot.set_face(step["face"])
         if "leds" in step and robot.supports(CAP_LEDS):
             color, bright = step["leds"]
             await robot.set_leds(color, float(bright))
+            used_leds = True
         if "head" in step and robot.supports(CAP_HEAD):
             yaw, pitch = step["head"]
             await robot.move_head(float(yaw), float(pitch), speed=1.0)
@@ -127,3 +129,11 @@ async def play_emote(robot: RobotController, name: str) -> None:
             await robot.say(str(step["say"]))
         if step.get("wait"):
             await asyncio.sleep(float(step["wait"]))
+    # An emote's LEDs are a flourish, not a state — always restore them, or every pet /
+    # feed / wellness tip leaves the LED bar burning bright (all night, in the worst case).
+    if used_leds:
+        await asyncio.sleep(0.4)  # let the last colour register as part of the gesture
+        try:
+            await robot.set_leds("off", 0.0)
+        except Exception:  # noqa: BLE001 — cleanup must never fail the emote
+            pass

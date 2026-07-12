@@ -2,7 +2,7 @@
 // the wireless joystick, the permission prompt, and the physical touch / proximity sensors.
 import { useEffect, useState } from "react";
 import { apiGet, apiSend } from "../api";
-import { Section } from "../ui";
+import { Section, toastErr } from "../ui";
 import { useI18n } from "../i18n";
 
 type Row = [heG: string, enG: string, heA: string, enA: string];
@@ -69,10 +69,14 @@ function CosmeticPicker({ endpoint, items }: { endpoint: string; items: [string,
   }, [endpoint]);
   const pick = (opt: string) => {
     if (busy) return;
+    const previous = cur;
     setBusy(true);
-    setCur(opt);
+    setCur(opt); // optimistic — reverted below if the robot didn't take it
     apiSend(endpoint, "POST", { option: opt })
-      .catch(() => undefined)
+      .catch((e) => {
+        setCur(previous);
+        toastErr(e);
+      })
       .finally(() => setBusy(false));
   };
   return (

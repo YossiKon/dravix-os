@@ -46,7 +46,9 @@ export function AgentCard() {
 
   useEffect(() => {
     refresh();
-    const t = setInterval(refresh, 3000);
+    const t = setInterval(() => {
+      if (document.visibilityState === "visible") refresh();
+    }, 3000);
     return () => clearInterval(t);
   }, [refresh]);
 

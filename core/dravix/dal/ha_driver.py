@@ -362,8 +362,11 @@ class HARobotDriver(RobotDriver):
             try:
                 # the DISPLAYED bubble gets RTL-reordered (the robot's screen has no BIDI);
                 # TTS below still receives the untouched logical text.
+                # truncate the LOGICAL text, then reorder — visual-order Hebrew keeps its
+                # logical start at the string END, so reorder-then-truncate chopped the
+                # BEGINNING of the sentence instead of its tail.
                 await self._ha.call_service(
-                    "text", "set_value", {"entity_id": bubble, "value": for_robot(text)[:120]}
+                    "text", "set_value", {"entity_id": bubble, "value": for_robot(text[:120])}
                 )
             except Exception:  # noqa: BLE001 — showing text must never block speaking
                 pass
@@ -418,7 +421,8 @@ class HARobotDriver(RobotDriver):
         from ..bidi import for_robot
 
         try:
-            await self._ha.call_service("text", "set_value", {"entity_id": ent, "value": for_robot(text)[:32]})
+            # truncate logical, then reorder (see say() — order matters for Hebrew)
+            await self._ha.call_service("text", "set_value", {"entity_id": ent, "value": for_robot(text[:32])})
         except Exception:  # noqa: BLE001 — a status badge must never break the caller
             pass
 
@@ -432,7 +436,8 @@ class HARobotDriver(RobotDriver):
         from ..bidi import for_robot
 
         try:
-            await self._ha.call_service("text", "set_value", {"entity_id": ent, "value": for_robot(text)[:80]})
+            # truncate logical, then reorder (see say() — order matters for Hebrew)
+            await self._ha.call_service("text", "set_value", {"entity_id": ent, "value": for_robot(text[:80])})
         except Exception:  # noqa: BLE001 — the on-robot prompt must never break the caller
             pass
 

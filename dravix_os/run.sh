@@ -29,6 +29,10 @@ if [ -z "$DRAVIX_HA_TOKEN" ] && [ -n "$SUPERVISOR_TOKEN" ]; then
 fi
 export DRAVIX_AI_PROVIDER="$(opt ai_provider)"
 export DRAVIX_LANG="$(opt language)"
+# Hebrew visual-reorder for the robot's no-BIDI screen; set false only if the firmware
+# ever enables LV_USE_BIDI (empty = the dravix default, true).
+export DRAVIX_ROBOT_RTL_FIX="$(opt robot_rtl_fix)"
+[ -z "$DRAVIX_ROBOT_RTL_FIX" ] && export DRAVIX_ROBOT_RTL_FIX="true"
 export DRAVIX_IDLE_MOTION="$(opt idle_motion)"
 export DRAVIX_LOCAL_ONLY="$(opt local_only)"
 export DRAVIX_FRIGATE_URL="$(opt frigate_url)"

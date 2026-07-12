@@ -1,5 +1,63 @@
 # Changelog
 
+## 0.0.83
+
+Full-system fix pass — the three audits (dashboard, core service, robot firmware) in one release.
+
+**The robot feels alive again (core):**
+- **😊 The face can cheer up now.** Mood no longer drifts unbounded into "sad forever" when ignored
+  (boredom is floored well above the sad threshold), thresholds are symmetric (happy > 0.35 / sad <
+  −0.35), and the dashboard mood text finally matches the face.
+- **🎭 The face un-sticks itself.** Mood compares against what's *actually* on the face instead of a
+  private cache — so a face left behind by an emote, an agent status or the dashboard is reclaimed on
+  the next mood tick instead of sticking forever (the "permanently confused while Claude Code runs" bug).
+- **🔋 Energy can't pin at 0 anymore.** Waking the robot manually mid-auto-nap used to latch a flag
+  (persisted!) that disabled auto-napping forever; it now re-arms on wake.
+- **💡 LEDs stop leaking.** Every emote restores the LED bar when it ends — no more cyan/orange bar
+  burning all night after a pet, a feed or a wellness tip.
+- **🌙 Agent status respects night/sleep.** A "done" report at 3 a.m. no longer talks and lights up the
+  bedroom; a crashed agent no longer holds an orange LED + doubt face forever (a stale-agent sweeper
+  releases the robot, and expired permission prompts are cleared server-side too).
+- **🐾 A pet no longer slams the head to full pitch** (degrees were fed into the normalized head API),
+  and the love emote now uses the firmware's real ♥_♥ face.
+- **🛡 Robustness:** the mood/vitals/nudge loops survive bad ticks instead of dying silently; mood
+  persists to disk only when it actually changed (flash wear).
+- **🔤 Hebrew fixes:** permission prompts were double-reversed (now reordered once, by the driver);
+  truncation now happens *before* reordering (long Hebrew lost its beginning, not its end); decimals,
+  times (12:30), ranges (24>21) and English phrases inside Hebrew stay intact; brackets are mirrored.
+  New add-on option `robot_rtl_fix` (leave on unless the firmware ever enables LV_USE_BIDI).
+- **🗣 Language toggle applies everywhere:** agent speech, the birthday greeting and the photobooth
+  countdown now honor the dashboard's live language, not just the add-on option.
+
+**Dashboard:**
+- **💾 Restore-from-backup actually works** (the file the dashboard itself exports was rejected with a
+  cryptic error).
+- **🌱 The Hebrew temperament sliders pointed at the WRONG trait** (RTL mirroring) — fixed.
+- **Errors are readable now** — validation failures showed "[object Object]"; every call also has a
+  timeout so a hung backend can't leave spinners stuck forever.
+- The idle-motion toggle no longer shows ON when it's actually off; custom wellness tips load back
+  into the editor; a failed Screens load offers Retry (and can't wipe your layout); the accessory
+  picker reverts + explains when the robot didn't take it; saved security photos stay reachable while
+  the robot is offline; timers are capped at 24 h with a clear message; double-taps can't fire actions
+  twice; the fallback page's head sliders send valid values and its face list includes love/dizzy.
+
+**Robot firmware (fw 24 — re-flash to get these):**
+- **🖼 "Face background" works now** — the theme was repainted to white by the very next render within
+  seconds. The face render owns the background (stars included) and the eyes go light on dark themes.
+- **😵 The confused face is finally visible** — teal x-eyes + yellow "?" were near-invisible on the
+  white awake face; they now pick dark marks on light backgrounds (and stay teal/yellow on dark ones).
+- **🌙 Modes hold.** Petting/tickling/waving/asking no longer silently cancel night/focus/quiet; a
+  sleeping robot no longer wakes because someone walked past; and it doesn't snack itself in
+  do-not-disturb.
+- **🤖 The head stops drifting off-centre** — shakes/nods can't restart mid-sequence anymore (each
+  collision used to walk the head ±12°); reactions settle back to the mood's resting face instead of
+  forcing neutral.
+- **🛑 Triple-tap STOP now stops *everything*** — dance, eating, drinking, tickles, waves and greets,
+  props included; the LED effect is cancelled too.
+- **✨ Less flicker, less churn:** blinks no longer flicker the cheeks/x-eyes; the background is only
+  repainted when it actually changes (full-screen invalidation on every blink is gone); the sleep
+  animation stops once the backlight is off; the "feels hot" sweat drop survives its own reaction.
+
 ## 0.0.82
 
 - **😐 The idle face no longer gets stuck on "happy" (blushing).** The mood engine now shows a happy

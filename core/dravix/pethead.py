@@ -27,7 +27,12 @@ class PetHeadBehavior:
         self._bus = bus
         self._robot = controller
         self._hold = hold_s
-        self._raise = raise_pitch
+        # The head API is normalized -1..1 (fraction of travel), but the config value is
+        # documented in DEGREES (default 30.0) — passing it straight through clamped to 1.0,
+        # i.e. the head slammed to FULL pitch on every pet. Treat >1 as degrees (of a ~90°
+        # half-travel) and ≤1 as an already-normalized fraction.
+        self._raise = raise_pitch / 90.0 if abs(raise_pitch) > 1.0 else raise_pitch
+        self._raise = max(-1.0, min(1.0, self._raise))
         self._raised = False
         self._pump_task: asyncio.Task | None = None
         self._return_task: asyncio.Task | None = None

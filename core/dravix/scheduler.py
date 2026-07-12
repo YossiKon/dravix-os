@@ -121,9 +121,13 @@ class Scheduler:
                 await robot.set_face(Expression.LOVE)
             if robot.supports(CAP_LEDS):
                 await robot.set_leds("purple", 0.9)
+            # the dashboard's live language toggle (store) wins over the add-on option
+            lang = (
+                getattr(self._store, "language", lambda: None)() if self._store is not None else None
+            ) or get_settings().language
             line = (
                 "יום הולדת שמח! חוגגים אותך היום 🎂"
-                if (get_settings().language or "en").startswith("he")
+                if (lang or "en").startswith("he")
                 else "Happy birthday! Today we're celebrating you 🎂"
             )
             if robot.supports(CAP_SAY):

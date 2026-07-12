@@ -264,14 +264,14 @@ class VitalsEngine:
         self._persist()
 
     async def _needs_ticker(self) -> None:
-        try:
-            while True:
-                await asyncio.sleep(self._tick)
+        while True:
+            await asyncio.sleep(self._tick)
+            try:
                 now = time.monotonic()
                 dt_h = (now - self._last) / 3600.0
                 self._last = now
                 mode = await self._mode()
-                asleep = mode == "sleep"
+                asleep = (mode or "").strip().lower() == "sleep"
                 # decay always happens (silent) — energy refills while asleep
                 if asleep:
                     self.energy = _clamp(self.energy + _SLEEP_ENERGY_GAIN_PER_H * dt_h)
@@ -280,6 +280,11 @@ class VitalsEngine:
                 else:
                     for k in ("energy", "food", "fun", "calm"):
                         setattr(self, k, _clamp(getattr(self, k) - _DECAY_PER_H[k] * dt_h))
+                    if self._auto_slept:
+                        # Woken mid-nap (mode select / a tap) — re-arm auto-napping. The flag
+                        # used to stay latched (it's persisted!), so energy pinned at 0 and
+                        # the robot never napped again until a manual "rest".
+                        self._auto_slept = False
                 await self._push_bars()
                 # auto-wake from an AUTO nap once rested (a manual sleep is left alone)
                 if asleep and self._auto_slept and self.energy >= 95.0:
@@ -291,8 +296,10 @@ class VitalsEngine:
                     await self._autonomy()
                 self._persist()
                 await self._bus.publish("vitals.changed", **self.snapshot())
-        except asyncio.CancelledError:
-            raise
+            except asyncio.CancelledError:
+                raise
+            except Exception:  # noqa: BLE001 — one bad tick must not kill the needs loop
+                log.exception("vitals tick failed")
 
     async def _autonomy(self) -> None:
         """When a need bottoms out, the robot fixes it itself (only reached in an active mode)."""
@@ -410,9 +417,9 @@ class VitalsEngine:
         return {k: (_NUDGE_INTERVALS_MIN[k], texts[k]) for k in _NUDGE_INTERVALS_MIN}
 
     async def _nudge_ticker(self) -> None:
-        try:
-            while True:
-                await asyncio.sleep(self._nudge_tick)
+        while True:
+            await asyncio.sleep(self._nudge_tick)
+            try:
                 if self._store is not None and not self._store.nudges_enabled():
                     continue
                 mode = await self._mode()
@@ -438,16 +445,20 @@ class VitalsEngine:
                 # drives the LEDs/head directly and would bypass the firmware's calm-mode
                 # gates — so it only plays when the mode is fully active
                 await self._fire_nudge(text, wiggle=self._active(mode))
-        except asyncio.CancelledError:
-            raise
+            except asyncio.CancelledError:
+                raise
+            except Exception:  # noqa: BLE001 — one bad tick must not kill the tips forever
+                log.exception("wellness nudge tick failed")
 
     async def _fire_nudge(self, text: str, wiggle: bool = True) -> None:
         if self._ha is not None:
             await self._resolve_entities()
             if self._tip_entity:
+                from .bidi import for_robot
+
                 try:
                     await self._ha.call_service(
-                        "text", "set_value", {"entity_id": self._tip_entity, "value": text}
+                        "text", "set_value", {"entity_id": self._tip_entity, "value": for_robot(text)}
                     )
                 except Exception as exc:  # noqa: BLE001
                     if _entity_missing(exc):

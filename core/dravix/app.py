@@ -223,6 +223,7 @@ async def lifespan(app: FastAPI):
     from .agent_status import AgentPresence
 
     app.state.agent = AgentPresence(controller, bus, store)
+    await app.state.agent.start()  # staleness sweeper — releases the robot from dead agents
     from .personality import Personality
 
     app.state.personality = Personality(store)
@@ -352,6 +353,7 @@ async def lifespan(app: FastAPI):
             await app.state.xiaozhi.stop()
         if ha_bridge is not None:
             await ha_bridge.stop()
+        await app.state.agent.stop()
         await screen_pusher.stop()
         await scheduler.stop()
         await pet_head.stop()

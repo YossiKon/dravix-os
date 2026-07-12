@@ -78,6 +78,7 @@ class MoodEngine:
         self._night = False
         self._last_interaction = time.monotonic()
         self._last_expr: Expression | None = None
+        self._persisted: tuple[float, float, float] | None = None
         self._tasks: list[asyncio.Task] = []
         self._load()
 
@@ -91,33 +92,45 @@ class MoodEngine:
         self.affection = float(m.get("affection", self.affection))
 
     def _persist(self) -> None:
-        if self._store is not None:
-            self._store.set_mood(
-                {"valence": self.valence, "arousal": self.arousal, "affection": self.affection}
-            )
+        if self._store is None:
+            return
+        # Skip the disk write when nothing moved meaningfully — the ticker calls this every
+        # 15s and a synchronous save per tick is needless flash wear on a small HA box.
+        snap = (round(self.valence, 2), round(self.arousal, 2), round(self.affection, 2))
+        if snap == self._persisted:
+            return
+        self._persisted = snap
+        self._store.set_mood(
+            {"valence": self.valence, "arousal": self.arousal, "affection": self.affection}
+        )
 
     # ── derived ────────────────────────────────────────────────────────────────
     def label(self) -> str:
+        # Thresholds MATCH expression() below — the dashboard's mood text and the face must
+        # never contradict each other ("happy" text over a neutral face).
         if self._night and self.arousal < 0.4:
             return "sleepy"
-        if self.valence > 0.3 and self.arousal > 0.55:
+        if self.valence > 0.35 and self.arousal > 0.55:
             return "excited"
-        if self.valence > 0.25:
+        if self.valence > 0.35:
             return "happy"
-        if self.valence < -0.3:
+        if self.valence < -0.35:
             return "sad"
         if self.arousal < 0.2:
             return "bored"
         return "content" if self.valence >= 0 else "down"
 
     def expression(self) -> Expression:
+        # Symmetric thresholds: happy needs a clearly positive mood, sad needs a clearly
+        # negative one — reachable by real interaction (a pet is +0.25), but neither is the
+        # steady state (decay + the bounded boredom drift both settle inside ±0.35).
         if self._night and self.arousal < 0.4:
             return Expression.SLEEPY
-        if self.valence > 0.45:  # only a CLEARLY positive mood shows a happy face — otherwise
-            return Expression.HAPPY  # it sits neutral, so the face doesn't get stuck on "happy"
-        if self.valence < -0.3 and self.arousal > 0.55:
+        if self.valence > 0.35:
+            return Expression.HAPPY
+        if self.valence < -0.4 and self.arousal > 0.55:
             return Expression.ANGRY
-        if self.valence < -0.2:
+        if self.valence < -0.35:
             return Expression.SAD
         if self.arousal < 0.2:
             return Expression.SLEEPY
@@ -152,20 +165,30 @@ class MoodEngine:
         q = self._bus.subscribe()
         try:
             while True:
-                await self.handle(await q.get())
+                event = await q.get()
+                try:
+                    await self.handle(event)
+                except asyncio.CancelledError:
+                    raise
+                except Exception:  # noqa: BLE001 — one bad event must not kill the pump
+                    log.exception("mood event handling failed (%s)", event.type)
         except asyncio.CancelledError:
             raise
         finally:
             self._bus.unsubscribe(q)
 
     async def _ticker(self) -> None:
-        try:
-            while True:
-                await asyncio.sleep(self._tick)
+        while True:
+            await asyncio.sleep(self._tick)
+            try:
                 self.valence *= 1 - self._decay
                 self.arousal += (0.3 - self.arousal) * self._decay
                 if time.monotonic() - self._last_interaction > self._idle_bored_s:
-                    self.valence = _clamp(self.valence - 0.03, -1, 1)
+                    # Boredom nudges the mood down but is FLOORED well above the sad
+                    # threshold — being ignored makes it wistful, not permanently
+                    # miserable (unbounded drift used to pin the face on SAD forever).
+                    if self.valence > -0.25:
+                        self.valence = max(self.valence - 0.03, -0.25)
                     self.arousal = _clamp(self.arousal - 0.02, 0, 1)
                     if not self._night and random.random() < 0.2:
                         await self.idle_behavior()  # do something cute on its own
@@ -173,8 +196,10 @@ class MoodEngine:
                     self.arousal = _clamp(self.arousal - 0.03, 0, 1)
                 await self._express()
                 self._persist()
-        except asyncio.CancelledError:
-            raise
+            except asyncio.CancelledError:
+                raise
+            except Exception:  # noqa: BLE001 — one bad tick must not kill the mood forever
+                log.exception("mood tick failed")
 
     def _locked(self) -> bool:
         # A foreground mode owns the face; don't override it with mood.
@@ -197,12 +222,17 @@ class MoodEngine:
         if self._locked() or await self._dnd():
             return
         expr = self.expression()
-        if not force and expr is self._last_expr:
+        # Compare against what's ACTUALLY on the face (controller state) — emotes, agent
+        # status, reactions and the dashboard all write the face too, and comparing a
+        # private cache let their face stick forever (mood could never reclaim it).
+        current = getattr(self._robot.state, "expression", None)
+        if not force and current == expr.value:
+            self._last_expr = expr
             return
-        self._last_expr = expr
         if self._robot.supports(CAP_FACE):
             try:
                 await self._robot.set_face(expr)
+                self._last_expr = expr  # commit only on success so a blip is retried next tick
             except Exception:  # noqa: BLE001
                 pass
 

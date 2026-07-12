@@ -389,6 +389,15 @@ async def agent_prefs_set(body: AgentPrefsBody, request: Request):
         display=display, primary=body.primary, muted=body.muted, approvals=body.approvals
     )
     agent = getattr(request.app.state, "agent", None)
+    # turning the badge off must also CLEAR the on-face label (reflection only rewrites it
+    # while badge display is on — a stale name would sit on the face forever otherwise)
+    if agent is not None and display in ("bubble", "off"):
+        writer = getattr(getattr(request.app.state.robot, "driver", None), "set_agent_text", None)
+        if writer is not None:
+            try:
+                await writer("")
+            except Exception:  # noqa: BLE001 — best-effort cleanup
+                pass
     return agent.snapshot() if agent is not None else {"ok": True}
 
 
@@ -938,7 +947,10 @@ async def photobooth(request: Request):
 
     from ..config import get_settings
 
-    he = (get_settings().language or "en").startswith("he")
+    # the dashboard's live language toggle (store) wins over the add-on option
+    store = getattr(request.app.state, "store", None)
+    lang = (store.language() if store is not None else None) or get_settings().language
+    he = (lang or "en").startswith("he")
 
     async def _try(coro):
         try:

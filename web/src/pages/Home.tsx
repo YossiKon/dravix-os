@@ -104,16 +104,12 @@ export function HomePage(props: { config: RobotConfig | null }) {
   const [tMin, setTMin] = useState("");
   const [tLabel, setTLabel] = useState("");
 
-  async function takePhoto() {
-    try {
+  const takePhoto = () =>
+    run("photo", async () => {
       const r = await apiSend<{ day: string; name: string }>("/api/robot/photo", "POST", {});
       setShot(r);
-      toast(tr("📸 צולם! נשמר בגלריה", "📸 Snapped! Saved to the gallery"));
       void refreshSecurity();
-    } catch (e) {
-      toastErr(e);
-    }
-  }
+    }, tr("📸 צולם! נשמר בגלריה", "📸 Snapped! Saved to the gallery"));
   const [boothBusy, setBoothBusy] = useState(false);
   async function photobooth() {
     setBoothBusy(true);
@@ -161,6 +157,10 @@ export function HomePage(props: { config: RobotConfig | null }) {
 
   async function startTimer(minutes: number, label: string) {
     if (!Number.isFinite(minutes) || minutes <= 0) return;
+    if (minutes > 1440) {
+      toast(tr("מקסימום 24 שעות (1440 דק׳)", "Max 24 hours (1440 min)"), "err");
+      return;
+    }
     try {
       await apiSend("/api/timer", "POST", { seconds: Math.round(minutes * 60), label });
       toast(tr("⏲ הטיימר הופעל", "⏲ Timer started"));
@@ -263,7 +263,12 @@ export function HomePage(props: { config: RobotConfig | null }) {
     };
   }, []);
 
+  // Ref (not state) so a second trigger mid-flight — e.g. the joystick, which has no
+  // disabled prop — can't start an overlapping action.
+  const runningRef = useRef(false);
   const run = useCallback(async (key: string, fn: () => Promise<unknown>, okMsg?: string) => {
+    if (runningRef.current) return;
+    runningRef.current = true;
     setBusy(key);
     try {
       await fn();
@@ -271,6 +276,7 @@ export function HomePage(props: { config: RobotConfig | null }) {
     } catch (e) {
       toastErr(e);
     } finally {
+      runningRef.current = false;
       setBusy(null);
     }
   }, []);
@@ -283,11 +289,13 @@ export function HomePage(props: { config: RobotConfig | null }) {
     setText("");
     setBusy("ask");
     try {
-      const r = await apiSend<{ text: string; conversation_id: string | null }>("/api/ai/chat", "POST", {
-        text: q,
-        conversation_id: convId,
-        speak,
-      });
+      // Local AI models can be slow — give chat a much longer deadline than the default.
+      const r = await apiSend<{ text: string; conversation_id: string | null }>(
+        "/api/ai/chat",
+        "POST",
+        { text: q, conversation_id: convId, speak },
+        180000,
+      );
       setConvId(r.conversation_id ?? null);
       setMsgs((m) => [...m, { role: "bot", text: r.text }]);
     } catch (e) {
@@ -368,7 +376,12 @@ export function HomePage(props: { config: RobotConfig | null }) {
           {MODES.map((m) => (
             <button
               key={m.id}
-              className={`chip ${state === m.id || (m.id === "awake" && state === "awake") ? "chip-on" : ""}`}
+              className={`chip ${
+                state === m.id ||
+                (m.id === "awake" && ["listening", "thinking", "speaking", "screensaver"].includes(state ?? ""))
+                  ? "chip-on"
+                  : ""
+              }`}
               disabled={busy !== null}
               onClick={() => void run(`mode-${m.id}`, () => apiSend("/api/robot/mode", "POST", { mode: m.id }))}
             >
@@ -506,6 +519,7 @@ export function HomePage(props: { config: RobotConfig | null }) {
             type="number"
             inputMode="numeric"
             min={1}
+            max={1440}
             className="inp w-20 text-center"
             placeholder={tr("דק׳", "min")}
             value={tMin}
@@ -519,7 +533,7 @@ export function HomePage(props: { config: RobotConfig | null }) {
           />
           <button
             className="btn btn-primary"
-            disabled={!tMin || Number(tMin) <= 0}
+            disabled={!tMin || Number(tMin) <= 0 || Number(tMin) > 1440}
             onClick={() => void startTimer(Number(tMin), tLabel.trim())}
           >
             {tr("▶ הפעל", "▶ Start")}
@@ -652,6 +666,11 @@ export function HomePage(props: { config: RobotConfig | null }) {
                 src="/camera/robot/stream.mjpeg"
                 alt={tr("מצלמת הרובוט", "Robot camera")}
                 className="w-full rounded-2xl border border-line bg-black"
+                onError={() => {
+                  // stream dropped (robot offline / privacy flipped) — collapse instead of a broken-image icon
+                  setCamOn(false);
+                  toast(tr("הזרם נותק", "Stream dropped"), "err");
+                }}
               />
               <button className="btn mt-3 w-full" onClick={() => setCamOn(false)}>
                 {tr("⏹ עצור צפייה", "⏹ Stop")}
@@ -689,13 +708,15 @@ export function HomePage(props: { config: RobotConfig | null }) {
         </Section>
       )}
 
-      {/* ── security mode — arm the robot as a little guard camera ── */}
-      {(props.config?.capabilities ?? []).includes("take_photo") && sec && (
+      {/* ── security mode — arm the robot as a little guard camera ──
+          Also shown when the robot is offline but photos exist, so the saved gallery
+          stays reachable exactly when you'd want to review it. */}
+      {sec && ((props.config?.capabilities ?? []).includes("take_photo") || sec.total > 0) && (
         <Section title={tr("🛡 אבטחה", "🛡 Security")} delay={330}>
           <p className="mb-3 text-sm text-mute">
             {tr(
-              "כשדרוך: שומר תמונה כל כמה שניות, מסייר עם הראש כל כמה דקות, ואפשר לצפות ולכוון אותו בלייב מכאן (גם מרחוק, דרך הגישה של Home Assistant).",
-              "When armed: saves a frame every few seconds, patrols with its head every few minutes, and you can watch & steer live from here (remotely too, via Home Assistant's remote access).",
+              "כשדרוך: שומר תמונה כל כמה שניות, מסייר עם הראש כל כמה דקות, ואפשר לצפות ולכוון אותו בלייב מכאן, מכל מכשיר ברשת הביתית.",
+              "When armed: saves a frame every few seconds, patrols with its head every few minutes, and you can watch & steer live from here, from any device on your home network.",
             )}
           </p>
           {sec.armed && (

@@ -2,7 +2,7 @@
 // 320×240 preview; drag the Mushroom-style entity cards to ANY position (pointer events, so it
 // works on touch too). Positions are saved as a per-entity {x,y} layout and the firmware places
 // each row exactly there. Up to 4 entities/card. Saves to /api/screens.
-import { useRef, useState, useEffect } from "react";
+import { useCallback, useRef, useState, useEffect } from "react";
 import { apiGet, apiSend } from "../api";
 import type { HAEntity } from "../api";
 import { EntityPicker } from "../components/EntityPicker";
@@ -137,9 +137,11 @@ export function ScreensPage(props: { entities: HAEntity[] }) {
     { title: "", entities: [], layout: {} },
   ]);
   const [loaded, setLoaded] = useState(false);
+  const [loadFailed, setLoadFailed] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  useEffect(() => {
+  const load = useCallback(() => {
+    setLoadFailed(false);
     apiGet<{ screens: Card[] }>("/api/screens")
       .then((r) => {
         const base: Card[] = [
@@ -153,8 +155,16 @@ export function ScreensPage(props: { entities: HAEntity[] }) {
         setCards(base);
         setLoaded(true);
       })
-      .catch(toastErr);
+      .catch((e) => {
+        // Saving over a layout we failed to load would wipe it — keep Save off, offer a retry.
+        setLoadFailed(true);
+        toastErr(e);
+      });
   }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
 
   const nameOf = (id: string) => props.entities.find((e) => e.entity_id === id)?.name ?? id;
   const patch = (i: number, next: Partial<Card>) =>
@@ -229,6 +239,11 @@ export function ScreensPage(props: { entities: HAEntity[] }) {
         </div>
       ))}
 
+      {loadFailed && !loaded && (
+        <button className="btn w-full" onClick={load}>
+          {tr("⟳ הטעינה נכשלה — נסה שוב", "⟳ Load failed — retry")}
+        </button>
+      )}
       <button className="btn btn-primary w-full" disabled={!loaded || saving} onClick={() => void save()}>
         {saving ? tr("שומר…", "Saving…") : tr("💾 שמור פריסה", "💾 Save layout")}
       </button>

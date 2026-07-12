@@ -20,7 +20,7 @@ const ACTIONS: { action: string; he: string; en: string; okHe: string; okEn: str
 ];
 
 export function VitalsPage() {
-  const { tr } = useI18n();
+  const { tr, lang } = useI18n();
   const [v, setV] = useState<Vitals | null>(null);
   const [pers, setPers] = useState<Personality | null>(null);
   const [busy, setBusy] = useState("");
@@ -54,6 +54,17 @@ export function VitalsPage() {
     }, 3000);
     return () => clearInterval(id);
   }, [refresh]);
+
+  // Seed the tips editor with the tips that are already live, so editing doesn't start blank.
+  useEffect(() => {
+    apiGet<{ store: Record<string, unknown> }>("/api/config")
+      .then((c) => {
+        const saved = c.store?.wellness_tips;
+        if (Array.isArray(saved) && saved.length)
+          setTips((prev) => (prev === null ? (saved as string[]).join("\n") : prev));
+      })
+      .catch(() => undefined);
+  }, []);
 
   async function act(action: string, okMsg: string) {
     setBusy(action);
@@ -127,6 +138,9 @@ export function VitalsPage() {
           <div className="space-y-3">
             {pers.axes.map((a) => {
               const pct = ((a.value + 1) / 2) * 100; // -1..+1 → 0..100
+              // The label row flips visually under RTL (flex + dir), but `left:%` is physical —
+              // flip the knob too so it sits under the trait it actually leans toward.
+              const pctVisual = lang === "he" ? 100 - pct : pct;
               const leans = a.value < -0.15 ? "left" : a.value > 0.15 ? "right" : "mid";
               return (
                 <div key={a.key}>
@@ -142,7 +156,7 @@ export function VitalsPage() {
                     <div className="absolute inset-y-0 left-1/2 w-px bg-line-2" />
                     <div
                       className="absolute top-1/2 h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-card bg-teal transition-all"
-                      style={{ left: `${pct}%` }}
+                      style={{ left: `${pctVisual}%` }}
                     />
                   </div>
                 </div>
