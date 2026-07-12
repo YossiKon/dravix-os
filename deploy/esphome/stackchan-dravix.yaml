@@ -282,6 +282,7 @@ globals:
   - { id: g_booted, type: bool, restore_value: false, initial_value: "false" }
   # face state
   - { id: g_expr,   type: int,  restore_value: false, initial_value: "0" }
+  - { id: g_face_rest, type: int, restore_value: false, initial_value: "0" }  # mood/select RESTING face; a reaction's happy/blush settles back to this on idle (so a pet's blush doesn't stick)
   - { id: g_blink,  type: bool, restore_value: false, initial_value: "false" }
   - { id: g_listen, type: bool, restore_value: false, initial_value: "false" }
   - { id: g_talk,   type: bool, restore_value: false, initial_value: "false" }
@@ -1420,6 +1421,20 @@ lvgl:
                   - script.execute: perm_log
                   - lvgl.widget.hide: perm_box
   on_idle:
+    # After ~6s of no interaction, settle the face back to the mood's resting expression, so a
+    # pet / greet / tickle that set a happy "blush" face directly doesn't stick there forever
+    # (the mood engine can't fix that — it only pushes on change). Touch/voice/reactions reset it.
+    - timeout: 6000ms
+      then:
+        - if:
+            condition:
+              lambda: |-
+                return !id(g_sleep) && !id(g_listen) && !id(g_talk) && !id(g_think)
+                       && !id(g_saver) && !id(g_focus) && !id(g_voice)
+                       && id(g_expr) != id(g_face_rest);
+            then:
+              - globals.set: { id: g_expr, value: !lambda 'return id(g_face_rest);' }
+              - script.execute: render_face
     # After 3 min of no touch, drift back to the FACE from any other screen (cards / games /
     # vitals). Touching any screen resets this timer (LVGL counts touches as activity).
     - timeout: 180000ms
@@ -4234,6 +4249,7 @@ select:
             else if (x == "love") return 6;
             else if (x == "dizzy") return 7;
             return 0;
+      - globals.set: { id: g_face_rest, value: !lambda 'return id(g_expr);' }   # this IS the resting face
       - script.execute: render_face
       # Every emotion also has a LED colour + body language:
       - if:
