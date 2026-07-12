@@ -188,7 +188,8 @@ class Scheduler:
                 await robot.set_face(action["face"])
             if action.get("leds") and robot.supports(CAP_LEDS):
                 leds = action["leds"]
-                await robot.set_leds(leds.get("color", "white"), float(leds.get("brightness", 1.0)))
+                # scheduled colour = a moment's accent, not permanent lighting — auto-reverts
+                await robot.flash_leds(leds.get("color", "white"), float(leds.get("brightness", 1.0)))
             if action.get("head") and robot.supports(CAP_HEAD):
                 yaw, pitch = action["head"]
                 await robot.move_head(float(yaw), float(pitch))

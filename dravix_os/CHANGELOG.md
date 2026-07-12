@@ -1,5 +1,30 @@
 # Changelog
 
+## 0.0.84
+
+User-feedback round on 0.0.83 — lights that return to themselves, and a face that always
+tells you what the AI is doing.
+
+- **💡 Every decorative light turns itself back off after a few seconds.** Reaction rules,
+  scheduled actions, notifications, and the agent lamp's ambient states (working/done) now
+  PULSE and auto-revert instead of leaving the LED bar burning. Only states that actively
+  need you — waiting-for-permission / question / error — hold their colour until resolved.
+  A colour you pick deliberately from the dashboard's LED buttons still persists (there's
+  an explicit Off).
+- **🎭 Face feedback for everything the AI does** *(fw 25 — re-flash)*:
+  - **Talking** — the mouth now animates for ALL speech, not just on-device voice chats:
+    the firmware watches its own speaker, so dashboard-chat replies, notifications, timers
+    and the birthday line all move the mouth for exactly as long as the audio plays.
+  - **Thinking** — while the AI composes a reply to a dashboard chat, the eyes drift up in
+    the pondering face (new "AI state" slot).
+  - **Focused** — while a coding agent (Claude Code etc.) is working, the robot shows the
+    narrowed concentrating eyes instead of the old permanently-confused "doubt" face.
+  - Listening / thinking / speaking during on-device voice conversations worked before and
+    still take priority over all external hints.
+  - Triple-tap STOP now also cuts external TTS mid-sentence (it only stopped pipeline speech).
+- **🖼 Defaults confirmed:** the face background stays plain white and accessories stay off
+  unless YOU pick one — themes/accessories are opt-in from the dashboard, exactly as before.
+
 ## 0.0.83
 
 Full-system fix pass — the three audits (dashboard, core service, robot firmware) in one release.

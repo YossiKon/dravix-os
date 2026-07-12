@@ -7,6 +7,7 @@ This is what lets us swap *how* the robot is reached without touching modes, AI,
 from __future__ import annotations
 
 import abc
+import asyncio
 from enum import Enum
 from typing import Any
 
@@ -128,6 +129,8 @@ class RobotController:
         # re-read HA every frame.
         self._priv_val: bool = False
         self._priv_at: float = 0.0
+        # Pending auto-revert of a flash_leds() call (cancelled by any newer LED write).
+        self._led_revert: asyncio.Task | None = None
 
     async def connect(self) -> None:
         await self._driver.connect()
@@ -194,8 +197,33 @@ class RobotController:
 
     async def set_leds(self, color: str, brightness: float = 1.0) -> None:
         self._require(CAP_LEDS)
+        # A newer LED intent always wins — cancel a pending flash revert so it can't
+        # switch off a colour that was deliberately set after the flash.
+        if self._led_revert is not None and not self._led_revert.done():
+            self._led_revert.cancel()
+            self._led_revert = None
         await self._driver.set_leds(color, brightness)
         await self._bus.publish("robot.leds", color=color, brightness=brightness)
+
+    async def flash_leds(self, color: str, brightness: float = 1.0, revert_s: float = 4.0) -> None:
+        """A decorative LED pulse, not a state: light up, then auto-OFF after ``revert_s``.
+
+        This is what reactions / scheduled actions / notifications / agent pulses use —
+        the LED bar always returns to itself a few seconds later, so nothing can leave it
+        burning. Deliberate LED choices (the dashboard picker) use set_leds and persist."""
+        await self.set_leds(color, brightness)
+
+        async def _revert() -> None:
+            try:
+                await asyncio.sleep(revert_s)
+                self._led_revert = None  # our own turn-off must not cancel itself
+                await self.set_leds("off", 0.0)
+            except asyncio.CancelledError:
+                raise
+            except Exception:  # noqa: BLE001 — best-effort cleanup
+                pass
+
+        self._led_revert = asyncio.create_task(_revert(), name="dravix-led-revert")
 
     def invalidate_privacy(self) -> None:
         """Drop the privacy cache so the next is_private() re-reads immediately — call this

@@ -40,6 +40,7 @@ _ROLES: dict[str, tuple[str, tuple[str, ...], bool]] = {
     "bubble_text": ("text", ("bubble",), True),
     "agent_text": ("text", ("agent_status",), False),
     "permission_text": ("text", ("agent_permission",), False),
+    "ai_state_text": ("text", ("ai_state",), False),
     "latest_fw_text": ("text", ("latest_firmware",), False),
     "climate_name_text": ("text", ("climate_name",), False),
     "climate_set_text": ("text", ("climate_set",), False),

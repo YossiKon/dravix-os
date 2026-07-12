@@ -45,7 +45,9 @@ class _Look:
 # states fall back to WORKING. Brightness also separates the states for a pure-colour LED:
 # idle off, ambient dim, attention full.
 _LOOKS: dict[str, _Look] = {
-    "working":            _Look("doubt",   "#56B4E9", 0.6, "🔧", "",                     "",                     False),  # sky blue
+    # working shows the CONCENTRATING face via the firmware "AI state" slot (narrowed steady
+    # eyes) — the neutral here just means it stops stomping the mood face like doubt did.
+    "working":            _Look("neutral", "#56B4E9", 0.6, "🔧", "",                     "",                     False),  # sky blue
     "waiting_permission": _Look("doubt",   "#E69F00", 1.0, "✋", "I need your approval.",  "צריך את האישור שלך.",  True),   # orange
     "question":           _Look("neutral", "#CC79A7", 1.0, "❓", "I have a question.",     "יש לי שאלה.",          True),   # reddish purple
     "done":               _Look("happy",   "#009E73", 0.8, "✅", "All done.",              "סיימתי.",              True),   # bluish green
@@ -290,7 +292,21 @@ class AgentPresence:
                     pass
             if robot.supports(CAP_LEDS):
                 try:
-                    await robot.set_leds(look.led, look.brightness)
+                    if wstate in ("working", "done"):
+                        # ambient states get a PULSE — the light returns to itself in a few
+                        # seconds (the badge/face keep the signal); only the states that
+                        # actively need you (permission/question/error) hold their colour.
+                        await robot.flash_leds(look.led, look.brightness, revert_s=5.0)
+                    else:
+                        await robot.set_leds(look.led, look.brightness)
+                except Exception:  # noqa: BLE001
+                    pass
+            # mirror the agent's activity onto the FACE: a working agent = the firmware's
+            # concentrating eyes (via the "AI state" text slot); anything else clears it.
+            ai_face = getattr(getattr(robot, "driver", None), "set_ai_state", None)
+            if ai_face is not None:
+                try:
+                    await ai_face("focused" if wstate == "working" else "")
                 except Exception:  # noqa: BLE001
                     pass
             if display in ("badge", "both"):

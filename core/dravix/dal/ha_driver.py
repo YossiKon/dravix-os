@@ -426,6 +426,18 @@ class HARobotDriver(RobotDriver):
         except Exception:  # noqa: BLE001 — a status badge must never break the caller
             pass
 
+    async def set_ai_state(self, state: str) -> None:
+        """Mirror the assistant's activity onto the robot's face via the fw v25+ ``t_ai_state``
+        slot: "thinking" (eyes drift up), "focused" (concentrating eyes), "listening", or ""
+        to clear. Best-effort — older firmware simply has no such entity."""
+        ent = self._entities.get("ai_state_text")
+        if not ent:
+            return
+        try:
+            await self._ha.call_service("text", "set_value", {"entity_id": ent, "value": state[:20]})
+        except Exception:  # noqa: BLE001 — a face hint must never break the caller
+            pass
+
     async def set_permission(self, text: str) -> None:
         """Show/clear the on-robot Approve/Reject prompt (fw v21+ ``t_permission`` slot).
 

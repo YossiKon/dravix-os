@@ -122,7 +122,8 @@ class ReactionEngine:
                 await robot.set_face(rule["face"])
             leds = rule.get("leds")
             if leds and robot.supports(CAP_LEDS):
-                await robot.set_leds(leds.get("color", "white"), float(leds.get("brightness", 1.0)))
+                # a reaction's light is a flourish — it returns to itself a few seconds later
+                await robot.flash_leds(leds.get("color", "white"), float(leds.get("brightness", 1.0)))
             if rule.get("emote"):
                 await play_emote(robot, rule["emote"])
             if rule.get("frigate_show") and self._frigate is not None and robot.supports(CAP_DISPLAY):

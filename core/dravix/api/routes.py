@@ -777,7 +777,22 @@ async def ai_chat(body: ChatBody, request: Request):
     mem = build_memory_context(store)
     if mem:
         system = f"{system}\n\n{mem}"
-    reply = await _guard(ai.converse(body.text, system=system, conversation_id=body.conversation_id))
+    # THINKING face while the AI composes (fw v25 t_ai_state; the talking mouth afterwards
+    # comes from the firmware itself, which watches its media player for the TTS playback).
+    ai_face = getattr(getattr(robot, "driver", None), "set_ai_state", None)
+    if ai_face is not None:
+        try:
+            await ai_face("thinking")
+        except Exception:  # noqa: BLE001
+            pass
+    try:
+        reply = await _guard(ai.converse(body.text, system=system, conversation_id=body.conversation_id))
+    finally:
+        if ai_face is not None:
+            try:
+                await ai_face("")
+            except Exception:  # noqa: BLE001
+                pass
     expression, clean = parse_expression(reply.text)
     if body.speak:
         if robot.supports(CAP_FACE):
@@ -1040,7 +1055,9 @@ async def robot_notify(body: RobotNotifyBody, request: Request):
             pass
 
     if robot.supports(CAP_LEDS):
-        await _try(robot.set_leds(color, 1.0))
+        # a glanceable pulse that turns itself off — a notification must never leave the
+        # LED bar burning in its event colour
+        await _try(robot.flash_leds(color, 1.0, revert_s=6.0))
     if robot.supports(CAP_HEAD):  # a little "hey, look at me" nod (dropped while asleep)
         await _try(robot.move_head(0.0, -0.15, speed=0.6))
         await asyncio.sleep(0.25)

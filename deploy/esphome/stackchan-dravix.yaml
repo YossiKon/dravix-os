@@ -39,7 +39,7 @@ substitutions:
   # publishes it to HA ("Firmware version" sensor); the dravix dashboard compares it
   # with the version bundled in the add-on and shows "firmware update available".
   # (Maintainers: bump this on every firmware change. Users: don't touch.)
-  fw_version: "24"
+  fw_version: "25"
   # The ESPHome node name (mDNS hostname + the default entity prefix on a fresh flash).
   # Change it only if you run MORE THAN ONE robot — each needs a unique name. NOTE:
   # changing it on an already-adopted robot registers a NEW device in HA.
@@ -289,6 +289,8 @@ globals:
   - { id: g_listen, type: bool, restore_value: false, initial_value: "false" }
   - { id: g_talk,   type: bool, restore_value: false, initial_value: "false" }
   - { id: g_think,  type: bool, restore_value: false, initial_value: "false" }   # AI is processing — between your words and its reply
+  - { id: g_conc,   type: bool, restore_value: false, initial_value: "false" }   # external "focused" face (a coding agent is working) — focus EYES only, no DND semantics
+  - { id: g_ext_talk, type: bool, restore_value: false, initial_value: "false" } # external TTS (dravix chat/notify/timers) is playing → talking mouth
   - { id: g_tip,    type: bool, restore_value: false, initial_value: "false" }  # a wellness tip is showing
   - { id: g_agent,  type: bool, restore_value: false, initial_value: "false" }  # an AI-agent badge is set
   - { id: g_perm,   type: bool, restore_value: false, initial_value: "false" }  # an approve/reject prompt is up
@@ -934,6 +936,27 @@ text:
             - script.execute: tip_timeout
           else:
             - globals.set: { id: g_tip, value: "false" }
+            - script.execute: render_face
+  # ── AI STATE — dravix mirrors the assistant/agents' activity onto the FACE:
+  #    "thinking" (eyes drift up) while the AI composes a reply, "focused" (narrowed
+  #    concentrating eyes) while a coding agent works, "listening" for an external
+  #    listen; "" clears. A live on-device voice conversation (g_voice) always wins —
+  #    an external hint never fights it. The talking mouth needs no hint at all: the
+  #    media-playback watcher below animates it for any TTS.
+  - platform: template
+    name: "AI state"
+    id: t_ai_state
+    optimistic: true
+    mode: text
+    max_length: 20
+    initial_value: ""
+    set_action:
+      - if:
+          condition: { lambda: 'return !id(g_voice) && !id(g_sleep) && !id(g_saver);' }
+          then:
+            - globals.set: { id: g_think,  value: !lambda 'return x == "thinking";' }
+            - globals.set: { id: g_listen, value: !lambda 'return x == "listening";' }
+            - globals.set: { id: g_conc,   value: !lambda 'return x == "focused";' }
             - script.execute: render_face
   # ── LATEST FIRMWARE — dravix writes the newest available fw_version here (every few
   #    hours + whenever the Updates card is opened). The robot compares it to its own
@@ -2779,6 +2802,7 @@ script:
   - id: panic_stop            # single tap: cut speech + dance + effects, LEDs off, clean face
     then:
       - voice_assistant.stop                    # stop listening / speaking mid-sentence
+      - media_player.stop: va_media_player      # …and external TTS (dravix chat/notify) too
       - script.stop: led_flash
       - script.stop: party                      # stop the disco / dance
       - script.stop: identify
@@ -2801,6 +2825,8 @@ script:
       - globals.set: { id: g_talk,   value: "false" }
       - globals.set: { id: g_voice,  value: "false" }
       - globals.set: { id: g_sweat,  value: "false" }
+      - globals.set: { id: g_conc,   value: "false" }
+      - globals.set: { id: g_ext_talk, value: "false" }
       # a stopped eat/drink cleans up only at its END — tidy its props here
       - lvgl.widget.hide: hand_l
       - lvgl.widget.hide: hand_r
@@ -3698,9 +3724,11 @@ script:
           else: [ { lvgl.widget.hide: lbl_agent } ]
       # speech bubble — while SPEAKING (the AI's words) or showing a wellness tip.
       # NOT while listening: listening is expressed by the FACE (big curious eyes,
-      # attentive perk), never by an on-screen label.
+      # attentive perk), never by an on-screen label. External speech shows a bubble
+      # only when dravix put text in it (g_tip) — a random media stream that animates
+      # the mouth (g_talk via the playback watcher) must not pop a STALE bubble.
       - if:
-          condition: { lambda: 'return id(g_talk) || id(g_tip);' }
+          condition: { lambda: 'return id(g_tip) || (id(g_talk) && id(g_voice));' }
           then:
             - lvgl.widget.show: speech_bubble
             - lvgl.widget.show: bub_t1
@@ -3722,7 +3750,8 @@ script:
           condition:
             lambda: |-
               return !id(g_sleep) && !id(g_listen) && !id(g_talk) && !id(g_think)
-                     && !id(g_saver) && !id(g_focus) && (id(g_expr) == 1 || id(g_expr) == 6);
+                     && !id(g_saver) && !id(g_focus) && !id(g_conc)
+                     && (id(g_expr) == 1 || id(g_expr) == 6);
           then: [ { lvgl.widget.show: cheek_l }, { lvgl.widget.show: cheek_r } ]
           else: [ { lvgl.widget.hide: cheek_l }, { lvgl.widget.hide: cheek_r } ]
       - if:
@@ -3780,13 +3809,13 @@ script:
                 y: 4
                 height: !lambda 'const int b[] = {46, 38, 30, 38}; return b[id(g_anim) % 4];'
             - script.execute: { id: set_mouth, w: 30, h: 6, r: 3, dy: 66 }
-      - if:  # FOCUS → steady, narrowed concentrating eyes
-          condition: { lambda: 'return !id(g_sleep) && !id(g_blink) && !id(g_listen) && !id(g_talk) && !id(g_think) && !id(g_saver) && id(g_focus);' }
+      - if:  # FOCUS mode — or an external "focused" hint (a coding agent working) → steady, narrowed concentrating eyes
+          condition: { lambda: 'return !id(g_sleep) && !id(g_blink) && !id(g_listen) && !id(g_talk) && !id(g_think) && !id(g_saver) && (id(g_focus) || id(g_conc));' }
           then:
             - script.execute: { id: set_eyes, w: 58, h: 40, r: 16, dy: 0 }
             - script.execute: { id: set_mouth, w: 28, h: 6, r: 3, dy: 64 }
       - if:  # idle → the chosen expression
-          condition: { lambda: 'return !id(g_sleep) && !id(g_blink) && !id(g_listen) && !id(g_talk) && !id(g_think) && !id(g_saver) && !id(g_focus);' }
+          condition: { lambda: 'return !id(g_sleep) && !id(g_blink) && !id(g_listen) && !id(g_talk) && !id(g_think) && !id(g_saver) && !id(g_focus) && !id(g_conc);' }
           then:
             - if:  # neutral
                 condition: { lambda: 'return id(g_expr) == 0;' }
@@ -3845,7 +3874,7 @@ script:
           condition:
             lambda: |-
               return !id(g_sleep) && !id(g_listen) && !id(g_talk)
-                     && !id(g_saver) && !id(g_focus) && id(g_expr) == 7;
+                     && !id(g_saver) && !id(g_focus) && !id(g_conc) && id(g_expr) == 7;
           then:
             - lvgl.label.update:
                 id: dz_l
@@ -5212,6 +5241,21 @@ interval:
             - globals.set: { id: g_blink, value: "false" }
             - globals.set: { id: g_wink, value: "false" }
             - script.execute: render_face
+  # EXTERNAL SPEECH → talking mouth. dravix TTS (chat replies, notifications, timers,
+  # birthday lines) plays on va_media_player WITHOUT the voice pipeline, so g_talk never
+  # fired and the mouth sat still while the robot was clearly speaking. Watch playback
+  # and animate the mouth for the duration (the pipeline's own states always win).
+  - interval: 500ms
+    then:
+      - lambda: |-
+          bool playing = !id(g_voice) && !id(g_sleep) && !id(g_saver)
+                         && (id(va_media_player).state == media_player::MEDIA_PLAYER_STATE_PLAYING
+                             || id(va_media_player).state == media_player::MEDIA_PLAYER_STATE_ANNOUNCING);
+          if (playing != id(g_ext_talk)) {
+            id(g_ext_talk) = playing;
+            id(g_talk) = playing;
+            id(render_face).execute();
+          }
   # Sleep "zzz" + talking mouth + screensaver breathing animation.
   - interval: 600ms
     then:
