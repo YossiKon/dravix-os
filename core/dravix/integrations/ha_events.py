@@ -74,6 +74,13 @@ def map_state_changed(
         if state in ("on", "off") and old.get("state") in ("on", "off") and old.get("state") != state:
             return "islocal.set", {"entity_id": eid, "enabled": state == "on"}
 
+    # The robot's "Privacy mode" switch — same both-direction republish. app.py's watcher
+    # detaches/re-attaches the camera at the HA level, no matter WHERE the flip came from
+    # (robot screen, HA UI, or the dashboard).
+    if domain == "switch" and (object_id == "privacy_mode" or object_id.endswith("_privacy_mode")):
+        if state in ("on", "off") and old.get("state") in ("on", "off") and old.get("state") != state:
+            return "privacy.set", {"entity_id": eid, "private": state == "on"}
+
     if domain == "binary_sensor" and became_active:
         device_class = (new.get("attributes") or {}).get("device_class")
         event_type = _DEVICE_CLASS_EVENT.get(device_class or "")

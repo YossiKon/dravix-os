@@ -683,7 +683,12 @@ async def put_privacy(body: PrivacyBody, request: Request):
     invalidate = getattr(request.app.state.robot, "invalidate_privacy", None)
     if invalidate is not None:
         invalidate()
-    return {"ok": True, "private": body.private}
+    # REALLY private: detach the camera ENTITY at the Home-Assistant level too — otherwise
+    # HA itself (and anything going through it) could still snapshot/stream the camera.
+    from ..privacy import apply_camera_privacy
+
+    cam_error = await apply_camera_privacy(request.app.state, body.private)
+    return {"ok": True, "private": body.private, "camera_error": cam_error}
 
 
 @router.get("/api/robot/live")

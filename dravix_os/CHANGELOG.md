@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.0.88
+
+**🔒 Privacy that actually disconnects, and badges you can see** *(firmware 29 — re-flash)*
+
+- **The camera is REALLY detached in privacy mode.** Until now dravix blocked its own
+  camera endpoints — but the camera is also a Home Assistant entity, and HA itself (or
+  any automation/NVR going through it) could still fetch frames. Now flipping privacy ON
+  **disables the camera entity in HA's registry** — it disappears from Home Assistant on
+  the spot; nothing can snapshot or stream it. Privacy OFF re-enables it and reloads the
+  integration so it comes straight back. Works from every toggle path (dashboard, HA UI,
+  the robot itself) and survives restarts.
+- **The microphone can't be woken remotely either.** All on-device start paths already
+  refused during privacy; now even a session started remotely (HA assist-satellite
+  services) is killed on its very first event — no listening face, no audio.
+- **On-screen badges:** privacy now shows as a proper red **PRIVACY** pill on the face
+  (was faint text), and a new teal **LOCAL** pill shows whenever isLocal is on — one
+  glance tells you the robot is in stay-at-home mode.
+- **isLocal verified end-to-end:** with the flag on, nothing leaves the LAN — cloud AI
+  blocked, the cloud MCP bridge disconnected, update checks skipped, non-LAN image URLs
+  rejected. (This was already enforced — now audited and badged.)
+
 ## 0.0.87
 
 **😵 Shake the robot — it gets dizzy!** *(firmware 28 — re-flash; the add-on bump just

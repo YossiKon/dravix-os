@@ -276,6 +276,19 @@ async def lifespan(app: FastAPI):
                     except Exception:  # noqa: BLE001 — never kill the watcher
                         log.exception("agent permission decision failed")
                     continue
+                # the robot's Privacy switch flipped (robot screen / HA UI) → detach or
+                # re-attach the camera at the HA level, whatever path the flip took
+                if ev.type == "privacy.set":
+                    try:
+                        from .privacy import apply_camera_privacy
+
+                        inv = getattr(app.state.robot, "invalidate_privacy", None)
+                        if inv is not None:
+                            inv()
+                        await apply_camera_privacy(app.state, bool(ev.data.get("private")))
+                    except Exception:  # noqa: BLE001 — never kill the watcher
+                        log.exception("applying privacy from the robot switch failed")
+                    continue
                 if ev.type != "islocal.set":
                     continue
                 enabled = bool(ev.data.get("enabled"))
@@ -289,6 +302,17 @@ async def lifespan(app: FastAPI):
             bus.unsubscribe(q)
 
     islocal_task = asyncio.create_task(_islocal_watcher(), name="dravix-islocal")
+
+    # PRIVACY startup sync: privacy that survived a restart must keep the camera detached
+    # at the HA level (and a flip made while dravix was down must be applied now).
+    try:
+        from .privacy import apply_camera_privacy
+
+        priv_reader = getattr(driver, "is_private", None)
+        if ha is not None and priv_reader is not None:
+            await apply_camera_privacy(app.state, bool(await priv_reader()))
+    except Exception:  # noqa: BLE001 — best-effort; the toggle path re-applies
+        log.exception("privacy startup sync failed")
 
     async def _fw_notifier() -> None:
         """Every 6h, tell the robot which firmware version this release ships — its

@@ -39,7 +39,7 @@ substitutions:
   # publishes it to HA ("Firmware version" sensor); the dravix dashboard compares it
   # with the version bundled in the add-on and shows "firmware update available".
   # (Maintainers: bump this on every firmware change. Users: don't touch.)
-  fw_version: "28"
+  fw_version: "29"
   # The ESPHome node name (mDNS hostname + the default entity prefix on a fresh flash).
   # Change it only if you run MORE THAN ONE robot — each needs a unique name. NOTE:
   # changing it on an already-adopted robot registers a NEW device in HA.
@@ -1288,12 +1288,14 @@ switch:
           then:
             - lvgl.widget.update: { id: sb_local, bg_color: 0x0e4d44 }
             - lvgl.label.update: { id: sb_local_lbl, text_color: 0x33E6C8 }
+            - script.execute: render_face   # the LOCAL pill on the face follows instantly
     on_turn_off:
       - if:
           condition: { lambda: 'return id(g_booted);' }
           then:
             - lvgl.widget.update: { id: sb_local, bg_color: 0x1a2233 }
             - lvgl.label.update: { id: sb_local_lbl, text_color: 0x8b96a4 }
+            - script.execute: render_face
   # PRIVACY: kills the microphone on-device (wake word + voice pipeline stopped) and shows
   # a red PRIVACY badge on the face. dravix additionally blocks the camera stream/snapshot
   # endpoints (the path Frigate + the dashboard use) while this is ON.
@@ -1719,14 +1721,44 @@ lvgl:
             align: TOP_LEFT
             x: 12
             y: 8
-        # red badge while privacy mode is on (mic dead + camera blocked)
+        # red PILL while privacy mode is on (mic dead + camera detached) — a real badge,
+        # not just text, so the state is unmissable at a glance
         - label:
             id: lbl_priv
-            text: ""
+            text: "PRIVACY"
             text_font: small_font
-            text_color: 0xE05555
+            text_color: 0xFFE0E0
+            bg_color: 0x7a1616
+            bg_opa: COVER
+            radius: 9
+            pad_left: 8
+            pad_right: 8
+            pad_top: 3
+            pad_bottom: 3
+            border_width: 1
+            border_color: 0xE05555
             align: TOP_MID
-            y: 6
+            y: 5
+            hidden: true
+        # teal PILL while isLocal is on — "everything stays inside the home network"
+        - label:
+            id: lbl_local
+            text: "LOCAL"
+            text_font: small_font
+            text_color: 0xCFFFF4
+            bg_color: 0x0e4d44
+            bg_opa: COVER
+            radius: 9
+            pad_left: 8
+            pad_right: 8
+            pad_top: 3
+            pad_bottom: 3
+            border_width: 1
+            border_color: 0x33E6C8
+            align: TOP_LEFT
+            x: 6
+            y: 5
+            hidden: true
         # a soft clock, shown only on the screensaver
         - label:
             id: lbl_clock
@@ -3824,10 +3856,15 @@ script:
             if (id(g_night)) return lv_color_hex(0x1f9e88);
             if (id(sel_background).state != "None") return lv_color_hex(0xF2F5F7);
             return lv_color_hex(0x14181d);
-      # privacy badge
-      - lvgl.label.update:
-          id: lbl_priv
-          text: !lambda 'return id(sw_privacy).state ? std::string("PRIVACY") : std::string("");'
+      # privacy + local badges (pills — show/hide the widget, an empty pill still draws)
+      - if:
+          condition: { lambda: 'return id(sw_privacy).state && !id(g_sleep);' }
+          then: [ { lvgl.widget.show: lbl_priv } ]
+          else: [ { lvgl.widget.hide: lbl_priv } ]
+      - if:
+          condition: { lambda: 'return id(sw_islocal).state && !id(g_sleep) && !id(g_saver);' }
+          then: [ { lvgl.widget.show: lbl_local } ]
+          else: [ { lvgl.widget.hide: lbl_local } ]
       # AI-agent badge — visible only when set AND the robot is awake (dead-still in sleep)
       - if:
           condition: { lambda: 'return id(g_agent) && !id(g_sleep) && !id(g_saver);' }
@@ -5749,36 +5786,44 @@ voice_assistant:
   auto_gain: 31dBFS
   volume_multiplier: 2.0
   on_listening:
-    - lambda: 'lv_disp_trig_activity(NULL);'   # a conversation is activity — no screensaver
-    # a mood flash may be mid-run — stop it so its delayed restore can't fire mid-talk
-    - script.stop: led_flash
-    # remember the current LEDs — but only at the START of a conversation, and never
-    # while a mood flash is showing (the flash already saved the TRUE original colour).
+    # PRIVACY HARD-STOP — every on-device start path already refuses while privacy is on,
+    # but a session can also be started REMOTELY (HA's assist-satellite services). If one
+    # slips through, it dies on the very first event: no listening face, no yellow, no audio.
     - if:
-        condition: { lambda: 'return !id(g_voice) && !id(g_flash);' }
+        condition: { switch.is_on: sw_privacy }
         then:
-          - lambda: |-
-              auto v = id(stackchan_light_bar).current_values;
-              id(led_on)  = v.is_on();
-              id(led_bri) = v.get_brightness();
-              id(led_r)   = v.get_red();
-              id(led_g)   = v.get_green();
-              id(led_b)   = v.get_blue();
-    - globals.set: { id: g_flash, value: "false" }   # flash cancelled; save is now ours
-    # the wake word DOES wake a sleeping robot — but a question asked in night/focus/quiet
-    # must not silently cancel that mode (it kept dropping focus/night to awake).
-    - if:
-        condition: { lambda: 'return id(g_sleep) || (!id(g_night) && !id(g_focus) && !id(g_quiet) && id(robot_mode).current_option() != std::string("awake"));' }
-        then: [ { select.set: { id: robot_mode, option: awake } } ]
-    - globals.set: { id: g_listen, value: "true" }
-    - globals.set: { id: g_voice, value: "true" }
-    - globals.set: { id: g_vad, value: "false" }   # fresh listen window — no voice heard yet
-    - script.execute: listen_timeout               # …auto-close if none arrives in ${listen_timeout_s}s
-    - lvgl.page.show: page_face
-    - globals.set: { id: g_card, value: "0" }
-    - script.execute: leds_yellow
-    - script.execute: render_face          # the LISTENING FACE (big curious eyes) — no label
-    - script.execute: { id: head_nudge, dx: 0, dy: 6 }   # perks up attentively, like it leans in
+          - voice_assistant.stop
+        else:
+          - lambda: 'lv_disp_trig_activity(NULL);'   # a conversation is activity — no screensaver
+          # a mood flash may be mid-run — stop it so its delayed restore can't fire mid-talk
+          - script.stop: led_flash
+          # remember the current LEDs — but only at the START of a conversation, and never
+          # while a mood flash is showing (the flash already saved the TRUE original colour).
+          - if:
+              condition: { lambda: 'return !id(g_voice) && !id(g_flash);' }
+              then:
+                - lambda: |-
+                    auto v = id(stackchan_light_bar).current_values;
+                    id(led_on)  = v.is_on();
+                    id(led_bri) = v.get_brightness();
+                    id(led_r)   = v.get_red();
+                    id(led_g)   = v.get_green();
+                    id(led_b)   = v.get_blue();
+          - globals.set: { id: g_flash, value: "false" }   # flash cancelled; save is now ours
+          # the wake word DOES wake a sleeping robot — but a question asked in night/focus/quiet
+          # must not silently cancel that mode (it kept dropping focus/night to awake).
+          - if:
+              condition: { lambda: 'return id(g_sleep) || (!id(g_night) && !id(g_focus) && !id(g_quiet) && id(robot_mode).current_option() != std::string("awake"));' }
+              then: [ { select.set: { id: robot_mode, option: awake } } ]
+          - globals.set: { id: g_listen, value: "true" }
+          - globals.set: { id: g_voice, value: "true" }
+          - globals.set: { id: g_vad, value: "false" }   # fresh listen window — no voice heard yet
+          - script.execute: listen_timeout               # …auto-close if none arrives in ${listen_timeout_s}s
+          - lvgl.page.show: page_face
+          - globals.set: { id: g_card, value: "0" }
+          - script.execute: leds_yellow
+          - script.execute: render_face          # the LISTENING FACE (big curious eyes) — no label
+          - script.execute: { id: head_nudge, dx: 0, dy: 6 }   # perks up attentively, like it leans in
   on_stt_vad_start:
     # a voice! — disarm the no-voice auto-close for this turn
     - globals.set: { id: g_vad, value: "true" }

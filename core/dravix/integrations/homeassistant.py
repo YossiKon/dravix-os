@@ -57,6 +57,51 @@ class HomeAssistant:
         r.raise_for_status()
         return r.json()
 
+    async def _ws_command(self, message: dict[str, Any]) -> Any:
+        """A one-shot ADMIN call over HA's WebSocket API — for registry operations the
+        REST API can't do. Opens, authenticates, sends, returns the result, closes."""
+        import json
+
+        import websockets
+
+        from .ha_events import ha_ws_url
+
+        url = ha_ws_url(self.base_url)
+        async with websockets.connect(url, max_size=1_000_000) as ws:
+            hello = json.loads(await ws.recv())
+            if hello.get("type") != "auth_required":
+                raise RuntimeError(f"unexpected first frame: {hello.get('type')}")
+            await ws.send(json.dumps({"type": "auth", "access_token": self._token}))
+            auth = json.loads(await ws.recv())
+            if auth.get("type") != "auth_ok":
+                raise RuntimeError(f"HA websocket auth failed: {auth.get('type')}")
+            await ws.send(json.dumps({"id": 1, **message}))
+            while True:
+                resp = json.loads(await ws.recv())
+                if resp.get("id") == 1 and resp.get("type") == "result":
+                    if not resp.get("success"):
+                        raise RuntimeError(str(resp.get("error")))
+                    return resp.get("result")
+
+    async def set_entity_enabled(self, entity_id: str, enabled: bool) -> None:
+        """Enable/disable an entity in HA's registry (dravix's privacy mode uses this to
+        REALLY detach the robot's camera — a disabled entity is removed from HA at once,
+        so nothing can snapshot or stream it). Re-enabling reloads the entity's
+        integration so it comes back without a restart."""
+        await self._ws_command({
+            "type": "config/entity_registry/update",
+            "entity_id": entity_id,
+            "disabled_by": None if enabled else "user",
+        })
+        if enabled:
+            # a re-enabled entity only returns after its config entry reloads
+            try:
+                await self.call_service(
+                    "homeassistant", "reload_config_entry", {"entity_id": entity_id}
+                )
+            except Exception as exc:  # noqa: BLE001 — worst case it appears after a restart
+                log.warning("config-entry reload for %s failed: %s", entity_id, exc)
+
     async def camera_snapshot(self, entity_id: str) -> bytes:
         """Fetch the current JPEG frame for a camera entity via HA's camera proxy (local)."""
         r = await self._client.get(f"/api/camera_proxy/{entity_id}")

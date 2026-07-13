@@ -41,6 +41,7 @@ _DEFAULTS: dict[str, Any] = {
     "nudges_enabled": True,  # wellness tips (rest/hydrate/eye-break) for the person working nearby
     "language": None,  # tips/UI language (en|he); None = the env default (DRAVIX_LANG)
     "wellness_tips": [],  # custom wellness tip texts; non-empty list replaces the built-ins
+    "privacy_camera": "",  # camera entity detached from HA by privacy mode (so a restart can re-attach it)
 }
 
 # Keys ``update()`` (and /api/import) may write. Everything else in a patch is rejected.
@@ -50,7 +51,7 @@ _UPDATABLE_KEYS = (
     "personas", "active_persona", "memories", "routines", "voice", "voices", "inbox",
     "screens", "robot_driver", "robot_entities", "head_calibration",
     "climate_entity", "vitals", "nudges_enabled", "language", "wellness_tips",
-    "mood", "idle_motion", "robot_name", "local_only", "birthday",
+    "mood", "idle_motion", "robot_name", "local_only", "birthday", "privacy_camera",
 )
 
 
@@ -363,6 +364,14 @@ class Store:
 
     def set_wellness_tips(self, tips: list[str]) -> None:
         self._data["wellness_tips"] = [t.strip() for t in tips if isinstance(t, str) and t.strip()]
+        self.save()
+
+    def privacy_camera(self) -> str:
+        """The camera entity privacy mode detached from HA ("" = none detached)."""
+        return str(self._data.get("privacy_camera") or "")
+
+    def set_privacy_camera(self, entity_id: str) -> None:
+        self._data["privacy_camera"] = str(entity_id or "")
         self.save()
 
     def birthday(self) -> str:
