@@ -255,7 +255,10 @@ packages:
     # BSP ids like `stackchan_light_bar` / `servo_x_angle`). To take a BSP update: change
     # ref to the new commit, validate, flash.
     ref: 238ba9825e7874d5626709631dae6be92e861b17
-    refresh: never
+    # 1d (not `never`): with a pinned ref the content can't change anyway, but the daily
+    # touch lets ESPHome's recovery path detect-and-recreate a broken cache dir. `never`
+    # preserves a corrupted directory forever (learned the hard way).
+    refresh: 1d
 
 # Pin the BSP's C++ COMPONENTS to the same commit. The BSP's own external_components
 # entry is UNPINNED with refresh: 0s — a git fetch on every single compile, which is
@@ -271,7 +274,7 @@ external_components:
       url: https://github.com/m5stack/esphome-yaml.git
       ref: 238ba9825e7874d5626709631dae6be92e861b17
     components: [axp2101, aw88298, aw9523b, si12t, m5ioe1, ftservo, scs9009]
-    refresh: never
+    refresh: 1d   # pinned ref = content can't change; the daily touch enables cache self-heal
   # The CoreS3's BMI270 IMU (accelerometer) — the BSP never exposes it. This community
   # component is the one M5Stack's own AtomS3R examples use; PINNED for reproducible
   # builds. Powers the SHAKE → dizzy reaction.
@@ -280,7 +283,7 @@ external_components:
       url: https://github.com/DennisGaida/m5stack-atoms3r-components.git
       ref: 7829279a1450827a4c32fa0a8c67e14062bfc5ff
     components: [bmi270_bmm150]
-    refresh: never
+    refresh: 1d   # pinned ref = content can't change; the daily touch enables cache self-heal
 
 display:
   - id: !extend m5cores3_lcd
