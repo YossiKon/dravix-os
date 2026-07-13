@@ -275,13 +275,14 @@ external_components:
       ref: 238ba9825e7874d5626709631dae6be92e861b17
     components: [axp2101, aw88298, aw9523b, si12t, m5ioe1, ftservo, scs9009]
     refresh: 1d   # pinned ref = content can't change; the daily touch enables cache self-heal
-  # The CoreS3's BMI270 IMU (accelerometer) — the BSP never exposes it. This community
-  # component is the one M5Stack's own AtomS3R examples use; PINNED for reproducible
-  # builds. Powers the SHAKE → dizzy reaction.
+  # The CoreS3's BMI270 IMU (accelerometer) — the BSP never exposes it. VENDORED into
+  # dravix-os's own components/ (MIT, from DennisGaida's driver — the one M5Stack's
+  # AtomS3R examples use) with a patch for the ESPHome 2026.6 i2c API, which upstream
+  # predates and no longer compiles against. Powers the SHAKE → dizzy reaction.
   - source:
       type: git
-      url: https://github.com/DennisGaida/m5stack-atoms3r-components.git
-      ref: 7829279a1450827a4c32fa0a8c67e14062bfc5ff
+      url: https://github.com/YossiKon/dravix-os.git
+      ref: 47cfa9356ca3650bebb983013b743646208d7398
     components: [bmi270_bmm150]
     refresh: 1d   # pinned ref = content can't change; the daily touch enables cache self-heal
 
