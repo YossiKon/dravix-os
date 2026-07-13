@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.0.91
+
+**🍄❄ The Climate page speaks Mushroom too** *(same firmware 30 — one flash covers 0.0.90+91)*
+
+The robot's Climate screen now matches the custom pages' design language: the AC name +
+live status sit in a proper Mushroom header card (tinted orange halo + dot), the −/+
+temperature buttons are rounded Mushroom tiles, and every HVAC mode is a colour-accented
+pill — **the ACTIVE mode lights up** (tinted fill + border): blue COOL, orange HEAT, teal
+FAN, amber DRY, green AUTO, red OFF. dravix now tells the robot which mode is active via
+a tiny prefix on the status line, so the highlight is always live.
+
 ## 0.0.90
 
 **🍄 Mushroom cards — on the robot AND in the editor** *(firmware 30 + this add-on: update both)*

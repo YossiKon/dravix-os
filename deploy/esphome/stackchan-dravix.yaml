@@ -2843,50 +2843,67 @@ lvgl:
       scrollable: false
       scrollbar_mode: "OFF"
       widgets:
-        - label: { id: lbl_clim_name, text: "AC", text_font: title_font, styles: accent_txt, align: TOP_MID, y: 6 }
-        - label: { id: lbl_clim_info, text: "", text_font: small_font, text_color: 0x8b96a4, align: TOP_MID, y: 40 }
+        # Mushroom header card: tinted climate-orange halo + dot, name + live info stacked
+        # (the same card language as the 3 custom entity screens)
+        - obj:
+            id: clim_head
+            x: 10
+            y: 4
+            width: 300
+            height: 46
+            radius: 14
+            bg_color: 0x1c222c
+            bg_opa: COVER
+            border_width: 0
+            scrollbar_mode: "OFF"
+            widgets:
+              - obj: { id: clim_halo, align: LEFT_MID, x: 8, width: 30, height: 30, radius: 15, bg_color: 0xFF7043, bg_opa: 25%, border_width: 0 }
+              - obj: { id: clim_dot, align: LEFT_MID, x: 17, width: 12, height: 12, radius: 6, bg_color: 0xFF7043, bg_opa: COVER, border_width: 0 }
+              - label: { id: lbl_clim_name, text: "AC", text_font: small_font, text_color: 0xF2F5F7, align: LEFT_MID, x: 46, y: -9 }
+              - label: { id: lbl_clim_info, text: "", text_font: small_font, text_color: 0x8b96a4, align: LEFT_MID, x: 46, y: 10 }
         # big − / + for the target temperature, flanking a large readout
         - button:
             id: clim_minus
-            x: 8
-            y: 74
-            width: 78
-            height: 84
-            radius: 14
-            bg_color: 0x14324a
+            x: 14
+            y: 60
+            width: 72
+            height: 74
+            radius: 18
+            bg_color: 0x1c222c
             widgets:
-              - label: { text: "-", text_font: big_font, text_color: 0xFFFFFF, align: CENTER }
+              - label: { text: "-", text_font: big_font, text_color: 0x7bb0ff, align: CENTER }
             on_click:
               - homeassistant.event: { event: esphome.dravix_climate, data: { action: "temp_down" } }
-        - label: { id: lbl_clim_set, text: "--°", text_font: big_font, text_color: 0x33E6C8, align: CENTER, y: -6 }
+        - label: { id: lbl_clim_set, text: "--°", text_font: big_font, text_color: 0xF2F5F7, align: TOP_MID, y: 78 }
         - button:
             id: clim_plus
             x: 234
-            y: 74
-            width: 78
-            height: 84
-            radius: 14
-            bg_color: 0x14324a
+            y: 60
+            width: 72
+            height: 74
+            radius: 18
+            bg_color: 0x1c222c
             widgets:
-              - label: { text: "+", text_font: big_font, text_color: 0xFFFFFF, align: CENTER }
+              - label: { text: "+", text_font: big_font, text_color: 0xff9440, align: CENTER }
             on_click:
               - homeassistant.event: { event: esphome.dravix_climate, data: { action: "temp_up" } }
-        # HVAC mode + power row
-        - button: { id: clim_cool, x: 6,   y: 172, width: 58, height: 30, radius: 8, bg_color: 0x123a5a, widgets: [ { label: { text: "COOL", text_font: small_font, text_color: 0x7bb0ff, align: CENTER } } ], on_click: [ { homeassistant.event: { event: esphome.dravix_climate, data: { action: "cool" } } } ] }
-        - button: { id: clim_heat, x: 68,  y: 172, width: 58, height: 30, radius: 8, bg_color: 0x4a1c14, widgets: [ { label: { text: "HEAT", text_font: small_font, text_color: 0xff9440, align: CENTER } } ], on_click: [ { homeassistant.event: { event: esphome.dravix_climate, data: { action: "heat" } } } ] }
-        - button: { id: clim_fan,  x: 130, y: 172, width: 58, height: 30, radius: 8, bg_color: 0x14324a, widgets: [ { label: { text: "FAN", text_font: small_font, text_color: 0x33E6C8, align: CENTER } } ], on_click: [ { homeassistant.event: { event: esphome.dravix_climate, data: { action: "fan_only" } } } ] }
-        - button: { id: clim_dry,  x: 192, y: 172, width: 58, height: 30, radius: 8, bg_color: 0x14324a, widgets: [ { label: { text: "DRY", text_font: small_font, text_color: 0xffc23d, align: CENTER } } ], on_click: [ { homeassistant.event: { event: esphome.dravix_climate, data: { action: "dry" } } } ] }
-        - button: { id: clim_auto, x: 254, y: 172, width: 58, height: 30, radius: 8, bg_color: 0x14324a, widgets: [ { label: { text: "AUTO", text_font: small_font, text_color: 0xFFFFFF, align: CENTER } } ], on_click: [ { homeassistant.event: { event: esphome.dravix_climate, data: { action: "auto" } } } ] }
-        # power + fan-speed row
-        - button: { id: clim_off,  x: 6,   y: 206, width: 120, height: 30, radius: 8, bg_color: 0x3a1414, widgets: [ { label: { text: "OFF", text_font: small_font, text_color: 0xE05555, align: CENTER } } ], on_click: [ { homeassistant.event: { event: esphome.dravix_climate, data: { action: "off" } } } ] }
-        - button: { id: clim_fanspd, x: 130, y: 206, width: 124, height: 30, radius: 8, bg_color: 0x14324a, widgets: [ { label: { text: "FAN SPEED", text_font: small_font, text_color: 0x33E6C8, align: CENTER } } ], on_click: [ { homeassistant.event: { event: esphome.dravix_climate, data: { action: "fan_cycle" } } } ] }
+        # HVAC mode PILLS — Mushroom accents; the ACTIVE mode gets a tinted fill + border
+        # (lit by the 5s interval from the "mode|" prefix dravix sends in the info slot)
+        - button: { id: clim_cool, x: 6,   y: 166, width: 58, height: 32, radius: 16, bg_color: 0x1c222c, widgets: [ { label: { text: "COOL", text_font: small_font, text_color: 0x448AFF, align: CENTER } } ], on_click: [ { homeassistant.event: { event: esphome.dravix_climate, data: { action: "cool" } } } ] }
+        - button: { id: clim_heat, x: 68,  y: 166, width: 58, height: 32, radius: 16, bg_color: 0x1c222c, widgets: [ { label: { text: "HEAT", text_font: small_font, text_color: 0xFF7043, align: CENTER } } ], on_click: [ { homeassistant.event: { event: esphome.dravix_climate, data: { action: "heat" } } } ] }
+        - button: { id: clim_fan,  x: 130, y: 166, width: 58, height: 32, radius: 16, bg_color: 0x1c222c, widgets: [ { label: { text: "FAN", text_font: small_font, text_color: 0x26A69A, align: CENTER } } ], on_click: [ { homeassistant.event: { event: esphome.dravix_climate, data: { action: "fan_only" } } } ] }
+        - button: { id: clim_dry,  x: 192, y: 166, width: 58, height: 32, radius: 16, bg_color: 0x1c222c, widgets: [ { label: { text: "DRY", text_font: small_font, text_color: 0xFFB300, align: CENTER } } ], on_click: [ { homeassistant.event: { event: esphome.dravix_climate, data: { action: "dry" } } } ] }
+        - button: { id: clim_auto, x: 254, y: 166, width: 58, height: 32, radius: 16, bg_color: 0x1c222c, widgets: [ { label: { text: "AUTO", text_font: small_font, text_color: 0x66BB6A, align: CENTER } } ], on_click: [ { homeassistant.event: { event: esphome.dravix_climate, data: { action: "auto" } } } ] }
+        # power + fan-speed row (same pill language)
+        - button: { id: clim_off,  x: 6,   y: 204, width: 120, height: 32, radius: 16, bg_color: 0x1c222c, widgets: [ { label: { text: "OFF", text_font: small_font, text_color: 0xEF5350, align: CENTER } } ], on_click: [ { homeassistant.event: { event: esphome.dravix_climate, data: { action: "off" } } } ] }
+        - button: { id: clim_fanspd, x: 130, y: 204, width: 124, height: 32, radius: 16, bg_color: 0x1c222c, widgets: [ { label: { text: "FAN SPEED", text_font: small_font, text_color: 0x26A69A, align: CENTER } } ], on_click: [ { homeassistant.event: { event: esphome.dravix_climate, data: { action: "fan_cycle" } } } ] }
         - button:
             id: clim_back
             x: 258
-            y: 206
+            y: 204
             width: 54
-            height: 30
-            radius: 8
+            height: 32
+            radius: 16
             bg_color: 0x05080b
             widgets:
               - label: { text: "<", text_font: text_font, text_color: 0x33E6C8, align: CENTER }
@@ -5660,7 +5677,27 @@ interval:
       # climate page — dravix keeps these slots fresh from the configured AC
       - lvgl.label.update: { id: lbl_clim_name, text: !lambda 'return id(t_clim_name).state.empty() ? std::string("No AC configured") : id(t_clim_name).state;' }
       - lvgl.label.update: { id: lbl_clim_set,  text: !lambda 'return id(t_clim_set).state;' }
-      - lvgl.label.update: { id: lbl_clim_info, text: !lambda 'return id(t_clim_info).state;' }
+      # info slot = "mode|display text" (add-on 0.0.90+): strip the mode for display and
+      # light the ACTIVE mode pill Mushroom-style (tinted fill + border in its accent).
+      - lambda: |-
+          std::string raw = id(t_clim_info).state;
+          std::string mode = "", info = raw;
+          size_t bar = raw.find('|');
+          if (bar != std::string::npos) { mode = raw.substr(0, bar); info = raw.substr(bar + 1); }
+          lv_label_set_text(id(lbl_clim_info), info.c_str());
+          auto pill = [&](lv_obj_t* b, const char* m, uint32_t col) {
+            bool on = (mode == m) || (strcmp(m, "auto") == 0 && mode == "heat_cool");
+            lv_obj_set_style_bg_color(b, on ? lv_color_hex(col) : lv_color_hex(0x1c222c), 0);
+            lv_obj_set_style_bg_opa(b, on ? 64 : 255, 0);
+            lv_obj_set_style_border_width(b, on ? 2 : 0, 0);
+            lv_obj_set_style_border_color(b, lv_color_hex(col), 0);
+          };
+          pill(id(clim_cool), "cool", 0x448AFF);
+          pill(id(clim_heat), "heat", 0xFF7043);
+          pill(id(clim_fan),  "fan_only", 0x26A69A);
+          pill(id(clim_dry),  "dry", 0xFFB300);
+          pill(id(clim_auto), "auto", 0x66BB6A);
+          pill(id(clim_off),  "off", 0xEF5350);
 
 # ── Manual SWIPE detection (ESPHome LVGL has no built-in gesture) ────────────────
 touchscreen:

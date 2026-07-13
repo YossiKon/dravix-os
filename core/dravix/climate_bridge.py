@@ -85,7 +85,9 @@ async def push_status(ha, entity: str, discovered: dict) -> None:
     try:
         await _set_text(ha, name_e, for_robot(name))
         await _set_text(ha, set_e, big)
-        await _set_text(ha, info_e, for_robot(info[:60]))
+        # "mode|" prefix (fw 30+): the firmware strips it for display and lights the
+        # matching Mushroom mode pill. Older firmware shows it as-is — harmless.
+        await _set_text(ha, info_e, f"{mode}|{for_robot(info[:48])}")
     except Exception as exc:  # noqa: BLE001
         log.debug("climate push write: %s", exc)
 

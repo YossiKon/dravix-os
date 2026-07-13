@@ -82,7 +82,8 @@ async def test_push_status_writes_the_three_slots():
     assert writes["text.dravix_climate_name"] == "Living Room AC"
     assert writes["text.dravix_climate_set"] == "21°"
     assert "now 24°" in writes["text.dravix_climate_info"]
-    assert "cool" in writes["text.dravix_climate_info"]
+    # "mode|" prefix (fw 30+) — the firmware strips it and lights the matching mode pill
+    assert writes["text.dravix_climate_info"].startswith("cool|")
 
 
 async def test_control_noops_without_entity():
