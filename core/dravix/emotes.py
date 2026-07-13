@@ -110,7 +110,10 @@ def emote_names() -> list[str]:
     return sorted(EMOTES)
 
 
-async def play_emote(robot: RobotController, name: str) -> None:
+async def play_emote(robot: RobotController, name: str, *, include_head: bool = True) -> None:
+    """Play a named emote. ``include_head=False`` runs the face/LED/say steps but leaves
+    the head alone — used when ANOTHER behavior owns the head pose (the pet head-lift:
+    an emote's trailing "back to centre" used to wipe the raised-head hold instantly)."""
     steps = EMOTES.get(name)
     if steps is None:
         raise KeyError(name)
@@ -122,7 +125,7 @@ async def play_emote(robot: RobotController, name: str) -> None:
             color, bright = step["leds"]
             await robot.set_leds(color, float(bright))
             used_leds = True
-        if "head" in step and robot.supports(CAP_HEAD):
+        if include_head and "head" in step and robot.supports(CAP_HEAD):
             yaw, pitch = step["head"]
             await robot.move_head(float(yaw), float(pitch), speed=1.0)
         if "say" in step and robot.supports(CAP_SAY):

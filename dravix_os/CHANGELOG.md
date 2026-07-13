@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.0.89
+
+**🐾 Petting raises the head again — and HOLDS it up.** *(no re-flash needed)*
+
+Three things touched the head on every pet, and they fought: the firmware's little
+nuzzle, dravix's head-lift (raise + hold ~10 s + settle — the feedback you're supposed
+to feel), and the mood emote (happy/love), whose final "back to centre" step wiped the
+raised head the instant it went up. Net result: no visible head-up at all.
+
+Now the head belongs to ONE owner during a pet: the head-lift. The mood emote still
+plays its face + LEDs (blush, love-eyes, pink pulse) but keeps its hands off the head.
+Pet the head → it leans up into your hand, stays up while you keep petting, and settles
+back down ~10 s after you stop.
+
 ## 0.0.88
 
 **🔒 Privacy that actually disconnects, and badges you can see** *(firmware 29 — re-flash)*

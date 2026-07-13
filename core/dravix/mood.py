@@ -299,7 +299,10 @@ class MoodEngine:
             emote = "curious" if self.affection < 0.3 else ("happy" if self.affection < 0.7 else "love")
         if emote and not self._locked():
             try:
-                await play_emote(self._robot, emote)
+                # On a PET the head belongs to PetHeadBehavior (raise + hold + settle) —
+                # the emote's trailing "back to centre" was wiping the raised head the
+                # instant it went up, so pets showed no head-up feedback at all.
+                await play_emote(self._robot, emote, include_head=(event.type != "touch.pet"))
             except Exception:  # noqa: BLE001
                 pass
             # the emote's face IS the reaction — don't stomp it with a forced mood face

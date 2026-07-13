@@ -16,6 +16,29 @@ async def _controller() -> RobotController:
     return c
 
 
+class _RecordingDriver(MockDriver):
+    def __init__(self) -> None:
+        super().__init__()
+        self.moves: list[tuple[float, float]] = []
+
+    async def move_head(self, yaw: float, pitch: float, speed: float = 1.0) -> None:
+        self.moves.append((yaw, pitch))
+
+
+async def test_pet_emote_leaves_the_head_to_the_head_lift():
+    # On a PET the head belongs to PetHeadBehavior (raise + hold) — the pet emote must
+    # not touch it: its trailing "back to centre" used to wipe the raised head instantly,
+    # so petting showed no head-up feedback at all.
+    bus = EventBus()
+    driver = _RecordingDriver()
+    c = RobotController(driver, bus, RobotState())
+    await c.connect()
+    m = MoodEngine(bus, c)
+    await m.handle(Event(type="touch.pet", data={}))
+    assert driver.moves == []
+    await c.close()
+
+
 async def test_petting_makes_it_happy_and_shows_on_face():
     c = await _controller()
     m = MoodEngine(c._bus, c)  # no engine -> face not locked
