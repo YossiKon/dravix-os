@@ -263,11 +263,13 @@ packages:
 # empty" build failures) and lets upstream changes float under us. This entry is
 # processed after the package's, and ESPHome prepends component finders, so it WINS.
 external_components:
+  # NOTE: no `path:` on purpose — ESPHome finds the top-level `components/` folder by
+  # itself (the exact mechanism the BSP's own entry has always used), and the plain
+  # `.git` URL matches it too so the cache key is clean.
   - source:
       type: git
-      url: https://github.com/m5stack/esphome-yaml
+      url: https://github.com/m5stack/esphome-yaml.git
       ref: 238ba9825e7874d5626709631dae6be92e861b17
-      path: components
     components: [axp2101, aw88298, aw9523b, si12t, m5ioe1, ftservo, scs9009]
     refresh: never
   # The CoreS3's BMI270 IMU (accelerometer) — the BSP never exposes it. This community
@@ -275,7 +277,7 @@ external_components:
   # builds. Powers the SHAKE → dizzy reaction.
   - source:
       type: git
-      url: https://github.com/DennisGaida/m5stack-atoms3r-components
+      url: https://github.com/DennisGaida/m5stack-atoms3r-components.git
       ref: 7829279a1450827a4c32fa0a8c67e14062bfc5ff
     components: [bmi270_bmm150]
     refresh: never
