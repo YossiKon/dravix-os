@@ -98,6 +98,9 @@ class WelcomeMode(Mode):
             try:
                 name = await self._frigate.latest_face(cam) if self._frigate else None
                 if name:
+                    # let the rest of the house react too — reaction rules can key on
+                    # {"on": "face.seen", "match": {"person": "..."}} for per-person magic
+                    await self.ctx.bus.publish("face.seen", person=_pretty(name))
                     await self._maybe_greet(_pretty(name))
             except Exception as exc:  # noqa: BLE001 — a poll failure must not stop the loop
                 self.ctx.log.debug("welcome: face poll failed: %s", exc)
@@ -160,17 +163,25 @@ class WelcomeMode(Mode):
         if robot.supports(CAP_FACE):
             await robot.set_face(Expression.LOVE)
         if robot.supports(CAP_LEDS):
-            await robot.set_leds("green", 1.0 if warm else 0.8)
+            # a burst of green, not permanent lighting — it returns to itself
+            await robot.flash_leds("green", 1.0 if warm else 0.8, revert_s=6.0)
         if robot.supports(CAP_HEAD):
             await robot.move_head(0.0, 0.5, speed=1.0)  # perk up toward the door
             if warm:  # a happy extra bob for your favourite person
                 await asyncio.sleep(0.35)
                 await robot.move_head(0.0, 0.2, speed=1.0)
-        he = (get_settings().language or "en").startswith("he")
+        he = self.ctx.language().startswith("he")
         base = str((cfg.get("line_he") if he else cfg.get("line")) or "").strip()
         line = _greeting_line(base, name, he)
         if line and robot.supports(CAP_SAY):
             try:
                 await robot.say(line)
             except Exception:  # noqa: BLE001 — greeting is best-effort
+                pass
+        if robot.supports(CAP_HEAD):
+            # the perk is a gesture, not a pose — settle back so the head doesn't stay up
+            await asyncio.sleep(1.6)
+            try:
+                await robot.move_head(0.0, 0.0, speed=0.7)
+            except Exception:  # noqa: BLE001
                 pass

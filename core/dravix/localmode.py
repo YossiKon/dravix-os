@@ -18,11 +18,17 @@ Applying OFF: everything back to normal. Applied live — no restart.
 """
 from __future__ import annotations
 
+import asyncio
 from typing import Any
 
 from .logging import get_logger
 
 log = get_logger("localmode")
+
+# Serializes concurrent applies (dashboard toggle + the robot switch's echo can land
+# almost together) — without it, two OFF applies could both see xiaozhi=None and leak
+# a second cloud bridge.
+_apply_lock = asyncio.Lock()
 
 
 async def apply_local_only(s: Any, enabled: bool, *, push_to_robot: bool = True) -> dict:
@@ -31,6 +37,11 @@ async def apply_local_only(s: Any, enabled: bool, *, push_to_robot: bool = True)
     ``push_to_robot=False`` when the change CAME from the robot's switch (avoid echo).
     Returns the payload the API responds with; never raises — errors are surfaced in it.
     """
+    async with _apply_lock:
+        return await _apply(s, enabled, push_to_robot=push_to_robot)
+
+
+async def _apply(s: Any, enabled: bool, *, push_to_robot: bool) -> dict:
     s.store.set_local_only(enabled)
 
     # 1 · the cloud MCP bridge follows the choice, live

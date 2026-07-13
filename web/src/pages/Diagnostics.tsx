@@ -173,7 +173,9 @@ export function DiagnosticsPage() {
           {logs.length === 0 ? (
             <div className="p-2 text-mute">{tr("אין לוגים עדיין.", "No logs yet.")}</div>
           ) : (
-            logs.map((l, i) => {
+            // NEWEST FIRST — the fresh lines are what you came for, and the 5s refresh
+            // otherwise kept yanking you back to the oldest ones above the fold
+            [...logs].reverse().map((l, i) => {
               const err = l.level === "ERROR" || l.level === "CRITICAL";
               const warn = l.level === "WARNING";
               return (

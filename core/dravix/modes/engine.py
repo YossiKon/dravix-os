@@ -162,6 +162,7 @@ class ModeEngine:
             ai=self._base_ctx.ai,
             ha=self._base_ctx.ha,
             config=config,
+            store=self._store,  # plugins see the live language toggle etc.
         )
         inst = loaded.cls(ctx)
         inst.meta = loaded.meta

@@ -25,7 +25,7 @@ import asyncio
 import time
 from typing import TYPE_CHECKING, Any
 
-from .dal.base import CAP_DISPLAY, CAP_FACE, CAP_LEDS, CAP_SAY, RobotController
+from .dal.base import CAP_DISPLAY, CAP_FACE, CAP_LEDS, CAP_SAY, RobotController, robot_is_quiet
 from .emotes import play_emote
 from .events import Event, EventBus
 from .logging import get_logger
@@ -118,6 +118,11 @@ class ReactionEngine:
         robot = self._robot
         ctx = _SafeDict(event.data)
         try:
+            # DND: a motion rule must not flash faces/LEDs/speech at 3am — same hard rule
+            # mood/vitals/agents follow. A rule that MUST fire at night (an alarm) opts
+            # out with "respect_quiet": false.
+            if rule.get("respect_quiet", True) and await robot_is_quiet(robot):
+                return
             if rule.get("face") and robot.supports(CAP_FACE):
                 await robot.set_face(rule["face"])
             leds = rule.get("leds")

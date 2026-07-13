@@ -91,9 +91,7 @@ class SurprisesMode(Mode):
         temp = await self._outdoor_temp()
         cold = temp is not None and temp < float(self.ctx.config.get("cold_c", 10))
         if random.random() < (0.45 if cold else 0.12):
-            from dravix.config import get_settings
-
-            he = (get_settings().language or "en").startswith("he")
+            he = self.ctx.language().startswith("he")  # dashboard toggle wins over env
             try:
                 if robot.supports(CAP_FACE):
                     await robot.set_face(Expression.DIZZY)

@@ -503,14 +503,20 @@ def _effective_entities(request: Request) -> dict[str, str]:
 def _robot_config_payload(request: Request) -> dict:
     s = request.app.state
     st = s.robot.state
+    wanted = (s.store.robot_driver() or s.settings.robot_driver)
+    live = getattr(s.robot.driver, "name", wanted)
     return {
-        "driver": (s.store.robot_driver() or s.settings.robot_driver),
+        # the LIVE driver — when the configured one failed to build, the app runs on the
+        # mock fallback and pretending otherwise showed a green dot on a fake robot
+        "driver": live,
+        "requested_driver": wanted,
+        "degraded": live != wanted,
         "drivers": ["ha"],
         "roles": ROBOT_ENTITY_ROLES,
         "entities": _effective_entities(request),
         "calibration": s.store.head_calibration(),
         "capabilities": list(st.capabilities),
-        "online": st.online,
+        "online": st.online and live == wanted,
         "last_error": getattr(st, "last_error", "") or "",
         "ha_configured": s.ha is not None,
         "robot_name": s.store.robot_name(),
@@ -815,12 +821,29 @@ async def ai_chat(body: ChatBody, request: Request):
 @router.websocket("/ws/events")
 async def ws_events(ws: WebSocket):
     """Stream event-bus events to the dashboard as JSON ``{type, data, ts}``."""
+    import secrets as _secrets
+    import time as _time
+
+    # honor the optional API token — the HTTP middleware doesn't run for WebSockets,
+    # so without this check the whole event bus leaked past DRAVIX_API_TOKEN
+    settings = getattr(ws.app.state, "settings", None)
+    token = getattr(settings, "api_token", "") if settings is not None else ""
+    if token:
+        supplied = ws.query_params.get("token", "") or ws.headers.get("x-api-token", "")
+        if not _secrets.compare_digest(supplied.encode(), token.encode()):
+            await ws.close(code=4401)
+            return
     await ws.accept()
     bus = ws.app.state.bus
     q = bus.subscribe()
     try:
         while True:
-            event = await q.get()
+            try:
+                event = await asyncio.wait_for(q.get(), timeout=25.0)
+            except asyncio.TimeoutError:
+                # heartbeat so idle proxies (HA ingress) don't drop the socket
+                await ws.send_json({"type": "ping", "data": {}, "ts": _time.time()})
+                continue
             await ws.send_json({"type": event.type, "data": event.data, "ts": event.ts})
     except (WebSocketDisconnect, asyncio.CancelledError):
         pass
@@ -828,6 +851,14 @@ async def ws_events(ws: WebSocket):
         pass
     finally:
         bus.unsubscribe(q)
+
+
+@router.get("/api/events/recent")
+async def recent_events(request: Request, limit: int = 50):
+    """The last bus events (oldest→newest) — lets the live feed paint instantly on load."""
+    recent = list(getattr(request.app.state.bus, "recent", []))
+    recent = recent[-max(1, min(100, limit)):]
+    return {"events": [{"type": e.type, "data": e.data, "ts": e.ts} for e in recent]}
 
 
 # ── runtime configuration ─────────────────────────────────────────────────────
@@ -1247,10 +1278,13 @@ async def security_photo(day: str, name: str, download: int = 0):
     path = _sec_day_dir(day) / name
     if not path.is_file():
         raise HTTPException(status_code=404, detail="no such photo")
-    headers = (
-        {"Content-Disposition": f'attachment; filename="dravix-{day}-{name}"'} if download else None
+    from fastapi.responses import FileResponse
+
+    # FileResponse streams from disk — read_bytes() stalled the whole event loop on big files
+    return FileResponse(
+        path, media_type="image/jpeg",
+        filename=f"dravix-{day}-{name}" if download else None,
     )
-    return Response(content=path.read_bytes(), media_type="image/jpeg", headers=headers)
 
 
 @router.delete("/api/security/photo/{day}/{name}")
@@ -1320,13 +1354,19 @@ async def security_day_zip(day: str):
     day_dir = _sec_day_dir(day)
     if not day_dir.is_dir():
         raise HTTPException(status_code=404, detail="no such day")
-    buf = io.BytesIO()
-    with zipfile.ZipFile(buf, "w", zipfile.ZIP_STORED) as z:  # JPEGs are already compressed
-        for f in sorted(day_dir.iterdir()):
-            if _SEC_FILE_RE.match(f.name):
-                z.write(f, arcname=f"{day}/{f.name}")
+
+    def _build() -> bytes:
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, "w", zipfile.ZIP_STORED) as z:  # JPEGs are already compressed
+            for f in sorted(day_dir.iterdir()):
+                if _SEC_FILE_RE.match(f.name):
+                    z.write(f, arcname=f"{day}/{f.name}")
+        return buf.getvalue()
+
+    # a whole day can be hundreds of JPEGs — build off the event loop
+    content = await asyncio.to_thread(_build)
     return Response(
-        content=buf.getvalue(),
+        content=content,
         media_type="application/zip",
         headers={"Content-Disposition": f'attachment; filename="dravix-security-{day}.zip"'},
     )
@@ -1373,10 +1413,12 @@ async def security_get_video(day: str, download: int = 0):
     path = _sec_day_dir(day) / "timelapse.mp4"
     if not path.is_file():
         raise HTTPException(status_code=404, detail="no video built for this day yet")
-    headers = (
-        {"Content-Disposition": f'attachment; filename="dravix-security-{day}.mp4"'} if download else None
+    from fastapi.responses import FileResponse
+
+    return FileResponse(
+        path, media_type="video/mp4",
+        filename=f"dravix-security-{day}.mp4" if download else None,
     )
-    return Response(content=path.read_bytes(), media_type="video/mp4", headers=headers)
 
 
 # ── recorded video clips (security mode records the camera stream while armed) ──
@@ -1418,10 +1460,13 @@ async def security_get_clip(day: str, name: str, download: int = 0):
     path = _sec_day_dir(day) / name
     if not path.is_file():
         raise HTTPException(status_code=404, detail="no such clip")
-    headers = (
-        {"Content-Disposition": f'attachment; filename="dravix-{day}-{name}"'} if download else None
+    from fastapi.responses import FileResponse
+
+    # clips are minutes of MP4 — stream from disk, never load into RAM on the event loop
+    return FileResponse(
+        path, media_type="video/mp4",
+        filename=f"dravix-{day}-{name}" if download else None,
     )
-    return Response(content=path.read_bytes(), media_type="video/mp4", headers=headers)
 
 
 @router.delete("/api/security/video/{day}/{name}")
@@ -1950,6 +1995,12 @@ class EventBody(BaseModel):
     data: dict = Field(default_factory=dict)
 
 
+# Event types only TRUSTED internal sources may emit (the HA bridge / the app itself).
+# The generic ingest endpoint must not let any LAN caller approve a pending agent
+# permission or silently flip the master isLocal flag.
+_PRIVILEGED_EVENTS = frozenset({"agent.permission_decision", "islocal.set"})
+
+
 @router.post("/api/event")
 async def ingest_event(body: EventBody, request: Request):
     """Inject a bus event from an external source (robot firmware/MCP, HA webhook, ...).
@@ -1957,6 +2008,8 @@ async def ingest_event(body: EventBody, request: Request):
     e.g. the robot's head-touch sensor can POST ``{"type":"touch.pet"}`` so the robot 'feels' it
     and the mood engine + reactions respond.
     """
+    if body.type in _PRIVILEGED_EVENTS:
+        raise HTTPException(status_code=403, detail=f"{body.type} may not be injected externally")
     await request.app.state.bus.publish(body.type, **(body.data or {}))
     return {"ok": True, "type": body.type}
 
@@ -2133,14 +2186,23 @@ async def play_inbox(request: Request):
     store = request.app.state.store
     robot = _robot(request)
     msgs = store.inbox()
-    for m in msgs:
+    spoken_ids: set[str] = set()
+    for i, m in enumerate(msgs):
+        text = str(m.get("text", "") or "")
+        if not text or not robot.supports(CAP_SAY):
+            continue
         try:
-            if robot.supports(CAP_SAY):
-                await robot.say(m.get("text", ""))
-        except Exception:  # noqa: BLE001
-            pass
-    store.clear_inbox()
-    return {"spoken": len(msgs)}
+            await robot.say(text)
+            spoken_ids.add(str(m.get("id")))
+            if i < len(msgs) - 1:
+                # pace the queue — rapid tts.speak calls cut each other off mid-word
+                await asyncio.sleep(min(10.0, 1.5 + 0.09 * len(text)))
+        except Exception:  # noqa: BLE001 — robot went away mid-queue
+            break
+    # clear ONLY what was actually spoken — a failed run must not destroy the queue
+    if spoken_ids:
+        store.set_inbox([m for m in msgs if str(m.get("id")) not in spoken_ids])
+    return {"spoken": len(spoken_ids), "remaining": len(msgs) - len(spoken_ids)}
 
 
 @router.delete("/api/inbox")

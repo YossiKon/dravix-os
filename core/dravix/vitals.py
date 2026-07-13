@@ -138,6 +138,7 @@ class VitalsEngine:
         self._num_entities: dict[str, str] = {}   # need -> number.* entity id (device bars)
         self._tip_entity: str | None = None        # text.* entity for the on-screen tip
         self._pushed: dict[str, int] = {}
+        self._persisted: tuple | None = None
         self._tasks: list[asyncio.Task] = []
         self._load()
 
@@ -159,12 +160,21 @@ class VitalsEngine:
                 setattr(self, k, _clamp(getattr(self, k) - _DECAY_PER_H[k] * gap_h))
 
     def _persist(self) -> None:
-        if self._store is not None:
-            self._store.set_vitals({
-                "energy": round(self.energy, 1), "food": round(self.food, 1),
-                "fun": round(self.fun, 1), "calm": round(self.calm, 1),
-                "auto_slept": self._auto_slept, "ts": round(time.time(), 1),
-            })
+        if self._store is None:
+            return
+        # Skip the disk write while nothing visibly moved — this runs every tick and a
+        # synchronous store.json save each time is pure flash wear on the HA box (the
+        # ts is only for the offline catch-up decay; whole-point precision is plenty).
+        snap = (round(self.energy), round(self.food), round(self.fun),
+                round(self.calm), self._auto_slept)
+        if snap == self._persisted:
+            return
+        self._persisted = snap
+        self._store.set_vitals({
+            "energy": round(self.energy, 1), "food": round(self.food, 1),
+            "fun": round(self.fun, 1), "calm": round(self.calm, 1),
+            "auto_slept": self._auto_slept, "ts": round(time.time(), 1),
+        })
 
     def snapshot(self) -> dict[str, Any]:
         needs = {"energy": round(self.energy), "food": round(self.food),

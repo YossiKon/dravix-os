@@ -43,15 +43,11 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    // Entities can fail while HA is still starting — remember and retry (next poll / focus).
-    let entitiesOk = false;
+    // Entities refresh on EVERY 10s tick (not latched on first success) — a robot flashed
+    // or renamed while the dashboard is open now shows up without a reload.
     const fetchEntities = () => {
-      if (entitiesOk) return;
       apiGet<{ entities: HAEntity[] }>("/api/ha/entities")
-        .then((r) => {
-          entitiesOk = true;
-          setEntities(r.entities);
-        })
+        .then((r) => setEntities(r.entities))
         .catch(() => undefined);
     };
     const tick = () => {
@@ -99,7 +95,7 @@ export default function App() {
               // keep the SERVER in the same language too (wellness tips, greetings)
               apiSend("/api/config/language", "PUT", { language: nextLang.code }).catch(() => undefined);
             }}
-            aria-label="Switch language"
+            aria-label={tr("החלף שפה", "Switch language")}
             title={nextLang.label}
           >
             {nextLang.short}
@@ -135,6 +131,7 @@ export default function App() {
             <button
               key={tb.id}
               onClick={() => go(tb.id)}
+              aria-current={tab === tb.id ? "page" : undefined}
               className={`flex flex-1 flex-col items-center gap-0.5 py-2.5 text-xs transition ${
                 tab === tb.id ? "text-teal" : "text-mute"
               }`}

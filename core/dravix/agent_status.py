@@ -132,6 +132,17 @@ class AgentPresence:
                 key = (win[0], win[1]["state"]) if win else ("", "idle")
                 if key != self._last:
                     await self._reflect(win, False, "", "")
+                elif key[1] in ("waiting_permission", "question", "error"):
+                    # re-assert a persistent ATTENTION light — an emote's LED cleanup or a
+                    # flourish may have wiped the "needs you" colour in the meantime
+                    from .dal.base import CAP_LEDS
+
+                    if self._robot.supports(CAP_LEDS) and not await self._quiet():
+                        look = _LOOKS[key[1]]
+                        try:
+                            await self._robot.set_leds(look.led, look.brightness)
+                        except Exception:  # noqa: BLE001
+                            pass
                 # expire the on-robot permission prompt server-side too (the firmware
                 # auto-hides its buttons, but the pending request must stop being current)
                 if self._current:
@@ -279,15 +290,16 @@ class AgentPresence:
         wtext = winner[1]["text"] if winner else ""
         look = _LOOKS.get(wstate, _LOOKS["idle"])
         changed = (wname, wstate) != self._last
-        self._last = (wname, wstate)
 
         robot = self._robot
         display = self._prefs().get("display", "both")
 
         if changed:
+            wrote = False
             if robot.supports(CAP_FACE):
                 try:
                     await robot.set_face(look.face)
+                    wrote = True
                 except Exception:  # noqa: BLE001 — a status lamp must never raise into the caller
                     pass
             if robot.supports(CAP_LEDS):
@@ -299,6 +311,7 @@ class AgentPresence:
                         await robot.flash_leds(look.led, look.brightness, revert_s=5.0)
                     else:
                         await robot.set_leds(look.led, look.brightness)
+                    wrote = True
                 except Exception:  # noqa: BLE001
                     pass
             # mirror the agent's activity onto the FACE: a working agent = the firmware's
@@ -316,6 +329,13 @@ class AgentPresence:
                         await writer(_badge(wname, wstate))
                     except Exception:  # noqa: BLE001
                         pass
+            # commit only when a write landed (or none was even possible — mock/no-caps),
+            # so a robot blip during the change is retried by the sweeper instead of the
+            # stale look sitting there forever.
+            if wrote or not (robot.supports(CAP_FACE) or robot.supports(CAP_LEDS)):
+                self._last = (wname, wstate)
+        else:
+            self._last = (wname, wstate)
 
         # speak only when THIS update is the (changed) winner, it's an attention state, and
         # the agent isn't individually muted (a chatty agent can be silenced on its own)
@@ -404,10 +424,12 @@ class AgentPresence:
             "id": pid, "agent": name, "tool": (tool or "").strip(), "summary": text,
             "created_dt": stamp, "decision": None, "decided_dt": None,
         }
-        # drop decided requests older than a minute so the map can't grow without bound
+        # drop decided requests older than a minute AND undecided ones past their TTL —
+        # an agent hook that times out unanswered must not leak an entry forever
         self._perms = {
             k: v for k, v in self._perms.items()
-            if v["decision"] is None or (stamp - (v["decided_dt"] or stamp)).total_seconds() < 60
+            if (v["decision"] is None and (stamp - v["created_dt"]).total_seconds() <= _PERM_TTL)
+            or (v["decision"] is not None and (stamp - (v["decided_dt"] or stamp)).total_seconds() < 60)
         }
         self._current = pid
         # the asking agent is now waiting_permission (the winner → face/LED). Speak the SHORT

@@ -38,7 +38,10 @@ export function Toaster() {
     };
   }, []);
   return (
-    <div className="pointer-events-none fixed inset-x-0 bottom-24 z-50 flex flex-col items-center gap-2 px-4">
+    <div
+      aria-live="polite"
+      className="pointer-events-none fixed inset-x-0 bottom-24 z-50 flex flex-col items-center gap-2 px-4"
+    >
       {items.map((t) => (
         <div
           key={t.id}
@@ -67,6 +70,8 @@ export function Toggle(props: { on: boolean; onChange: (v: boolean) => void; lab
   return (
     <button
       type="button"
+      role="switch"
+      aria-checked={props.on}
       onClick={() => props.onChange(!props.on)}
       className="flex min-h-12 w-full items-center justify-between gap-3 rounded-2xl border border-line bg-card2 px-4 py-2 text-start"
     >

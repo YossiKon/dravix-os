@@ -60,6 +60,21 @@ QUIET_STATES = frozenset({"sleep", "night", "screensaver", "quiet", "focus", "bu
 ASLEEP_STATES = frozenset({"sleep", "screensaver"})
 
 
+async def robot_is_quiet(controller: "RobotController") -> bool:
+    """The ONE do-not-disturb check, shared by mood / vitals / agents / reactions /
+    scheduler: True when the robot's own state sensor reports a QUIET state. An
+    unknown or unreadable state counts as ACTIVE (mock/tests stay unchanged, and a
+    new firmware state can never accidentally mute the robot)."""
+    getter = getattr(controller.driver, "get_text", None)
+    if getter is None:
+        return False
+    try:
+        state = await getter("state_sensor")
+    except Exception:  # noqa: BLE001 — can't tell → treat as active
+        return False
+    return (state or "").strip().lower() in QUIET_STATES
+
+
 class RobotDriver(abc.ABC):
     """Backend that knows how to physically talk to the robot."""
 
@@ -129,8 +144,11 @@ class RobotController:
         # re-read HA every frame.
         self._priv_val: bool = False
         self._priv_at: float = 0.0
-        # Pending auto-revert of a flash_leds() call (cancelled by any newer LED write).
+        # Pending auto-revert of a flash_leds() call (cancelled by any newer LED write),
+        # plus a generation counter so an already-detached revert can never darken a
+        # colour that was deliberately set after its flash.
         self._led_revert: asyncio.Task | None = None
+        self._led_gen: int = 0
 
     async def connect(self) -> None:
         await self._driver.connect()
@@ -196,14 +214,20 @@ class RobotController:
         await self._bus.publish("robot.say", text=text)
 
     async def set_leds(self, color: str, brightness: float = 1.0) -> None:
+        await self._set_leds(color, brightness)
+
+    async def _set_leds(self, color: str, brightness: float) -> int:
+        """The one real LED write. Returns the write's generation — a newer LED intent
+        always wins, and any revert task from an older generation must no-op."""
         self._require(CAP_LEDS)
-        # A newer LED intent always wins — cancel a pending flash revert so it can't
-        # switch off a colour that was deliberately set after the flash.
+        self._led_gen += 1
+        gen = self._led_gen
         if self._led_revert is not None and not self._led_revert.done():
             self._led_revert.cancel()
             self._led_revert = None
         await self._driver.set_leds(color, brightness)
         await self._bus.publish("robot.leds", color=color, brightness=brightness)
+        return gen
 
     async def flash_leds(self, color: str, brightness: float = 1.0, revert_s: float = 4.0) -> None:
         """A decorative LED pulse, not a state: light up, then auto-OFF after ``revert_s``.
@@ -211,11 +235,13 @@ class RobotController:
         This is what reactions / scheduled actions / notifications / agent pulses use —
         the LED bar always returns to itself a few seconds later, so nothing can leave it
         burning. Deliberate LED choices (the dashboard picker) use set_leds and persist."""
-        await self.set_leds(color, brightness)
+        gen = await self._set_leds(color, brightness)
 
         async def _revert() -> None:
             try:
                 await asyncio.sleep(revert_s)
+                if gen != self._led_gen:
+                    return  # a newer LED write took over — leave its colour alone
                 self._led_revert = None  # our own turn-off must not cancel itself
                 await self.set_leds("off", 0.0)
             except asyncio.CancelledError:

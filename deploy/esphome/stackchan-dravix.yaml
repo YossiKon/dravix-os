@@ -39,7 +39,7 @@ substitutions:
   # publishes it to HA ("Firmware version" sensor); the dravix dashboard compares it
   # with the version bundled in the add-on and shows "firmware update available".
   # (Maintainers: bump this on every firmware change. Users: don't touch.)
-  fw_version: "26"
+  fw_version: "27"
   # The ESPHome node name (mDNS hostname + the default entity prefix on a fresh flash).
   # Change it only if you run MORE THAN ONE robot — each needs a unique name. NOTE:
   # changing it on an already-adopted robot registers a NEW device in HA.
@@ -97,6 +97,13 @@ esphome:
         - if:
             condition: { switch.is_off: sw_privacy }
             then: [ micro_wake_word.start ]
+        # REPLAY the restored mode — restore_value only republishes the select's state;
+        # running it through set_action applies the real thing (night dim, sleep droop,
+        # servo speeds), so a robot that rebooted at night stays a night robot.
+        - if:
+            condition: { lambda: 'return id(robot_mode).current_option() != std::string("awake");' }
+            then:
+              - select.set: { id: robot_mode, option: !lambda 'return id(robot_mode).current_option();' }
 
 esp32:
   variant: esp32s3
@@ -248,7 +255,21 @@ packages:
     # BSP ids like `stackchan_light_bar` / `servo_x_angle`). To take a BSP update: change
     # ref to the new commit, validate, flash.
     ref: 238ba9825e7874d5626709631dae6be92e861b17
-    refresh: 1d
+    refresh: never
+
+# Pin the BSP's C++ COMPONENTS to the same commit. The BSP's own external_components
+# entry is UNPINNED with refresh: 0s — a git fetch on every single compile, which is
+# what corrupts the ESPHome add-on's cache ("shallow.lock exists" / "directory not
+# empty" build failures) and lets upstream changes float under us. This entry is
+# processed after the package's, and ESPHome prepends component finders, so it WINS.
+external_components:
+  - source:
+      type: git
+      url: https://github.com/m5stack/esphome-yaml
+      ref: 238ba9825e7874d5626709631dae6be92e861b17
+      path: components
+    components: [axp2101, aw88298, aw9523b, si12t, m5ioe1, ftservo, scs9009]
+    refresh: never
 
 display:
   - id: !extend m5cores3_lcd
@@ -298,7 +319,6 @@ globals:
   - { id: g_tip,    type: bool, restore_value: false, initial_value: "false" }  # a wellness tip is showing
   - { id: g_agent,  type: bool, restore_value: false, initial_value: "false" }  # an AI-agent badge is set
   - { id: g_perm,   type: bool, restore_value: false, initial_value: "false" }  # an approve/reject prompt is up
-  - { id: g_ptouch, type: bool, restore_value: false, initial_value: "false" }  # a head touch is deciding a prompt
   - { id: g_voice,  type: bool, restore_value: false, initial_value: "false" }  # voice pipeline active
   - { id: g_sleep,  type: bool, restore_value: false, initial_value: "false" }
   - { id: g_saver,  type: bool, restore_value: false, initial_value: "false" }
@@ -351,16 +371,7 @@ globals:
   - { id: sn_fy,  type: int,     restore_value: false, initial_value: "4" }
   - { id: sn_sc,  type: int,     restore_value: false, initial_value: "0" }
   - { id: sn_alive, type: bool,  restore_value: false, initial_value: "false" }
-  # ── DOOM-lite — a corridor shooter: joystick aims a crosshair, the remote's button fires ──
-  - { id: dm_ex,    type: float, restore_value: false, initial_value: "160" }  # enemy centre x
-  - { id: dm_es,    type: float, restore_value: false, initial_value: "10" }   # enemy size (grows as it nears)
-  - { id: dm_cx,    type: int,   restore_value: false, initial_value: "160" }  # crosshair x
-  - { id: dm_cy,    type: int,   restore_value: false, initial_value: "110" }  # crosshair y
-  - { id: dm_sc,    type: int,   restore_value: false, initial_value: "0" }
-  - { id: dm_lives, type: int,   restore_value: false, initial_value: "3" }
-  - { id: dm_bp,    type: bool,  restore_value: false, initial_value: "false" }  # fire button, previous frame
-  - { id: dm_shot,  type: bool,  restore_value: false, initial_value: "false" }  # a shot was fired this frame
-  - { id: dm_run,   type: bool,  restore_value: false, initial_value: "false" }
+  # (DOOM-lite removed — it was unreachable: the games menu opens the real DOOM-3D.)
   # ── MAPLE-lite — a little platformer: joystick moves, the remote button jumps, stomp mushrooms ──
   - { id: mp_x,     type: float, restore_value: false, initial_value: "20" }
   - { id: mp_y,     type: float, restore_value: false, initial_value: "180" }
@@ -392,8 +403,7 @@ globals:
   - { id: perm_dec, type: int, restore_value: false, initial_value: "0" }   # last decision: 1 approve · 2 reject
   - { id: g_apulse, type: bool, restore_value: false, initial_value: "false" }  # AI-agent "working" pulse phase
   - { id: g_gloves, type: bool, restore_value: false, initial_value: "false" }  # boxing-gloves accessory is on → arms the auto-punch
-  - { id: g_wink,   type: bool, restore_value: false, initial_value: "false" }  # this blink is a one-eyed wink
-  - { id: g_ant,    type: bool, restore_value: false, initial_value: "false" }  # antennae accessory is on (arms the wiggle)
+  # (g_wink + g_ant removed — winks were permanently disabled and no accessory ever armed the antennae)
   # ── DOOM-3D — a real first-person raycaster: joystick turns/walks, the button shoots ──
   - { id: r3_px,   type: float, restore_value: false, initial_value: "2.5" }   # player x (map units)
   - { id: r3_py,   type: float, restore_value: false, initial_value: "2.5" }   # player y
@@ -421,7 +431,7 @@ globals:
   - { id: g_pn,     type: int,  restore_value: false, initial_value: "0" }   # party sway alternator
   # official ESP-NOW remote state (latest parsed packet + throttling)
   - { id: g_rc_yaw,   type: float, restore_value: false, initial_value: "0" }     # target yaw (servo scale)
-  - { id: g_rc_pitch, type: float, restore_value: false, initial_value: "165" }   # target pitch (158..260)
+  - { id: g_rc_pitch, type: float, restore_value: false, initial_value: "209" }   # target pitch (158..260) — 209 = the stick's NEUTRAL centre; 165 made Snake/DOOM-3D auto-move with no remote touched
   - { id: g_rc_btn,   type: int,   restore_value: false, initial_value: "0" }
   - { id: g_rc_btna,  type: int,   restore_value: false, initial_value: "0" }   # 2nd remote button / stick-click (packet byte 0)
   - { id: g_rc_prev,  type: int,   restore_value: false, initial_value: "0" }
@@ -463,6 +473,9 @@ globals:
   - { id: g_prev_x,  type: float, restore_value: false, initial_value: "-999" }
   - { id: g_prev_y,  type: float, restore_value: false, initial_value: "-999" }
   - { id: g_move_ms, type: long,  restore_value: false, initial_value: "0" }
+  # affection streak — pets within a 90s window escalate the reaction (blush → love-eyes → melt)
+  - { id: g_pets_n,  type: int,   restore_value: false, initial_value: "0" }
+  - { id: g_pets_ms, type: long,  restore_value: false, initial_value: "0" }
   # battery engine (see battery_pct): smoothed open-circuit voltage + charging flag
   - { id: g_batt_v_filt, type: float, restore_value: false, initial_value: "-1" }
   - { id: g_batt_chg,    type: bool,  restore_value: false, initial_value: "false" }
@@ -564,6 +577,23 @@ sensor:
       # nom, electricity! — a happy little reaction the moment it's plugged in
       on_press:
         then: [ { script.execute: plug_react } ]
+      # …and a "fully charged!" stretch when unplugged with a full belly 🔋
+      on_release:
+        then:
+          - if:
+              condition:
+                lambda: |-
+                  return id(g_booted) && !id(g_sleep) && !id(g_saver) && !id(g_night)
+                         && !id(g_focus) && !id(g_quiet)
+                         && id(axp_batt).has_state() && id(axp_batt).state > 95.0f;
+              then:
+                - script.execute: { id: led_flash, r: 20, g: 100, b: 30 }   # a green "all full!"
+                - globals.set: { id: g_expr, value: "1" }
+                - script.execute: render_face
+                - script.execute: head_nod
+                - delay: 2500ms
+                - globals.set: { id: g_expr, value: !lambda 'return id(g_face_rest);' }
+                - script.execute: render_face
   # REAL power metering — the BSP exposes the INA226 battery monitor to HA. Current is in A,
   # power in W, bus voltage in V. These make the status page show true consumption + a true
   # time-left instead of a guess.
@@ -638,8 +668,12 @@ sensor:
           condition: { lambda: 'return x > ${prox_boop} && !id(g_sleep) && !id(g_saver) && id(sw_touch).state;' }
           then: [ { script.execute: boop_react } ]
       # (boop excludes greet/wave — a finger straight to the sensor is a boop, not both)
+      # PRESENCE is tracked UNCONDITIONALLY — g_near feeds the "Presence nearby" sensor
+      # that dravix's wellness tips + HA automations rely on. Only the greet/wave
+      # REACTIONS are gated by the "Greet on approach" toggle (turning greet off used
+      # to silently kill presence detection entirely).
       - if:
-          condition: { lambda: 'return x > ${prox_near} && x <= ${prox_boop} && !id(g_near) && id(sw_greet).state;' }
+          condition: { lambda: 'return x > ${prox_near} && x <= ${prox_boop} && !id(g_near);' }
           then:
             - globals.set: { id: g_near, value: "true" }
             # WAVE 👋 — three near/far swings inside 4s = a hand waving (an approach is
@@ -649,12 +683,15 @@ sensor:
                 if (now - id(g_wv_ms) > 4000) { id(g_wv_cnt) = 1; id(g_wv_ms) = now; }
                 else { id(g_wv_cnt)++; }
             - if:
-                condition: { lambda: 'return id(g_wv_cnt) >= 3;' }
+                condition: { lambda: 'return id(sw_greet).state;' }
                 then:
-                  - lambda: 'id(g_wv_cnt) = 0;'
-                  - script.execute: wave_react
-                else:
-                  - script.execute: greet
+                  - if:
+                      condition: { lambda: 'return id(g_wv_cnt) >= 3;' }
+                      then:
+                        - lambda: 'id(g_wv_cnt) = 0;'
+                        - script.execute: wave_react
+                      else:
+                        - script.execute: greet
       - if:
           condition: { lambda: 'return x < ${prox_far};' }            # they moved away
           then:
@@ -691,8 +728,8 @@ text_sensor:
                      && !id(g_pet) && id(sw_touch).state;
           then:
             - globals.set: { id: g_pet, value: "true" }
-            # While an Approve/Reject prompt is up, a HEAD TOUCH decides it: a quick TAP
-            # approves (on release) and a 3s HOLD rejects (perm_hold). Otherwise it's a pet.
+            # While an Approve/Reject prompt is up, a HEAD TOUCH approves it (the red
+            # on-screen button rejects). Otherwise it's a pet.
             - if:
                 condition: { lambda: 'return id(g_perm);' }
                 then:
@@ -703,19 +740,6 @@ text_sensor:
           condition: { lambda: 'return x == "No touch";' }            # released
           then:
             - globals.set: { id: g_pet, value: "false" }
-            # a prompt touch released BEFORE the 3s hold fired = a quick TAP → approve
-            - if:
-                condition: { lambda: 'return id(g_ptouch);' }
-                then:
-                  - script.stop: perm_hold
-                  - globals.set: { id: g_ptouch, value: "false" }
-                  - if:
-                      condition: { lambda: 'return id(g_perm);' }
-                      then:
-                        - globals.set: { id: g_perm, value: "false" }
-                        - lvgl.widget.hide: perm_box
-                        - homeassistant.event: { event: esphome.dravix_permission, data: { decision: "approve" } }
-                        - script.execute: pet_react
   # Fallback: after an HA device/area rename, re-registered entities can land under an
   # "<area>_<device>" prefix. Only one of the two prefixes really exists; the other just
   # stays unavailable (harmless). This makes petting survive either prefix.
@@ -730,8 +754,8 @@ text_sensor:
                      && !id(g_pet) && id(sw_touch).state;
           then:
             - globals.set: { id: g_pet, value: "true" }
-            # While an Approve/Reject prompt is up, a HEAD TOUCH decides it: a quick TAP
-            # approves (on release) and a 3s HOLD rejects (perm_hold). Otherwise it's a pet.
+            # While an Approve/Reject prompt is up, a HEAD TOUCH approves it (the red
+            # on-screen button rejects). Otherwise it's a pet.
             - if:
                 condition: { lambda: 'return id(g_perm);' }
                 then:
@@ -742,18 +766,6 @@ text_sensor:
           condition: { lambda: 'return x == "No touch";' }
           then:
             - globals.set: { id: g_pet, value: "false" }
-            - if:
-                condition: { lambda: 'return id(g_ptouch);' }
-                then:
-                  - script.stop: perm_hold
-                  - globals.set: { id: g_ptouch, value: "false" }
-                  - if:
-                      condition: { lambda: 'return id(g_perm);' }
-                      then:
-                        - globals.set: { id: g_perm, value: "false" }
-                        - lvgl.widget.hide: perm_box
-                        - homeassistant.event: { event: esphome.dravix_permission, data: { decision: "approve" } }
-                        - script.execute: pet_react
   # TOUCH ZONE 2 (middle of the head) — also petting.
   - platform: homeassistant
     id: ha_touch2
@@ -766,8 +778,8 @@ text_sensor:
                      && !id(g_pet) && id(sw_touch).state;
           then:
             - globals.set: { id: g_pet, value: "true" }
-            # While an Approve/Reject prompt is up, a HEAD TOUCH decides it: a quick TAP
-            # approves (on release) and a 3s HOLD rejects (perm_hold). Otherwise it's a pet.
+            # While an Approve/Reject prompt is up, a HEAD TOUCH approves it (the red
+            # on-screen button rejects). Otherwise it's a pet.
             - if:
                 condition: { lambda: 'return id(g_perm);' }
                 then:
@@ -778,18 +790,6 @@ text_sensor:
           condition: { lambda: 'return x == "No touch";' }
           then:
             - globals.set: { id: g_pet, value: "false" }
-            - if:
-                condition: { lambda: 'return id(g_ptouch);' }
-                then:
-                  - script.stop: perm_hold
-                  - globals.set: { id: g_ptouch, value: "false" }
-                  - if:
-                      condition: { lambda: 'return id(g_perm);' }
-                      then:
-                        - globals.set: { id: g_perm, value: "false" }
-                        - lvgl.widget.hide: perm_box
-                        - homeassistant.event: { event: esphome.dravix_permission, data: { decision: "approve" } }
-                        - script.execute: pet_react
   # TOUCH ZONE 3 (back of the head) — a TICKLE: giggly wiggle instead of a calm pet.
   - platform: homeassistant
     id: ha_touch3
@@ -955,8 +955,17 @@ text:
     max_length: 20
     initial_value: ""
     set_action:
+      # CLEARING ("") always works — a clear dropped because the robot happened to be
+      # mid-voice-turn/asleep used to latch the focused eyes forever. Only SETTING a
+      # state respects the guards (a live conversation / sleep always wins).
       - if:
-          condition: { lambda: 'return !id(g_voice) && !id(g_sleep) && !id(g_saver);' }
+          condition: { lambda: 'return x.empty() && id(g_voice);' }
+          then:
+            # a live conversation owns think/listen — only release the agent's focus eyes
+            - globals.set: { id: g_conc, value: "false" }
+            - script.execute: render_face
+      - if:
+          condition: { lambda: 'return !id(g_voice) && (x.empty() || (!id(g_sleep) && !id(g_saver)));' }
           then:
             - globals.set: { id: g_think,  value: !lambda 'return x == "thinking";' }
             - globals.set: { id: g_listen, value: !lambda 'return x == "listening";' }
@@ -1021,8 +1030,8 @@ text:
             # request never goes unnoticed (dravix still waits for YOU to decide — no auto-approve).
             - script.execute: { id: led_flash, r: 100, g: 62, b: 0 }
             - if:
-                condition: { lambda: 'return id(sw_sfx).state && !id(g_quiet) && !id(g_night);' }
-                then: [ { rtttl.play: "perm:d=8,o=6,b=150:c,e,g" } ]
+                condition: { lambda: 'return id(sw_sfx).state && !id(g_quiet) && !id(g_night) && !id(g_sleep) && !id(g_saver);' }
+                then: [ { rtttl.play: "perm:d=8,o=6,b=150:c,e,g" } ]   # never chirp at a black sleeping screen
             - script.execute: { id: head_nudge, dx: 0, dy: 8 }
           else:
             - globals.set: { id: g_perm, value: "false" }
@@ -1081,9 +1090,14 @@ number:
     unit_of_measurement: "%"
     restore_value: true
     set_action:
-      - light.turn_on:
-          id: lcd_backlight
-          brightness: !lambda 'return x / 100.0;'
+      # store-only while asleep (a dashboard write must not light a black sleeping screen)
+      # and in night mode (which owns its own 15% dim); it applies on the next wake.
+      - if:
+          condition: { lambda: 'return !id(g_sleep) && !id(g_night);' }
+          then:
+            - light.turn_on:
+                id: lcd_backlight
+                brightness: !lambda 'return x / 100.0;'
   # Head PITCH in YOUR units (158..260). The BSP's servo_y_angle is locked to 0..90 and can't
   # be re-ranged, so this number maps 158..260 → the real 0..90 servo. In dravix-os Setup,
   # map "Head — up/down" to THIS entity: number.dravix_head_pitch  (instead of servo_y_angle).
@@ -1184,7 +1198,9 @@ button:
           id(bk_alive) = true;
       - lvgl.label.update: { id: bk_msg, text: "" }
       - lvgl.page.show: page_breakout
-      - rtttl.play: "go:d=16,o=6,b=200:e,g,c7"   # launch trill
+      - if:
+          condition: { lambda: 'return id(sw_sfx).state && !id(g_quiet) && !id(g_night);' }
+          then: [ { rtttl.play: "go:d=16,o=6,b=200:e,g,c7" } ]   # launch trill
 
 # ── Behaviour toggles — flip these from Home Assistant / the dravix dashboard ────
 switch:
@@ -1531,10 +1547,8 @@ lvgl:
               - obj: { id: cheek_l, align: CENTER, x: -58, y: 42, width: 28, height: 10, radius: 5,  bg_color: 0xFF9EB5, bg_opa: COVER, border_width: 0, hidden: true }
               - obj: { id: cheek_r, align: CENTER, x: 58,  y: 42, width: 28, height: 10, radius: 5,  bg_color: 0xFF9EB5, bg_opa: COVER, border_width: 0, hidden: true }
               - obj: { id: mouth,   align: CENTER, x: 0,   y: 64, width: 40, height: 8,  radius: 4,  bg_color: 0x33E6C8, bg_opa: COVER, border_width: 0 }
-              # ── decorators (ported from the original avatar): angry BROWS (slanted
-              #    lines above the eyes), a SWEAT drop (busy), and X-eyes (dizzy) ──
-              - line: { id: brow_l, points: ["70, 58", "128, 76"], line_width: 7, line_color: 0x14181d, line_rounded: true, hidden: true }
-              - line: { id: brow_r, points: ["192, 76", "250, 58"], line_width: 7, line_color: 0x14181d, line_rounded: true, hidden: true }
+              # ── decorators (ported from the original avatar): a SWEAT drop (react_hot)
+              #    and X-eyes (dizzy). (Brows removed — they were permanently disabled.) ──
               - obj: { id: sweat, align: CENTER, x: 100, y: -60, width: 14, height: 20, radius: 7, bg_color: 0x57c8ff, bg_opa: COVER, border_width: 0, hidden: true }
               - label: { id: dz_l, align: CENTER, x: -58, y: -6, text: "x", text_font: big_font, text_color: 0x33E6C8, hidden: true }
               - label: { id: dz_r, align: CENTER, x: 58,  y: -6, text: "x", text_font: big_font, text_color: 0x33E6C8, hidden: true }
@@ -1634,16 +1648,7 @@ lvgl:
               - obj: { id: acc_mts, align: CENTER, x: 0, y: 100, width: 170, height: 22, radius: 4, bg_color: 0xc02020, bg_opa: COVER, border_width: 0, hidden: true }   # Muay Thai trunks
               - obj: { id: acc_mts_w, align: CENTER, x: 0, y: 90, width: 170, height: 10, radius: 2, bg_color: 0xf0c040, bg_opa: COVER, border_width: 0, hidden: true }   # waistband
               - obj: { id: acc_mts_s, align: CENTER, x: 0, y: 102, width: 6, height: 20, radius: 0, bg_color: 0x3a0a0a, bg_opa: COVER, border_width: 0, hidden: true }   # leg split
-              # ── sparkles (shown while happy / in love) ──
-              - obj: { id: sp_1, align: CENTER, x: -92, y: -36, width: 9, height: 9, radius: 4, bg_color: 0xffe14a, bg_opa: COVER, border_width: 0, hidden: true }
-              - obj: { id: sp_2, align: CENTER, x: 92,  y: -28, width: 7, height: 7, radius: 3, bg_color: 0xfff2a0, bg_opa: COVER, border_width: 0, hidden: true }
-              - obj: { id: sp_3, align: CENTER, x: -82, y: 46,  width: 7, height: 7, radius: 3, bg_color: 0xfff2a0, bg_opa: COVER, border_width: 0, hidden: true }
-              - obj: { id: sp_4, align: CENTER, x: 86,  y: 42,  width: 9, height: 9, radius: 4, bg_color: 0xffe14a, bg_opa: COVER, border_width: 0, hidden: true }
-              # ── antennae — an OPT-IN accessory (hidden by default so the plain face stays clean) ──
-              - obj: { id: ant_l, align: CENTER, x: -54, y: -84, width: 4, height: 18, radius: 2, bg_color: 0x1f9e88, bg_opa: COVER, border_width: 0, hidden: true }
-              - obj: { id: ant_r, align: CENTER, x: 54,  y: -84, width: 4, height: 18, radius: 2, bg_color: 0x1f9e88, bg_opa: COVER, border_width: 0, hidden: true }
-              - obj: { id: ant_lb, align: CENTER, x: -54, y: -94, width: 11, height: 11, radius: 6, bg_color: 0x33E6C8, bg_opa: COVER, border_width: 0, hidden: true }
-              - obj: { id: ant_rb, align: CENTER, x: 54,  y: -94, width: 11, height: 11, radius: 6, bg_color: 0x33E6C8, bg_opa: COVER, border_width: 0, hidden: true }
+              # (sparkles + antennae removed — permanently hidden dead widgets; keep the face lean)
               # a glass of water (glass body + a blue fill that drops as it drinks)
               - obj: { id: drink_glass, align: CENTER, x: 0, y: 86, width: 26, height: 34, radius: 4, bg_color: 0xBFE8FF, bg_opa: COVER, border_width: 2, border_color: 0xFFFFFF, hidden: true }
               - obj: { id: drink_water, align: CENTER, x: 0, y: 96, width: 20, height: 18, radius: 2, bg_color: 0x4FC3F7, bg_opa: COVER, border_width: 0, hidden: true }
@@ -2496,36 +2501,8 @@ lvgl:
               - globals.set: { id: r3_run, value: "false" }
               - globals.set: { id: g_card, value: "0" }
               - lvgl.page.show: page_face
-    # ── DOOM-lite — a corridor shooter: joystick aims the crosshair, the remote button fires ──
-    - id: page_doom
-      bg_color: 0x0a0808
-      bg_opa: COVER
-      scrollable: false
-      scrollbar_mode: "OFF"
-      widgets:
-        - obj: { id: dm_c0, x: 30,  y: 26, width: 260, height: 188, radius: 0, bg_color: 0x1a1414, bg_opa: COVER, border_width: 2, border_color: 0x3a2a2a }
-        - obj: { id: dm_c1, x: 85,  y: 56, width: 150, height: 128, radius: 0, bg_color: 0x120e0e, bg_opa: COVER, border_width: 2, border_color: 0x2a2020 }
-        - obj: { id: dm_c2, x: 128, y: 82, width: 64,  height: 76,  radius: 0, bg_color: 0x080606, bg_opa: COVER, border_width: 2, border_color: 0x221818 }
-        - obj: { id: dm_enemy, x: 145, y: 95,  width: 30, height: 30, radius: 6, bg_color: 0xd83b3b, bg_opa: COVER, border_width: 2, border_color: 0x7a1010 }
-        - obj: { id: dm_gun,   x: 138, y: 214, width: 44, height: 26, radius: 4, bg_color: 0x4a4a4a, bg_opa: COVER, border_width: 0 }
-        - label: { id: dm_cross, text: "+", text_font: big_font, text_color: 0x33E6C8, align: TOP_LEFT, x: 150, y: 90 }
-        - label: { id: dm_lbl,       text: "0",       text_font: title_font, text_color: 0xff5a52, align: TOP_RIGHT, x: -10, y: 4 }
-        - label: { id: dm_lives_lbl, text: "LIVES 3", text_font: small_font, text_color: 0xff9e9e, align: TOP_MID,  y: 8 }
-        - label: { id: dm_msg,       text: "",        text_font: title_font, text_color: 0x33E6C8, align: CENTER,   y: -20 }
-        - button:
-            id: dm_back
-            x: 6
-            y: 6
-            width: 48
-            height: 26
-            radius: 8
-            bg_color: 0x0a0808
-            widgets:
-              - label: { text: "<", text_font: text_font, text_color: 0x33E6C8, align: CENTER }
-            on_click:
-              - globals.set: { id: dm_run, value: "false" }
-              - globals.set: { id: g_card, value: "0" }
-              - lvgl.page.show: page_face
+    # (page_doom removed — it was unreachable: the games menu opens DOOM-3D. ~13 widgets +
+    #  a 50ms interval of RAM/CPU back.)
     # ── SNAKE — joystick steers a continuous heading; eat the food, don't hit walls/yourself ──
     - id: page_snake
       bg_color: 0x0a1420
@@ -2823,6 +2800,15 @@ script:
       - script.stop: wave
       - script.stop: shy
       - script.stop: clap
+      - script.stop: pet_react
+      - script.stop: plug_react
+      - script.stop: ir_glance
+      - script.stop: react_hot
+      - script.stop: react_cold
+      - script.stop: rub_eyes
+      - script.stop: head_nudge
+      - script.stop: head_shake
+      - script.stop: head_nod
       - globals.set: { id: g_flash,  value: "false" }
       - globals.set: { id: g_listen, value: "false" }
       - globals.set: { id: g_think,  value: "false" }   # else STOP mid-"thinking" leaves the face + HA state stuck
@@ -2898,27 +2884,14 @@ script:
       - delay: 180s
       - globals.set: { id: g_perm, value: "false" }
       - lvgl.widget.hide: perm_box
-  # HOLD-TO-REJECT — armed on a head touch while a prompt is up. If the touch is still held
-  # 3s later it's a deliberate long-press → REJECT (with a "no" head shake). A quick tap
-  # releases before this fires and is handled as APPROVE in the touch release handler.
-  - id: perm_hold
-    mode: restart
-    then:
-      - delay: 3s
-      - if:
-          condition: { lambda: 'return id(g_ptouch) && id(g_perm);' }
-          then:
-            - globals.set: { id: g_ptouch, value: "false" }
-            - globals.set: { id: g_perm, value: "false" }
-            - lvgl.widget.hide: perm_box
-            - homeassistant.event: { event: esphome.dravix_permission, data: { decision: "reject" } }
-            - script.execute: head_shake
   # APPROVE via a head touch — fires the moment you touch (quick + reliable, no waiting for
-  # release / no HA round-trip race). REJECT is screen-only now (the red button on the prompt).
+  # release / no HA round-trip race). REJECT is screen-only (the red button on the prompt).
+  # NOT while asleep/screensaver: petting a sleeping robot must never blind-approve an
+  # agent request the user hasn't even seen.
   - id: perm_approve
     then:
       - if:
-          condition: { lambda: 'return id(g_perm);' }
+          condition: { lambda: 'return id(g_perm) && !id(g_sleep) && !id(g_saver);' }
           then:
             - globals.set: { id: g_perm, value: "false" }
             - lvgl.widget.hide: perm_box
@@ -3110,20 +3083,44 @@ script:
             # a pet must NOT cancel night/focus/quiet (it used to flip them to awake —
             # backlight to full, mood LEDs re-armed). It still blushes, gently.
             - if:
-                condition: { lambda: 'return !id(g_night) && !id(g_focus) && !id(g_quiet);' }
+                condition: { lambda: 'return !id(g_night) && !id(g_focus) && !id(g_quiet) && id(robot_mode).current_option() != std::string("awake");' }
                 then: [ { select.set: { id: robot_mode, option: awake } } ]
-            - globals.set: { id: g_expr, value: "1" }     # happy (cheeks show)
+            # AFFECTION STREAK — pets within 90s of each other escalate: 1-2 = the happy
+            # blush · 3-4 = love-eyes + a purr · 5+ = it MELTS (floating hearts). The robot
+            # visibly warms up to sustained affection, Cozmo-style.
+            - lambda: |-
+                long now = (long) millis();
+                if (now - id(g_pets_ms) > 90000) id(g_pets_n) = 0;
+                id(g_pets_n) += 1;
+                id(g_pets_ms) = now;
+            - globals.set: { id: g_expr, value: !lambda 'return id(g_pets_n) >= 3 ? 6 : 1;' }   # streak → ♥ eyes
             - globals.set: { id: g_card, value: "0" }
             - lvgl.page.show: page_face
             - script.execute: render_face
             - script.execute: { id: led_flash, r: 100, g: 25, b: 45 }   # pink
             - if:
-                condition: { lambda: 'return id(sw_sfx).state && !id(g_quiet) && !id(g_night);' }
+                condition: { lambda: 'return id(sw_sfx).state && !id(g_quiet) && !id(g_night) && id(g_pets_n) < 3;' }
                 then: [ { rtttl.play: "pet:d=16,o=6,b=200:c,e,g" } ]   # a happy little giggle 😊
+            - if:
+                condition: { lambda: 'return id(sw_sfx).state && !id(g_quiet) && !id(g_night) && id(g_pets_n) >= 3;' }
+                then: [ { rtttl.play: "purr:d=16,o=5,b=140:c,e,c,e,g" } ]   # a longer, warmer purr
             - delay: 400ms
             - script.execute: { id: head_nudge, dx: 0, dy: 12 }         # nuzzle up into your hand
             - delay: 900ms
             - script.execute: head_shake                                # happy little wiggle
+            - if:  # 5+ pets in a row → the melt: hearts float up over the blush
+                condition: { lambda: 'return id(g_pets_n) >= 5;' }
+                then:
+                  - lvgl.widget.update: { id: heart1, y: 18 }
+                  - lvgl.widget.update: { id: heart2, y: 26 }
+                  - lvgl.widget.update: { id: heart3, y: 12 }
+                  - lvgl.widget.show: heart1
+                  - lvgl.widget.show: heart2
+                  - lvgl.widget.show: heart3
+                  - delay: 1600ms
+                  - lvgl.widget.hide: heart1
+                  - lvgl.widget.hide: heart2
+                  - lvgl.widget.hide: heart3
   # ── EATS 🍪 — Ropet-style: paws lift a random treat to the mouth, 2 nibbles + "nom", then a
   #    happy "yum" nod. Fires from the Feed button, or spontaneously now and then on the face.
   - id: eat
@@ -3391,7 +3388,7 @@ script:
           then:
             - lambda: 'lv_disp_trig_activity(NULL);'
             - if:  # waving = you want its attention — but it must not cancel night/focus/quiet
-                condition: { lambda: 'return !id(g_night) && !id(g_focus) && !id(g_quiet);' }
+                condition: { lambda: 'return !id(g_night) && !id(g_focus) && !id(g_quiet) && id(robot_mode).current_option() != std::string("awake");' }
                 then: [ { select.set: { id: robot_mode, option: awake } } ]
             - globals.set: { id: g_expr, value: "1" }         # happy
             - globals.set: { id: g_card, value: "0" }
@@ -3472,7 +3469,7 @@ script:
           then:
             - lambda: 'lv_disp_trig_activity(NULL);'
             - if:  # a tickle must not cancel night/focus/quiet either
-                condition: { lambda: 'return !id(g_night) && !id(g_focus) && !id(g_quiet);' }
+                condition: { lambda: 'return !id(g_night) && !id(g_focus) && !id(g_quiet) && id(robot_mode).current_option() != std::string("awake");' }
                 then: [ { select.set: { id: robot_mode, option: awake } } ]
             - globals.set: { id: g_expr, value: "1" }     # happy (cheeks show)
             - globals.set: { id: g_card, value: "0" }
@@ -3487,7 +3484,9 @@ script:
     mode: restart
     then:
       - lambda: 'lv_disp_trig_activity(NULL);'
-      - select.set: { id: robot_mode, option: awake }
+      - if:
+          condition: { lambda: 'return id(robot_mode).current_option() != std::string("awake");' }
+          then: [ { select.set: { id: robot_mode, option: awake } } ]
       - globals.set: { id: g_expr, value: "1" }
       - globals.set: { id: g_card, value: "0" }
       - lvgl.page.show: page_face
@@ -3548,7 +3547,9 @@ script:
       - if:
           condition: { lambda: 'return id(g_booted) && !id(g_sleep) && !id(g_saver) && !id(g_perm);' }
           then:
-            - select.set: { id: robot_mode, option: awake }
+            - if:
+                condition: { lambda: 'return id(robot_mode).current_option() != std::string("awake");' }
+                then: [ { select.set: { id: robot_mode, option: awake } } ]
             - globals.set: { id: g_card, value: "0" }
             - globals.set: { id: g_expr, value: "1" }
             - lvgl.page.show: page_face
@@ -3779,16 +3780,10 @@ script:
           condition: { lambda: 'return id(g_sleep);' }
           then:
             - script.execute: { id: set_eyes, w: 60, h: 10, r: 5, dy: 8 }
-      - if:  # blink — or a one-eyed wink
+      - if:  # blink — always both eyes (winks were retired)
           condition: { lambda: 'return !id(g_sleep) && id(g_blink);' }
           then:
-            - if:
-                condition: { lambda: 'return id(g_wink);' }
-                then:
-                  - lvgl.widget.update: { id: eye_l, width: 64, height: 10, radius: 5, y: 0 }
-                  - lvgl.widget.update: { id: eye_r, width: 64, height: 60, radius: 22, y: 0 }
-                else:
-                  - script.execute: { id: set_eyes, w: 64, h: 10, r: 5, dy: 0 }
+            - script.execute: { id: set_eyes, w: 64, h: 10, r: 5, dy: 0 }
       - if:  # listening → big curious eyes
           condition: { lambda: 'return !id(g_sleep) && !id(g_blink) && id(g_listen);' }
           then:
@@ -3876,13 +3871,8 @@ script:
                 then:
                   - script.execute: { id: set_eyes, w: 8, h: 8, r: 4, dy: 0 }   # eyes shrink away
                   - script.execute: { id: set_mouth, w: 22, h: 8, r: 4, dy: 68 }
-      # ── decorators (original-avatar style): brows on angry · x-eyes on dizzy ·
-      #    a sweat drop while busy. Shown only on an idle face; hidden in every
-      #    other state so they never linger.
-      - if:
-          condition: { lambda: 'return false;' }   # eyebrows removed — expression via eyes/mouth/blush only
-          then: [ { lvgl.widget.show: brow_l }, { lvgl.widget.show: brow_r } ]
-          else: [ { lvgl.widget.hide: brow_l }, { lvgl.widget.hide: brow_r } ]
+      # ── decorators (original-avatar style): x-eyes on dizzy + react_hot's sweat drop.
+      #    Shown only on an idle face; hidden in every other state so they never linger.
       - if:  # CONFUSED / dizzy — x-eyes + a "?" above the head (only on an idle face).
              # Colours follow the background: dark marks on the white awake face, bright
              # teal/yellow on dark themes/night — teal-on-white was near-invisible (~1.8:1).
@@ -3915,19 +3905,6 @@ script:
           condition: { lambda: 'return id(g_sweat) && !id(g_sleep) && !id(g_saver);' }
           then: [ { lvgl.widget.show: sweat } ]
           else: [ { lvgl.widget.hide: sweat } ]
-      # sparkles pop when it's happy or in love (and idle)
-      - if:
-          condition: { lambda: 'return false;' }   # sparkles removed — replaced by the floating hearts below
-          then:
-            - lvgl.widget.show: sp_1
-            - lvgl.widget.show: sp_2
-            - lvgl.widget.show: sp_3
-            - lvgl.widget.show: sp_4
-          else:
-            - lvgl.widget.hide: sp_1
-            - lvgl.widget.hide: sp_2
-            - lvgl.widget.hide: sp_3
-            - lvgl.widget.hide: sp_4
       # Publish the live state to HA (only when it actually changed).
       - lambda: |-
           std::string s = id(g_sleep)  ? "sleep"
@@ -3962,7 +3939,9 @@ script:
             - globals.set: { id: g_card,  value: "0" }
             - globals.set: { id: g_expr,  value: "1" }     # happy
             - lvgl.page.show: page_face
-            - select.set: { id: robot_mode, option: awake }
+            - if:
+                condition: { lambda: 'return id(robot_mode).current_option() != std::string("awake");' }
+                then: [ { select.set: { id: robot_mode, option: awake } } ]
             - script.execute: wave                                # 👋 a paw waves hello
             - if:
                 condition: { lambda: 'return id(sw_sfx).state && !id(g_quiet);' }
@@ -4435,6 +4414,10 @@ select:
     optimistic: true
     options: [awake, morning, focus, quiet, night, busy, sleep]
     initial_option: awake
+    # survive a reboot: a robot put to night/sleep must not boot back bright-awake.
+    # NOTE: restoring only republishes the STATE — on_boot below replays it through
+    # set_action so the flags/backlight/servo speeds actually apply.
+    restore_value: true
     set_action:
       # option → state flags
       - globals.set: { id: g_sleep, value: !lambda 'return x == std::string("sleep");' }
@@ -4584,7 +4567,7 @@ interval:
                 lv_disp_trig_activity(NULL);
             # button B rising edge → toggle the voice assistant (privacy-respecting)
             - if:
-                condition: { lambda: 'return id(g_rc_btn) != 0 && id(g_rc_prev) == 0 && !id(dm_run) && !id(mp_run) && !id(r3_run);' }   # not while a game uses the button
+                condition: { lambda: 'return id(g_rc_btn) != 0 && id(g_rc_prev) == 0 && !id(mp_run) && !id(r3_run);' }   # not while a game uses the button
                 then:
                   - if:
                       condition: { lambda: 'return id(g_voice);' }
@@ -4732,23 +4715,30 @@ interval:
                 id: bk_lv
                 text: !lambda 'char b[12]; snprintf(b, sizeof(b), "LIVES %d", id(bk_lives)); return std::string(b);'
                 text_color: !lambda 'return id(bk_lives) <= 1 ? lv_color_hex(0xFF5555) : lv_color_hex(0x8b96a4);'
-            # per-event JUICE — LED + an 8-bit beep on every hit; head shake when the ball beats you
+            # per-event JUICE — LED + an 8-bit beep on every hit (beeps respect "Robot
+            # sounds" + quiet/night like every other sound); head shake when the ball beats you
             - if:
                 condition: { lambda: 'return id(bk_ev) == 1;' }
                 then:
                   - script.execute: { id: led_flash, r: 0, g: 90, b: 80 }                # brick → cyan
-                  - rtttl.play: "bk:d=16,o=7,b=220:c"                                     # bright blip
+                  - if:
+                      condition: { lambda: 'return id(sw_sfx).state && !id(g_quiet) && !id(g_night);' }
+                      then: [ { rtttl.play: "bk:d=16,o=7,b=220:c" } ]                     # bright blip
             - if:
                 condition: { lambda: 'return id(bk_ev) == 2;' }
                 then:
                   - script.execute: { id: led_flash, r: 55, g: 55, b: 15 }               # paddle → soft
-                  - rtttl.play: "bk:d=16,o=6,b=220:g"                                     # bloop
+                  - if:
+                      condition: { lambda: 'return id(sw_sfx).state && !id(g_quiet) && !id(g_night);' }
+                      then: [ { rtttl.play: "bk:d=16,o=6,b=220:g" } ]                     # bloop
             - if:
                 condition: { lambda: 'return id(bk_ev) == 3;' }
                 then:
                   - script.execute: { id: led_flash, r: 100, g: 8, b: 8 }                # hit → red
                   - script.execute: head_shake
-                  - rtttl.play: "bk:d=8,o=4,b=150:c,a#"                                   # sad buzz down
+                  - if:
+                      condition: { lambda: 'return id(sw_sfx).state && !id(g_quiet) && !id(g_night);' }
+                      then: [ { rtttl.play: "bk:d=8,o=4,b=150:c,a#" } ]                   # sad buzz down
             - lambda: 'id(bk_ev) = 0;'
             - if:
                 condition: { lambda: 'return !id(bk_alive);' }
@@ -4760,13 +4750,17 @@ interval:
                         - lvgl.label.update: { id: bk_msg, text: "YOU WIN!" }
                         - script.execute: { id: led_flash, r: 20, g: 100, b: 30 }        # win → green
                         - script.execute: head_nod                                        # a happy nod
-                        - rtttl.play: "win:d=8,o=6,b=180:c,e,g,c7"                        # victory fanfare
+                        - if:
+                            condition: { lambda: 'return id(sw_sfx).state && !id(g_quiet) && !id(g_night);' }
+                            then: [ { rtttl.play: "win:d=8,o=6,b=180:c,e,g,c7" } ]        # victory fanfare
                         - script.execute: clap                                            # 👏 claps for you
                       else:
                         - lvgl.label.update: { id: bk_msg, text: "GAME OVER" }
                         - script.execute: { id: led_flash, r: 100, g: 8, b: 8 }           # lose → red
                         - script.execute: head_shake
-                        - rtttl.play: "lose:d=8,o=5,b=120:g,e,c,c4"                       # sad descent
+                        - if:
+                            condition: { lambda: 'return id(sw_sfx).state && !id(g_quiet) && !id(g_night);' }
+                            then: [ { rtttl.play: "lose:d=8,o=5,b=120:g,e,c,c4" } ]       # sad descent
   # SPONTANEOUS SNACK — every so often, while you're on the face and it's awake + idle, the
   # robot gets peckish and eats a little treat on its own (Ropet/Tamagotchi charm).
   - interval: 113s
@@ -4775,8 +4769,9 @@ interval:
           condition:
             and:
               - lvgl.page.is_showing: page_face
-              # (night/focus/quiet included — no spontaneous snacking in do-not-disturb)
-              - lambda: 'return !id(g_sleep) && !id(g_saver) && !id(g_voice) && !id(g_busy) && !id(g_perm) && !id(g_night) && !id(g_focus) && !id(g_quiet) && random_float() < 0.25;'
+              # (night/focus/quiet included — no spontaneous snacking in do-not-disturb;
+              #  nor while it's mid-speech or a bubble is up — paws over a talking mouth read wrong)
+              - lambda: 'return !id(g_sleep) && !id(g_saver) && !id(g_voice) && !id(g_busy) && !id(g_perm) && !id(g_night) && !id(g_focus) && !id(g_quiet) && !id(g_talk) && !id(g_tip) && random_float() < 0.25;'
           then:
             - if:
                 condition: { lambda: 'return random_float() < 0.5;' }
@@ -4930,55 +4925,7 @@ interval:
                   - lvgl.label.update: { id: sn_msg, text: "GAME OVER" }
                   - script.execute: { id: led_flash, r: 10, g: 25, b: 100 }
                   - script.execute: head_shake
-  # DOOM-lite physics — ~20 fps. Crosshair follows the joystick; the enemy grows as it nears;
-  # the remote button fires (edge-detected). Miss too long → it reaches you and costs a life.
-  - interval: 50ms
-    then:
-      - if:
-          condition:
-            and:
-              - lvgl.page.is_showing: page_doom
-              - lambda: 'return id(dm_run);'
-          then:
-            - lambda: |-
-                int cx = 160 + (int)(id(g_rc_yaw) * 0.85f);
-                int cy = 120 - (int)((id(g_rc_pitch) - 209.0f) * 1.3f);
-                id(dm_cx) = cx < 20 ? 20 : (cx > 290 ? 290 : cx);
-                id(dm_cy) = cy < 40 ? 40 : (cy > 190 ? 190 : cy);
-                id(dm_es) += 0.65f;
-                id(dm_ex) += (random_float() - 0.5f) * 5.0f;
-                if (id(dm_ex) < 70.0f)  id(dm_ex) = 70.0f;
-                if (id(dm_ex) > 250.0f) id(dm_ex) = 250.0f;
-                id(dm_shot) = false;
-                if (id(dm_es) > 72.0f) {
-                  id(dm_lives) -= 1;
-                  id(dm_es) = 10.0f; id(dm_ex) = 70.0f + random_float() * 180.0f;
-                  if (id(dm_lives) <= 0) id(dm_run) = false;
-                }
-                bool fire = (id(g_rc_btn) != 0) && !id(dm_bp);
-                id(dm_bp) = (id(g_rc_btn) != 0);
-                if (fire) {
-                  id(dm_shot) = true;
-                  float half = id(dm_es) / 2.0f;
-                  if (id(dm_cx) >= id(dm_ex) - half && id(dm_cx) <= id(dm_ex) + half
-                      && id(dm_cy) >= 110.0f - half && id(dm_cy) <= 110.0f + half) {
-                    id(dm_sc) += 1;
-                    id(dm_es) = 10.0f; id(dm_ex) = 70.0f + random_float() * 180.0f;
-                  }
-                }
-            - lvgl.widget.update: { id: dm_enemy, x: !lambda 'return (int)(id(dm_ex) - id(dm_es) / 2.0f);', y: !lambda 'return (int)(110.0f - id(dm_es) / 2.0f);', width: !lambda 'return (int) id(dm_es);', height: !lambda 'return (int) id(dm_es);' }
-            - lvgl.widget.update: { id: dm_cross, x: !lambda 'return id(dm_cx) - 10;', y: !lambda 'return id(dm_cy) - 22;' }
-            - lvgl.label.update:  { id: dm_lbl, text: !lambda 'char b[8]; snprintf(b, sizeof(b), "%d", id(dm_sc)); return std::string(b);' }
-            - lvgl.label.update:  { id: dm_lives_lbl, text: !lambda 'char b[12]; snprintf(b, sizeof(b), "LIVES %d", id(dm_lives)); return std::string(b);' }
-            - if:
-                condition: { lambda: 'return id(dm_shot) && id(sw_sfx).state && !id(g_quiet) && !id(g_night);' }
-                then: [ { rtttl.play: "pew:d=32,o=6,b=210:c,g" } ]
-            - if:
-                condition: { lambda: 'return !id(dm_run);' }
-                then:
-                  - lvgl.label.update: { id: dm_msg, text: "GAME OVER" }
-                  - script.execute: { id: led_flash, r: 100, g: 8, b: 8 }
-                  - script.execute: head_shake
+  # (DOOM-lite physics interval removed with page_doom.)
   # MAPLE-lite physics — ~25 fps. Joystick walks, button jumps, gravity + platform landing;
   # land ON the mushroom to stomp it (score), touch it from the side and you lose a life.
   - interval: 40ms
@@ -5210,17 +5157,7 @@ interval:
               - lambda: 'return id(g_gloves) && !id(g_sleep) && !id(g_saver) && !id(g_voice) && !id(g_flash) && random_float() < 0.55;'
           then:
             - script.execute: punch
-  # ANTENNAE wiggle — the two head antennae sway their tips gently (face page, awake).
-  - interval: 700ms
-    then:
-      - if:
-          condition:
-            and:
-              - lvgl.page.is_showing: page_face
-              - lambda: 'return !id(g_sleep) && id(g_ant);'
-          then:
-            - lvgl.widget.update: { id: ant_lb, x: !lambda 'return (id(g_anim) % 2) ? -58 : -50;' }
-            - lvgl.widget.update: { id: ant_rb, x: !lambda 'return (id(g_anim) % 2) ? 50 : 58;' }
+  # (antennae wiggle interval removed with the dead antennae widgets)
   # SLEEP BREATHING — while asleep ON THE CHARGER, the LED bar "breathes" very dimly
   # (the EMO/Vector charger-snooze everyone loves). Gated on Mood LEDs; goes fully
   # dark the moment it wakes or is unplugged.
@@ -5250,12 +5187,10 @@ interval:
           condition:
             lambda: 'return id(sw_blink).state && !id(g_sleep) && !id(g_talk) && !id(g_listen) && !id(g_saver) && id(g_expr) != 7 && random_float() < 0.22;'
           then:
-            - globals.set: { id: g_wink, value: "false" }   # winks disabled — always blink with BOTH eyes
             - globals.set: { id: g_blink, value: "true" }
             - script.execute: render_face
             - delay: 160ms
             - globals.set: { id: g_blink, value: "false" }
-            - globals.set: { id: g_wink, value: "false" }
             - script.execute: render_face
   # EXTERNAL SPEECH → talking mouth. dravix TTS (chat replies, notifications, timers,
   # birthday lines) plays on va_media_player WITHOUT the voice pipeline, so g_talk never
@@ -5577,12 +5512,14 @@ touchscreen:
     on_touch:
       - globals.set: { id: sw_sleep, value: !lambda 'return id(g_sleep);' }
       - lambda: 'id(sw_x0) = 0; id(sw_y0) = 0; id(sw_x1) = 0; id(sw_y1) = 0; id(g_tms) = (long) millis();'
-      # Any touch exits the screensaver (restore full brightness).
+      # Any touch exits the screensaver (restore full brightness + redraw NOW — the dozy
+      # breathing eyes and the "screensaver" HA state used to linger until the next blink).
       - if:
           condition: { lambda: 'return id(g_saver) && !id(g_sleep);' }
           then:
             - light.turn_on: { id: lcd_backlight, brightness: !lambda 'return id(n_brightness).state / 100.0;' }
             - globals.set: { id: g_saver, value: "false" }
+            - script.execute: render_face
     on_update:
       - lambda: |-
           for (auto t : touches) {
@@ -5595,7 +5532,8 @@ touchscreen:
           condition: { lambda: 'return id(sw_sleep);' }
           then:
             - select.set: { id: robot_mode, option: awake }
-      # LONG-PRESS (1.2s+) on the FACE → instant sleep.
+      # LONG-PRESS (1.2s+) on the FACE → instant sleep. NOT while the status-bar overlay is
+      # open — holding a slider knob / the LOCAL button must not put the robot to sleep.
       - if:
           condition:
             and:
@@ -5604,10 +5542,12 @@ touchscreen:
                   int dx = id(sw_x1) - id(sw_x0), dy = id(sw_y1) - id(sw_y0);
                   int adx = dx < 0 ? -dx : dx, ady = dy < 0 ? -dy : dy;
                   long dur = (long) millis() - id(g_tms);
-                  return !id(sw_sleep) && !id(g_voice) && adx < 40 && ady < 40 && dur > 1200;
+                  return !id(sw_sleep) && !id(g_voice) && adx < 40 && ady < 40 && dur > 1200
+                         && lv_obj_has_flag(id(statusbar), LV_OBJ_FLAG_HIDDEN);
           then:
             - select.set: { id: robot_mode, option: sleep }
       # PERMISSION up? A quick tap on the face = APPROVE (Reject = the red button on the prompt).
+      # (Not through the status-bar overlay.)
       - if:
           condition:
             and:
@@ -5616,12 +5556,14 @@ touchscreen:
                   int dx = id(sw_x1) - id(sw_x0), dy = id(sw_y1) - id(sw_y0);
                   int adx = dx < 0 ? -dx : dx, ady = dy < 0 ? -dy : dy;
                   long dur = (long) millis() - id(g_tms);
-                  return id(g_perm) && !id(sw_sleep) && adx < 40 && ady < 40 && dur < 700;
+                  return id(g_perm) && !id(sw_sleep) && adx < 40 && ady < 40 && dur < 700
+                         && lv_obj_has_flag(id(statusbar), LV_OBJ_FLAG_HIDDEN);
           then:
             - script.execute: perm_tap_approve
       # FACE TAP: TRIPLE tap (3 within ~350ms each) = STOP everything (panic); DOUBLE tap = toggle
       # the AI (start listening / cancel); a single tap does nothing. Gated by "Tap face to talk".
-      # Suppressed while a permission prompt is up (then a tap = approve, above).
+      # Suppressed while a permission prompt is up (then a tap = approve, above) and while the
+      # status-bar overlay is open (two quick taps on LOCAL must not start the voice assistant).
       - if:
           condition:
             and:
@@ -5631,7 +5573,8 @@ touchscreen:
                   int dx = id(sw_x1) - id(sw_x0), dy = id(sw_y1) - id(sw_y0);
                   int adx = dx < 0 ? -dx : dx, ady = dy < 0 ? -dy : dy;
                   long dur = (long) millis() - id(g_tms);
-                  return !id(sw_sleep) && adx < 40 && ady < 40 && dur < 700 && !id(g_perm);
+                  return !id(sw_sleep) && adx < 40 && ady < 40 && dur < 700 && !id(g_perm)
+                         && lv_obj_has_flag(id(statusbar), LV_OBJ_FLAG_HIDDEN);
           then:
             - lambda: |-
                 if ((long) millis() - id(g_dc_ms) < 350) id(g_tapc) += 1;
@@ -5731,7 +5674,7 @@ voice_assistant:
     # the wake word DOES wake a sleeping robot — but a question asked in night/focus/quiet
     # must not silently cancel that mode (it kept dropping focus/night to awake).
     - if:
-        condition: { lambda: 'return id(g_sleep) || (!id(g_night) && !id(g_focus) && !id(g_quiet));' }
+        condition: { lambda: 'return id(g_sleep) || (!id(g_night) && !id(g_focus) && !id(g_quiet) && id(robot_mode).current_option() != std::string("awake"));' }
         then: [ { select.set: { id: robot_mode, option: awake } } ]
     - globals.set: { id: g_listen, value: "true" }
     - globals.set: { id: g_voice, value: "true" }

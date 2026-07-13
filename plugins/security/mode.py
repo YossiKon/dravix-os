@@ -52,7 +52,7 @@ class SecurityMode(Mode):
         self._prev_idle = getattr(robot, "idle_motion", True)
         robot.idle_motion = False
         if bool(self.ctx.config.get("announce", False)) and robot.supports(CAP_SAY):
-            he = (get_settings().language or "en").startswith("he")
+            he = self.ctx.language().startswith("he")  # dashboard toggle wins over env
             try:
                 await robot.say("מצב אבטחה הופעל." if he else "Security mode armed.")
             except Exception:  # noqa: BLE001 — announcing is best-effort

@@ -40,14 +40,31 @@ _NUDGES: dict[str, tuple[float, float, float, str | None]] = {
 }
 _INTERACTIONS = {"user.spoke", "touch.pet", "touch.tap", "robot.touched"}
 
-# Little things it does on its own when bored (the "alive" idle behavior).
-_IDLE_QUIPS = [
-    "Hmm, quiet in here.",
-    "I'm here whenever you need me.",
-    "Just thinking.",
-    "*hums quietly*",
-    "Anyone around?",
-]
+# Little things it says on its own when bored (the "alive" idle behavior) — in the
+# USER'S language (dashboard toggle wins) and varied by time of day, so 8am and 23:00
+# don't sound the same.
+_IDLE_QUIPS: dict[str, dict[str, list[str]]] = {
+    "en": {
+        "morning": ["Morning! Ready when you are.", "Fresh day, fresh circuits.", "*stretches* okay, today we thrive."],
+        "day": ["Hmm, quiet in here.", "I'm here whenever you need me.", "Just thinking.", "*hums quietly*", "Anyone around?"],
+        "evening": ["Cozy evening, huh?", "*yawns a little*", "Evenings are nice and quiet.", "I'm here if you need anything."],
+    },
+    "he": {
+        "morning": ["בוקר! מוכן כשאתה מוכן.", "יום חדש, מעגלים רעננים.", "*מתמתח* קדימה, יום חדש."],
+        "day": ["הממ, שקט פה.", "אני כאן אם צריך אותי.", "סתם חושב לעצמי.", "*מזמזם בשקט*", "יש מישהו בסביבה?"],
+        "evening": ["ערב נעים, אה?", "*מפהק קצת*", "ערבים זה זמן טוב לשקט.", "אני פה אם תצטרך משהו."],
+    },
+}
+_QUIP_MIN_GAP_S = 600.0  # a bored robot may be cute, not chatty — one quip per 10 min tops
+
+
+def _pick_quip(lang: str) -> str:
+    import datetime
+
+    hour = datetime.datetime.now().hour
+    slot = "morning" if 5 <= hour < 12 else "day" if 12 <= hour < 18 else "evening"
+    table = _IDLE_QUIPS["he" if (lang or "").startswith("he") else "en"]
+    return random.choice(table.get(slot) or table["day"])
 
 
 def _clamp(x: float, lo: float, hi: float) -> float:
@@ -77,8 +94,8 @@ class MoodEngine:
         self.affection = 0.3
         self._night = False
         self._last_interaction = time.monotonic()
-        self._last_expr: Expression | None = None
         self._persisted: tuple[float, float, float] | None = None
+        self._last_quip = 0.0
         self._tasks: list[asyncio.Task] = []
         self._load()
 
@@ -227,13 +244,11 @@ class MoodEngine:
         # private cache let their face stick forever (mood could never reclaim it).
         current = getattr(self._robot.state, "expression", None)
         if not force and current == expr.value:
-            self._last_expr = expr
             return
         if self._robot.supports(CAP_FACE):
             try:
                 await self._robot.set_face(expr)
-                self._last_expr = expr  # commit only on success so a blip is retried next tick
-            except Exception:  # noqa: BLE001
+            except Exception:  # noqa: BLE001 — a blip is retried on the next tick
                 pass
 
     async def idle_behavior(self) -> None:
@@ -243,10 +258,23 @@ class MoodEngine:
             return
         if not getattr(self._robot, "idle_motion", True):
             return  # idle motion off → stay still & quiet (e.g. the firmware owns idle life)
+        if time.monotonic() - self._last_quip < _QUIP_MIN_GAP_S:
+            return  # bored ≠ chatty — cap the self-talk
+        self._last_quip = time.monotonic()
         try:
             await play_emote(self._robot, "curious")
             if self._robot.supports(CAP_SAY):
-                await self._robot.say(random.choice(_IDLE_QUIPS))
+                lang = ""
+                if self._store is not None:
+                    try:
+                        lang = self._store.language() or ""
+                    except Exception:  # noqa: BLE001
+                        pass
+                if not lang:
+                    from .config import get_settings
+
+                    lang = get_settings().language or "en"
+                await self._robot.say(_pick_quip(lang))
         except Exception:  # noqa: BLE001
             pass
         await self._bus.publish("mood.idle")
@@ -265,11 +293,18 @@ class MoodEngine:
         self.affection = _clamp(self.affection + daf, 0.0, 1.0)
         if event.type in _INTERACTIONS:
             self._last_interaction = time.monotonic()
+        if event.type == "touch.pet":
+            # the BOND shows: a robot still warming up is curious about pets, a bonded
+            # one melts — two robots raised differently feel different to pet.
+            emote = "curious" if self.affection < 0.3 else ("happy" if self.affection < 0.7 else "love")
         if emote and not self._locked():
             try:
                 await play_emote(self._robot, emote)
             except Exception:  # noqa: BLE001
                 pass
-        await self._express(force=bool(emote))
+            # the emote's face IS the reaction — don't stomp it with a forced mood face
+            # (the ♥ pet-face used to vanish ~0.3s in); the next tick reclaims naturally.
+        else:
+            await self._express()
         self._persist()
         await self._bus.publish("mood.changed", **self.snapshot())

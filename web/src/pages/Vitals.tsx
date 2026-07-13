@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { apiGet, apiSend } from "../api";
 import type { Personality, Vitals } from "../api";
+import { LiveFeed } from "../components/LiveFeed";
 import { Section, toast, toastErr } from "../ui";
 import { useI18n } from "../i18n";
 
@@ -97,6 +98,9 @@ export function VitalsPage() {
           <p className="rounded-2xl border border-red/30 bg-red/10 p-3 text-sm text-red">
             {tr("לא זמין — אין חיבור לשירות.", "Offline — can't reach the service.")}
           </p>
+        ) : !v ? (
+          // first fetch still in flight — don't flash 0% bars
+          <p className="text-sm text-mute">{tr("טוען…", "Loading…")}</p>
         ) : (
           <div className="space-y-3">
             {NEEDS.map((n) => {
@@ -121,6 +125,8 @@ export function VitalsPage() {
           </div>
         )}
       </Section>
+
+      <LiveFeed />
 
       {pers && pers.axes.length > 0 && (
         <Section title={tr("🌱 האופי", "🌱 Temperament")} delay={40}>

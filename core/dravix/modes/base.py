@@ -18,6 +18,7 @@ if TYPE_CHECKING:  # avoid import cycles at runtime
     from ..ai.base import AIProvider
     from ..dal.base import RobotController
     from ..integrations.homeassistant import HomeAssistant
+    from ..store import Store
 
 
 @dataclass
@@ -27,10 +28,23 @@ class ModeContext:
     ai: "AIProvider | None" = None
     ha: "HomeAssistant | None" = None
     config: dict[str, Any] = field(default_factory=dict)
+    store: "Store | None" = None  # runtime settings (language override, persistence)
 
     @property
     def log(self):  # noqa: ANN201
         return get_logger("mode")
+
+    def language(self) -> str:
+        """The effective language — the dashboard's live toggle (store) wins over env."""
+        from ..config import get_settings
+
+        lang = None
+        if self.store is not None:
+            try:
+                lang = self.store.language()
+            except Exception:  # noqa: BLE001
+                lang = None
+        return (lang or get_settings().language or "en").strip().lower()
 
     async def robot_state(self) -> str | None:
         """The robot's live on-device state (awake/sleep/focus/…), or None if unreadable."""

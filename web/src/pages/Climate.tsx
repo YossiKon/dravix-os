@@ -146,19 +146,28 @@ export function ClimatePage(props: { entities: HAEntity[] }) {
               <div className="font-display text-4xl text-teal">{target != null ? `${target}°` : "—"}</div>
             </div>
           </div>
-          {/* target +/- */}
+          {/* target +/- — when there's no target yet (AC just turned on), start from the
+              current room temperature instead of leaving the buttons dead */}
           <div className="mb-4 grid grid-cols-2 gap-2">
             <button
               className="btn text-2xl"
-              disabled={busy || target == null}
-              onClick={() => target != null && void setTemp(st.min_temp != null ? Math.max(st.min_temp, target - step) : target - step)}
+              disabled={busy || (target == null && st.current_temperature == null)}
+              onClick={() => {
+                const base = target ?? st.current_temperature;
+                if (base == null) return;
+                void setTemp(st.min_temp != null ? Math.max(st.min_temp, base - step) : base - step);
+              }}
             >
               −
             </button>
             <button
               className="btn text-2xl"
-              disabled={busy || target == null}
-              onClick={() => target != null && void setTemp(st.max_temp != null ? Math.min(st.max_temp, target + step) : target + step)}
+              disabled={busy || (target == null && st.current_temperature == null)}
+              onClick={() => {
+                const base = target ?? st.current_temperature;
+                if (base == null) return;
+                void setTemp(st.max_temp != null ? Math.min(st.max_temp, base + step) : base + step);
+              }}
             >
               ＋
             </button>

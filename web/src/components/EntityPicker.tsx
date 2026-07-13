@@ -1,5 +1,5 @@
 // A searchable Home Assistant entity picker (big touch targets, works well on phones).
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { HAEntity } from "../api";
 import { useI18n } from "../i18n";
 
@@ -13,6 +13,25 @@ export function EntityPicker(props: {
   const { tr } = useI18n();
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
+  const rootRef = useRef<HTMLDivElement>(null);
+
+  // close on tap-outside / Escape — an open list used to sit over the next card with
+  // no way to dismiss it except picking something
+  useEffect(() => {
+    if (!open) return;
+    const onPointerDown = (e: PointerEvent) => {
+      if (rootRef.current && !rootRef.current.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("pointerdown", onPointerDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
 
   const pool = useMemo(() => {
     const doms = props.domains?.filter(Boolean) ?? [];
@@ -29,7 +48,7 @@ export function EntityPicker(props: {
   const current = props.entities.find((e) => e.entity_id === props.value);
 
   return (
-    <div className={`relative ${open ? "z-40" : ""}`}>
+    <div ref={rootRef} className={`relative ${open ? "z-40" : ""}`}>
       <button
         type="button"
         className="inp flex items-center justify-between gap-2 text-start"

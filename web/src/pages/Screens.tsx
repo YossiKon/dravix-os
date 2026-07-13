@@ -87,6 +87,7 @@ function CardCanvas(props: {
       ref={ref}
       onPointerMove={moveEvt}
       onPointerUp={() => (drag.current = null)}
+      onPointerCancel={() => (drag.current = null)}
       className="relative w-full overflow-hidden rounded-xl border border-line"
       style={{ aspectRatio: `${SCREEN_W} / ${SCREEN_H}`, background: "#05080b" }}
     >

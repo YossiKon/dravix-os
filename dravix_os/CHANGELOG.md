@@ -1,5 +1,63 @@
 # Changelog
 
+## 0.0.86
+
+Round-3 sweep: three fresh audits (core / dashboard / firmware 27) — deeper fixes, remote
+access, and a set of "feels alive" features.
+
+**🌍 The dashboard now works through Home Assistant Ingress** — open it from HA's sidebar,
+**including remotely via Nabu Casa**. Direct LAN access on :8800 keeps working. (All URLs
+became base-relative; assets, camera stream and gallery downloads included.)
+
+**New on the dashboard:**
+- **📜 Live diary** (Life tab) — a real-time feed of the robot's inner life: pets, greets,
+  mood shifts, timers, agent updates, reactions — as they happen (with instant history).
+- **⚡ Quick asks** (Home) — one-tap chips: how do you feel / time / weather / agenda /
+  joke / fun fact / riddle / tiny story. Saved **routines** show as one-tap chips too.
+- A slow AI reply no longer freezes the whole Home page (chat has its own spinner);
+  restore-from-backup refreshes the page; Diagnostics logs show newest-first; entity
+  pickers close on tap-outside/Escape; new entities appear without a reload; honest
+  "running on mock fallback" warning when the real driver failed (was a fake green dot).
+
+**Robot firmware 27** *(re-flash!)*:
+- **Fixes:** status-bar taps no longer fall through (holding a slider used to put the robot
+  to sleep; double-tapping LOCAL started the AI!); petting a SLEEPING robot can no longer
+  blind-approve an agent permission (and the prompt no longer chirps at a black screen);
+  turning "Greet on approach" off no longer kills the Presence sensor; waking from the
+  screensaver redraws instantly; the agent's "focused" eyes can't get stuck anymore;
+  Snake/DOOM-3D no longer self-move with no remote (wrong joystick neutral); Breakout
+  beeps respect "Robot sounds"/quiet/night; brightness writes no longer light a sleeping
+  screen; triple-tap STOP now stops pets/plug/IR/hot/cold/head gestures too; redundant
+  mode-replays no longer hammer the servo bus on every pet.
+- **🌙 The mode survives reboots** — a robot that rebooted at night wakes up as a night
+  robot, not a bright awake one.
+- **🧹 RAM back:** removed dead code — the unreachable DOOM-lite page (+50ms interval),
+  antennae, sparkles, brows, wink leftovers, and the dead hold-to-reject path (~25 widgets
+  + 2 intervals).
+- **🔧 Build reliability:** the M5Stack component code is now PINNED and never re-fetched —
+  this removes the git-cache corruption that broke ESPHome builds ("shallow.lock exists" /
+  "Directory not empty") and stops upstream changes floating under us.
+- **New life:** 💗 **affection streak** — pets within 90s escalate (blush → love-eyes+purr →
+  full melt with floating hearts); 🔋 a "fully charged!" happy stretch when unplugged full.
+
+**Robot brain (core):**
+- Welcome greetings and the birthday party no longer leave the LED bar burning (and the
+  greeting head-perk settles back down).
+- Reaction rules + scheduled actions now respect night/focus/quiet like everything else
+  (add `"respect_quiet": false` to a rule that MUST fire at night). Mode changes are exempt.
+- Idle self-talk is now **in your language**, varies by time of day, and is capped at one
+  quip per 10 minutes; **petting reflects the bond** — a new robot is curious, a loved one
+  melts (and the ♥ pet-face is no longer wiped an instant after it appears).
+- Frigate face-recognition now publishes a `face.seen` event — reaction rules can key on a
+  person (`{"on":"face.seen","match":{"person":"yossi"}}`) for per-person magic.
+- Hardening: store.json writes throttled (~200× less flash wear from vitals); a corrupt
+  store no longer gets silently overwritten with defaults (preserved as .corrupt); the AC
+  page is only re-written when something changed; big gallery videos stream instead of
+  loading into RAM; the notifications inbox is spoken paced (messages no longer cut each
+  other off) and only spoken messages are cleared; /api/event can no longer approve agent
+  permissions or flip isLocal from outside; /ws/events honors the API token; expired
+  permission requests can't pile up; attention LEDs re-assert if a gesture wiped them.
+
 ## 0.0.85
 
 Voice-session polish *(firmware 26 — re-flash; the add-on bump just ships the new bundled

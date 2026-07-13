@@ -397,6 +397,15 @@ def create_app() -> FastAPI:
                 )
         return await call_next(request)
 
+    @app.middleware("http")
+    async def no_cache_index(request: Request, call_next):
+        """index.html must never be cached — a cached shell referencing old hashed asset
+        names is a white page after every add-on update until a hard refresh."""
+        resp = await call_next(request)
+        if request.url.path in ("/", "/index.html"):
+            resp.headers["Cache-Control"] = "no-cache"
+        return resp
+
     from .api.routes import router  # imported here to avoid a circular import
 
     app.include_router(router)

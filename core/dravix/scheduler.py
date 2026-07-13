@@ -15,7 +15,7 @@ import time
 import uuid
 from typing import TYPE_CHECKING, Any, Callable
 
-from .dal.base import CAP_FACE, CAP_HEAD, CAP_LEDS, CAP_SAY, RobotController
+from .dal.base import CAP_FACE, CAP_HEAD, CAP_LEDS, CAP_SAY, RobotController, robot_is_quiet
 from .emotes import play_emote
 from .events import EventBus
 from .logging import get_logger
@@ -120,7 +120,8 @@ class Scheduler:
             if robot.supports(CAP_FACE):
                 await robot.set_face(Expression.LOVE)
             if robot.supports(CAP_LEDS):
-                await robot.set_leds("purple", 0.9)
+                # party lights, not permanent lighting — return to normal after the moment
+                await robot.flash_leds("purple", 0.9, revert_s=10.0)
             # the dashboard's live language toggle (store) wins over the add-on option
             lang = (
                 getattr(self._store, "language", lambda: None)() if self._store is not None else None
@@ -184,16 +185,20 @@ class Scheduler:
     async def run_action(self, action: dict[str, Any], ctx: dict[str, Any]) -> None:
         robot = self._robot
         try:
-            if action.get("face") and robot.supports(CAP_FACE):
+            # DND: face/LED/motion/speech flourishes respect the robot's quiet modes (a
+            # job may opt out with "respect_quiet": false). MODE changes are exempt —
+            # that's how the day schedule puts it to sleep and wakes it in the first place.
+            quiet = bool(action.get("respect_quiet", True)) and await robot_is_quiet(robot)
+            if action.get("face") and not quiet and robot.supports(CAP_FACE):
                 await robot.set_face(action["face"])
-            if action.get("leds") and robot.supports(CAP_LEDS):
+            if action.get("leds") and not quiet and robot.supports(CAP_LEDS):
                 leds = action["leds"]
                 # scheduled colour = a moment's accent, not permanent lighting — auto-reverts
                 await robot.flash_leds(leds.get("color", "white"), float(leds.get("brightness", 1.0)))
-            if action.get("head") and robot.supports(CAP_HEAD):
+            if action.get("head") and not quiet and robot.supports(CAP_HEAD):
                 yaw, pitch = action["head"]
                 await robot.move_head(float(yaw), float(pitch))
-            if action.get("emote"):
+            if action.get("emote") and not quiet:
                 await play_emote(robot, action["emote"])
             # the robot's ON-DEVICE mode (awake/morning/focus/quiet/night/sleep) — this
             # is what the dashboard's Day-Schedule rows use ("07:30 morning, 23:00 sleep")
@@ -201,7 +206,7 @@ class Scheduler:
                 setter = getattr(robot.driver, "set_mode", None)
                 if setter is not None:
                     await setter(str(action["mode"]))
-            if action.get("say") and robot.supports(CAP_SAY):
+            if action.get("say") and not quiet and robot.supports(CAP_SAY):
                 await robot.say(str(action["say"]).format_map(_SafeDict(ctx)))
             if action.get("activate_mode") and self._engine is not None:
                 await self._engine.activate(action["activate_mode"])

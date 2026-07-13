@@ -27,5 +27,19 @@ async def test_mood_idle_behavior_speaks():
     await c.connect()
     m = MoodEngine(c._bus, c)  # no engine -> not locked
     await m.idle_behavior()
-    assert c.state.last_said in _IDLE_QUIPS
+    # quips are now per-language and per-time-of-day — the line must come from the table
+    all_quips = [q for lang in _IDLE_QUIPS.values() for slot in lang.values() for q in slot]
+    assert c.state.last_said in all_quips
+    await c.close()
+
+
+async def test_mood_idle_behavior_is_not_chatty():
+    c = RobotController(MockDriver(), EventBus(), RobotState())
+    await c.connect()
+    m = MoodEngine(c._bus, c)
+    await m.idle_behavior()
+    first = c.state.last_said
+    c.state.last_said = ""
+    await m.idle_behavior()  # inside the min-gap → must stay silent
+    assert first and c.state.last_said == ""
     await c.close()

@@ -24,7 +24,9 @@ async def test_petting_makes_it_happy_and_shows_on_face():
     assert m.valence > 0.4
     assert m.affection > 0.5
     assert m.expression().value == "happy"
-    assert c.state.expression == "happy"  # mood drove the face (idle)
+    # the pet EMOTE drives the face now (its reaction isn't stomped by a forced mood
+    # push) — and at affection 0.7 the bonded robot melts into the love face
+    assert c.state.expression == "love"
     await c.close()
 
 

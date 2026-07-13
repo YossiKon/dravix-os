@@ -1,6 +1,6 @@
 // Security gallery — browse / download / delete the robot's saved captures, by day.
 import { useCallback, useEffect, useState } from "react";
-import { apiGet, apiSend } from "../api";
+import { apiGet, apiSend, apiUrl } from "../api";
 import type { SecurityClip, SecurityDay, SecurityPhoto } from "../api";
 import { toast, toastErr } from "../ui";
 import { useI18n } from "../i18n";
@@ -139,11 +139,11 @@ export function SecurityGallery(props: { onChanged?: () => void }) {
               {d.videos ? ` · ${d.videos} ${tr("סרטונים", "clips")}` : ""} · {fmtBytes(d.bytes)}
             </span>
             <div className="ms-auto flex items-center gap-2">
-              <a className="chip" href={`/api/security/day/${d.day}/zip`}>
+              <a className="chip" href={apiUrl(`api/security/day/${d.day}/zip`)}>
                 {tr("⬇ ZIP", "⬇ ZIP")}
               </a>
               {d.has_video ? (
-                <a className="chip" href={`/api/security/day/${d.day}/video?download=1`}>
+                <a className="chip" href={apiUrl(`api/security/day/${d.day}/video?download=1`)}>
                   {tr("🎬 סרטון", "🎬 Video")}
                 </a>
               ) : (
@@ -168,10 +168,10 @@ export function SecurityGallery(props: { onChanged?: () => void }) {
                   <span dir="ltr" className="font-mono text-xs">{clipTime(c)}</span>
                   <span className="text-[10px] text-mute">{fmtBytes(c.size)}</span>
                   <span className="ms-auto flex items-center gap-2">
-                    <a className="chip" href={`/api/security/video/${c.day}/${c.name}`} target="_blank" rel="noreferrer">
+                    <a className="chip" href={apiUrl(`api/security/video/${c.day}/${c.name}`)} target="_blank" rel="noreferrer">
                       {tr("▶ נגן", "▶ Play")}
                     </a>
-                    <a className="text-sm" href={`/api/security/video/${c.day}/${c.name}?download=1`} title={tr("הורד", "Download")}>
+                    <a className="text-sm" href={apiUrl(`api/security/video/${c.day}/${c.name}?download=1`)} title={tr("הורד", "Download")}>
                       ⬇
                     </a>
                     <button className="text-sm" onClick={() => void delClip(c)} title={tr("מחק", "Delete")}>
@@ -186,9 +186,9 @@ export function SecurityGallery(props: { onChanged?: () => void }) {
             <div className="mt-3 grid grid-cols-3 gap-2 sm:grid-cols-4">
               {photos.map((p) => (
                 <div key={p.name} className="overflow-hidden rounded-xl border border-line bg-black">
-                  <a href={`/api/security/photo/${p.day}/${p.name}`} target="_blank" rel="noreferrer">
+                  <a href={apiUrl(`api/security/photo/${p.day}/${p.name}`)} target="_blank" rel="noreferrer">
                     <img
-                      src={`/api/security/photo/${p.day}/${p.name}`}
+                      src={apiUrl(`api/security/photo/${p.day}/${p.name}`)}
                       alt={timeOf(p)}
                       loading="lazy"
                       className="h-20 w-full object-cover"
@@ -199,7 +199,7 @@ export function SecurityGallery(props: { onChanged?: () => void }) {
                     <span className="flex gap-1">
                       <a
                         className="text-xs"
-                        href={`/api/security/photo/${p.day}/${p.name}?download=1`}
+                        href={apiUrl(`api/security/photo/${p.day}/${p.name}?download=1`)}
                         title={tr("הורד", "Download")}
                       >
                         ⬇

@@ -29,19 +29,41 @@ def _fmt_temp(v) -> str:
         return "--°"
 
 
+# last values we wrote per slot — push_status runs every 5s and unconditional writes were
+# constant HA→robot traffic (and recorder DB growth) even while nothing changed. The cache
+# is dropped every ~10 min so a rebooted robot (whose optimistic slots reset) self-heals.
+_last_pushed: dict[str, str] = {}
+_last_forced: float = 0.0
+
+
+async def _set_text(ha, entity_id: str, value: str) -> None:
+    if _last_pushed.get(entity_id) == value:
+        return
+    await ha.call_service("text", "set_value", {"entity_id": entity_id, "value": value})
+    _last_pushed[entity_id] = value
+
+
 async def push_status(ha, entity: str, discovered: dict) -> None:
-    """Write the configured AC's live state into the climate name/set/info text slots."""
+    """Write the configured AC's live state into the climate name/set/info text slots
+    (diffed — only slots whose value actually changed are written)."""
+    global _last_forced
+    import time as _time
+
+    now = _time.monotonic()
+    if now - _last_forced > 600:
+        _last_pushed.clear()
+        _last_forced = now
     name_e = (discovered or {}).get("climate_name_text")
     set_e = (discovered or {}).get("climate_set_text")
     info_e = (discovered or {}).get("climate_info_text")
     if ha is None or not (name_e and set_e and info_e):
         return
     if not entity:
-        # no AC configured → tell the page so (only need to write it once, but cheap)
+        # no AC configured → tell the page so (the diff makes this a true write-once)
         try:
-            await ha.call_service("text", "set_value", {"entity_id": name_e, "value": ""})
-            await ha.call_service("text", "set_value", {"entity_id": set_e, "value": "--°"})
-            await ha.call_service("text", "set_value", {"entity_id": info_e, "value": ""})
+            await _set_text(ha, name_e, "")
+            await _set_text(ha, set_e, "--°")
+            await _set_text(ha, info_e, "")
         except Exception:  # noqa: BLE001
             pass
         return
@@ -61,9 +83,9 @@ async def push_status(ha, entity: str, discovered: dict) -> None:
         info += f"   fan: {fan}"
     big = "off" if mode in ("off", "") else _fmt_temp(attrs.get("temperature"))
     try:
-        await ha.call_service("text", "set_value", {"entity_id": name_e, "value": for_robot(name)})
-        await ha.call_service("text", "set_value", {"entity_id": set_e, "value": big})
-        await ha.call_service("text", "set_value", {"entity_id": info_e, "value": for_robot(info[:60])})
+        await _set_text(ha, name_e, for_robot(name))
+        await _set_text(ha, set_e, big)
+        await _set_text(ha, info_e, for_robot(info[:60]))
     except Exception as exc:  # noqa: BLE001
         log.debug("climate push write: %s", exc)
 

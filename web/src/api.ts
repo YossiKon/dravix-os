@@ -1,4 +1,24 @@
 // Tiny typed API client — every call goes to the dravix core on the same origin.
+//
+// URLS ARE RELATIVE to the page's base, not root-absolute: the app is served both at
+// http://host:8800/ AND under Home Assistant ingress (/api/hassio_ingress/<token>/),
+// where "/api/..." would resolve against HA itself and 401. `apiUrl` makes both work.
+const BASE = new URL(".", window.location.href);
+
+export function apiUrl(path: string): string {
+  return new URL(path.replace(/^\//, ""), BASE).toString();
+}
+
+export function wsUrl(path: string): string {
+  const u = new URL(path.replace(/^\//, ""), BASE);
+  u.protocol = u.protocol === "https:" ? "wss:" : "ws:";
+  return u.toString();
+}
+
+// AbortSignal.timeout is missing on older Safari/WebViews — degrade to "no deadline"
+// instead of throwing synchronously on every call (which rendered the app blank).
+const deadline = (ms: number): AbortSignal | undefined =>
+  typeof AbortSignal !== "undefined" && "timeout" in AbortSignal ? AbortSignal.timeout(ms) : undefined;
 
 async function unwrap<T>(r: Response): Promise<T> {
   if (!r.ok) {
@@ -24,7 +44,7 @@ async function unwrap<T>(r: Response): Promise<T> {
 
 // A hung backend must not leave spinners stuck forever — every call gets a deadline.
 export function apiGet<T>(url: string, timeoutMs = 15000): Promise<T> {
-  return fetch(url, { signal: AbortSignal.timeout(timeoutMs) }).then((r) => unwrap<T>(r));
+  return fetch(apiUrl(url), { signal: deadline(timeoutMs) }).then((r) => unwrap<T>(r));
 }
 
 export function apiSend<T>(
@@ -33,11 +53,11 @@ export function apiSend<T>(
   body?: unknown,
   timeoutMs = 60000,
 ): Promise<T> {
-  return fetch(url, {
+  return fetch(apiUrl(url), {
     method,
     headers: { "Content-Type": "application/json" },
     body: body === undefined ? undefined : JSON.stringify(body),
-    signal: AbortSignal.timeout(timeoutMs),
+    signal: deadline(timeoutMs),
   }).then((r) => unwrap<T>(r));
 }
 

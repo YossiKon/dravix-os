@@ -1,6 +1,6 @@
 // Home — everything to operate the robot: live state, sleep/wake, chat, games, head, face, LEDs.
 import { useCallback, useEffect, useRef, useState } from "react";
-import { apiGet, apiSend } from "../api";
+import { apiGet, apiSend, apiUrl } from "../api";
 import type { Live, RobotConfig, SecurityInfo } from "../api";
 import { RobotFace, stateLabel } from "../components/RobotFace";
 import { Joystick } from "../components/Joystick";
@@ -75,6 +75,9 @@ export function HomePage(props: { config: RobotConfig | null }) {
   const [live, setLive] = useState<Live | null>(null);
   const [text, setText] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
+  // chat gets its OWN flag — a slow local LLM (up to 3 min) must not freeze every
+  // other control on the page (modes, sleep, LEDs...)
+  const [askBusy, setAskBusy] = useState(false);
   // chat with the HA Assist AI — a running conversation with memory
   const [msgs, setMsgs] = useState<ChatMsg[]>([]);
   const [convId, setConvId] = useState<string | null>(null);
@@ -101,6 +104,8 @@ export function HomePage(props: { config: RobotConfig | null }) {
   const [shot, setShot] = useState<{ day: string; name: string } | null>(null);
   // kitchen timers running on the core (the robot speaks when one fires)
   const [timers, setTimers] = useState<{ id: number | string; label: string; seconds_left: number }[]>([]);
+  // saved routines (macros) — shown as one-tap chips when any exist
+  const [routines, setRoutines] = useState<{ name: string }[]>([]);
   const [tMin, setTMin] = useState("");
   const [tLabel, setTLabel] = useState("");
 
@@ -125,14 +130,25 @@ export function HomePage(props: { config: RobotConfig | null }) {
     }
   }
   const volTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const volPending = useRef<number | null>(null);
 
-  // don't leave a pending volume PUT behind after unmount
-  useEffect(() => () => { if (volTimer.current) clearTimeout(volTimer.current); }, []);
+  // FLUSH (not drop) a pending volume PUT on unmount — switching tabs right after a
+  // drag used to silently lose the new volume
+  useEffect(() => () => {
+    if (volTimer.current) {
+      clearTimeout(volTimer.current);
+      if (volPending.current != null)
+        void apiSend("/api/robot/volume", "PUT", { volume: volPending.current }).catch(() => undefined);
+    }
+  }, []);
 
   function onVolume(v: number) {
     setVol(v);
+    volPending.current = v;
     if (volTimer.current) clearTimeout(volTimer.current);
     volTimer.current = setTimeout(() => {
+      volTimer.current = null;
+      volPending.current = null;
       apiSend("/api/robot/volume", "PUT", { volume: v }).catch(toastErr);
     }, 250); // debounce while dragging
   }
@@ -198,6 +214,9 @@ export function HomePage(props: { config: RobotConfig | null }) {
     apiGet<{ supported: boolean; private: boolean }>("/api/robot/privacy").then(setPrivacy).catch(() => undefined);
     apiGet<{ supported: boolean; volume: number | null }>("/api/robot/volume")
       .then((r) => setVol(r.supported ? r.volume : null))
+      .catch(() => undefined);
+    apiGet<{ routines: { name: string }[] }>("/api/routines")
+      .then((r) => setRoutines(r.routines ?? []))
       .catch(() => undefined);
     void refreshSecurity();
   }, []);
@@ -284,10 +303,10 @@ export function HomePage(props: { config: RobotConfig | null }) {
   // Send a chat message to the HA Assist AI (keeps the conversation id = memory).
   async function ask() {
     const q = text.trim();
-    if (!q) return;
+    if (!q || askBusy) return;
     setMsgs((m) => [...m, { role: "user", text: q }]);
     setText("");
-    setBusy("ask");
+    setAskBusy(true);
     try {
       // Local AI models can be slow — give chat a much longer deadline than the default.
       const r = await apiSend<{ text: string; conversation_id: string | null }>(
@@ -304,7 +323,7 @@ export function HomePage(props: { config: RobotConfig | null }) {
       setMsgs((m) => (m.length && m[m.length - 1]?.role === "user" ? m.slice(0, -1) : m));
       setText((cur) => cur || q);
     } finally {
-      setBusy(null);
+      setAskBusy(false);
     }
   }
 
@@ -393,13 +412,13 @@ export function HomePage(props: { config: RobotConfig | null }) {
         {(live?.heard || live?.reply) && (
           <div className="mt-3 space-y-2">
             {live?.heard && (
-              <div className="me-8 rounded-2xl rounded-tr-md border border-line bg-card2 px-4 py-2 text-sm">
+              <div className="me-8 rounded-2xl rounded-se-md border border-line bg-card2 px-4 py-2 text-sm">
                 <span className="text-mute">{tr("שמעתי: ", "Heard: ")}</span>
                 {live.heard}
               </div>
             )}
             {live?.reply && (
-              <div className="ms-8 rounded-2xl rounded-tl-md border border-teal/30 bg-teal/10 px-4 py-2 text-sm">
+              <div className="ms-8 rounded-2xl rounded-ss-md border border-teal/30 bg-teal/10 px-4 py-2 text-sm">
                 <span className="text-teal/70">{tr("עניתי: ", "Replied: ")}</span>
                 {live.reply}
               </div>
@@ -414,11 +433,11 @@ export function HomePage(props: { config: RobotConfig | null }) {
           <div ref={chatRef} className="mb-3 max-h-72 space-y-2 overflow-y-auto pe-1">
             {msgs.map((m, i) =>
               m.role === "user" ? (
-                <div key={i} className="me-8 rounded-2xl rounded-tr-md border border-line bg-card2 px-4 py-2 text-sm">
+                <div key={i} className="me-8 rounded-2xl rounded-se-md border border-line bg-card2 px-4 py-2 text-sm">
                   {m.text}
                 </div>
               ) : (
-                <div key={i} className="ms-8 rounded-2xl rounded-tl-md border border-teal/30 bg-teal/10 px-4 py-2 text-sm">
+                <div key={i} className="ms-8 rounded-2xl rounded-ss-md border border-teal/30 bg-teal/10 px-4 py-2 text-sm">
                   {m.text}
                 </div>
               ),
@@ -431,15 +450,15 @@ export function HomePage(props: { config: RobotConfig | null }) {
           value={text}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={(e) => {
-            if (e.key === "Enter" && !e.shiftKey && text.trim() && busy === null) {
+            if (e.key === "Enter" && !e.shiftKey && text.trim() && !askBusy) {
               e.preventDefault();
               void ask();
             }
           }}
         />
         <div className="mt-3 flex flex-wrap items-center gap-2">
-          <button className="btn btn-amber flex-1" disabled={!text.trim() || busy !== null} onClick={() => void ask()}>
-            {busy === "ask" ? <Spinner /> : "🤖"} {tr("שלח לבינה", "Send to AI")}
+          <button className="btn btn-amber flex-1" disabled={!text.trim() || askBusy} onClick={() => void ask()}>
+            {askBusy ? <Spinner /> : "🤖"} {tr("שלח לבינה", "Send to AI")}
           </button>
           <button
             className="btn"
@@ -469,6 +488,60 @@ export function HomePage(props: { config: RobotConfig | null }) {
           )}
         </div>
       </Section>
+
+      {/* ── quick asks — one tap, the robot answers out loud (lands in the chat too) ── */}
+      <Section title={tr("שאל אותו רגע", "Quick asks")} delay={75}>
+        <div className="flex flex-wrap gap-2">
+          {([
+            { key: "mood", he: "🙂 מה שלומך?", en: "🙂 How do you feel?", url: "/api/say/mood" },
+            { key: "time", he: "🕐 מה השעה?", en: "🕐 What time is it?", url: "/api/say/time" },
+            { key: "weather", he: "🌤 מזג אוויר", en: "🌤 Weather", url: "/api/say/weather" },
+            { key: "agenda", he: "📅 סדר יום", en: "📅 Agenda", url: "/api/say/agenda" },
+            { key: "joke", he: "😄 ספר בדיחה", en: "😄 Tell a joke", url: "/api/ai/fun/joke" },
+            { key: "fact", he: "🧠 עובדה מפתיעה", en: "🧠 Fun fact", url: "/api/ai/fun/fact" },
+            { key: "riddle", he: "🧩 חידה", en: "🧩 Riddle", url: "/api/ai/fun/riddle" },
+            { key: "story", he: "📖 סיפור קטן", en: "📖 Tiny story", url: "/api/ai/fun/story" },
+          ] as const).map((c) => (
+            <button
+              key={c.key}
+              className="chip"
+              disabled={busy !== null}
+              onClick={() =>
+                void run(`ask-${c.key}`, async () => {
+                  const r = await apiSend<{ text?: string }>(c.url, "POST", {}, 120000);
+                  if (r.text) setMsgs((m) => [...m, { role: "bot", text: r.text ?? "" }]);
+                })
+              }
+            >
+              {tr(c.he, c.en)}
+            </button>
+          ))}
+        </div>
+      </Section>
+
+      {/* ── saved routines (macros) — created via the API/agents; one tap runs one ── */}
+      {routines.length > 0 && (
+        <Section title={tr("רוטינות", "Routines")} delay={85}>
+          <div className="flex flex-wrap gap-2">
+            {routines.map((r) => (
+              <button
+                key={r.name}
+                className="chip"
+                disabled={busy !== null}
+                onClick={() =>
+                  void run(
+                    `routine-${r.name}`,
+                    () => apiSend(`/api/routines/${encodeURIComponent(r.name)}/run`, "POST", {}),
+                    tr("הרוטינה רצה ✨", "Routine running ✨"),
+                  )
+                }
+              >
+                ▶ {r.name}
+              </button>
+            ))}
+          </div>
+        </Section>
+      )}
 
       {/* ── games + tricks ── */}
       <Section title={tr("משחקים וקטעים", "Games & tricks")} delay={90}>
@@ -663,7 +736,7 @@ export function HomePage(props: { config: RobotConfig | null }) {
           ) : camOn ? (
             <>
               <img
-                src="/camera/robot/stream.mjpeg"
+                src={apiUrl("camera/robot/stream.mjpeg")}
                 alt={tr("מצלמת הרובוט", "Robot camera")}
                 className="w-full rounded-2xl border border-line bg-black"
                 onError={() => {
@@ -693,7 +766,7 @@ export function HomePage(props: { config: RobotConfig | null }) {
           )}
           {shot && (
             <img
-              src={`/api/security/photo/${shot.day}/${shot.name}`}
+              src={apiUrl(`api/security/photo/${shot.day}/${shot.name}`)}
               alt={tr("התמונה שצולמה", "The photo")}
               className="mt-3 w-full rounded-2xl border border-line bg-black"
             />
@@ -741,7 +814,7 @@ export function HomePage(props: { config: RobotConfig | null }) {
             <div className="mt-3 flex items-center gap-3">
               {sec.photos[0] && (
                 <img
-                  src={`/api/security/photo/${sec.photos[0].day}/${sec.photos[0].name}`}
+                  src={apiUrl(`api/security/photo/${sec.photos[0].day}/${sec.photos[0].name}`)}
                   alt={tr("התמונה האחרונה", "Latest snapshot")}
                   className="h-16 w-24 rounded-xl border border-line object-cover"
                 />

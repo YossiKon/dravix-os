@@ -69,6 +69,14 @@ class Store:
             self._data = {**self._data, **loaded}
         except Exception as exc:  # noqa: BLE001 — a corrupt file must not crash startup
             log.error("failed to read store %s: %s — using defaults", self._path, exc)
+            # keep the corrupt original — the very next save() would otherwise overwrite
+            # the user's whole config (personas/schedule/calibration) with defaults forever
+            try:
+                backup = self._path.with_suffix(self._path.suffix + ".corrupt")
+                os.replace(self._path, backup)
+                log.error("corrupt store preserved at %s — recover manually if needed", backup)
+            except OSError:
+                pass
 
     def save(self) -> None:
         self._path.parent.mkdir(parents=True, exist_ok=True)
@@ -283,6 +291,10 @@ class Store:
         self._data.setdefault("inbox", []).append(item)
         self.save()
         return item
+
+    def set_inbox(self, items: list[dict[str, Any]]) -> None:
+        self._data["inbox"] = list(items)
+        self.save()
 
     def clear_inbox(self) -> None:
         self._data["inbox"] = []

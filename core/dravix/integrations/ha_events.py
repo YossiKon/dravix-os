@@ -162,31 +162,38 @@ class HAEventBridge:
             await ws.send(json.dumps({"id": 4, "type": "subscribe_events", "event_type": "esphome.dravix_permission"}))
             log.info("HA event bridge connected and subscribed")
             async for raw in ws:
-                msg = json.loads(raw)
-                if msg.get("type") != "event":
-                    continue
-                event = msg.get("event") or {}
-                data = event.get("data") or {}
-                # A tap on one of the robot's card rows → dravix performs the action.
-                if event.get("event_type") == "esphome.dravix_card":
-                    await self._bus.publish(
-                        "card.tap",
-                        card=int(data.get("card") or 0),
-                        row=int(data.get("row") or 0),
-                    )
-                    continue
-                # A tap on the robot's CLIMATE page → dravix controls the configured AC.
-                if event.get("event_type") == "esphome.dravix_climate":
-                    await self._bus.publish("climate.control", action=str(data.get("action") or ""))
-                    continue
-                # A tap on the robot's Approve/Reject buttons → resolve the pending permission.
-                if event.get("event_type") == "esphome.dravix_permission":
-                    await self._bus.publish(
-                        "agent.permission_decision", decision=str(data.get("decision") or "")
-                    )
-                    continue
-                mapped = map_state_changed(data, self._map)
-                if mapped:
-                    event_type, payload = mapped
-                    await self._bus.publish(event_type, **payload)
-                    log.debug("HA -> %s %s", event_type, payload)
+                # One malformed frame/payload must not unwind the whole session — a
+                # session drop loses events during the reconnect backoff.
+                try:
+                    msg = json.loads(raw)
+                    if msg.get("type") != "event":
+                        continue
+                    event = msg.get("event") or {}
+                    data = event.get("data") or {}
+                    # A tap on one of the robot's card rows → dravix performs the action.
+                    if event.get("event_type") == "esphome.dravix_card":
+                        await self._bus.publish(
+                            "card.tap",
+                            card=int(data.get("card") or 0),
+                            row=int(data.get("row") or 0),
+                        )
+                        continue
+                    # A tap on the robot's CLIMATE page → dravix controls the configured AC.
+                    if event.get("event_type") == "esphome.dravix_climate":
+                        await self._bus.publish("climate.control", action=str(data.get("action") or ""))
+                        continue
+                    # A tap on the robot's Approve/Reject buttons → resolve the pending permission.
+                    if event.get("event_type") == "esphome.dravix_permission":
+                        await self._bus.publish(
+                            "agent.permission_decision", decision=str(data.get("decision") or "")
+                        )
+                        continue
+                    mapped = map_state_changed(data, self._map)
+                    if mapped:
+                        event_type, payload = mapped
+                        await self._bus.publish(event_type, **payload)
+                        log.debug("HA -> %s %s", event_type, payload)
+                except asyncio.CancelledError:
+                    raise
+                except Exception as exc:  # noqa: BLE001
+                    log.warning("HA event bridge: bad frame skipped (%s)", exc)

@@ -5,6 +5,9 @@ import react from "@vitejs/plugin-react";
 // running on http://localhost:8800. In production the core serves web/dist/
 // itself, so requests are same-origin and no proxy is needed.
 export default defineConfig({
+  // Relative asset paths — the app must work both at http://host:8800/ and under
+  // Home Assistant ingress (/api/hassio_ingress/<token>/), where "/assets/..." 404s.
+  base: "./",
   plugins: [react()],
   server: {
     proxy: {

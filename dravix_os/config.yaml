@@ -1,5 +1,5 @@
 name: dravix-os
-version: "0.0.85"
+version: "0.0.86"
 slug: dravix_os
 description: Companion OS for the M5Stack StackChan robot (local-first)
 url: https://github.com/YossiKon/dravix-os
@@ -14,10 +14,16 @@ init: false
 # needs NO manually created long-lived token (run.sh falls back to SUPERVISOR_TOKEN).
 homeassistant_api: true
 # The web dashboard + API, plus an "Open Web UI" button on the add-on page.
+# INGRESS makes the dashboard reachable through Home Assistant itself — including
+# REMOTELY via Nabu Casa / any HA remote access. Direct LAN access on :8800 still works.
+ingress: true
+ingress_port: 8800
+panel_icon: mdi:robot-happy
+panel_title: Dravix
 ports:
   8800/tcp: 8800
 ports_description:
-  8800/tcp: dravix-os dashboard + API
+  8800/tcp: dravix-os dashboard + API (direct LAN access; ingress works too)
 webui: "http://[HOST]:[PORT:8800]"
 # Add-on options → DRAVIX_* env (see run.sh). Persistent state lives in /data.
 options:

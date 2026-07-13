@@ -271,6 +271,12 @@ export function SettingsPage(props: {
   }
 
   async function saveTimers() {
+    // Number("abc") is NaN, which JSON-serializes to null and silently no-ops — validate
+    const bad = [timers.saver, timers.sleep].some((t) => t !== "" && !Number.isFinite(Number(t)));
+    if (bad) {
+      toast(tr("ערך לא תקין — מספרים בלבד", "Invalid value — numbers only"), "err");
+      return;
+    }
     try {
       await apiSend("/api/robot/screen", "PUT", {
         screensaver_min: timers.saver === "" ? null : Number(timers.saver),
@@ -408,8 +414,11 @@ export function SettingsPage(props: {
       // /api/import expects {store: {...}}; our own backup file is the bare store dict.
       const body = data && typeof data === "object" && "store" in (data as object) ? data : { store: data };
       await apiSend("/api/import", "POST", body);
-      toast(tr("שוחזר! חלק מהשינויים דורשים ריסטארט לתוסף", "Restored! Some changes need an add-on restart"));
+      toast(tr("שוחזר! מרענן…", "Restored! Refreshing…"));
       props.onConfigChanged();
+      // every card on this page holds mount-time state (personas/memories/schedule/…) —
+      // a reload is the honest way to show the restored values instead of the old ones
+      setTimeout(() => window.location.reload(), 900);
     } catch (e) {
       toastErr(e);
     }
@@ -475,7 +484,15 @@ export function SettingsPage(props: {
             v{props.version}
           </span>
         </div>
-        {cfg.last_error && !cfg.online && (
+        {(cfg as { degraded?: boolean }).degraded && (
+          <p className="mb-3 rounded-xl border border-amber/40 bg-amber/10 p-2 text-xs text-amber">
+            {tr(
+              "הדרייבר המבוקש נכשל — רץ על דרייבר דמה (הפקודות לא מגיעות לרובוט האמיתי).",
+              "The requested driver failed to build — running on the mock fallback (commands don't reach the real robot).",
+            )}
+          </p>
+        )}
+        {cfg.last_error && (!cfg.online || (cfg as { degraded?: boolean }).degraded) && (
           <p dir="ltr" className="mb-3 rounded-xl border border-red/30 bg-red/10 p-2 text-start text-xs text-red">
             {cfg.last_error}
           </p>
