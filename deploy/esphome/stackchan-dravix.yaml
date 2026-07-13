@@ -279,12 +279,15 @@ external_components:
   # dravix-os's own components/ (MIT, from DennisGaida's driver — the one M5Stack's
   # AtomS3R examples use) with a patch for the ESPHome 2026.6 i2c API, which upstream
   # predates and no longer compiles against. Powers the SHAKE → dizzy reaction.
+  # ref is a BRANCH (not a sha) on purpose: GitHub only serves fetches of ADVERTISED
+  # refs (branch/tag tips) — a pinned sha breaks the moment it stops being the tip.
+  # This is our own repo — the same main the firmware itself ships from.
   - source:
       type: git
       url: https://github.com/YossiKon/dravix-os.git
-      ref: 47cfa9356ca3650bebb983013b743646208d7398
+      ref: main
     components: [bmi270_bmm150]
-    refresh: 1d   # pinned ref = content can't change; the daily touch enables cache self-heal
+    refresh: 1d
 
 display:
   - id: !extend m5cores3_lcd
