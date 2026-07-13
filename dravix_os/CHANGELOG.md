@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.0.87
+
+**😵 Shake the robot — it gets dizzy!** *(firmware 28 — re-flash; the add-on bump just
+ships the bundled firmware for the update indicator)*
+
+The CoreS3's built-in BMI270 accelerometer is now wired up (the stock BSP never exposed
+it). Give the robot a real shake (3 jolts within 1.5 s — picking it up gently won't
+trigger it) and it reacts: **x_x dizzy eyes + a "?"**, the face wobbles side-to-side like
+its inner gyro needs a second, woozy violet LEDs and a warbly little whimper — then it
+settles back to its resting face. Shaking wakes it from sleep (it's literally in your
+hands), but never cancels night/focus/quiet, and it won't spam — one dizzy spell per
+shake session. Detection runs fully on-device at 10 Hz without flooding Home Assistant.
+
 ## 0.0.86
 
 Round-3 sweep: three fresh audits (core / dashboard / firmware 27) — deeper fixes, remote

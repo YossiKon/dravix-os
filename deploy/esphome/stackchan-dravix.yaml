@@ -39,7 +39,7 @@ substitutions:
   # publishes it to HA ("Firmware version" sensor); the dravix dashboard compares it
   # with the version bundled in the add-on and shows "firmware update available".
   # (Maintainers: bump this on every firmware change. Users: don't touch.)
-  fw_version: "27"
+  fw_version: "28"
   # The ESPHome node name (mDNS hostname + the default entity prefix on a fresh flash).
   # Change it only if you run MORE THAN ONE robot — each needs a unique name. NOTE:
   # changing it on an already-adopted robot registers a NEW device in HA.
@@ -270,6 +270,15 @@ external_components:
       path: components
     components: [axp2101, aw88298, aw9523b, si12t, m5ioe1, ftservo, scs9009]
     refresh: never
+  # The CoreS3's BMI270 IMU (accelerometer) — the BSP never exposes it. This community
+  # component is the one M5Stack's own AtomS3R examples use; PINNED for reproducible
+  # builds. Powers the SHAKE → dizzy reaction.
+  - source:
+      type: git
+      url: https://github.com/DennisGaida/m5stack-atoms3r-components
+      ref: 7829279a1450827a4c32fa0a8c67e14062bfc5ff
+    components: [bmi270_bmm150]
+    refresh: never
 
 display:
   - id: !extend m5cores3_lcd
@@ -476,6 +485,11 @@ globals:
   # affection streak — pets within a 90s window escalate the reaction (blush → love-eyes → melt)
   - { id: g_pets_n,  type: int,   restore_value: false, initial_value: "0" }
   - { id: g_pets_ms, type: long,  restore_value: false, initial_value: "0" }
+  # shake detection (BMI270): jolt counter + window, and a slow-filtered gravity baseline
+  # so the maths works whether the driver reports m/s² or g.
+  - { id: g_shake_n,  type: int,   restore_value: false, initial_value: "0" }
+  - { id: g_shake_ms, type: long,  restore_value: false, initial_value: "0" }
+  - { id: g_grav,     type: float, restore_value: false, initial_value: "-1" }
   # battery engine (see battery_pct): smoothed open-circuit voltage + charging flag
   - { id: g_batt_v_filt, type: float, restore_value: false, initial_value: "-1" }
   - { id: g_batt_chg,    type: bool,  restore_value: false, initial_value: "false" }
@@ -594,6 +608,41 @@ sensor:
                 - delay: 2500ms
                 - globals.set: { id: g_expr, value: !lambda 'return id(g_face_rest);' }
                 - script.execute: render_face
+  # ── SHAKE SENSE — the CoreS3's own BMI270 accelerometer (internal I2C bus, 0x69).
+  #    Sensors are INTERNAL (10Hz would flood HA's recorder); shake detection runs
+  #    on-device: a jolt = |accel| far from the slow-filtered gravity baseline (unit-
+  #    agnostic — works for m/s² or g), and 3 jolts within 1.5s = a real SHAKE → dizzy.
+  #    If the chip doesn't answer (other hardware), the sensors just read NaN — harmless.
+  - platform: bmi270_bmm150
+    i2c_id: bsp_bus
+    address: 0x69
+    update_interval: 100ms
+    acceleration_x: { id: imu_ax, internal: true }
+    acceleration_y: { id: imu_ay, internal: true }
+    acceleration_z:
+      id: imu_az
+      internal: true
+      on_value:
+        then:
+          - lambda: |-
+              if (std::isnan(id(imu_ax).state) || std::isnan(id(imu_ay).state) || std::isnan(x)) return;
+              float ax = id(imu_ax).state, ay = id(imu_ay).state, az = x;
+              float mag = sqrtf(ax * ax + ay * ay + az * az);
+              if (mag <= 0.0f) return;
+              // slow baseline ≈ gravity in whatever unit the driver reports
+              if (id(g_grav) <= 0.0f) id(g_grav) = mag;
+              float dev = fabsf(mag - id(g_grav));
+              id(g_grav) += 0.02f * (mag - id(g_grav));
+              if (dev > 0.55f * id(g_grav)) {          // a jolt: >±55% off gravity
+                long now = (long) millis();
+                if (now - id(g_shake_ms) > 1500) id(g_shake_n) = 0;
+                id(g_shake_n) += 1;
+                id(g_shake_ms) = now;
+                if (id(g_shake_n) >= 3) {              // 3 jolts in the window = SHAKEN
+                  id(g_shake_n) = 0;
+                  id(dizzy_react).execute();
+                }
+              }
   # REAL power metering — the BSP exposes the INA226 battery monitor to HA. Current is in A,
   # power in W, bus voltage in V. These make the status page show true consumption + a true
   # time-left instead of a guess.
@@ -2803,6 +2852,7 @@ script:
       - script.stop: pet_react
       - script.stop: plug_react
       - script.stop: ir_glance
+      - script.stop: dizzy_react
       - script.stop: react_hot
       - script.stop: react_cold
       - script.stop: rub_eyes
@@ -3439,6 +3489,41 @@ script:
             - globals.set: { id: g_expr, value: !lambda 'return id(g_face_rest);' }   # back to the mood's resting face
             - script.execute: render_face
             - delay: 12s                                   # throttle: at most once per ~15s
+  # ── SHAKEN! 😵 — the IMU felt real shaking: dizzy x_x eyes + "?", a woozy face wobble,
+  #    violet LEDs and a warbly whimper. Being shaken wakes it (it's literally in your
+  #    hands) but never cancels night/focus/quiet. One dizzy spell per shake session.
+  - id: dizzy_react
+    mode: single
+    then:
+      - if:
+          condition: { lambda: 'return id(g_booted) && !id(g_voice) && !id(g_perm);' }
+          then:
+            - lambda: 'lv_disp_trig_activity(NULL);'
+            - if:
+                condition: { lambda: 'return (id(g_sleep) || id(g_saver)) && !id(g_night) && !id(g_focus) && !id(g_quiet);' }
+                then: [ { select.set: { id: robot_mode, option: awake } } ]
+            - globals.set: { id: g_card, value: "0" }
+            - lvgl.page.show: page_face
+            - globals.set: { id: g_expr, value: "7" }      # dizzy x_x + "?"
+            - script.execute: render_face
+            - script.execute: { id: led_flash, r: 55, g: 25, b: 100 }   # woozy violet
+            - if:
+                condition: { lambda: 'return id(sw_sfx).state && !id(g_quiet) && !id(g_night) && !id(g_sleep);' }
+                then: [ { rtttl.play: "dizzy:d=16,o=5,b=170:g,e,c,e,g,e,c" } ]   # a wobbly whimper
+            # the face wobbles like its inner gyro needs a second to settle
+            - lvgl.widget.update: { id: face_box, x: -14 }
+            - delay: 180ms
+            - lvgl.widget.update: { id: face_box, x: 12 }
+            - delay: 180ms
+            - lvgl.widget.update: { id: face_box, x: -8 }
+            - delay: 180ms
+            - lvgl.widget.update: { id: face_box, x: 6 }
+            - delay: 180ms
+            - lvgl.widget.update: { id: face_box, x: 0 }
+            - delay: 2400ms
+            - globals.set: { id: g_expr, value: !lambda 'return id(g_face_rest);' }   # back to the mood's resting face
+            - script.execute: render_face
+      - delay: 12s   # throttle — one dizzy spell per shake session
   # ── IR GLANCE — someone pressed a TV/AC remote: glance over, quizzical, then back.
   #    mode: single + the trailing delay = fires at most once per ~20s, and never
   #    interrupts sleep / screensaver / calm modes.
