@@ -39,7 +39,7 @@ substitutions:
   # publishes it to HA ("Firmware version" sensor); the dravix dashboard compares it
   # with the version bundled in the add-on and shows "firmware update available".
   # (Maintainers: bump this on every firmware change. Users: don't touch.)
-  fw_version: "29"
+  fw_version: "30"
   # The ESPHome node name (mDNS hostname + the default entity prefix on a fresh flash).
   # Change it only if you run MORE THAN ONE robot — each needs a unique name. NOTE:
   # changing it on an already-adopted robot registers a NEW device in HA.
@@ -1842,56 +1842,66 @@ lvgl:
       scrollbar_mode: "OFF"
       widgets:
         - label: { id: lbl_c1_title, text: "CARD 1", text_font: title_font, styles: accent_txt, align: TOP_MID, y: 4 }
+        # Mushroom-style row: tinted icon halo + solid dot (colour by domain+state, sent
+        # by dravix as the row's "K|" key) and the name + state stacked in two lines.
         - button:
             id: c1_r0
             x: 10
-            y: 42
+            y: 38
             width: 300
-            height: 44
-            radius: 10
-            bg_color: 0x121821
+            height: 46
+            radius: 14
+            bg_color: 0x1c222c
             widgets:
-              - obj: { id: chip_c1_r0, align: LEFT_MID, x: 8, width: 28, height: 28, radius: 14, bg_color: 0x4a90d9, bg_opa: COVER, border_width: 0 }
-              - label: { id: lbl_c1_r0, text: "", text_font: small_font, text_color: 0xFFFFFF, align: LEFT_MID, x: 44 }
+              - obj: { id: chip_c1_r0, align: LEFT_MID, x: 8, width: 30, height: 30, radius: 15, bg_color: 0x4a90d9, bg_opa: 25%, border_width: 0 }
+              - obj: { id: dot_c1_r0, align: LEFT_MID, x: 17, width: 12, height: 12, radius: 6, bg_color: 0x4a90d9, bg_opa: COVER, border_width: 0 }
+              - label: { id: lbl_c1_r0, text: "", text_font: small_font, text_color: 0xF2F5F7, align: LEFT_MID, x: 46, y: -9 }
+              - label: { id: st_c1_r0, text: "", text_font: small_font, text_color: 0x8b96a4, align: LEFT_MID, x: 46, y: 10 }
             on_click:
               - homeassistant.event: { event: esphome.dravix_card, data: { card: "1", row: "0" } }
         - button:
             id: c1_r1
             x: 10
-            y: 92
+            y: 88
             width: 300
-            height: 44
-            radius: 10
-            bg_color: 0x121821
+            height: 46
+            radius: 14
+            bg_color: 0x1c222c
             widgets:
-              - obj: { id: chip_c1_r1, align: LEFT_MID, x: 8, width: 28, height: 28, radius: 14, bg_color: 0x4a90d9, bg_opa: COVER, border_width: 0 }
-              - label: { id: lbl_c1_r1, text: "", text_font: small_font, text_color: 0xFFFFFF, align: LEFT_MID, x: 44 }
+              - obj: { id: chip_c1_r1, align: LEFT_MID, x: 8, width: 30, height: 30, radius: 15, bg_color: 0x4a90d9, bg_opa: 25%, border_width: 0 }
+              - obj: { id: dot_c1_r1, align: LEFT_MID, x: 17, width: 12, height: 12, radius: 6, bg_color: 0x4a90d9, bg_opa: COVER, border_width: 0 }
+              - label: { id: lbl_c1_r1, text: "", text_font: small_font, text_color: 0xF2F5F7, align: LEFT_MID, x: 46, y: -9 }
+              - label: { id: st_c1_r1, text: "", text_font: small_font, text_color: 0x8b96a4, align: LEFT_MID, x: 46, y: 10 }
             on_click:
               - homeassistant.event: { event: esphome.dravix_card, data: { card: "1", row: "1" } }
         - button:
             id: c1_r2
             x: 10
-            y: 142
+            y: 138
             width: 300
-            height: 44
-            radius: 10
-            bg_color: 0x121821
+            height: 46
+            radius: 14
+            bg_color: 0x1c222c
             widgets:
-              - obj: { id: chip_c1_r2, align: LEFT_MID, x: 8, width: 28, height: 28, radius: 14, bg_color: 0x4a90d9, bg_opa: COVER, border_width: 0 }
-              - label: { id: lbl_c1_r2, text: "", text_font: small_font, text_color: 0xFFFFFF, align: LEFT_MID, x: 44 }
+              - obj: { id: chip_c1_r2, align: LEFT_MID, x: 8, width: 30, height: 30, radius: 15, bg_color: 0x4a90d9, bg_opa: 25%, border_width: 0 }
+              - obj: { id: dot_c1_r2, align: LEFT_MID, x: 17, width: 12, height: 12, radius: 6, bg_color: 0x4a90d9, bg_opa: COVER, border_width: 0 }
+              - label: { id: lbl_c1_r2, text: "", text_font: small_font, text_color: 0xF2F5F7, align: LEFT_MID, x: 46, y: -9 }
+              - label: { id: st_c1_r2, text: "", text_font: small_font, text_color: 0x8b96a4, align: LEFT_MID, x: 46, y: 10 }
             on_click:
               - homeassistant.event: { event: esphome.dravix_card, data: { card: "1", row: "2" } }
         - button:
             id: c1_r3
             x: 10
-            y: 192
+            y: 188
             width: 300
-            height: 44
-            radius: 10
-            bg_color: 0x121821
+            height: 46
+            radius: 14
+            bg_color: 0x1c222c
             widgets:
-              - obj: { id: chip_c1_r3, align: LEFT_MID, x: 8, width: 28, height: 28, radius: 14, bg_color: 0x4a90d9, bg_opa: COVER, border_width: 0 }
-              - label: { id: lbl_c1_r3, text: "", text_font: small_font, text_color: 0xFFFFFF, align: LEFT_MID, x: 44 }
+              - obj: { id: chip_c1_r3, align: LEFT_MID, x: 8, width: 30, height: 30, radius: 15, bg_color: 0x4a90d9, bg_opa: 25%, border_width: 0 }
+              - obj: { id: dot_c1_r3, align: LEFT_MID, x: 17, width: 12, height: 12, radius: 6, bg_color: 0x4a90d9, bg_opa: COVER, border_width: 0 }
+              - label: { id: lbl_c1_r3, text: "", text_font: small_font, text_color: 0xF2F5F7, align: LEFT_MID, x: 46, y: -9 }
+              - label: { id: st_c1_r3, text: "", text_font: small_font, text_color: 0x8b96a4, align: LEFT_MID, x: 46, y: 10 }
             on_click:
               - homeassistant.event: { event: esphome.dravix_card, data: { card: "1", row: "3" } }
     - id: page_card2
@@ -1904,53 +1914,61 @@ lvgl:
         - button:
             id: c2_r0
             x: 10
-            y: 42
+            y: 38
             width: 300
-            height: 44
-            radius: 10
-            bg_color: 0x121821
+            height: 46
+            radius: 14
+            bg_color: 0x1c222c
             widgets:
-              - obj: { id: chip_c2_r0, align: LEFT_MID, x: 8, width: 28, height: 28, radius: 14, bg_color: 0x4a90d9, bg_opa: COVER, border_width: 0 }
-              - label: { id: lbl_c2_r0, text: "", text_font: small_font, text_color: 0xFFFFFF, align: LEFT_MID, x: 44 }
+              - obj: { id: chip_c2_r0, align: LEFT_MID, x: 8, width: 30, height: 30, radius: 15, bg_color: 0x4a90d9, bg_opa: 25%, border_width: 0 }
+              - obj: { id: dot_c2_r0, align: LEFT_MID, x: 17, width: 12, height: 12, radius: 6, bg_color: 0x4a90d9, bg_opa: COVER, border_width: 0 }
+              - label: { id: lbl_c2_r0, text: "", text_font: small_font, text_color: 0xF2F5F7, align: LEFT_MID, x: 46, y: -9 }
+              - label: { id: st_c2_r0, text: "", text_font: small_font, text_color: 0x8b96a4, align: LEFT_MID, x: 46, y: 10 }
             on_click:
               - homeassistant.event: { event: esphome.dravix_card, data: { card: "2", row: "0" } }
         - button:
             id: c2_r1
             x: 10
-            y: 92
+            y: 88
             width: 300
-            height: 44
-            radius: 10
-            bg_color: 0x121821
+            height: 46
+            radius: 14
+            bg_color: 0x1c222c
             widgets:
-              - obj: { id: chip_c2_r1, align: LEFT_MID, x: 8, width: 28, height: 28, radius: 14, bg_color: 0x4a90d9, bg_opa: COVER, border_width: 0 }
-              - label: { id: lbl_c2_r1, text: "", text_font: small_font, text_color: 0xFFFFFF, align: LEFT_MID, x: 44 }
+              - obj: { id: chip_c2_r1, align: LEFT_MID, x: 8, width: 30, height: 30, radius: 15, bg_color: 0x4a90d9, bg_opa: 25%, border_width: 0 }
+              - obj: { id: dot_c2_r1, align: LEFT_MID, x: 17, width: 12, height: 12, radius: 6, bg_color: 0x4a90d9, bg_opa: COVER, border_width: 0 }
+              - label: { id: lbl_c2_r1, text: "", text_font: small_font, text_color: 0xF2F5F7, align: LEFT_MID, x: 46, y: -9 }
+              - label: { id: st_c2_r1, text: "", text_font: small_font, text_color: 0x8b96a4, align: LEFT_MID, x: 46, y: 10 }
             on_click:
               - homeassistant.event: { event: esphome.dravix_card, data: { card: "2", row: "1" } }
         - button:
             id: c2_r2
             x: 10
-            y: 142
+            y: 138
             width: 300
-            height: 44
-            radius: 10
-            bg_color: 0x121821
+            height: 46
+            radius: 14
+            bg_color: 0x1c222c
             widgets:
-              - obj: { id: chip_c2_r2, align: LEFT_MID, x: 8, width: 28, height: 28, radius: 14, bg_color: 0x4a90d9, bg_opa: COVER, border_width: 0 }
-              - label: { id: lbl_c2_r2, text: "", text_font: small_font, text_color: 0xFFFFFF, align: LEFT_MID, x: 44 }
+              - obj: { id: chip_c2_r2, align: LEFT_MID, x: 8, width: 30, height: 30, radius: 15, bg_color: 0x4a90d9, bg_opa: 25%, border_width: 0 }
+              - obj: { id: dot_c2_r2, align: LEFT_MID, x: 17, width: 12, height: 12, radius: 6, bg_color: 0x4a90d9, bg_opa: COVER, border_width: 0 }
+              - label: { id: lbl_c2_r2, text: "", text_font: small_font, text_color: 0xF2F5F7, align: LEFT_MID, x: 46, y: -9 }
+              - label: { id: st_c2_r2, text: "", text_font: small_font, text_color: 0x8b96a4, align: LEFT_MID, x: 46, y: 10 }
             on_click:
               - homeassistant.event: { event: esphome.dravix_card, data: { card: "2", row: "2" } }
         - button:
             id: c2_r3
             x: 10
-            y: 192
+            y: 188
             width: 300
-            height: 44
-            radius: 10
-            bg_color: 0x121821
+            height: 46
+            radius: 14
+            bg_color: 0x1c222c
             widgets:
-              - obj: { id: chip_c2_r3, align: LEFT_MID, x: 8, width: 28, height: 28, radius: 14, bg_color: 0x4a90d9, bg_opa: COVER, border_width: 0 }
-              - label: { id: lbl_c2_r3, text: "", text_font: small_font, text_color: 0xFFFFFF, align: LEFT_MID, x: 44 }
+              - obj: { id: chip_c2_r3, align: LEFT_MID, x: 8, width: 30, height: 30, radius: 15, bg_color: 0x4a90d9, bg_opa: 25%, border_width: 0 }
+              - obj: { id: dot_c2_r3, align: LEFT_MID, x: 17, width: 12, height: 12, radius: 6, bg_color: 0x4a90d9, bg_opa: COVER, border_width: 0 }
+              - label: { id: lbl_c2_r3, text: "", text_font: small_font, text_color: 0xF2F5F7, align: LEFT_MID, x: 46, y: -9 }
+              - label: { id: st_c2_r3, text: "", text_font: small_font, text_color: 0x8b96a4, align: LEFT_MID, x: 46, y: 10 }
             on_click:
               - homeassistant.event: { event: esphome.dravix_card, data: { card: "2", row: "3" } }
     - id: page_card3
@@ -1963,53 +1981,61 @@ lvgl:
         - button:
             id: c3_r0
             x: 10
-            y: 42
+            y: 38
             width: 300
-            height: 44
-            radius: 10
-            bg_color: 0x121821
+            height: 46
+            radius: 14
+            bg_color: 0x1c222c
             widgets:
-              - obj: { id: chip_c3_r0, align: LEFT_MID, x: 8, width: 28, height: 28, radius: 14, bg_color: 0x4a90d9, bg_opa: COVER, border_width: 0 }
-              - label: { id: lbl_c3_r0, text: "", text_font: small_font, text_color: 0xFFFFFF, align: LEFT_MID, x: 44 }
+              - obj: { id: chip_c3_r0, align: LEFT_MID, x: 8, width: 30, height: 30, radius: 15, bg_color: 0x4a90d9, bg_opa: 25%, border_width: 0 }
+              - obj: { id: dot_c3_r0, align: LEFT_MID, x: 17, width: 12, height: 12, radius: 6, bg_color: 0x4a90d9, bg_opa: COVER, border_width: 0 }
+              - label: { id: lbl_c3_r0, text: "", text_font: small_font, text_color: 0xF2F5F7, align: LEFT_MID, x: 46, y: -9 }
+              - label: { id: st_c3_r0, text: "", text_font: small_font, text_color: 0x8b96a4, align: LEFT_MID, x: 46, y: 10 }
             on_click:
               - homeassistant.event: { event: esphome.dravix_card, data: { card: "3", row: "0" } }
         - button:
             id: c3_r1
             x: 10
-            y: 92
+            y: 88
             width: 300
-            height: 44
-            radius: 10
-            bg_color: 0x121821
+            height: 46
+            radius: 14
+            bg_color: 0x1c222c
             widgets:
-              - obj: { id: chip_c3_r1, align: LEFT_MID, x: 8, width: 28, height: 28, radius: 14, bg_color: 0x4a90d9, bg_opa: COVER, border_width: 0 }
-              - label: { id: lbl_c3_r1, text: "", text_font: small_font, text_color: 0xFFFFFF, align: LEFT_MID, x: 44 }
+              - obj: { id: chip_c3_r1, align: LEFT_MID, x: 8, width: 30, height: 30, radius: 15, bg_color: 0x4a90d9, bg_opa: 25%, border_width: 0 }
+              - obj: { id: dot_c3_r1, align: LEFT_MID, x: 17, width: 12, height: 12, radius: 6, bg_color: 0x4a90d9, bg_opa: COVER, border_width: 0 }
+              - label: { id: lbl_c3_r1, text: "", text_font: small_font, text_color: 0xF2F5F7, align: LEFT_MID, x: 46, y: -9 }
+              - label: { id: st_c3_r1, text: "", text_font: small_font, text_color: 0x8b96a4, align: LEFT_MID, x: 46, y: 10 }
             on_click:
               - homeassistant.event: { event: esphome.dravix_card, data: { card: "3", row: "1" } }
         - button:
             id: c3_r2
             x: 10
-            y: 142
+            y: 138
             width: 300
-            height: 44
-            radius: 10
-            bg_color: 0x121821
+            height: 46
+            radius: 14
+            bg_color: 0x1c222c
             widgets:
-              - obj: { id: chip_c3_r2, align: LEFT_MID, x: 8, width: 28, height: 28, radius: 14, bg_color: 0x4a90d9, bg_opa: COVER, border_width: 0 }
-              - label: { id: lbl_c3_r2, text: "", text_font: small_font, text_color: 0xFFFFFF, align: LEFT_MID, x: 44 }
+              - obj: { id: chip_c3_r2, align: LEFT_MID, x: 8, width: 30, height: 30, radius: 15, bg_color: 0x4a90d9, bg_opa: 25%, border_width: 0 }
+              - obj: { id: dot_c3_r2, align: LEFT_MID, x: 17, width: 12, height: 12, radius: 6, bg_color: 0x4a90d9, bg_opa: COVER, border_width: 0 }
+              - label: { id: lbl_c3_r2, text: "", text_font: small_font, text_color: 0xF2F5F7, align: LEFT_MID, x: 46, y: -9 }
+              - label: { id: st_c3_r2, text: "", text_font: small_font, text_color: 0x8b96a4, align: LEFT_MID, x: 46, y: 10 }
             on_click:
               - homeassistant.event: { event: esphome.dravix_card, data: { card: "3", row: "2" } }
         - button:
             id: c3_r3
             x: 10
-            y: 192
+            y: 188
             width: 300
-            height: 44
-            radius: 10
-            bg_color: 0x121821
+            height: 46
+            radius: 14
+            bg_color: 0x1c222c
             widgets:
-              - obj: { id: chip_c3_r3, align: LEFT_MID, x: 8, width: 28, height: 28, radius: 14, bg_color: 0x4a90d9, bg_opa: COVER, border_width: 0 }
-              - label: { id: lbl_c3_r3, text: "", text_font: small_font, text_color: 0xFFFFFF, align: LEFT_MID, x: 44 }
+              - obj: { id: chip_c3_r3, align: LEFT_MID, x: 8, width: 30, height: 30, radius: 15, bg_color: 0x4a90d9, bg_opa: 25%, border_width: 0 }
+              - obj: { id: dot_c3_r3, align: LEFT_MID, x: 17, width: 12, height: 12, radius: 6, bg_color: 0x4a90d9, bg_opa: COVER, border_width: 0 }
+              - label: { id: lbl_c3_r3, text: "", text_font: small_font, text_color: 0xF2F5F7, align: LEFT_MID, x: 46, y: -9 }
+              - label: { id: st_c3_r3, text: "", text_font: small_font, text_color: 0x8b96a4, align: LEFT_MID, x: 46, y: 10 }
             on_click:
               - homeassistant.event: { event: esphome.dravix_card, data: { card: "3", row: "3" } }
     # ── Page 5: CATCH ME! — tap the dot before it runs away (in the swipe cycle) ──
@@ -5463,81 +5489,80 @@ interval:
       - lvgl.label.update: { id: lbl_c1_title, text: !lambda 'return id(t_c1_title).state;' }
       - lvgl.label.update: { id: lbl_c2_title, text: !lambda 'return id(t_c2_title).state;' }
       - lvgl.label.update: { id: lbl_c3_title, text: !lambda 'return id(t_c3_title).state;' }
-      # split each card body into its 4 tappable rows (line k → row k; empty → hidden)
-      - lvgl.label.update: { id: lbl_c1_r0, text: !lambda 'std::string b = id(t_c1_body).state; size_t s = 0; for (int i = 0; i < 0; i++) { size_t p = b.find(10, s); if (p == std::string::npos) return std::string(""); s = p + 1; } size_t e = b.find(10, s); return b.substr(s, e == std::string::npos ? std::string::npos : e - s);' }
-      - lvgl.label.update: { id: lbl_c1_r1, text: !lambda 'std::string b = id(t_c1_body).state; size_t s = 0; for (int i = 0; i < 1; i++) { size_t p = b.find(10, s); if (p == std::string::npos) return std::string(""); s = p + 1; } size_t e = b.find(10, s); return b.substr(s, e == std::string::npos ? std::string::npos : e - s);' }
-      - lvgl.label.update: { id: lbl_c1_r2, text: !lambda 'std::string b = id(t_c1_body).state; size_t s = 0; for (int i = 0; i < 2; i++) { size_t p = b.find(10, s); if (p == std::string::npos) return std::string(""); s = p + 1; } size_t e = b.find(10, s); return b.substr(s, e == std::string::npos ? std::string::npos : e - s);' }
-      - lvgl.label.update: { id: lbl_c1_r3, text: !lambda 'std::string b = id(t_c1_body).state; size_t s = 0; for (int i = 0; i < 3; i++) { size_t p = b.find(10, s); if (p == std::string::npos) return std::string(""); s = p + 1; } size_t e = b.find(10, s); return b.substr(s, e == std::string::npos ? std::string::npos : e - s);' }
-      - lvgl.label.update: { id: lbl_c2_r0, text: !lambda 'std::string b = id(t_c2_body).state; size_t s = 0; for (int i = 0; i < 0; i++) { size_t p = b.find(10, s); if (p == std::string::npos) return std::string(""); s = p + 1; } size_t e = b.find(10, s); return b.substr(s, e == std::string::npos ? std::string::npos : e - s);' }
-      - lvgl.label.update: { id: lbl_c2_r1, text: !lambda 'std::string b = id(t_c2_body).state; size_t s = 0; for (int i = 0; i < 1; i++) { size_t p = b.find(10, s); if (p == std::string::npos) return std::string(""); s = p + 1; } size_t e = b.find(10, s); return b.substr(s, e == std::string::npos ? std::string::npos : e - s);' }
-      - lvgl.label.update: { id: lbl_c2_r2, text: !lambda 'std::string b = id(t_c2_body).state; size_t s = 0; for (int i = 0; i < 2; i++) { size_t p = b.find(10, s); if (p == std::string::npos) return std::string(""); s = p + 1; } size_t e = b.find(10, s); return b.substr(s, e == std::string::npos ? std::string::npos : e - s);' }
-      - lvgl.label.update: { id: lbl_c2_r3, text: !lambda 'std::string b = id(t_c2_body).state; size_t s = 0; for (int i = 0; i < 3; i++) { size_t p = b.find(10, s); if (p == std::string::npos) return std::string(""); s = p + 1; } size_t e = b.find(10, s); return b.substr(s, e == std::string::npos ? std::string::npos : e - s);' }
-      - lvgl.label.update: { id: lbl_c3_r0, text: !lambda 'std::string b = id(t_c3_body).state; size_t s = 0; for (int i = 0; i < 0; i++) { size_t p = b.find(10, s); if (p == std::string::npos) return std::string(""); s = p + 1; } size_t e = b.find(10, s); return b.substr(s, e == std::string::npos ? std::string::npos : e - s);' }
-      - lvgl.label.update: { id: lbl_c3_r1, text: !lambda 'std::string b = id(t_c3_body).state; size_t s = 0; for (int i = 0; i < 1; i++) { size_t p = b.find(10, s); if (p == std::string::npos) return std::string(""); s = p + 1; } size_t e = b.find(10, s); return b.substr(s, e == std::string::npos ? std::string::npos : e - s);' }
-      - lvgl.label.update: { id: lbl_c3_r2, text: !lambda 'std::string b = id(t_c3_body).state; size_t s = 0; for (int i = 0; i < 2; i++) { size_t p = b.find(10, s); if (p == std::string::npos) return std::string(""); s = p + 1; } size_t e = b.find(10, s); return b.substr(s, e == std::string::npos ? std::string::npos : e - s);' }
-      - lvgl.label.update: { id: lbl_c3_r3, text: !lambda 'std::string b = id(t_c3_body).state; size_t s = 0; for (int i = 0; i < 3; i++) { size_t p = b.find(10, s); if (p == std::string::npos) return std::string(""); s = p + 1; } size_t e = b.find(10, s); return b.substr(s, e == std::string::npos ? std::string::npos : e - s);' }
-      # FREE POSITIONING (dashboard drag-and-drop) — a row whose text starts with "x,y|" jumps
-      # to (x,y) as a small 150x46 card; without the prefix it keeps the default full-width stack
-      # (backward compatible). The "x,y|" prefix is stripped so only the entity text is shown.
+      # ── MUSHROOM CARD ROWS — one pass renders all 12 rows. dravix sends one line per
+      #    entity: "[x,y|]K|name|state" — K picks the lovelace-mushroom accent colour,
+      #    name/state fill the two stacked labels, "x,y|" places the row as a mini-card.
+      #    Legacy bodies (plain "name  STATE" lines) still render — all text in line 1.
       - lambda: |-
-          auto place = [](lv_obj_t* row, lv_obj_t* lbl) {
-            const char* t = lv_label_get_text(lbl);
-            std::string s = t ? t : "";
-            size_t bar = s.find('|');
-            if (bar == std::string::npos) return;
-            std::string pos = s.substr(0, bar);
-            size_t comma = pos.find(',');
-            if (comma == std::string::npos) return;
-            lv_obj_set_size(row, 150, 46);
-            lv_obj_set_pos(row, atoi(pos.substr(0, comma).c_str()), atoi(pos.substr(comma + 1).c_str()));
-            lv_label_set_text(lbl, s.substr(bar + 1).c_str());
+          auto colour = [](char k) -> uint32_t {
+            switch (k) {
+              case 'l': return 0xFFB300;  // light on / triggered sensor - amber
+              case 's': return 0x448AFF;  // switch family on - blue
+              case 'c': return 0xAB47BC;  // cover open - purple
+              case 'K': return 0xEF5350;  // lock OPEN - red, needs attention
+              case 'k': return 0x66BB6A;  // lock locked - green
+              case 't': return 0xFF7043;  // climate active - orange
+              case 'm': return 0x5C6BC0;  // media playing - indigo
+              case 'b': return 0x26A69A;  // script / scene / button - teal
+              case 'o': return 0x555b66;  // off / idle - grey
+              default:  return 0x4a90d9;  // 'n' sensors / info - blue
+            }
           };
-          place(id(c1_r0), id(lbl_c1_r0)); place(id(c1_r1), id(lbl_c1_r1)); place(id(c1_r2), id(lbl_c1_r2)); place(id(c1_r3), id(lbl_c1_r3));
-          place(id(c2_r0), id(lbl_c2_r0)); place(id(c2_r1), id(lbl_c2_r1)); place(id(c2_r2), id(lbl_c2_r2)); place(id(c2_r3), id(lbl_c2_r3));
-          place(id(c3_r0), id(lbl_c3_r0)); place(id(c3_r1), id(lbl_c3_r1)); place(id(c3_r2), id(lbl_c3_r2)); place(id(c3_r3), id(lbl_c3_r3));
-      # Mushroom-style chip colour per row, read from the row's own text: active → amber,
-      # off/closed/locked → grey, sensor/other → blue, empty → blends into the card.
-      - lambda: |-
-          auto chip = [](lv_obj_t* ch, const char* txt) {
-            std::string s = txt ? txt : "";
-            lv_color_t c;
-            if (s.empty()) c = lv_color_hex(0x121821);
-            else if (s.find("ON") != std::string::npos || s.find("OPEN") != std::string::npos || s.find("PLAY") != std::string::npos) c = lv_color_hex(0xF5A623);
-            else if (s.find("OFF") != std::string::npos || s.find("CLOS") != std::string::npos || s.find("LOCK") != std::string::npos) c = lv_color_hex(0x555b66);
-            else c = lv_color_hex(0x4a90d9);
-            lv_obj_set_style_bg_color(ch, c, 0);
+          auto row = [&](lv_obj_t* btn, lv_obj_t* tint, lv_obj_t* dot, lv_obj_t* nm, lv_obj_t* stt,
+                         const std::string& body, int k, int defy) {
+            size_t s = 0;
+            for (int i = 0; i < k; i++) {
+              size_t p = body.find(10, s);
+              if (p == std::string::npos) { lv_obj_add_flag(btn, LV_OBJ_FLAG_HIDDEN); return; }
+              s = p + 1;
+            }
+            size_t e = body.find(10, s);
+            std::string line = body.substr(s, e == std::string::npos ? std::string::npos : e - s);
+            if (line.empty()) { lv_obj_add_flag(btn, LV_OBJ_FLAG_HIDDEN); return; }
+            lv_obj_clear_flag(btn, LV_OBJ_FLAG_HIDDEN);
+            // optional free-position prefix "x,y|" (comma before the first bar = a position)
+            size_t bar = line.find('|');
+            size_t comma = line.find(',');
+            if (bar != std::string::npos && comma != std::string::npos && comma < bar) {
+              lv_obj_set_size(btn, 150, 48);
+              lv_obj_set_pos(btn, atoi(line.substr(0, comma).c_str()),
+                                  atoi(line.substr(comma + 1, bar - comma - 1).c_str()));
+              line = line.substr(bar + 1);
+            } else {
+              lv_obj_set_size(btn, 300, 46);
+              lv_obj_set_pos(btn, 10, defy);
+            }
+            // "K|name|state" (a legacy line without the key shows whole-line as the name)
+            char key = 'n';
+            std::string name = line, st = "";
+            if (line.size() > 1 && line[1] == '|') {
+              key = line[0];
+              size_t b2 = line.find('|', 2);
+              name = line.substr(2, b2 == std::string::npos ? std::string::npos : b2 - 2);
+              if (b2 != std::string::npos) st = line.substr(b2 + 1);
+            }
+            lv_label_set_text(nm, name.c_str());
+            lv_label_set_text(stt, st.c_str());
+            uint32_t col = colour(key);
+            lv_obj_set_style_bg_color(tint, lv_color_hex(col), 0);
+            lv_obj_set_style_bg_color(dot, lv_color_hex(col), 0);
+            lv_obj_set_style_bg_opa(tint, key == 'o' ? 28 : 64, 0);   // dimmer halo when off
           };
-          chip(id(chip_c1_r0), lv_label_get_text(id(lbl_c1_r0)));
-          chip(id(chip_c1_r1), lv_label_get_text(id(lbl_c1_r1)));
-          chip(id(chip_c1_r2), lv_label_get_text(id(lbl_c1_r2)));
-          chip(id(chip_c1_r3), lv_label_get_text(id(lbl_c1_r3)));
-          chip(id(chip_c2_r0), lv_label_get_text(id(lbl_c2_r0)));
-          chip(id(chip_c2_r1), lv_label_get_text(id(lbl_c2_r1)));
-          chip(id(chip_c2_r2), lv_label_get_text(id(lbl_c2_r2)));
-          chip(id(chip_c2_r3), lv_label_get_text(id(lbl_c2_r3)));
-          chip(id(chip_c3_r0), lv_label_get_text(id(lbl_c3_r0)));
-          chip(id(chip_c3_r1), lv_label_get_text(id(lbl_c3_r1)));
-          chip(id(chip_c3_r2), lv_label_get_text(id(lbl_c3_r2)));
-          chip(id(chip_c3_r3), lv_label_get_text(id(lbl_c3_r3)));
-      # rows with no entity behind them disappear (count the body's lines)
-      - lambda: |-
-          auto rows_of = [](const std::string &b) -> int {
-            if (b.empty()) return 0;
-            int n = 1;
-            for (char c : b) if (c == '\n') n++;
-            return n;
-          };
-          int n1 = rows_of(id(t_c1_body).state);
-          int n2 = rows_of(id(t_c2_body).state);
-          int n3 = rows_of(id(t_c3_body).state);
-          lv_obj_t *c1[4] = {id(c1_r0), id(c1_r1), id(c1_r2), id(c1_r3)};
-          lv_obj_t *c2[4] = {id(c2_r0), id(c2_r1), id(c2_r2), id(c2_r3)};
-          lv_obj_t *c3[4] = {id(c3_r0), id(c3_r1), id(c3_r2), id(c3_r3)};
-          for (int i = 0; i < 4; i++) {
-            if (i < n1) lv_obj_clear_flag(c1[i], LV_OBJ_FLAG_HIDDEN); else lv_obj_add_flag(c1[i], LV_OBJ_FLAG_HIDDEN);
-            if (i < n2) lv_obj_clear_flag(c2[i], LV_OBJ_FLAG_HIDDEN); else lv_obj_add_flag(c2[i], LV_OBJ_FLAG_HIDDEN);
-            if (i < n3) lv_obj_clear_flag(c3[i], LV_OBJ_FLAG_HIDDEN); else lv_obj_add_flag(c3[i], LV_OBJ_FLAG_HIDDEN);
-          }
+          std::string body1 = id(t_c1_body).state;
+          std::string body2 = id(t_c2_body).state;
+          std::string body3 = id(t_c3_body).state;
+          row(id(c1_r0), id(chip_c1_r0), id(dot_c1_r0), id(lbl_c1_r0), id(st_c1_r0), body1, 0, 38);
+          row(id(c1_r1), id(chip_c1_r1), id(dot_c1_r1), id(lbl_c1_r1), id(st_c1_r1), body1, 1, 88);
+          row(id(c1_r2), id(chip_c1_r2), id(dot_c1_r2), id(lbl_c1_r2), id(st_c1_r2), body1, 2, 138);
+          row(id(c1_r3), id(chip_c1_r3), id(dot_c1_r3), id(lbl_c1_r3), id(st_c1_r3), body1, 3, 188);
+          row(id(c2_r0), id(chip_c2_r0), id(dot_c2_r0), id(lbl_c2_r0), id(st_c2_r0), body2, 0, 38);
+          row(id(c2_r1), id(chip_c2_r1), id(dot_c2_r1), id(lbl_c2_r1), id(st_c2_r1), body2, 1, 88);
+          row(id(c2_r2), id(chip_c2_r2), id(dot_c2_r2), id(lbl_c2_r2), id(st_c2_r2), body2, 2, 138);
+          row(id(c2_r3), id(chip_c2_r3), id(dot_c2_r3), id(lbl_c2_r3), id(st_c2_r3), body2, 3, 188);
+          row(id(c3_r0), id(chip_c3_r0), id(dot_c3_r0), id(lbl_c3_r0), id(st_c3_r0), body3, 0, 38);
+          row(id(c3_r1), id(chip_c3_r1), id(dot_c3_r1), id(lbl_c3_r1), id(st_c3_r1), body3, 1, 88);
+          row(id(c3_r2), id(chip_c3_r2), id(dot_c3_r2), id(lbl_c3_r2), id(st_c3_r2), body3, 2, 138);
+          row(id(c3_r3), id(chip_c3_r3), id(dot_c3_r3), id(lbl_c3_r3), id(st_c3_r3), body3, 3, 188);
       # ── status-bar overlay (compact time · date · battery · wifi) ──
       - lvgl.label.update:
           id: sb_time

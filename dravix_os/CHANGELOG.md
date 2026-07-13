@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.0.90
+
+**🍄 Mushroom cards — on the robot AND in the editor** *(firmware 30 + this add-on: update both)*
+
+The robot's 3 custom screens now render your Home Assistant entities as real
+[lovelace-mushroom](https://github.com/piitaya/lovelace-mushroom)-style cards: a rounded
+card with a tinted icon halo + colour dot, the entity name on top and its live state
+underneath. Colours follow Mushroom's per-domain accents — amber for a lit light,
+blue for switches, purple for an open cover, red for an UNLOCKED lock / green when
+locked, orange for active climate, indigo for playing media, teal for scripts &
+scenes, grey for anything off.
+
+**The Screens editor is now true WYSIWYG:** the dashboard preview draws the exact same
+Mushroom cards — same colours, same two-line layout, live states — so what you drag is
+literally what the robot shows. Pick entities, drag them anywhere on the 320×240
+preview, save — three custom pages, swipe between them on the robot; a tap on a card
+still toggles/runs the entity.
+
+The **Climate page stays its own separate screen** (swipe slot after the 3 custom
+pages) — unaffected by your custom dashboards, as before.
+
 ## 0.0.89
 
 **🐾 Petting raises the head again — and HOLDS it up.** *(no re-flash needed)*

@@ -13,19 +13,39 @@ const MAX_PER_CARD = 4;
 const SCREEN_W = 320;
 const SCREEN_H = 240;
 const CARD_W = 150; // a positioned row card, in robot pixels
-const CARD_H = 46;
+const CARD_H = 48;
 
 type Card = { title: string; entities: string[]; layout?: Record<string, [number, number]> };
 
-function chipColor(entityId: string): string {
+// EXACTLY the colours + rules the robot firmware uses (screens._style_key ⇄ fw colour()),
+// so the preview is a true WYSIWYG of the robot's Mushroom cards.
+function mushroomColor(entityId: string, state: string | null | undefined): string {
   const d = entityId.split(".")[0];
-  if (d === "light") return "#f5a623";
-  if (["switch", "fan", "input_boolean", "automation", "script", "scene", "siren"].includes(d)) return "#4caf50";
-  if (["sensor", "binary_sensor"].includes(d)) return "#4a90d9";
-  if (d === "climate") return "#e67e22";
-  if (["cover", "lock"].includes(d)) return "#9b59b6";
-  if (d === "media_player") return "#e91e63";
-  return "#8b96a4";
+  const s = (state ?? "").toLowerCase();
+  const OFF = "#555b66";
+  if (d === "light") return s === "on" ? "#FFB300" : OFF;
+  if (["switch", "fan", "input_boolean", "siren", "humidifier", "remote", "group", "automation"].includes(d))
+    return s === "on" ? "#448AFF" : OFF;
+  if (d === "cover") return ["open", "opening"].includes(s) ? "#AB47BC" : OFF;
+  if (d === "lock") return ["unlocked", "unlocking", "open"].includes(s) ? "#EF5350" : "#66BB6A";
+  if (d === "climate") return ["off", "", "unknown", "unavailable"].includes(s) ? OFF : "#FF7043";
+  if (d === "media_player") return ["playing", "on", "paused"].includes(s) ? "#5C6BC0" : OFF;
+  if (["script", "scene", "button", "input_button"].includes(d)) return "#26A69A";
+  if (d === "binary_sensor") return s === "on" ? "#FFB300" : OFF;
+  return "#4a90d9";
+}
+
+// the state text the robot shows in the row's second line (mirrors screens._onoff)
+function stateText(entityId: string, state: string | null | undefined): string {
+  const d = entityId.split(".")[0];
+  const s = (state ?? "").toLowerCase();
+  if (!s || s === "unknown" || s === "unavailable") return "—";
+  if (["switch", "light", "fan", "input_boolean", "siren", "humidifier", "automation", "remote", "group"].includes(d))
+    return s === "on" ? "ON" : "OFF";
+  if (d === "cover") return s === "open" ? "OPEN" : "CLOSED";
+  if (d === "lock") return s === "unlocked" ? "OPEN" : "LOCKED";
+  if (d === "media_player") return ["playing", "on"].includes(s) ? "PLAY" : "OFF";
+  return state ?? "";
 }
 
 // Snap to a fixed 2-col × 4-row grid so cards can NEVER sit on top of each other.
@@ -48,6 +68,7 @@ const posOf = (card: Card, id: string, idx: number): [number, number] =>
 function CardCanvas(props: {
   card: Card;
   nameOf: (id: string) => string;
+  stateOf: (id: string) => string | null | undefined;
   onMove: (id: string, x: number, y: number) => void;
   onRemove: (id: string) => void;
 }) {
@@ -93,22 +114,39 @@ function CardCanvas(props: {
     >
       {props.card.entities.map((id, idx) => {
         const [x, y] = posOf(props.card, id, idx);
+        const state = props.stateOf(id);
+        const color = mushroomColor(id, state);
         return (
           <div
             key={id}
             onPointerDown={(e) => down(e, id, x, y)}
-            className="absolute flex touch-none items-center gap-1.5 rounded-lg px-1.5"
+            className="absolute flex touch-none items-center gap-1.5 px-1.5"
             style={{
               left: `${(x / SCREEN_W) * 100}%`,
               top: `${(y / SCREEN_H) * 100}%`,
               width: `${(CARD_W / SCREEN_W) * 100}%`,
               height: `${(CARD_H / SCREEN_H) * 100}%`,
-              background: "#121821",
+              background: "#1c222c",
+              borderRadius: "10px",
               cursor: "grab",
             }}
           >
-            <span className="aspect-square h-[55%] shrink-0 rounded-full" style={{ background: chipColor(id) }} aria-hidden />
-            <span className="min-w-0 flex-1 truncate text-[10px] leading-tight text-white">{props.nameOf(id)}</span>
+            {/* mushroom icon chip: tinted halo + solid dot, colour by domain+state */}
+            <span
+              className="relative flex aspect-square h-[62%] shrink-0 items-center justify-center rounded-full"
+              style={{ background: `${color}44` }}
+              aria-hidden
+            >
+              <span className="aspect-square h-[42%] rounded-full" style={{ background: color }} />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-[10px] font-semibold leading-tight text-white">
+                {props.nameOf(id)}
+              </span>
+              <span className="block truncate text-[9px] leading-tight text-mute" dir="ltr">
+                {stateText(id, state)}
+              </span>
+            </span>
             <button
               type="button"
               className="shrink-0 text-[10px] text-mute hover:text-red"
@@ -168,6 +206,7 @@ export function ScreensPage(props: { entities: HAEntity[] }) {
   }, [load]);
 
   const nameOf = (id: string) => props.entities.find((e) => e.entity_id === id)?.name ?? id;
+  const stateOf = (id: string) => props.entities.find((e) => e.entity_id === id)?.state;
   const patch = (i: number, next: Partial<Card>) =>
     setCards((cur) => cur.map((c, j) => (j === i ? { ...c, ...next } : c)));
 
@@ -226,6 +265,7 @@ export function ScreensPage(props: { entities: HAEntity[] }) {
           <CardCanvas
             card={card}
             nameOf={nameOf}
+            stateOf={stateOf}
             onMove={(id, x, y) => moveEntity(i, id, x, y)}
             onRemove={(id) => removeEntity(i, id)}
           />

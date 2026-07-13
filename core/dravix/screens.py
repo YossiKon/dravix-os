@@ -37,6 +37,35 @@ ROW_COUNT = 4  # tappable rows per card — more won't fit a 320x240 screen comf
 NAME_MAX = 14  # truncate long friendly names so a line fits the small display
 
 
+def _style_key(entity_id: str, state: str) -> str:
+    """One-char Mushroom colour key for a row — tells the firmware which colour family
+    the icon chip gets (matching lovelace-mushroom's per-domain accent colours):
+    l=amber (light on / triggered binary_sensor) · s=blue (switch family on) ·
+    c=purple (cover open) · K=red (lock OPEN — attention) · k=green (locked) ·
+    t=orange (climate active) · m=indigo (media playing) · b=teal (script/scene/button) ·
+    n=info blue (sensors) · o=grey (anything off/idle)."""
+    domain = entity_id.split(".", 1)[0]
+    s = str(state).strip().lower()
+    if domain == "light":
+        return "l" if s == "on" else "o"
+    if domain in ("switch", "fan", "input_boolean", "siren", "humidifier", "remote",
+                  "group", "automation"):
+        return "s" if s == "on" else "o"
+    if domain == "cover":
+        return "c" if s in ("open", "opening") else "o"
+    if domain == "lock":
+        return "K" if s in ("unlocked", "unlocking", "open") else "k"
+    if domain == "climate":
+        return "t" if s not in ("off", "unknown", "unavailable") else "o"
+    if domain == "media_player":
+        return "m" if s in ("playing", "on", "paused") else "o"
+    if domain in ("script", "scene", "button", "input_button"):
+        return "b"
+    if domain == "binary_sensor":
+        return "l" if s == "on" else "o"
+    return "n"
+
+
 def _onoff(entity_id: str, state: str) -> str | None:
     """A clean ON/OFF-style label for a toggleable entity (so a switch shows "ON"/"OFF"
     instead of the raw "on"/"closed"/"unlocked" state). Returns None for entities whose
@@ -136,8 +165,17 @@ class ScreenPusher:
                 log.debug("screen card %d push failed: %s", n, exc)
 
     def _render_body(self, card: dict[str, Any], smap: dict[str, dict]) -> str:
+        """One line per entity: ``[x,y|]K|name|state`` — K is the Mushroom colour key,
+        and name/state land in the row's two stacked labels (the Mushroom card look)."""
         layout = card.get("layout") or {}  # {entity_id: [x, y]} from the dashboard drag editor
         lines: list[str] = []
+
+        def _clean(v: str, cap: int) -> str:
+            # "\n" and "|" are OUR row/field delimiters — an entity's own name/state must
+            # never inject them (a newline would shift every row below it, so a tap could
+            # fire the WRONG device; a "|" would corrupt the field split).
+            return v.replace("\n", " ").replace("\r", " ").replace("|", "/")[:cap]
+
         for entity_id in (card.get("entities", []) or [])[:ROW_COUNT]:
             st = smap.get(entity_id)
             if st is None:
@@ -145,28 +183,28 @@ class ScreenPusher:
             attrs = st.get("attributes") or {}
             name = str(attrs.get("friendly_name") or entity_id)[:NAME_MAX]
             state = st.get("state", "")
-            text = ""
-            # Climate entities read nicer as "Name  cool 24>21" (mode + current>target)
-            # than the bare hvac state; fall back to the plain line if attrs are missing.
+            state_txt = ""
+            # Climate reads nicer as "cool 24>21" (mode + current>target) than the bare state.
             if entity_id.startswith("climate."):
                 try:
                     current = attrs.get("current_temperature")
                     target = attrs.get("temperature")
                     if current is not None and target is not None:
-                        text = f"{name}  {state} {float(current):.0f}>{float(target):.0f}"
+                        state_txt = f"{state} {float(current):.0f}>{float(target):.0f}"
                 except Exception as exc:  # noqa: BLE001 — never let one card break the loop
                     log.debug("climate format for %s failed: %s", entity_id, exc)
-            # toggleable entities read as a clean ON/OFF (the row is a tappable button)
-            if not text:
+            if not state_txt:
                 onoff = _onoff(entity_id, state)
-                text = f"{name}   {onoff}" if onoff is not None else f"{name}  {state}"
-            # "\n" and "|" are OUR row/position delimiters — an entity's own name/state must never
-            # inject them: a newline would split one entity into two firmware rows, shifting every
-            # row below it so a tap fires the WRONG device; a "|" could be mis-parsed as a position
-            # prefix. Also cap each row so the "x,y|" prefixes below can't be sliced by the 160-char
-            # body cap (which would drop a position and print a stray coordinate fragment).
-            text = text.replace("\n", " ").replace("\r", " ").replace("|", "/")[:32]
-            text = for_robot(text)  # Hebrew → visual order (the robot's LVGL has no BiDi)
+                if onoff is not None:
+                    state_txt = onoff
+                else:
+                    # sensors show their unit too — "23.5 °C" beats a bare number
+                    unit = str(attrs.get("unit_of_measurement") or "").strip()
+                    state_txt = f"{state} {unit}".strip() if unit else str(state)
+            key = _style_key(entity_id, state)
+            text = (
+                f"{key}|{for_robot(_clean(name, NAME_MAX))}|{for_robot(_clean(state_txt, 12))}"
+            )
             # free-positioning prefix "x,y|" (from the dashboard drag editor); the firmware
             # moves that row to (x, y). No layout entry → no prefix → the default stacked rows.
             pos = layout.get(entity_id)

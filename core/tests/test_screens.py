@@ -75,8 +75,9 @@ async def test_configured_screen_pushes_title_and_body():
 
     assert ("text", "set_value", {"entity_id": f"{PREFIX}_card1_title", "value": "Home"}) in ha.calls
     body = _value(ha.calls, f"{PREFIX}_card1_body")
-    # a sensor shows its raw value; a toggleable entity shows a clean ON/OFF.
-    assert body == "Living Room Te  21\nLamp   ON"
+    # Mushroom rows: "K|name|state" — a sensor is info-blue ('n') with its raw value,
+    # a lit light gets the amber key ('l') and a clean ON.
+    assert body == "n|Living Room Te|21\nl|Lamp|ON"
 
     # Cards beyond what's configured stay blank (no write needed — already "unknown"→"").
     assert ha.slots[f"{PREFIX}_card2_title"] in ("unknown", "")
@@ -91,8 +92,8 @@ async def test_climate_card_formats_mode_and_temps():
     await asyncio.sleep(0.05)
     await pusher.stop()
 
-    # "Name  <mode> <current>><target>" — temps rounded to whole degrees.
-    assert _value(ha.calls, f"{PREFIX}_card1_body") == "AC  cool 24>21"
+    # climate state field = "<mode> <current>><target>" — temps rounded to whole degrees.
+    assert _value(ha.calls, f"{PREFIX}_card1_body") == "t|AC|cool 24>21"
 
 
 async def test_climate_card_without_temps_falls_back_to_plain_line():
@@ -103,8 +104,8 @@ async def test_climate_card_without_temps_falls_back_to_plain_line():
     await asyncio.sleep(0.05)
     await pusher.stop()
 
-    # No current/target attributes → the plain "Name  State" line.
-    assert _value(ha.calls, f"{PREFIX}_card1_body") == "Bare AC  heat"
+    # No current/target attributes → the plain state in the state field.
+    assert _value(ha.calls, f"{PREFIX}_card1_body") == "t|Bare AC|heat"
 
 
 async def test_pusher_noop_without_ha():
@@ -124,7 +125,7 @@ async def test_unknown_entity_is_skipped_not_fatal():
     await pusher.stop()
 
     # The missing entity is skipped; the good one still renders.
-    assert _value(ha.calls, f"{PREFIX}_card1_body") == "Lamp   ON"
+    assert _value(ha.calls, f"{PREFIX}_card1_body") == "l|Lamp|ON"
 
 
 async def test_unchanged_values_written_only_once():
@@ -160,8 +161,8 @@ async def test_robot_reboot_wipes_slots_and_pusher_self_heals():
         ha.slots[k] = "unknown"
     await asyncio.sleep(0.05)
     await pusher.stop()
-    assert ha.slots[f"{PREFIX}_card1_title"] == "Home"      # rewritten
-    assert ha.slots[f"{PREFIX}_card1_body"] == "Lamp   ON"  # rewritten
+    assert ha.slots[f"{PREFIX}_card1_title"] == "Home"       # rewritten
+    assert ha.slots[f"{PREFIX}_card1_body"] == "l|Lamp|ON"   # rewritten
 
 
 async def test_more_than_four_entities_are_capped_per_card():
@@ -188,3 +189,19 @@ def test_onoff_labels_for_toggleable_domains():
     assert _onoff("media_player.x", "playing") == "PLAY"
     assert _onoff("sensor.x", "21.5") is None   # raw value shown as-is
     assert _onoff("climate.x", "cool") is None
+
+
+def test_mushroom_style_keys():
+    from dravix.screens import _style_key
+    assert _style_key("light.x", "on") == "l"
+    assert _style_key("light.x", "off") == "o"
+    assert _style_key("switch.x", "on") == "s"
+    assert _style_key("cover.x", "open") == "c"
+    assert _style_key("lock.x", "unlocked") == "K"   # open lock = red, needs attention
+    assert _style_key("lock.x", "locked") == "k"
+    assert _style_key("climate.x", "cool") == "t"
+    assert _style_key("climate.x", "off") == "o"
+    assert _style_key("media_player.x", "playing") == "m"
+    assert _style_key("script.x", "off") == "b"
+    assert _style_key("binary_sensor.x", "on") == "l"
+    assert _style_key("sensor.x", "21.5") == "n"
