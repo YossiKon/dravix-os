@@ -39,7 +39,7 @@ substitutions:
   # publishes it to HA ("Firmware version" sensor); the dravix dashboard compares it
   # with the version bundled in the add-on and shows "firmware update available".
   # (Maintainers: bump this on every firmware change. Users: don't touch.)
-  fw_version: "25"
+  fw_version: "26"
   # The ESPHome node name (mDNS hostname + the default entity prefix on a fresh flash).
   # Change it only if you run MORE THAN ONE robot — each needs a unique name. NOTE:
   # changing it on an already-adopted robot registers a NEW device in HA.
@@ -47,6 +47,9 @@ substitutions:
   friendly_name: "stackchan"
   # The on-device wake word (see the micro_wake_word docs for available models).
   wake_word_model: "okay_nabu"
+  # After "Okay Nabu" / a double-tap the robot listens — if NO voice is detected within
+  # this many seconds, it closes the session on its own (no hanging on a big-eyed face).
+  listen_timeout_s: "5"
   # The entity-id prefix HA gave the robot's own sensors (battery, touch, proximity…).
   # dravix-os convention: rename the device to "Dravix" in HA (Settings → Devices →
   # rename → let HA update the entity ids) and keep this as "dravix". A FRESH flash
@@ -290,6 +293,7 @@ globals:
   - { id: g_talk,   type: bool, restore_value: false, initial_value: "false" }
   - { id: g_think,  type: bool, restore_value: false, initial_value: "false" }   # AI is processing — between your words and its reply
   - { id: g_conc,   type: bool, restore_value: false, initial_value: "false" }   # external "focused" face (a coding agent is working) — focus EYES only, no DND semantics
+  - { id: g_vad,    type: bool, restore_value: false, initial_value: "false" }   # voice detected in the CURRENT listen window (VAD) — gates the no-voice auto-close
   - { id: g_ext_talk, type: bool, restore_value: false, initial_value: "false" } # external TTS (dravix chat/notify/timers) is playing → talking mouth
   - { id: g_tip,    type: bool, restore_value: false, initial_value: "false" }  # a wellness tip is showing
   - { id: g_agent,  type: bool, restore_value: false, initial_value: "false" }  # an AI-agent badge is set
@@ -2874,6 +2878,18 @@ script:
       - delay: 12s
       - globals.set: { id: g_tip, value: "false" }
       - script.execute: render_face
+  # NO-VOICE AUTO-CLOSE — armed on every listen (wake word / double-tap / follow-up turn).
+  # If ${listen_timeout_s}s pass while STILL listening and VAD never heard a voice, close
+  # the session (voice_assistant.stop → on_end cleans the face/LEDs + re-arms the wake
+  # word). Once a voice IS detected (g_vad) this never cuts you off mid-sentence.
+  - id: listen_timeout
+    mode: restart
+    then:
+      - delay: ${listen_timeout_s}s
+      - if:
+          condition: { lambda: 'return id(g_listen) && !id(g_vad);' }
+          then:
+            - voice_assistant.stop
   # Safety auto-hide for the permission prompt — clears the buttons after 3 min if you never
   # tapped (the agent has already timed out by then). NEVER auto-decides — just tidies up.
   - id: perm_timeout
@@ -5719,18 +5735,24 @@ voice_assistant:
         then: [ { select.set: { id: robot_mode, option: awake } } ]
     - globals.set: { id: g_listen, value: "true" }
     - globals.set: { id: g_voice, value: "true" }
+    - globals.set: { id: g_vad, value: "false" }   # fresh listen window — no voice heard yet
+    - script.execute: listen_timeout               # …auto-close if none arrives in ${listen_timeout_s}s
     - lvgl.page.show: page_face
     - globals.set: { id: g_card, value: "0" }
     - script.execute: leds_yellow
     - script.execute: render_face          # the LISTENING FACE (big curious eyes) — no label
     - script.execute: { id: head_nudge, dx: 0, dy: 6 }   # perks up attentively, like it leans in
+  on_stt_vad_start:
+    # a voice! — disarm the no-voice auto-close for this turn
+    - globals.set: { id: g_vad, value: "true" }
   on_stt_end:
-    # You finished talking → STOP "listening" and show a "THINKING" face (cyan LEDs) until the
-    # reply starts. Publish what the robot HEARD (shows live on the dashboard + HA).
+    # You finished talking → STOP "listening" and show a "THINKING" face until the reply
+    # starts. The LEDs stay YELLOW — one colour from "it hears me" to the end of the AI's
+    # speech (the cyan thinking-flash made the turn read as three unrelated events).
     - text_sensor.template.publish: { id: st_heard, state: !lambda 'return x;' }
     - globals.set: { id: g_listen, value: "false" }
     - globals.set: { id: g_think,  value: "true" }
-    - light.turn_on: { id: stackchan_light_bar, red: 0.15, green: 0.7, blue: 1.0, brightness: 0.7 }
+    - script.execute: leds_yellow
     - script.execute: render_face
     - script.execute: { id: head_nudge, dx: 12, dy: -6 }   # tilts up, pondering
   on_tts_start:

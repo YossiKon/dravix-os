@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.0.85
+
+Voice-session polish *(firmware 26 — re-flash; the add-on bump just ships the new bundled
+firmware so the "update available" indicator works)*:
+
+- **👂 Listening closes itself when nobody talks.** After "Okay Nabu" / a double-tap, if no
+  voice is detected within **5 seconds** the robot ends the session on its own — no more
+  hanging on the big-eyed listening face. Once you DO start talking it never cuts you off
+  (voice-activity detection disarms the timer). Tunable via the `listen_timeout_s`
+  substitution in the git-stub.
+- **💛 One yellow light for the whole conversation.** The LED bar now stays YELLOW from the
+  moment the robot hears you until the AI finishes speaking — the cyan "thinking" flash in
+  the middle is gone (it made one conversation read as three unrelated events). At the end
+  of the reply the LEDs return to whatever they were before.
+
 ## 0.0.84
 
 User-feedback round on 0.0.83 — lights that return to themselves, and a face that always
