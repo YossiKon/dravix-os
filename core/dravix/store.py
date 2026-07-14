@@ -42,6 +42,9 @@ _DEFAULTS: dict[str, Any] = {
     "language": None,  # tips/UI language (en|he); None = the env default (DRAVIX_LANG)
     "wellness_tips": [],  # custom wellness tip texts; non-empty list replaces the built-ins
     "privacy_camera": "",  # camera entity detached from HA by privacy mode (so a restart can re-attach it)
+    # Known people for face recognition (Frigate sub_labels / HA persons) — the welcome
+    # mode greets each one with their own line; "primary" gets the extra-warm greeting.
+    "people": [],  # [{name, line?, line_he?, primary?}]
 }
 
 # Keys ``update()`` (and /api/import) may write. Everything else in a patch is rejected.
@@ -52,6 +55,7 @@ _UPDATABLE_KEYS = (
     "screens", "robot_driver", "robot_entities", "head_calibration",
     "climate_entity", "vitals", "nudges_enabled", "language", "wellness_tips",
     "mood", "idle_motion", "robot_name", "local_only", "birthday", "privacy_camera",
+    "people",
 )
 
 
@@ -372,6 +376,46 @@ class Store:
 
     def set_privacy_camera(self, entity_id: str) -> None:
         self._data["privacy_camera"] = str(entity_id or "")
+        self.save()
+
+    def people(self) -> list[dict[str, Any]]:
+        """Known people for face recognition — [{name, line?, line_he?, primary?}]."""
+        return [dict(p) for p in self._data.get("people", []) if isinstance(p, dict)]
+
+    def person(self, name: str) -> dict[str, Any] | None:
+        """Case-insensitive lookup — "yossi" matches a person saved as "Yossi"."""
+        want = (name or "").strip().lower()
+        if not want:
+            return None
+        for p in self.people():
+            if str(p.get("name", "")).strip().lower() == want:
+                return p
+        return None
+
+    def set_people(self, people: list[dict[str, Any]]) -> None:
+        """Sanitize + save: name required, deduped case-insensitively, capped at 24,
+        and at most ONE primary (the first wins) so "extra warm" stays special."""
+        clean: list[dict[str, Any]] = []
+        seen: set[str] = set()
+        primary_taken = False
+        for p in people or []:
+            if not isinstance(p, dict):
+                continue
+            name = str(p.get("name", "")).strip()[:40]
+            if not name or name.lower() in seen:
+                continue
+            seen.add(name.lower())
+            primary = bool(p.get("primary")) and not primary_taken
+            primary_taken = primary_taken or primary
+            clean.append({
+                "name": name,
+                "line": str(p.get("line", "") or "").strip()[:120],
+                "line_he": str(p.get("line_he", "") or "").strip()[:120],
+                "primary": primary,
+            })
+            if len(clean) >= 24:
+                break
+        self._data["people"] = clean
         self.save()
 
     def birthday(self) -> str:

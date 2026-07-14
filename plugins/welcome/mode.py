@@ -126,6 +126,15 @@ class WelcomeMode(Mode):
         return _pretty(entity_id) or ""
 
     # ── the greeting ────────────────────────────────────────────────────────────────
+    def _person(self, name: str) -> dict:
+        """The person's dashboard record (Settings → People) — custom greeting + primary."""
+        if not name or self.ctx.store is None:
+            return {}
+        try:
+            return self.ctx.store.person(name) or {}
+        except Exception:  # noqa: BLE001 — a store hiccup must not kill the greeting
+            return {}
+
     async def _maybe_greet(self, name: str) -> None:
         key = name or "someone"
         gap_s = max(0.0, float(self.ctx.config.get("min_gap_min", 15))) * 60.0
@@ -135,8 +144,10 @@ class WelcomeMode(Mode):
         if await self._do_not_disturb():
             return
         self._last[key] = now
+        person = self._person(name)
         primary = _pretty(str(self.ctx.config.get("primary") or ""))
-        await self._celebrate(name, warm=bool(primary) and name.lower() == primary.lower())
+        warm = bool(person.get("primary")) or (bool(primary) and name.lower() == primary.lower())
+        await self._celebrate(name, warm=warm, person=person)
         self.ctx.log.info("welcome: greeted %s", key)
 
     async def _do_not_disturb(self) -> bool:
@@ -149,9 +160,10 @@ class WelcomeMode(Mode):
             return False
         return (state or "").strip().lower() in _DND_STATES
 
-    async def _celebrate(self, name: str, warm: bool = False) -> None:
+    async def _celebrate(self, name: str, warm: bool = False, person: dict | None = None) -> None:
         robot = self.ctx.robot
         cfg = self.ctx.config
+        person = person or {}
         if await self.ctx.is_asleep():  # coming home should WAKE it
             setter = getattr(robot.driver, "set_mode", None)
             if setter is not None:
@@ -171,7 +183,10 @@ class WelcomeMode(Mode):
                 await asyncio.sleep(0.35)
                 await robot.move_head(0.0, 0.2, speed=1.0)
         he = self.ctx.language().startswith("he")
-        base = str((cfg.get("line_he") if he else cfg.get("line")) or "").strip()
+        # the person's OWN line (Settings → People) wins; the mode's generic line is the fallback
+        base = str((person.get("line_he") if he else person.get("line")) or "").strip()
+        if not base:
+            base = str((cfg.get("line_he") if he else cfg.get("line")) or "").strip()
         line = _greeting_line(base, name, he)
         if line and robot.supports(CAP_SAY):
             try:

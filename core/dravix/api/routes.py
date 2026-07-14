@@ -2542,3 +2542,20 @@ async def run_routine_endpoint(name: str, request: Request):
         raise HTTPException(status_code=404, detail=f"unknown routine {name!r}")
     await run_routine(_robot(request), match.get("steps", []), request.app.state.engine)
     return {"ok": True, "name": name}
+
+
+# ── people (face recognition — per-person greetings) ──────────────────────────
+class PeopleBody(BaseModel):
+    people: list[dict]
+
+
+@router.get("/api/people")
+async def get_people(request: Request):
+    return {"people": request.app.state.store.people()}
+
+
+@router.put("/api/people")
+async def put_people(body: PeopleBody, request: Request):
+    # set_people sanitizes (name required, dedupe, one primary, caps) — echo the result
+    request.app.state.store.set_people(body.people)
+    return {"people": request.app.state.store.people()}

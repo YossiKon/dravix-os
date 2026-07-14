@@ -39,7 +39,7 @@ substitutions:
   # publishes it to HA ("Firmware version" sensor); the dravix dashboard compares it
   # with the version bundled in the add-on and shows "firmware update available".
   # (Maintainers: bump this on every firmware change. Users: don't touch.)
-  fw_version: "30"
+  fw_version: "31"
   # The ESPHome node name (mDNS hostname + the default entity prefix on a fresh flash).
   # Change it only if you run MORE THAN ONE robot — each needs a unique name. NOTE:
   # changing it on an already-adopted robot registers a NEW device in HA.
@@ -355,6 +355,7 @@ globals:
   - { id: sw_y1,    type: int,  restore_value: false, initial_value: "0" }
   - { id: sw_sleep, type: bool, restore_value: false, initial_value: "false" }
   - { id: g_card,   type: int,  restore_value: false, initial_value: "0" }
+  - { id: g_sbar,   type: int,  restore_value: false, initial_value: "0" }   # status-bar stage: 0 hidden · 1 compact strip (time/date/battery) · 2 full panel (sliders etc.)
   - { id: g_score,  type: int,  restore_value: false, initial_value: "0" }   # catch-me game score
   # ── HIGH SCORES — the best each game has seen; restore_value: true → survives reboots ──
   - { id: hs_catch,    type: int, restore_value: true, initial_value: "0" }
@@ -1333,8 +1334,10 @@ lvgl:
       text_color: 0x33E6C8
     - id: muted_txt
       text_color: 0x8b96a4
-  # ── STATUS BAR — a slim overlay on the TOP LAYER (floats above every page). Swipe DOWN
-  #    shows it; swipe up/left/right hides it. Stays until you dismiss it (no auto-vanish).
+  # ── STATUS BAR — a slim overlay on the TOP LAYER (floats above every page), in TWO
+  #    stages (g_sbar / sbar_apply): swipe DOWN once = compact 40px strip (wifi, time,
+  #    date, battery), swipe down again = this full 150px panel (sliders, LOCAL, power).
+  #    Swipe UP closes it from either stage. Stays until you dismiss it (no auto-vanish).
   #    Drawn from primitives (no icon font): wifi = 4 signal bars, battery = outline+fill.
   top_layer:
     widgets:
@@ -1548,7 +1551,8 @@ lvgl:
                 lvgl.page.is_showing: page_face
             then:
               - globals.set: { id: g_card, value: "0" }
-              - lvgl.widget.hide: statusbar
+              - globals.set: { id: g_sbar, value: "0" }
+              - script.execute: sbar_apply
               - lvgl.page.show: page_face
     # Screensaver: dim + dozy breathing eyes + a soft clock (night mode is already dim — skip).
     - timeout: !lambda 'return (uint32_t) id(n_screensaver).state * 60000;'
@@ -2912,6 +2916,31 @@ lvgl:
               - lvgl.page.show: page_face
 
 script:
+  # ── STATUS BAR — apply the current g_sbar stage. 0 = hidden · 1 = a compact 40px strip
+  #    (wifi / time / date / battery only) · 2 = the full 150px panel (+ VOL/SCR/LED
+  #    sliders, power line, LOCAL button, update arrow). Swipe down steps 0→1→2; swipe
+  #    up closes from either stage. The swipe guards elsewhere key off the bar's HIDDEN
+  #    flag, which this script maintains.
+  - id: sbar_apply
+    then:
+      - lambda: |-
+          lv_obj_t *bar = id(statusbar);
+          if (id(g_sbar) <= 0) { lv_obj_add_flag(bar, LV_OBJ_FLAG_HIDDEN); return; }
+          bool full = id(g_sbar) >= 2;
+          lv_obj_set_height(bar, full ? 150 : 40);
+          lv_obj_t *ext[] = { id(sb_vol_lbl), id(sl_vol), id(sb_scr_lbl), id(sl_scr),
+                              id(sb_led_lbl), id(sl_led), id(sb_power), id(sb_local) };
+          for (auto *w : ext) {
+            if (full) lv_obj_clear_flag(w, LV_OBJ_FLAG_HIDDEN);
+            else      lv_obj_add_flag(w, LV_OBJ_FLAG_HIDDEN);
+          }
+          // the update arrow is owned by the 5s interval (gated on g_sbar) — force it
+          // off here too so it can't linger for up to 5s after a full→compact step
+          if (!full) {
+            lv_obj_add_flag(id(upd_a1), LV_OBJ_FLAG_HIDDEN);
+            lv_obj_add_flag(id(upd_a2), LV_OBJ_FLAG_HIDDEN);
+          }
+          lv_obj_clear_flag(bar, LV_OBJ_FLAG_HIDDEN);
   # ── FACE TAP dispatch — single tap = STOP everything · double tap = toggle the AI ──
   - id: panic_stop            # single tap: cut speech + dance + effects, LEDs off, clean face
     then:
@@ -5654,7 +5683,13 @@ interval:
             lambda: |-
               return id(t_latest_fw).has_state() && !id(t_latest_fw).state.empty()
                      && id(t_latest_fw).state != "${fw_version}";
-          then: [ { lvgl.widget.show: upd_a1 }, { lvgl.widget.show: upd_a2 }, { lvgl.widget.show: upd_badge } ]
+          then:
+            - lvgl.widget.show: upd_badge
+            # the status-bar arrow only fits the FULL panel — keep it hidden in the compact strip
+            - if:
+                condition: { lambda: 'return id(g_sbar) != 1;' }
+                then: [ { lvgl.widget.show: upd_a1 }, { lvgl.widget.show: upd_a2 } ]
+                else: [ { lvgl.widget.hide: upd_a1 }, { lvgl.widget.hide: upd_a2 } ]
           else: [ { lvgl.widget.hide: upd_a1 }, { lvgl.widget.hide: upd_a2 }, { lvgl.widget.hide: upd_badge } ]
       # WiFi signal → reveal more bars as it gets stronger
       - if:
@@ -5784,15 +5819,18 @@ touchscreen:
                 else:
                   # ── 1 or 2 taps → wait a beat (tap_single decides: a settled double = AI) ──
                   - script.execute: tap_single
-      # swipe DOWN → status
+      # swipe DOWN → status bar, in TWO stages: first swipe = compact strip (time / date /
+      # battery), second swipe = the full panel (sliders, LOCAL, power). Overlay, not a page.
       - if:
           condition:
             lambda: |-
               int dx = id(sw_x1) - id(sw_x0), dy = id(sw_y1) - id(sw_y0);
               int adx = dx < 0 ? -dx : dx, ady = dy < 0 ? -dy : dy;
               return !id(sw_sleep) && ady > adx && dy > 40;
-          then: [ { lvgl.widget.show: statusbar } ]   # slim overlay, not a full page
-      # swipe UP → face (home)
+          then:
+            - globals.set: { id: g_sbar, value: !lambda 'return id(g_sbar) >= 2 ? 2 : id(g_sbar) + 1;' }
+            - script.execute: sbar_apply
+      # swipe UP → close the status bar (from either stage); when it's already closed → face (home)
       - if:
           condition:
             lambda: |-
@@ -5800,9 +5838,14 @@ touchscreen:
               int adx = dx < 0 ? -dx : dx, ady = dy < 0 ? -dy : dy;
               return !id(sw_sleep) && ady > adx && dy < -40;
           then:
-            - globals.set: { id: g_card, value: "0" }
-            - lvgl.widget.hide: statusbar
-            - lvgl.page.show: page_face
+            - if:
+                condition: { lambda: 'return id(g_sbar) != 0;' }
+                then:
+                  - globals.set: { id: g_sbar, value: "0" }
+                  - script.execute: sbar_apply
+                else:
+                  - globals.set: { id: g_card, value: "0" }
+                  - lvgl.page.show: page_face
       # swipe LEFT → next screen (face → c1 → c2 → c3 → games → vitals → climate → face)
       # BUT NOT while the status bar is open — there, a horizontal drag is a slider
       # (volume / screen / LED brightness), not a screen change.
@@ -5826,7 +5869,6 @@ touchscreen:
               return !id(sw_sleep) && adx >= ady && dx > 40;
           then:
             - globals.set: { id: g_card, value: !lambda 'return (id(g_card) + 6) % 7;' }
-            - lvgl.widget.hide: statusbar
             - script.execute: show_card
 
 # ── Wake word "Okay, Nabu" (on-device) ──────────────────────────────────────────

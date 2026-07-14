@@ -61,6 +61,14 @@ interface Memory {
   text: string;
 }
 
+// A known person (face recognition) — name as trained in Frigate + their own greeting.
+interface Person {
+  name: string;
+  line: string;
+  line_he: string;
+  primary: boolean;
+}
+
 const PROVIDERS: Record<string, Bi> = {
   ha_assist: { he: "העוזר של Home Assistant", en: "Home Assistant Assist" },
   claude: { he: "Claude", en: "Claude" },
@@ -106,6 +114,9 @@ export function SettingsPage(props: {
   // long-term memories fed into every conversation
   const [memories, setMemories] = useState<Memory[]>([]);
   const [memText, setMemText] = useState("");
+  // known people (face recognition) — per-person greeting + the ⭐ favourite
+  const [people, setPeople] = useState<Person[]>([]);
+  const [peopleLoaded, setPeopleLoaded] = useState(false);
   const restoreInput = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -159,6 +170,12 @@ export function SettingsPage(props: {
       })
       .catch(() => undefined);
     void refreshMemories();
+    apiGet<{ people: Person[] }>("/api/people")
+      .then((r) => {
+        setPeople(r.people);
+        setPeopleLoaded(true);
+      })
+      .catch(() => undefined);
     apiGet<Updates>("/api/updates").then(setUpdates).catch(() => undefined);
     apiGet<{ schedule: { at?: string; action?: { mode?: string; say?: string } }[] }>("/api/schedule")
       .then((r) =>
@@ -381,6 +398,27 @@ export function SettingsPage(props: {
     try {
       await apiSend(`/api/memory/${encodeURIComponent(String(id))}`, "DELETE");
       await refreshMemories();
+    } catch (e) {
+      toastErr(e);
+    }
+  }
+
+  // ── people (face recognition) ──
+  function editPerson(i: number, patch: Partial<Person>) {
+    setPeople((cur) => cur.map((p, j) => (j === i ? { ...p, ...patch } : p)));
+  }
+
+  function setPrimary(i: number) {
+    // one favourite at a time — starring someone un-stars everyone else
+    setPeople((cur) => cur.map((p, j) => ({ ...p, primary: j === i ? !p.primary : false })));
+  }
+
+  async function savePeople() {
+    try {
+      // the server sanitizes (name required, dedupe, one primary) and echoes the result
+      const r = await apiSend<{ people: Person[] }>("/api/people", "PUT", { people });
+      setPeople(r.people);
+      toast(tr("האנשים נשמרו", "People saved"));
     } catch (e) {
       toastErr(e);
     }
@@ -780,6 +818,70 @@ export function SettingsPage(props: {
           </button>
         </div>
       </Section>
+
+      {/* ── people — face recognition → personal greetings ── */}
+      {peopleLoaded && (
+        <Section title={tr("🙂 אנשים — זיהוי פנים", "🙂 People — face recognition")} delay={112}>
+          <p className="mb-3 text-sm text-mute">
+            {tr(
+              "כשהרובוט מזהה פרצוף מוכר הוא מברך אותו אישית — בשם ובמשפט משלו. הזיהוי עצמו נעשה על ידי זיהוי הפנים של Frigate (צריך לאמן שם את הפרצופים), והשם כאן חייב להתאים לשם שב-Frigate. אפשר לכתוב {name} בתוך המשפט. ⭐ = המועדף — מקבל ברכה חמה במיוחד.",
+              "When the robot recognizes a familiar face it greets that person personally — by name, with their own line. Recognition itself is done by Frigate face recognition (train the faces there), and the name here must match the one in Frigate. You can use {name} inside the line. ⭐ = the favourite — gets the extra-warm greeting.",
+            )}
+          </p>
+          <div className="space-y-2">
+            {people.map((p, i) => (
+              <div key={i} className="space-y-2 rounded-2xl border border-line bg-card2 p-3">
+                <div className="flex items-center gap-2">
+                  <input
+                    className="inp flex-1"
+                    dir="ltr"
+                    placeholder={tr("שם (כמו ב-Frigate)", "Name (as in Frigate)")}
+                    value={p.name}
+                    onChange={(e) => editPerson(i, { name: e.target.value })}
+                  />
+                  <button
+                    className="chip"
+                    title={tr("המועדף — ברכה חמה במיוחד", "Favourite — extra-warm greeting")}
+                    onClick={() => setPrimary(i)}
+                  >
+                    {p.primary ? "⭐" : "☆"}
+                  </button>
+                  <button className="chip" onClick={() => setPeople((cur) => cur.filter((_, j) => j !== i))}>
+                    🗑
+                  </button>
+                </div>
+                <input
+                  className="inp w-full text-sm"
+                  placeholder={tr("ברכה בעברית (ריק = ברירת מחדל)", "Hebrew greeting (empty = default)")}
+                  value={p.line_he}
+                  onChange={(e) => editPerson(i, { line_he: e.target.value })}
+                />
+                <input
+                  className="inp w-full text-sm"
+                  dir="ltr"
+                  placeholder={tr("ברכה באנגלית (ריק = ברירת מחדל)", "English greeting (empty = default)")}
+                  value={p.line}
+                  onChange={(e) => editPerson(i, { line: e.target.value })}
+                />
+              </div>
+            ))}
+            {people.length === 0 && (
+              <p className="text-sm text-mute">{tr("עוד אין אנשים — הוסיפו את הראשון.", "No people yet — add the first one.")}</p>
+            )}
+          </div>
+          <div className="mt-3 flex gap-2">
+            <button
+              className="chip"
+              onClick={() => setPeople((cur) => [...cur, { name: "", line: "", line_he: "", primary: false }])}
+            >
+              {tr("+ הוסף אדם", "+ Add person")}
+            </button>
+            <button className="btn btn-primary ms-auto" onClick={() => void savePeople()}>
+              {tr("💾 שמור", "💾 Save")}
+            </button>
+          </div>
+        </Section>
+      )}
 
       {/* ── day schedule — preset hours → robot modes ── */}
       {schedLoaded && (

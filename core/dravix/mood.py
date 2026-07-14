@@ -36,6 +36,9 @@ _NUDGES: dict[str, tuple[float, float, float, str | None]] = {
     "guard.alert": (-0.10, 0.40, 0.00, None),
     "ha.motion": (0.00, 0.15, 0.00, None),
     "presence.detected": (0.02, 0.10, 0.02, None),
+    # a KNOWN face (Frigate recognition) — warmer than mere presence, but small: the
+    # welcome loop re-publishes every poll while the face lingers, so this accumulates
+    "face.seen": (0.04, 0.05, 0.04, None),
     "frigate.shown": (-0.02, 0.20, 0.00, None),
 }
 _INTERACTIONS = {"user.spoke", "touch.pet", "touch.tap", "robot.touched"}

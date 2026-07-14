@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.0.93
+
+**🙂 People — personal face-recognition greetings + a two-stage status bar** *(firmware 31 for the new status bar — update both)*
+
+- **People (Settings → 🙂 People)**: teach the robot who's who. Add each person with their
+  own greeting line (Hebrew + English, `{name}` works inside the line) and star ⭐ one
+  favourite — they get the extra-warm welcome (brighter lights + a happy head-bob). When
+  the robot recognizes a familiar face it now greets that person with *their* line, and
+  seeing someone it knows genuinely lifts its mood a little.
+  The recognition itself comes from **Frigate face recognition** — train the faces in
+  Frigate and make sure the name there matches the name you enter here (the add-on's
+  `frigate_url` / `frigate_camera` options wire it up). HA `person.*` arrivals use the
+  same greetings too.
+- **Two-stage swipe-down status bar (firmware 31)**: one swipe down now shows just a slim
+  strip — Wi-Fi, time, date and battery — instead of the big panel. Swipe down **again**
+  for everything else (volume / screen / LED sliders, power line, LOCAL button, update
+  arrow). Swipe up closes it from either stage. The quick glance no longer covers half
+  the face.
+
 ## 0.0.92
 
 **🎮 Live remote — watch, steer, talk and record, all in one panel** *(no re-flash needed!)*
