@@ -98,7 +98,9 @@ class MoodEngine:
         self._night = False
         self._last_interaction = time.monotonic()
         self._persisted: tuple[float, float, float] | None = None
-        self._last_quip = 0.0
+        # "long ago", not 0.0 — monotonic() is machine UPTIME, so 0.0 would mute the
+        # first quip for 10 minutes after any host reboot (and deterministically on CI)
+        self._last_quip = -_QUIP_MIN_GAP_S
         self._tasks: list[asyncio.Task] = []
         self._load()
 

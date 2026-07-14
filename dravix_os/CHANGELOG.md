@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.0.94
+
+**🔧 Tiny fix: the robot's first idle quip after a host reboot** *(install this instead of 0.0.93 — same features, same firmware 31)*
+
+The bored-robot self-talk timer measured "time since the machine booted" instead of "time
+since the last quip", so for 10 minutes after the Proxmox host (or the add-on's first-ever
+start) rebooted, the robot skipped its first idle quip. One-line fix; this was also what kept
+the project's CI red for a week (fresh CI machines always look "just booted").
+
 ## 0.0.93
 
 **🙂 People — personal face-recognition greetings + a two-stage status bar** *(firmware 31 for the new status bar — update both)*
