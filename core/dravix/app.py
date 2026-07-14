@@ -224,6 +224,9 @@ async def lifespan(app: FastAPI):
 
     app.state.agent = AgentPresence(controller, bus, store)
     await app.state.agent.start()  # staleness sweeper — releases the robot from dead agents
+    from .recorder import ClipRecorder
+
+    app.state.recorder = ClipRecorder()  # the teleop panel's manual REC button
     from .personality import Personality
 
     app.state.personality = Personality(store)
@@ -378,6 +381,10 @@ async def lifespan(app: FastAPI):
         if ha_bridge is not None:
             await ha_bridge.stop()
         await app.state.agent.stop()
+        try:
+            await app.state.recorder.close()  # finalize a clip that's still recording
+        except Exception:  # noqa: BLE001 — shutdown must not hang on ffmpeg
+            pass
         await screen_pusher.stop()
         await scheduler.stop()
         await pet_head.stop()

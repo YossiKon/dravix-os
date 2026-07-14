@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.0.92
+
+**🎮 Live remote — watch, steer, talk and record, all in one panel** *(no re-flash needed!)*
+
+Open the camera on the Home tab and you now get a full teleoperation panel:
+
+- **🎥 Live view** through the robot's eyes, with the **joystick right underneath** — steer
+  the head while you watch what it sees.
+- **🎙 Talk through the robot** (walkie-talkie): tap, speak into your phone/PC mic, tap to
+  send — your voice plays out of the robot's speaker (and its mouth moves while it plays).
+  Works from anywhere the dashboard works, including via HA remote access.
+- **⏺ Record video on demand**: start/stop a real MP4 recording of what the robot sees
+  (with a live seconds counter and a 15-minute safety cap). Clips are finalized properly
+  and land in the gallery.
+- **📸 Photo + 🎬 3-2-1 selfie** buttons are right there too, and a **🖼 Gallery** button
+  opens the full media manager (view / download / delete / daily ZIP) without leaving the
+  panel. Everything is stored by Home Assistant's add-on storage, managed from the site.
+
+Privacy mode blocks all of it except talking (speaker-only), as it should.
+
 ## 0.0.91
 
 **🍄❄ The Climate page speaks Mushroom too** *(same firmware 30 — one flash covers 0.0.90+91)*

@@ -78,6 +78,11 @@ class Settings(BaseSettings):
     pet_head_raise: float = 30.0
     pet_head_hold_s: float = 10.0  # seconds to hold up before returning to centre
 
+    # The base URL the ROBOT can reach dravix at on the LAN (for push-to-talk audio and
+    # anything else the robot fetches from us). Empty = auto-detect: HA's internal_url
+    # host, else the interface facing HA. Set only if the auto-detection picks wrong.
+    public_url: str = ""
+
     # Home Assistant
     ha_url: str = "http://homeassistant.local:8123"
     ha_token: str = ""

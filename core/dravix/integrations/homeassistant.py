@@ -40,6 +40,12 @@ class HomeAssistant:
             log.warning("HA ping failed: %s", exc)
             return False
 
+    async def core_config(self) -> dict[str, Any]:
+        """HA's /api/config — version, location, internal/external URLs."""
+        r = await self._client.get("/api/config")
+        r.raise_for_status()
+        return r.json()
+
     async def states(self) -> list[dict[str, Any]]:
         r = await self._client.get("/api/states")
         r.raise_for_status()

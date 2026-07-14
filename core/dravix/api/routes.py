@@ -2,8 +2,10 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import ipaddress
 import re
+from pathlib import Path
 from urllib.parse import urlparse
 
 import httpx
@@ -689,6 +691,151 @@ async def put_privacy(body: PrivacyBody, request: Request):
 
     cam_error = await apply_camera_privacy(request.app.state, body.private)
     return {"ok": True, "private": body.private, "camera_error": cam_error}
+
+
+# ── teleop: manual recording + push-to-talk ───────────────────────────────────
+@router.get("/api/record/status")
+async def record_status(request: Request):
+    rec = getattr(request.app.state, "recorder", None)
+    return rec.status() if rec is not None else {"recording": False, "name": None, "seconds": 0}
+
+
+@router.post("/api/record/start")
+async def record_start(request: Request, fps: int = 6):
+    """⏺ Start recording the robot camera into an MP4 clip (lands in the gallery)."""
+    robot = request.app.state.robot
+    if not robot.supports(CAP_PHOTO):
+        raise HTTPException(status_code=501, detail="this robot has no camera")
+    if await _camera_blocked(request):
+        raise HTTPException(status_code=503, detail="privacy mode is on")
+    rec = getattr(request.app.state, "recorder", None)
+    if rec is None:
+        raise HTTPException(status_code=503, detail="recorder not available")
+    try:
+        return await rec.start(fps=fps)
+    except RuntimeError as exc:  # no ffmpeg in this environment
+        raise HTTPException(status_code=501, detail=str(exc)) from exc
+
+
+@router.post("/api/record/stop")
+async def record_stop(request: Request):
+    """⏹ Stop the manual recording; the finished clip shows up in the security gallery."""
+    rec = getattr(request.app.state, "recorder", None)
+    if rec is None:
+        raise HTTPException(status_code=503, detail="recorder not available")
+    return await rec.stop()
+
+
+_TALK_KEEP = 20  # how many past voice clips to keep on disk
+_TALK_RE = re.compile(r"^[0-9a-f]{10,32}\.mp3$")
+
+
+def _talk_dir(s) -> Path:
+    from ..config import DATA_DIR
+
+    base = Path(s.settings.data_dir) if s.settings.data_dir else DATA_DIR
+    d = base / "talk"
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+async def _lan_base_url(s) -> str:
+    """The base URL the ROBOT can fetch us at (for push-to-talk audio):
+    DRAVIX_PUBLIC_URL override → HA's internal_url host → the interface facing HA."""
+    cached = getattr(s, "lan_base_url", "")
+    if cached:
+        return cached
+    base = ""
+    if s.settings.public_url:
+        base = s.settings.public_url.rstrip("/")
+    if not base and s.ha is not None:
+        try:
+            cfg = await s.ha.core_config()
+            host = urlparse(str(cfg.get("internal_url") or cfg.get("external_url") or "")).hostname
+            if host:
+                base = f"http://{host}:{s.settings.port}"
+        except Exception:  # noqa: BLE001 — fall through to the socket trick
+            base = ""
+    if not base:
+        import socket
+
+        host = urlparse(s.settings.ha_url).hostname or "8.8.8.8"
+        try:
+            sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            sock.connect((host, 80))
+            base = f"http://{sock.getsockname()[0]}:{s.settings.port}"
+            sock.close()
+        except OSError:
+            base = f"http://127.0.0.1:{s.settings.port}"
+    s.lan_base_url = base
+    return base
+
+
+@router.post("/api/robot/talk")
+async def robot_talk(request: Request):
+    """🎙 Push-to-talk — a walkie-talkie through the robot: the browser records a short
+    voice clip (webm/ogg/mp4), we transcode it to mp3 (ffmpeg is in the add-on image)
+    and the robot's speaker plays it as an announcement. The mouth animates by itself —
+    fw 25+ watches its own media player."""
+    import shutil as _shutil
+
+    s = request.app.state
+    raw = await request.body()
+    if not raw or len(raw) < 200:
+        raise HTTPException(status_code=400, detail="no audio received")
+    if len(raw) > 8_000_000:
+        raise HTTPException(status_code=400, detail="clip too big — keep it under ~30 seconds")
+    if _shutil.which("ffmpeg") is None:
+        raise HTTPException(status_code=501, detail="ffmpeg is not available in this image")
+    eid = _effective_entities(request).get("media_player")
+    if s.ha is None or not eid:
+        raise HTTPException(status_code=409, detail="no media_player entity configured")
+    import uuid as _uuid
+
+    tdir = _talk_dir(s)
+    uid = _uuid.uuid4().hex[:12]
+    src, dst = tdir / f"{uid}.in", tdir / f"{uid}.mp3"
+    await asyncio.to_thread(src.write_bytes, raw)
+    proc = await asyncio.create_subprocess_exec(
+        "ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
+        "-i", str(src), "-vn", "-acodec", "libmp3lame", "-ar", "44100", "-b:a", "96k",
+        str(dst),
+        stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.DEVNULL,
+    )
+    rc = await proc.wait()
+    with contextlib.suppress(OSError):
+        src.unlink()
+    if rc != 0 or not dst.is_file() or dst.stat().st_size < 200:
+        raise HTTPException(status_code=502, detail="audio transcode failed")
+    # keep the folder tidy — only the last few clips stay on disk
+    clips = sorted(tdir.glob("*.mp3"), key=lambda p: p.stat().st_mtime, reverse=True)
+    for old in clips[_TALK_KEEP:]:
+        with contextlib.suppress(OSError):
+            old.unlink()
+    url = f"{await _lan_base_url(s)}/api/talk/{uid}.mp3"
+    if s.settings.api_token:
+        url += f"?token={s.settings.api_token}"
+    try:
+        await s.ha.call_service("media_player", "play_media", {
+            "entity_id": eid, "media_content_id": url,
+            "media_content_type": "music", "announce": True,
+        })
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=502, detail=f"robot playback failed: {exc}") from exc
+    return {"ok": True, "id": uid}
+
+
+@router.get("/api/talk/{name}")
+async def talk_clip(name: str, request: Request):
+    """Serve a push-to-talk clip — this is the URL the ROBOT fetches to play it."""
+    if not _TALK_RE.match(name):
+        raise HTTPException(status_code=400, detail="bad clip name")
+    path = _talk_dir(request.app.state) / name
+    if not path.is_file():
+        raise HTTPException(status_code=404, detail="no such clip")
+    from fastapi.responses import FileResponse
+
+    return FileResponse(path, media_type="audio/mpeg")
 
 
 @router.get("/api/robot/live")

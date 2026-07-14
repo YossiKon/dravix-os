@@ -98,6 +98,13 @@ export function HomePage(props: { config: RobotConfig | null }) {
   // security mode: armed state + how many snapshots are stored (null = not loaded yet)
   const [sec, setSec] = useState<SecurityInfo | null>(null);
   const [galleryOpen, setGalleryOpen] = useState(false);
+  // teleop: manual clip recording + push-to-talk (walkie-talkie through the robot)
+  const [recording, setRecording] = useState<{ on: boolean; seconds: number }>({ on: false, seconds: 0 });
+  const [talking, setTalking] = useState(false);
+  const [sendingTalk, setSendingTalk] = useState(false);
+  const [camGallery, setCamGallery] = useState(false);
+  const mediaRec = useRef<MediaRecorder | null>(null);
+  const talkChunks = useRef<Blob[]>([]);
   // speaker volume (0-100); null until loaded / unsupported
   const [vol, setVol] = useState<number | null>(null);
   // the last photo taken via the 📸 ritual (shown inline under the camera)
@@ -155,6 +162,97 @@ export function HomePage(props: { config: RobotConfig | null }) {
 
   const refreshSecurity = () =>
     apiGet<SecurityInfo>("/api/security/photos?limit=1").then(setSec).catch(() => undefined);
+
+  // keep the REC button honest while the live view is open (recording may hit its cap)
+  useEffect(() => {
+    if (!camOn) return;
+    const tick = () =>
+      apiGet<{ recording: boolean; seconds: number }>("/api/record/status")
+        .then((r) => setRecording({ on: r.recording, seconds: r.seconds }))
+        .catch(() => undefined);
+    tick();
+    const t = setInterval(tick, 2000);
+    return () => clearInterval(t);
+  }, [camOn]);
+
+  async function toggleRecord() {
+    try {
+      if (recording.on) {
+        const r = await apiSend<{ ok: boolean; name?: string; error?: string }>("/api/record/stop", "POST", {});
+        setRecording({ on: false, seconds: 0 });
+        if (r.ok && r.name) {
+          toast(tr("🎬 הקליפ נשמר בגלריה", "🎬 Clip saved to the gallery"));
+          void refreshSecurity();
+        } else if (r.error) toast(r.error, "err");
+      } else {
+        await apiSend("/api/record/start", "POST", {});
+        setRecording({ on: true, seconds: 0 });
+        toast(tr("⏺ מקליט…", "⏺ Recording…"));
+      }
+    } catch (e) {
+      toastErr(e);
+    }
+  }
+
+  // push-to-talk: record in the browser, send once, the robot's speaker plays it
+  async function startTalk() {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mime = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
+        ? "audio/webm;codecs=opus"
+        : MediaRecorder.isTypeSupported("audio/mp4")
+          ? "audio/mp4"
+          : "";
+      const rec = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined);
+      talkChunks.current = [];
+      rec.ondataavailable = (e) => {
+        if (e.data.size) talkChunks.current.push(e.data);
+      };
+      rec.onstop = () => {
+        stream.getTracks().forEach((t) => t.stop());
+        void sendTalk();
+      };
+      rec.start();
+      mediaRec.current = rec;
+      setTalking(true);
+      // walkie-talkie sized — auto-send after 30s so a forgotten mic can't run forever
+      setTimeout(() => {
+        if (mediaRec.current === rec && rec.state === "recording") stopTalk();
+      }, 30000);
+    } catch {
+      toast(tr("אין גישה למיקרופון בדפדפן", "Browser mic permission denied"), "err");
+    }
+  }
+
+  function stopTalk() {
+    setTalking(false);
+    const rec = mediaRec.current;
+    mediaRec.current = null;
+    if (rec && rec.state === "recording") rec.stop();
+  }
+
+  async function sendTalk() {
+    const blob = new Blob(talkChunks.current, { type: talkChunks.current[0]?.type || "audio/webm" });
+    talkChunks.current = [];
+    if (blob.size < 400) return; // an accidental tap — nothing worth sending
+    setSendingTalk(true);
+    try {
+      const r = await fetch(apiUrl("api/robot/talk"), {
+        method: "POST",
+        body: blob,
+        headers: { "Content-Type": blob.type || "application/octet-stream" },
+      });
+      if (!r.ok) {
+        const b = (await r.json().catch(() => ({}))) as { detail?: unknown };
+        throw new Error(typeof b.detail === "string" ? b.detail : `HTTP ${r.status}`);
+      }
+      toast(tr("📢 מתנגן על הרובוט", "📢 Playing on the robot"));
+    } catch (e) {
+      toastErr(e);
+    } finally {
+      setSendingTalk(false);
+    }
+  }
 
   const refreshTimers = () =>
     apiGet<{ timers: { id: number | string; label: string; seconds_left: number }[] }>("/api/timers")
@@ -745,13 +843,40 @@ export function HomePage(props: { config: RobotConfig | null }) {
                   toast(tr("הזרם נותק", "Stream dropped"), "err");
                 }}
               />
-              <button className="btn mt-3 w-full" onClick={() => setCamOn(false)}>
+              {/* ── teleop: steer WHILE watching ── */}
+              <p className="mt-3 text-xs text-mute">
+                {tr("גרור ושחרר — הראש זז לאן שסימנת, בזמן שאתה רואה מה הוא רואה.", "Drag & release — the head moves while you watch what it sees.")}
+              </p>
+              <Joystick
+                onRelease={(yaw, pitch) =>
+                  void run("head", () => apiSend("/api/robot/head", "POST", { yaw, pitch, speed: 0.6 }))
+                }
+              />
+              <div className="mt-3 grid grid-cols-2 gap-2">
+                <button
+                  className={`btn ${talking ? "btn-danger" : ""}`}
+                  disabled={sendingTalk}
+                  onClick={() => (talking ? stopTalk() : void startTalk())}
+                >
+                  {sendingTalk
+                    ? tr("שולח…", "Sending…")
+                    : talking
+                      ? tr("🔴 משדר — לחץ לשליחה", "🔴 On air — tap to send")
+                      : tr("🎙 דבר דרך הרובוט", "🎙 Talk through it")}
+                </button>
+                <button className={`btn ${recording.on ? "btn-danger" : ""}`} onClick={() => void toggleRecord()}>
+                  {recording.on
+                    ? tr(`⏹ עצור הקלטה (${recording.seconds}s)`, `⏹ Stop recording (${recording.seconds}s)`)
+                    : tr("⏺ הקלט וידאו", "⏺ Record video")}
+                </button>
+              </div>
+              <button className="btn mt-2 w-full" onClick={() => setCamOn(false)}>
                 {tr("⏹ עצור צפייה", "⏹ Stop")}
               </button>
             </>
           ) : (
             <button className="btn btn-primary w-full" onClick={() => setCamOn(true)}>
-              {tr("🎥 צפה דרך העיניים של הרובוט", "🎥 See through the robot's eyes")}
+              {tr("🎥 שלט חי — צפה, כוון, דבר והקלט", "🎥 Live remote — watch, steer, talk & record")}
             </button>
           )}
           {!privacy.private && (
@@ -763,6 +888,18 @@ export function HomePage(props: { config: RobotConfig | null }) {
                 {boothBusy ? tr("3… 2… 1…", "3… 2… 1…") : tr("🎬 סלפי 3-2-1", "🎬 Selfie 3-2-1")}
               </button>
             </div>
+          )}
+          {!privacy.private && (
+            <>
+              <button className="chip mt-3" onClick={() => setCamGallery((g) => !g)}>
+                {camGallery ? tr("סגור גלריה", "Close gallery") : tr("🖼 גלריה — תמונות והקלטות", "🖼 Gallery — photos & clips")}
+              </button>
+              {camGallery && (
+                <div className="mt-3">
+                  <SecurityGallery onChanged={refreshSecurity} />
+                </div>
+              )}
+            </>
           )}
           {shot && (
             <img
