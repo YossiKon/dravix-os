@@ -50,3 +50,21 @@ async def test_spontaneous_speech_gate():
     await c.say("good morning!", proactive=True)
     assert c.state.last_said == "good morning!"
     await c.close()
+
+
+async def test_proactive_emote_speech_respects_mute():
+    """The only emote with a spoken step (fistbump's "Boom!") must respect the mute when it's
+    played from an ambient context (surprises/scheduler/reaction), but still speak on a
+    user-triggered play (/api/emote)."""
+    from dravix.emotes import play_emote
+
+    drv = MockDriver()
+    c = RobotController(drv, EventBus(), RobotState())
+    await c.connect()
+
+    c.speak_spontaneous = False
+    await play_emote(c, "fistbump", proactive=True)  # ambient → "Boom!" muted
+    assert c.state.last_said != "Boom!"
+    await play_emote(c, "fistbump")  # user-triggered (default proactive=False) → speaks
+    assert c.state.last_said == "Boom!"
+    await c.close()

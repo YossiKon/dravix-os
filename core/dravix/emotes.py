@@ -110,10 +110,14 @@ def emote_names() -> list[str]:
     return sorted(EMOTES)
 
 
-async def play_emote(robot: RobotController, name: str, *, include_head: bool = True) -> None:
+async def play_emote(
+    robot: RobotController, name: str, *, include_head: bool = True, proactive: bool = False
+) -> None:
     """Play a named emote. ``include_head=False`` runs the face/LED/say steps but leaves
     the head alone — used when ANOTHER behavior owns the head pose (the pet head-lift:
-    an emote's trailing "back to centre" used to wipe the raised-head hold instantly)."""
+    an emote's trailing "back to centre" used to wipe the raised-head hold instantly).
+    ``proactive=True`` marks an ambient/self-initiated play so an emote with a spoken step
+    (only ``fistbump``'s "Boom!") respects the "speaks on its own" mute."""
     steps = EMOTES.get(name)
     if steps is None:
         raise KeyError(name)
@@ -129,7 +133,7 @@ async def play_emote(robot: RobotController, name: str, *, include_head: bool = 
             yaw, pitch = step["head"]
             await robot.move_head(float(yaw), float(pitch), speed=1.0)
         if "say" in step and robot.supports(CAP_SAY):
-            await robot.say(str(step["say"]))
+            await robot.say(str(step["say"]), proactive=proactive)
         if step.get("wait"):
             await asyncio.sleep(float(step["wait"]))
     # An emote's LEDs are a flourish, not a state — always restore them, or every pet /

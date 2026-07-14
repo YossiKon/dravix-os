@@ -29,6 +29,10 @@ COPY README.md /app/README.md
 COPY core /app/core
 COPY plugins /app/plugins
 COPY docs /app/docs
+# The firmware YAML — updates.py reads its `fw_version` to tell the robot when a new firmware
+# ships (the "firmware update available" nudge). Without it, bundled_fw_version() returns None
+# and the whole update indicator silently no-ops. Only this one file is needed at runtime.
+COPY deploy/esphome/stackchan-dravix.yaml /app/deploy/esphome/stackchan-dravix.yaml
 RUN pip install -e /app/core
 COPY --from=web /web/dist /app/web/dist
 COPY dravix_os/run.sh /run.sh

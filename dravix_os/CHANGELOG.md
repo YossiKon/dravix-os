@@ -2,7 +2,7 @@
 
 ## 0.0.95
 
-**🌐 A dashboard page on the robot — glance at any Home Assistant view** *(firmware 33 — update both)*
+**🌐 A dashboard page on the robot — glance at any Home Assistant view** *(firmware 34 — update both)*
 
 - **Dashboard page (Settings → 🌐 Dashboard page)**: paste an image URL and the robot gains a
   new page in its swipe cycle that shows it full-screen. Unlike the alert/snapshot image it
@@ -25,14 +25,30 @@
   lines, and mode alerts — is muted. Turn it on to bring the talkative companion back.
 - Gated at a single point (`say(..., proactive=True)`), so nothing autonomous slips through.
 
-**😌 Calmer at rest — moves only every so often (firmware 33)**
+**😌 Calmer at rest — moves only every so often (firmware 34)**
 
 - The autonomous "looking around" is now much sparser: the idle glance timer slowed (9s → 14s)
   and each move fires far less often — the physical **head turns only ~once every ~3 minutes**
   (was ~once a minute) and the on-screen gaze drifts ~once every ~45s (was ~13s). It still feels
-  alive, just not restless. For finer control, the dashboard toggles **"Body language (head
-  moves)"** (stops physical head motion) and **"Idle glances / motion"** (stops idle motion
-  entirely) still work.
+  alive, just not restless. The idle glance/drift is also now suppressed **during a conversation**
+  (the attentive face no longer jumps mid-turn). For finer control, the dashboard toggles
+  **"Body language (head moves)"** and **"Idle glances / motion"** still work.
+
+**🔧 Build fix + hardening (firmware 34)**
+
+- **Firmware compiles again on ESPHome 2026.6.5.** A stricter LVGL type made the status-bar
+  update-arrows (line widgets) fail to build; fixed, and the `select .state` calls were migrated
+  to `current_option()` so the next ESPHome (2026.7.0) won't break either.
+- **The 🌐 dashboard no longer re-downloads while the robot sleeps** — it paused the fetch only
+  for the screensaver, not for sleep, so a robot left on the dashboard fetched all night.
+- **Timers ring through the mute.** A kitchen timer / reminder you explicitly set now sounds even
+  when "Speaks on its own" is off (that mute is for ambient chatter, not alerts). The `fistbump`
+  emote's "Boom!" now also respects the mute when it fires from an ambient surprise/reaction.
+- **Backup & restore fixed.** Re-importing your own `/api/export` backup used to fail once the
+  robot had run a while — the personality/agent-display state wasn't on the importable list.
+- **Screen-brightness slider** no longer loses your last drag when you switch tabs right after.
+- The shipped add-on image now includes the firmware version file, so the **"firmware update
+  available"** nudge actually works.
 
 ## 0.0.94
 

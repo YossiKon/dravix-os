@@ -2,22 +2,31 @@
 
 ## 1. The big picture
 
-dravix-os is a **companion service** for the M5Stack StackChan robot. The robot keeps its
-original firmware; dravix-os runs on the always-on Proxmox host (in its own LXC, next to the
-Home Assistant VM) and controls the robot from the outside.
+dravix-os is a **companion service** for the M5Stack StackChan robot. The robot is flashed with
+the custom **dravix ESPHome firmware** (`deploy/esphome/stackchan-dravix.yaml`), which exposes it
+as Home Assistant entities (a face `select`, head-angle `number`s, a media_player, a light bar, a
+camera, text slots, sensors…). dravix-os — packaged as a **Home Assistant add-on** — drives the
+robot **through those HA entities** (the `ha` driver) and stays entirely on your LAN.
 
-Three MCP relationships sit at the center of the design:
+The control paths, in order of how the shipped product works:
 
-- **dravix-os → robot MCP server.** The robot exposes an MCP endpoint at a URL. dravix-os is
-  a client of it (move head, set face, say, LEDs, take photo, listen, …). This is the
-  primary robot control path.
-- **dravix-os → Home Assistant MCP server.** HA exposes its entities/services as MCP tools.
-  dravix-os uses this for smart-home control and context.
-- **agents → dravix-os MCP server.** dravix-os exposes its *own* MCP server so an external
-  agent (Claude, etc.) can drive modes, the robot, and the home through one surface.
+- **dravix-os → Home Assistant → robot (the `ha` driver).** This is the **primary, supported**
+  path. dravix maps the robot's HA entities at startup (auto-discovery) and moves the head, sets
+  the face, speaks, drives LEDs, takes photos, etc. by calling HA services.
+- **dravix-os → Home Assistant (entities/services).** The same HA connection gives smart-home
+  control and context for modes.
+- **agents → dravix-os MCP server.** dravix-os exposes its *own* MCP server so an external agent
+  (Claude, etc.) can drive modes, the robot, and the home through one surface.
+- **dravix-os → robot MCP server (legacy).** An earlier design had the robot expose its own MCP
+  endpoint; the `mcp` driver still exists for non-HA backends, but the ESPHome + `ha` path is the
+  one the product ships and is tested against.
 
-> The exact tool names/transports the robot exposes are discovered at runtime — see
-> [§6 Discovery](#6-discovery-phase-0). Nothing is hard-coded against unverified assumptions.
+> Robot HA entity ids are **discovered at runtime** by suffix — see [§6 Discovery](#6-discovery-phase-0).
+> Nothing is hard-coded against unverified assumptions.
+
+> **Deployment:** the primary path is the **HA add-on** (auto-discovery, Supervisor token, ingress).
+> A Proxmox-LXC + Docker-Compose deployment (§8) is an alternative that runs the same service in a
+> separate container, still against the `ha` driver.
 
 ## 2. Layers
 

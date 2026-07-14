@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "dravix-os"
-version = "0.0.78"
+version = "0.0.95"
 description = "Companion OS layer for the M5Stack StackChan robot"
 readme = "../README.md"
 requires-python = ">=3.11"
@@ -17,7 +17,8 @@ dependencies = [
     "httpx>=0.27",
     "websockets>=12",
     "pyyaml>=6",
-    "mcp>=1.2",
+    # upper-bounded: a breaking mcp 2.x could turn CI red (mcpserver is imported by tests)
+    "mcp>=1.2,<2",
 ]
 
 [project.optional-dependencies]

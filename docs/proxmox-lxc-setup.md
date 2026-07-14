@@ -28,28 +28,24 @@ curl -fsSL https://get.docker.com | sh
 git clone <your dravix-os repo> /opt/dravix-os
 cd /opt/dravix-os
 cp .env.example .env
-nano .env          # set DRAVIX_ROBOT_MCP_URL, DRAVIX_HA_URL, DRAVIX_HA_TOKEN, ...
+nano .env          # set DRAVIX_ROBOT_DRIVER=ha, DRAVIX_HA_URL, DRAVIX_HA_TOKEN
 docker compose -f deploy/docker-compose.yml up -d --build
 ```
 
 Browse to `http://<lxc-ip>:8800`.
 
-## 4. First run: discover capabilities
+## 4. First run: entity discovery
 
-```bash
-docker compose -f deploy/docker-compose.yml exec dravix-os python scripts/discover.py
-```
-
-This writes `docs/capability-report.md` (persisted to the host via the compose volume). Use
-it to set `DRAVIX_ROBOT_DRIVER=mcp` and confirm the verb→tool mapping, then restart.
+With `DRAVIX_ROBOT_DRIVER=ha`, dravix-os **auto-discovers** the robot's HA entities (exposed by
+the dravix ESPHome firmware) at startup — nothing to map by hand. The service logs the discovered
+entity set on boot. (The legacy `scripts/discover.py` probe is only for the non-HA `mcp` driver.)
 
 ## 5. Networking notes
 
-- The LXC reaches **Home Assistant** at its VM IP (`http://<ha-ip>:8123`) and the **robot's
-  MCP URL** over the LAN — the same URL you already point HA at.
+- The LXC reaches **Home Assistant** at its VM IP (`http://<ha-ip>:8123`); the robot itself is
+  driven **through HA** (the ESPHome firmware exposes it as HA entities), so there's no separate
+  robot URL to configure.
 - Get a HA **long-lived access token**: HA → your profile → *Long-Lived Access Tokens*.
-- If you enabled HA's **MCP Server** integration, set `DRAVIX_HA_MCP_URL` to
-  `http://<ha-ip>:8123/mcp_server/sse` so dravix-os can also drive the smart home over MCP.
 
 ## 6. Backups
 

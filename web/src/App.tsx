@@ -117,7 +117,7 @@ export default function App() {
         {tab === "controls" && <ControlsPage />}
         {tab === "diag" && <DiagnosticsPage />}
         {tab === "settings" && (
-          <SettingsPage config={config} entities={entities} version={version} onConfigChanged={refreshConfig} />
+          <SettingsPage config={config} version={version} onConfigChanged={refreshConfig} />
         )}
       </main>
 

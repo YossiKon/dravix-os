@@ -135,7 +135,7 @@ Everything is done by touching the robot, talking to it, or from the dashboard:
 | **Turn its head by hand** | Startled wide eyes (x_x)… then it decides it liked it |
 | **Plug in the charger** (while awake) | "Nom, electricity!" — happy face + a green flash |
 | Room goes **dark / bright** | Falls asleep / wakes up (toggleable) |
-| **Swipe ⬇** | Status bar: clock · date · Wi-Fi bars · battery % + time-left · **volume slider** · **LOCAL** button · amber ⬆ arrow when a firmware update is available |
+| **Swipe ⬇** | Status bar, in **two stages**: one swipe = a slim strip (Wi-Fi bars · clock · date · battery % + time-left); swipe down again = the full panel with **three sliders** (volume · screen · LED brightness) · **LOCAL** button · power line · amber ⬆ arrow when a firmware update is available. Swipe ⬆ closes it. |
 | **Swipe ⬅ / ➡** | Cycles: face → card 1 → card 2 → card 3 → **GAMES** → **VITALS** → **CLIMATE** → **🌐 DASHBOARD** (the last only when you've set a Dashboard URL in Settings) |
 | **Tap a row on a card** | Controls that HA entity right from the robot — toggles lights/switches, presses buttons, runs scripts & scenes (up to 4 rows per card) |
 | **Swipe ⬆** | Back to the face |
@@ -151,10 +151,13 @@ Everything is done by touching the robot, talking to it, or from the dashboard:
 | 🐣 Pet face | Drawn animated eyes/cheeks/mouth — blinks, looks around, squints when happy | Always on; expressions via HA `select` / dashboard / the AI's emotion tags |
 | 🎭 7 modes | `awake · morning · focus · quiet · night · busy · sleep` — each changes face, LEDs, volume, behaviour | Mode chips on the dashboard Home tab, or the `Mode` select in HA |
 | 🗣️ Voice + speech bubble | On-device wake word → HA Assist (STT/LLM/TTS); listening is a **face** (big curious eyes, no label), replies pop in a **comic bubble** at the top with a tail to the mouth | "Okay, Nabu" or tap the face; swap the wake word in the tiny file |
-| 🌬 Breathing + body language | The face rises/settles on a slow sine while idle, sways in tiny moves while talking; truly random idle glances | Always on; fully still in calm modes (Body language toggle) |
+| 🔇 Speaks on its own | Master switch for the robot's *spontaneous* speech — bored quips, surprises, greetings, scheduled/reaction lines. **Off by default**: it speaks only during an AI conversation and for things you explicitly trigger (timers/alerts still ring) | Dashboard → **Settings → Speaks on its own** |
+| 🙂 People — face recognition | Teach it who's who: each person gets their own greeting line (he/en, `{name}`), ⭐ a favourite for the extra-warm welcome. Recognizes familiar faces via **Frigate** and greets by name | Dashboard → **Settings → People**; train faces in Frigate |
+| 🎩 Themes & accessories | Dress-up: **7 face backdrops** (Space/Sunset/Ocean/Matrix/Party/Arena…) and **22 accessories** (glasses, top hat, crown, cat ears, boxing gloves…) — opt-in, never auto-applied | Dashboard picker → two HA `select` entities |
+| 🌬 Breathing + body language | The face rises/settles on a slow sine while idle, sways in tiny moves while talking; **occasional** idle glances (sparse by design — the head turns ~once every few minutes, and it holds still during a conversation) | Always on; fully still in calm modes. Toggles: **Body language (head moves)** and **Idle glances / motion** |
 | 👋 Wave & 👉 boop gestures | Wave at the nose sensor → it waves back; a finger right at the sensor → love-eyes + a nod | Just do it (proximity sensor) |
 | 🫨 Hand-turn reaction | Physically turn its head → startled wide eyes, then it warms up to it | Just do it |
-| 🕹️ Games arcade | **Catch Me · Reaction · Simon · Rock-Paper-Scissors · Flappy · Party** | Swipe to **GAMES**, tap a game (Party also has an HA button) |
+| 🕹️ Games arcade | **Catch Me · Reaction · Simon · Rock-Paper-Scissors · Maple · Flappy · Doom · Breakout · Pong · Snake · Party**, plus a **high-score** board | Swipe to **GAMES**, tap a game (Party also has an HA button) |
 | 💗 Vitals screen | The robot's live needs as bars (energy/food/fun/calm) | Swipe to **VITALS**; care actions on the dashboard **Life** tab |
 | 🌐 Dashboard page | A live screenshot of any Home Assistant dashboard (or any image URL) on its own swipe page — stays put, refreshes every 15s | Dashboard → **Settings → 🌐 Dashboard page**; render HA views with the **Puppet** add-on. See [docs/dashboard-page.md](docs/dashboard-page.md) |
 | 🗂 3 interactive cards | Any HA entities you pick — and up to 4 **tappable rows** per card: tap to toggle/press/run scripts, scenes, automations, the AC | Dashboard → **Screens**: pick entities per card; tap rows on the robot |
@@ -221,14 +224,16 @@ controllable from Home Assistant:
   Listening is a **face**, not a label — big curious eyes and an attentive little perk-up.
 - **A games arcade** — a **Games** menu on the robot's screen: **Catch Me** (tap the runaway dot),
   **Reaction** (a reflex speed test in milliseconds), **Simon** (the growing colour-sequence memory
-  game), **Rock-Paper-Scissors** (it nods when it wins), **Flappy** (slip through the pipes) and
-  **Party** (a desk disco).
-- **A swipe UI** — swipe **down** for a slim status-bar overlay (clock · date · Wi-Fi bars ·
-  battery % + time-left · a draggable **volume slider** · the **LOCAL** button · an amber ⬆ arrow
-  when a firmware update is available), and **left/right** through 3 **interactive cards** (you
-  choose the HA entities on each from the dashboard; tap a row to toggle/press/run it), the
-  **Games** arcade and the **Vitals** page — plus a full-screen alert-image page for Frigate /
-  doorbell snapshots.
+  game), **Rock-Paper-Scissors** (it nods when it wins), **Maple** (a platformer), **Flappy** (slip
+  through the pipes), **Doom** (a tiny raycaster), **Breakout**, **Pong**, **Snake**, and **Party**
+  (a desk disco) — plus a **high-score** board.
+- **A swipe UI** — swipe **down** for a **two-stage** status bar (first a slim strip: Wi-Fi · clock ·
+  date · battery % + time-left; swipe down again for the full panel: **three sliders** — volume,
+  screen, LED brightness — the **LOCAL** button, a power line, and an amber ⬆ arrow when a firmware
+  update is available), and **left/right** through 3 **interactive cards** (you choose the HA
+  entities on each from the dashboard; tap a row to toggle/press/run it), the **Games** arcade, the
+  **Vitals** page, the **Climate** page, and the opt-in **🌐 dashboard** page — plus a full-screen
+  alert-image page for Frigate / doorbell snapshots.
 - **Privacy mode** — kills the microphone on-device (wake word + voice pipeline stopped) and shows a
   red **PRIVACY** badge; dravix additionally blocks the camera stream/snapshot.
 - **Head calibration** — the head servos are driven and calibrated per-axis from the dashboard.
@@ -256,12 +261,16 @@ real feedback (it "eats", yawns, wiggles, LEDs). Petting and talking to it feed 
 
 ## 📱 Web dashboard
 
-The add-on ships a **bilingual (English default · עברית RTL built-in), mobile-friendly** dashboard: a live mirror of the robot's
-face, chat with memory, mode switching, games & emotes, a head joystick, volume, the privacy
-toggle, a camera view + security guard + photo gallery, kitchen timers, the cards editor, the
-**Life** page (feed · rest · play · calm + the wellness tips), climate control, and Settings —
-modes manager, personas/voice/memories, day schedule, birthday, auto-wired entities (read-only),
-per-axis head calibration, brightness, updates and backup/restore.
+The add-on ships a **bilingual (English default · עברית RTL built-in), mobile-friendly** dashboard
+with eight tabs — **Home · Agent 🤖 · Screens · Life · Climate · Controls 🕹 · Diagnostics 🩺 ·
+Settings**: a live mirror of the robot's face, chat with memory, mode switching, games & emotes, a
+head joystick, volume, the privacy toggle, a camera view + live teleop + security guard + photo
+gallery, kitchen timers, the cards editor, the **Life** page (feed · rest · play · calm + wellness
+tips), climate control, an **Agent** status board (AI agents reporting on the robot), a **Controls**
+tab, and a **Diagnostics** tab. **Settings** covers the modes manager, personas/voice/memories,
+**People** (face-recognition greetings), the **🌐 dashboard page** URL, **Speaks on its own**, day
+schedule, birthday, auto-wired entities (read-only), per-axis head calibration, brightness, updates
+and backup/restore.
 
 |  Home  |  Screens  |  Settings  |
 |:------:|:---------:|:----------:|

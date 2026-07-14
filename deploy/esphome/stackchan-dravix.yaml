@@ -40,7 +40,7 @@ substitutions:
   # publishes it to HA ("Firmware version" sensor); the dravix dashboard compares it
   # with the version bundled in the add-on and shows "firmware update available".
   # (Maintainers: bump this on every firmware change. Users: don't touch.)
-  fw_version: "33"
+  fw_version: "34"
   # The ESPHome node name (mDNS hostname + the default entity prefix on a fresh flash).
   # Change it only if you run MORE THAN ONE robot — each needs a unique name. NOTE:
   # changing it on an already-adopted robot registers a NEW device in HA.
@@ -2151,6 +2151,8 @@ lvgl:
     - id: page_dash
       bg_color: 0x000000
       bg_opa: COVER
+      scrollable: false
+      scrollbar_mode: "OFF"
       widgets:
         - label:
             id: dash_hint
@@ -4223,7 +4225,11 @@ script:
                 condition:
                   and:
                     - lvgl.page.is_showing: page_dash
-                    - lambda: 'return !id(g_saver) && !id(t_dash_url).state.empty();'
+                    # skip the fetch+PNG-decode while dimmed (saver) OR asleep — the robot can
+                    # idle→sleep with the 🌐 page still up (on_idle doesn't return it to the face),
+                    # and re-downloading all night defeats the "dead-still asleep" contract. The
+                    # loop stays alive (cheap 15s ticks) so it resumes the moment you wake it here.
+                    - lambda: 'return !id(g_saver) && !id(g_sleep) && !id(t_dash_url).state.empty();'
                 then:
                   - online_image.set_url: { id: oi_dash, url: !lambda 'return id(t_dash_url).state;' }
   # Greet: someone approached → wake up + a happy face + perk the head up.
@@ -5552,7 +5558,7 @@ interval:
       - if:
           condition:
             lambda: |-
-              return id(sw_drift).state && !id(g_sleep) && !id(g_saver) && !id(g_busy)
+              return id(sw_drift).state && !id(g_sleep) && !id(g_saver) && !id(g_busy) && !id(g_voice)
                      && !id(g_night) && !id(g_focus) && !id(g_quiet) && random_float() < 0.30;
           then:
             - lvgl.widget.update:
@@ -5587,7 +5593,7 @@ interval:
                       value: !lambda 'return 160.0f + random_float() * 16.0f;'   # tilt: 160..176
       # ...and drift back roughly (not exactly!) to centre about half the time.
       - if:
-          condition: { lambda: 'return id(sw_drift).state && !id(g_sleep) && !id(g_saver) && random_float() < 0.5;' }
+          condition: { lambda: 'return id(sw_drift).state && !id(g_sleep) && !id(g_saver) && !id(g_voice) && random_float() < 0.5;' }
           then:
             - delay: !lambda 'return (uint32_t)(1500 + random_float() * 3000);'   # 1.5-4.5s, varies
             - lvgl.widget.update:

@@ -111,7 +111,7 @@ class SurprisesMode(Mode):
         # prefer a random named emote when the backend can express them
         names = [n for n in emote_names() if n not in ("wake", "sleep")]
         if names and random.random() < 0.7:
-            await play_emote(robot, random.choice(names))
+            await play_emote(robot, random.choice(names), proactive=True)
             self.ctx.log.info("surprise: emote")
             return
         # otherwise a simple homemade delight

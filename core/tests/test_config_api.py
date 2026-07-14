@@ -97,6 +97,10 @@ def test_config_api(tmp_path, monkeypatch):
             assert client.get("/api/config/dashboard_url").json()["url"].endswith("viewport=320x240")
             assert client.put("/api/config/dashboard_url", json={"url": "ftp://nope"}).status_code == 400
             assert client.put("/api/config/dashboard_url", json={"url": ""}).json()["url"] == ""
+            # isLocal ON → a public (non-LAN) dashboard URL is rejected (same guard as show_image)
+            client.put("/api/config/local_only", json={"enabled": True})
+            assert client.put("/api/config/dashboard_url", json={"url": "http://example.com/d.png"}).status_code == 400
+            client.put("/api/config/local_only", json={"enabled": False})  # restore for later assertions
 
             # "Speaks on its own" toggle round-trips and shows up in /api/config's store.
             assert client.get("/api/config").json()["store"].get("spontaneous_speech") in (None, False)

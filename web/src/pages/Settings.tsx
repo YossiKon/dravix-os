@@ -79,7 +79,6 @@ const PROVIDERS: Record<string, Bi> = {
 
 export function SettingsPage(props: {
   config: RobotConfig | null;
-  entities: HAEntity[];
   version: string;
   onConfigChanged: () => void;
 }) {
@@ -105,6 +104,7 @@ export function SettingsPage(props: {
   // screen brightness (10-100); null = robot doesn't expose it
   const [bright, setBright] = useState<number | null>(null);
   const brightTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const brightPending = useRef<number | null>(null);
   // custom AI personas + the active one (null = built-in default)
   const [personas, setPersonas] = useState<Persona[]>([]);
   const [activePersona, setActivePersona] = useState<string | null>(null);
@@ -318,15 +318,24 @@ export function SettingsPage(props: {
   // Debounced brightness — PUTs while dragging, like the volume slider on Home.
   function onBrightness(v: number) {
     setBright(v);
+    brightPending.current = v;
     if (brightTimer.current) clearTimeout(brightTimer.current);
     brightTimer.current = setTimeout(() => {
+      brightTimer.current = null;
+      brightPending.current = null;
       apiSend("/api/robot/screen", "PUT", { brightness: v }).catch(toastErr);
     }, 250);
   }
 
+  // FLUSH (not drop) a pending brightness PUT on unmount — switching tabs right after a
+  // drag used to silently lose the new brightness (same fix as Home's volume slider).
   useEffect(
     () => () => {
-      if (brightTimer.current) clearTimeout(brightTimer.current);
+      if (brightTimer.current) {
+        clearTimeout(brightTimer.current);
+        if (brightPending.current != null)
+          void apiSend("/api/robot/screen", "PUT", { brightness: brightPending.current }).catch(() => undefined);
+      }
     },
     [],
   );
@@ -538,10 +547,12 @@ export function SettingsPage(props: {
       );
       setDashSaved(r.url ?? "");
       setDashUrl(r.url ?? "");
-      if (r.error) {
-        toast(tr("נשמר, אך הדחיפה לרובוט נכשלה", "Saved, but the push to the robot failed"), "err");
-      } else if (!url) {
+      // clearing always succeeds (nothing to push); only a real, non-empty URL that failed
+      // to reach the robot is worth a warning.
+      if (!url) {
         toast(tr("הדף הוסר — גללו והוא כבר לא יופיע", "Removed — the 🌐 page left the swipe cycle"));
+      } else if (r.error) {
+        toast(tr("נשמר, אך הדחיפה לרובוט נכשלה", "Saved, but the push to the robot failed"), "err");
       } else {
         toast(tr("נשמר — גללו לדף ה-🌐 כדי לראות את הדשבורד", "Saved — swipe to the 🌐 page to see it"));
       }

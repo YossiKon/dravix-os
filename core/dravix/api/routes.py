@@ -1922,7 +1922,12 @@ class ReactionsBody(BaseModel):
 
 @router.post("/api/announce")
 async def announce(body: AnnounceBody, request: Request):
-    """Speak a message (for HA automations, Frigate, etc.), with a matching face."""
+    """Speak a message (for HA automations, Frigate, etc.), with a matching face.
+
+    Deliberately NOT gated by the "speaks on its own" mute: an announce is an explicit,
+    caller-initiated alert (doorbell, a person detected, a reminder) — like /api/notify — not
+    ambient chatter. The mute silences the robot's OWN spontaneous speech; it must not swallow
+    an alert an automation was explicitly told to speak."""
     robot = _robot(request)
     if body.expression is None:
         expr, text = parse_expression(body.text)

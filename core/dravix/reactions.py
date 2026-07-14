@@ -130,7 +130,7 @@ class ReactionEngine:
                 # a reaction's light is a flourish — it returns to itself a few seconds later
                 await robot.flash_leds(leds.get("color", "white"), float(leds.get("brightness", 1.0)))
             if rule.get("emote"):
-                await play_emote(robot, rule["emote"])
+                await play_emote(robot, rule["emote"], proactive=True)
             if rule.get("frigate_show") and self._frigate is not None and robot.supports(CAP_DISPLAY):
                 img = await self._frigate.snapshot(rule["frigate_show"])
                 await robot.show_image(img)

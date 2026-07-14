@@ -1,16 +1,20 @@
 # CLAUDE.md — working notes for dravix-os
 
 ## What this is
-A **companion OS layer** for the M5Stack StackChan robot. It does **not** replace the robot's
-stock firmware — it runs next to Home Assistant (on the user's Proxmox host, in its own LXC)
-and controls the robot from outside. See [README.md](README.md) and
-[docs/architecture.md](docs/architecture.md).
+A **companion OS** for the M5Stack StackChan robot. The robot is flashed with our own **dravix
+ESPHome firmware** (`deploy/esphome/stackchan-dravix.yaml`), which exposes it as Home Assistant
+entities; dravix-os is delivered as a **Home Assistant add-on** and drives the robot through those
+HA entities (the `ha` driver). Ships next to Home Assistant, all local. (A Proxmox-LXC + Docker
+Compose deployment is an alternative, but the HA add-on is the primary path.) See
+[README.md](README.md) and [docs/architecture.md](docs/architecture.md).
 
 ## Golden rules
-- **Never fork/patch the robot firmware.** dravix-os layers *beside* it. Upstream
-  `m5stack/StackChan` is reference-only under `vendor/`.
-- **Discovery-first.** Don't hard-code robot MCP tool names or HA entity ids. Run
-  `core/scripts/discover.py`, read `docs/capability-report.md`, build against what's real.
+- **Don't fork/patch M5Stack's upstream firmware.** Our firmware is a fresh ESPHome config that
+  layers on the M5Stack ESPHome **BSP** (pinned under `packages:`); upstream `m5stack/StackChan`
+  is reference-only under `vendor/`. Never edit the BSP in place — extend beside it.
+- **Discovery-first.** Don't hard-code HA entity ids. Auto-discovery (`core/dravix/discovery.py`,
+  suffix-anchored) maps the robot's entities at startup; build against what's discovered. The
+  legacy MCP driver + `core/scripts/discover.py` remain for non-HA backends.
 - **Everything is pluggable** behind interfaces: robot drivers (`core/dravix/dal/`), AI
   providers (`core/dravix/ai/`), modes (`plugins/`). Higher layers depend only on the
   `RobotController` facade — never a driver directly.

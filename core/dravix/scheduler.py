@@ -148,7 +148,9 @@ class Scheduler:
                 await asyncio.sleep(seconds)
                 await self._bus.publish("timer.done", label=label, id=timer_id)
                 default = {"say": f"{label or 'Timer'} done."}
-                await self.run_action(action or default, {"label": label})
+                # a timer is something the user explicitly set — it must ring even when the
+                # "speaks on its own" mute is on (that mute is for ambient chatter, not alerts).
+                await self.run_action(action or default, {"label": label}, proactive=False)
             except asyncio.CancelledError:
                 raise
             finally:
@@ -182,7 +184,12 @@ class Scheduler:
         return out
 
     # ── shared action runner ────────────────────────────────────────────────────
-    async def run_action(self, action: dict[str, Any], ctx: dict[str, Any]) -> None:
+    async def run_action(
+        self, action: dict[str, Any], ctx: dict[str, Any], *, proactive: bool = True
+    ) -> None:
+        """Run a scheduled action's flourishes. ``proactive`` (default True — a scheduled
+        announcement is ambient) is False for user-set timer alerts so they ring through the
+        "speaks on its own" mute."""
         robot = self._robot
         try:
             # DND: face/LED/motion/speech flourishes respect the robot's quiet modes (a
@@ -199,7 +206,7 @@ class Scheduler:
                 yaw, pitch = action["head"]
                 await robot.move_head(float(yaw), float(pitch))
             if action.get("emote") and not quiet:
-                await play_emote(robot, action["emote"])
+                await play_emote(robot, action["emote"], proactive=proactive)
             # the robot's ON-DEVICE mode (awake/morning/focus/quiet/night/sleep) — this
             # is what the dashboard's Day-Schedule rows use ("07:30 morning, 23:00 sleep")
             if action.get("mode"):
@@ -207,7 +214,7 @@ class Scheduler:
                 if setter is not None:
                     await setter(str(action["mode"]))
             if action.get("say") and not quiet and robot.supports(CAP_SAY):
-                await robot.say(str(action["say"]).format_map(_SafeDict(ctx)), proactive=True)
+                await robot.say(str(action["say"]).format_map(_SafeDict(ctx)), proactive=proactive)
             if action.get("activate_mode") and self._engine is not None:
                 await self._engine.activate(action["activate_mode"])
         except Exception as exc:  # noqa: BLE001 — a bad job must not kill the loop

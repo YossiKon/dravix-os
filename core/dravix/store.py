@@ -46,6 +46,11 @@ _DEFAULTS: dict[str, Any] = {
     # Known people for face recognition (Frigate sub_labels / HA persons) — the welcome
     # mode greets each one with their own line; "primary" gets the extra-warm greeting.
     "people": [],  # [{name, line?, line_he?, primary?}]
+    # These are written during normal operation / from the dashboard and must be listed so an
+    # /api/export round-trips back through /api/import (validate_patch also type-checks them).
+    "personality": {},  # long-horizon temperament axes (mood drift persisted by Personality)
+    "agent_prefs": {},  # how reporting agents show on the robot + who wins
+    "spontaneous_speech": False,  # master "robot speaks on its own" switch (off = quiet)
 }
 
 # Keys ``update()`` (and /api/import) may write. Everything else in a patch is rejected.
@@ -56,7 +61,7 @@ _UPDATABLE_KEYS = (
     "screens", "robot_driver", "robot_entities", "head_calibration",
     "climate_entity", "dashboard_url", "vitals", "nudges_enabled", "language", "wellness_tips",
     "mood", "idle_motion", "spontaneous_speech", "robot_name", "local_only", "birthday",
-    "privacy_camera", "people",
+    "privacy_camera", "people", "personality", "agent_prefs",
 )
 
 
