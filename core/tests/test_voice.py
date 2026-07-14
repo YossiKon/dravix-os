@@ -31,3 +31,22 @@ async def test_controller_applies_default_voice():
     await c.say("yo", voice="explicit")
     assert drv.last_voice == "explicit"  # explicit voice overrides the default
     await c.close()
+
+
+async def test_spontaneous_speech_gate():
+    drv = MockDriver()
+    c = RobotController(drv, EventBus(), RobotState())
+    await c.connect()
+
+    # spontaneous speech OFF → proactive chatter is muted, but user/AI speech still speaks
+    c.speak_spontaneous = False
+    await c.say("bored quip", proactive=True)
+    assert c.state.last_said != "bored quip"      # never reached the driver
+    await c.say("AI reply")                        # non-proactive always speaks
+    assert c.state.last_said == "AI reply"
+
+    # turning it ON lets proactive speech through
+    c.speak_spontaneous = True
+    await c.say("good morning!", proactive=True)
+    assert c.state.last_said == "good morning!"
+    await c.close()

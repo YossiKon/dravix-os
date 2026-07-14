@@ -1,5 +1,39 @@
 # Changelog
 
+## 0.0.95
+
+**🌐 A dashboard page on the robot — glance at any Home Assistant view** *(firmware 33 — update both)*
+
+- **Dashboard page (Settings → 🌐 Dashboard page)**: paste an image URL and the robot gains a
+  new page in its swipe cycle that shows it full-screen. Unlike the alert/snapshot image it
+  **stays put** — it doesn't drift back to the face after a few minutes — and it **refreshes
+  every 15 seconds** while you're on it, so it reads like a live screen. Swipe left/right to
+  reach it (it sits after the Climate page); leave the field empty and the page simply drops
+  out of the cycle.
+- **Show a Home Assistant dashboard** with the community **Puppet** add-on, which renders any
+  dashboard to a PNG. Install it, give it a long-lived token, then point the field at e.g.
+  `http://homeassistant.local:10000/lovelace/0?viewport=320x240`. Any other URL that returns
+  an image works too. While *isLocal* is on, only LAN URLs are accepted.
+- The URL survives a robot reboot (the add-on re-asserts it), and the entity auto-discovers —
+  nothing to wire up by hand.
+
+**🔇 "Speaks on its own" toggle — quiet unless you want the chatter**
+
+- New switch in **Settings** (default **off**): when off, the robot talks **only** during an AI
+  conversation and when you press a "say" button in the dashboard. All the ambient chatter —
+  the mood engine's bored quips, the *surprises* mode, per-person greetings, scheduled/reaction
+  lines, and mode alerts — is muted. Turn it on to bring the talkative companion back.
+- Gated at a single point (`say(..., proactive=True)`), so nothing autonomous slips through.
+
+**😌 Calmer at rest — moves only every so often (firmware 33)**
+
+- The autonomous "looking around" is now much sparser: the idle glance timer slowed (9s → 14s)
+  and each move fires far less often — the physical **head turns only ~once every ~3 minutes**
+  (was ~once a minute) and the on-screen gaze drifts ~once every ~45s (was ~13s). It still feels
+  alive, just not restless. For finer control, the dashboard toggles **"Body language (head
+  moves)"** (stops physical head motion) and **"Idle glances / motion"** (stops idle motion
+  entirely) still work.
+
 ## 0.0.94
 
 **🔧 Tiny fix: the robot's first idle quip after a host reboot** *(install this instead of 0.0.93 — same features, same firmware 31)*

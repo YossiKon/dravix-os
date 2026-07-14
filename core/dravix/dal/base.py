@@ -140,6 +140,10 @@ class RobotController:
         self.default_voice: str | None = None  # applied to say() when no explicit voice given
         # When False, ambient/idle behaviors skip moving the head (manual control still works).
         self.idle_motion: bool = True
+        # When False, the robot only speaks for AI conversations + things you explicitly trigger
+        # (dashboard "say" buttons). Proactive chatter — mood quips, surprises, greetings,
+        # scheduled/reaction lines, mode alerts — passes proactive=True to say() and is muted.
+        self.speak_spontaneous: bool = True
         # Short cache for the Privacy switch (see is_private) so the camera stream doesn't
         # re-read HA every frame.
         self._priv_val: bool = False
@@ -206,7 +210,13 @@ class RobotController:
         self.state.touch()
         await self._bus.publish("robot.head", yaw=yaw, pitch=pitch)
 
-    async def say(self, text: str, voice: str | None = None) -> None:
+    async def say(self, text: str, voice: str | None = None, *, proactive: bool = False) -> None:
+        """Speak ``text``. ``proactive=True`` marks ambient/self-initiated speech (mood quips,
+        surprises, greetings, scheduled/reaction lines, mode alerts); when the user has turned
+        off spontaneous speech, those are silently dropped so the robot only talks for AI
+        conversations and things the user explicitly triggers."""
+        if proactive and not self.speak_spontaneous:
+            return
         self._require(CAP_SAY)
         await self._driver.say(text, voice or self.default_voice)
         self.state.last_said = text

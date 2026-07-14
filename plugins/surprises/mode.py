@@ -100,7 +100,7 @@ class SurprisesMode(Mode):
                 else:
                     line = "אַפְּצִ'י!" if he else "Achoo!"
                 if robot.supports(CAP_SAY):
-                    await robot.say(line)
+                    await robot.say(line, proactive=True)
                 await asyncio.sleep(2.0)
                 if robot.supports(CAP_FACE):
                     await robot.set_face(Expression.NEUTRAL)

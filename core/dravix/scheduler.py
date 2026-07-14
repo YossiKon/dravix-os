@@ -132,7 +132,7 @@ class Scheduler:
                 else "Happy birthday! Today we're celebrating you 🎂"
             )
             if robot.supports(CAP_SAY):
-                await robot.say(line)
+                await robot.say(line, proactive=True)
         except Exception:  # noqa: BLE001 — a party must never crash the scheduler
             pass
         await self._bus.publish("birthday.celebrated", date=today)
@@ -207,7 +207,7 @@ class Scheduler:
                 if setter is not None:
                     await setter(str(action["mode"]))
             if action.get("say") and not quiet and robot.supports(CAP_SAY):
-                await robot.say(str(action["say"]).format_map(_SafeDict(ctx)))
+                await robot.say(str(action["say"]).format_map(_SafeDict(ctx)), proactive=True)
             if action.get("activate_mode") and self._engine is not None:
                 await self._engine.activate(action["activate_mode"])
         except Exception as exc:  # noqa: BLE001 — a bad job must not kill the loop

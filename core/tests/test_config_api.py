@@ -86,6 +86,24 @@ def test_config_api(tmp_path, monkeypatch):
             assert client.get("/api/climate/state", params={"entity_id": "climate.ac"}).status_code == 503
             assert client.post("/api/climate/set", json={"entity_id": "climate.ac", "temperature": 22}).status_code == 503
 
+            # Dashboard URL round-trips through the store; scheme is validated; empty clears it.
+            # No HA configured here, so it's stored but not pushed to a robot.
+            assert client.get("/api/config/dashboard_url").json()["url"] == ""
+            r = client.put(
+                "/api/config/dashboard_url",
+                json={"url": "http://homeassistant.local:10000/lovelace/0?viewport=320x240"},
+            )
+            assert r.status_code == 200 and r.json()["pushed"] is False
+            assert client.get("/api/config/dashboard_url").json()["url"].endswith("viewport=320x240")
+            assert client.put("/api/config/dashboard_url", json={"url": "ftp://nope"}).status_code == 400
+            assert client.put("/api/config/dashboard_url", json={"url": ""}).json()["url"] == ""
+
+            # "Speaks on its own" toggle round-trips and shows up in /api/config's store.
+            assert client.get("/api/config").json()["store"].get("spontaneous_speech") in (None, False)
+            r = client.put("/api/robot/spontaneous-speech", json={"enabled": True})
+            assert r.status_code == 200 and r.json()["spontaneous_speech"] is True
+            assert client.get("/api/config").json()["store"]["spontaneous_speech"] is True
+
             # Robot mode: the mock driver has no mode control → 409; a bad mode → 400.
             assert client.post("/api/robot/mode", json={"mode": "sleep"}).status_code == 409
             assert client.post("/api/robot/mode", json={"mode": "nope"}).status_code == 400

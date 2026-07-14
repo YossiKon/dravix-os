@@ -54,7 +54,7 @@ class SecurityMode(Mode):
         if bool(self.ctx.config.get("announce", False)) and robot.supports(CAP_SAY):
             he = self.ctx.language().startswith("he")  # dashboard toggle wins over env
             try:
-                await robot.say("מצב אבטחה הופעל." if he else "Security mode armed.")
+                await robot.say("מצב אבטחה הופעל." if he else "Security mode armed.", proactive=True)
             except Exception:  # noqa: BLE001 — announcing is best-effort
                 pass
         self._task = asyncio.create_task(self._run(), name="dravix-security")

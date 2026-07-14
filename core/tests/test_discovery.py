@@ -16,7 +16,8 @@ def test_discovery_full_robot():
         "light.dravix_stackchan_light_bar", "media_player.dravix_media_player",
         "camera.dravix_camera", "sensor.dravix_state", "sensor.kitchen_state",
         "sensor.dravix_last_heard", "sensor.dravix_last_reply",
-        "text.dravix_show_image_url", "switch.dravix_privacy_mode",
+        "text.dravix_show_image_url", "text.dravix_dashboard_url",
+        "switch.dravix_privacy_mode",
         "sensor.dravix_battery", "sensor.phone_battery", "sensor.door_lock_battery",
         "switch.dravix_local_only", "text.dravix_bubble", "text.dravix_latest_firmware",
         "number.dravix_screen_brightness", "binary_sensor.dravix_presence_nearby",
@@ -32,6 +33,7 @@ def test_discovery_full_robot():
     assert found["media_player"] == "media_player.dravix_media_player"
     assert found["camera"] == "camera.dravix_camera"
     assert found["image_url_text"] == "text.dravix_show_image_url"
+    assert found["dash_url_text"] == "text.dravix_dashboard_url"
     assert found["privacy_switch"] == "switch.dravix_privacy_mode"
     assert found["screensaver_number"] == "number.dravix_screensaver_after_min"
     assert found["sleep_number"] == "number.dravix_sleep_after_min"

@@ -45,4 +45,4 @@ class CompanionMode(Mode):
         if self.ctx.robot.supports(CAP_FACE):
             await self.ctx.robot.set_face(expr)
         if clean and self.ctx.robot.supports(CAP_SAY):
-            await self.ctx.robot.say(clean)
+            await self.ctx.robot.say(clean, proactive=True)

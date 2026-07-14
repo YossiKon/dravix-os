@@ -136,7 +136,7 @@ Everything is done by touching the robot, talking to it, or from the dashboard:
 | **Plug in the charger** (while awake) | "Nom, electricity!" — happy face + a green flash |
 | Room goes **dark / bright** | Falls asleep / wakes up (toggleable) |
 | **Swipe ⬇** | Status bar: clock · date · Wi-Fi bars · battery % + time-left · **volume slider** · **LOCAL** button · amber ⬆ arrow when a firmware update is available |
-| **Swipe ⬅ / ➡** | Cycles: face → card 1 → card 2 → card 3 → **GAMES** → **VITALS** |
+| **Swipe ⬅ / ➡** | Cycles: face → card 1 → card 2 → card 3 → **GAMES** → **VITALS** → **CLIMATE** → **🌐 DASHBOARD** (the last only when you've set a Dashboard URL in Settings) |
 | **Tap a row on a card** | Controls that HA entity right from the robot — toggles lights/switches, presses buttons, runs scripts & scenes (up to 4 rows per card) |
 | **Swipe ⬆** | Back to the face |
 | **LOCAL** button (on the status bar) | Toggles local-only mode — nothing in or out of your LAN |
@@ -156,6 +156,7 @@ Everything is done by touching the robot, talking to it, or from the dashboard:
 | 🫨 Hand-turn reaction | Physically turn its head → startled wide eyes, then it warms up to it | Just do it |
 | 🕹️ Games arcade | **Catch Me · Reaction · Simon · Rock-Paper-Scissors · Flappy · Party** | Swipe to **GAMES**, tap a game (Party also has an HA button) |
 | 💗 Vitals screen | The robot's live needs as bars (energy/food/fun/calm) | Swipe to **VITALS**; care actions on the dashboard **Life** tab |
+| 🌐 Dashboard page | A live screenshot of any Home Assistant dashboard (or any image URL) on its own swipe page — stays put, refreshes every 15s | Dashboard → **Settings → 🌐 Dashboard page**; render HA views with the **Puppet** add-on. See [docs/dashboard-page.md](docs/dashboard-page.md) |
 | 🗂 3 interactive cards | Any HA entities you pick — and up to 4 **tappable rows** per card: tap to toggle/press/run scripts, scenes, automations, the AC | Dashboard → **Screens**: pick entities per card; tap rows on the robot |
 | 🔊 Volume slider | A real slider on the status bar — drag it; it live-mirrors the actual speaker volume | Swipe ⬇ (matching slider on the dashboard Home tab) |
 | 🔒 Privacy mode | Mic dead on-device + camera endpoints blocked; red PRIVACY badge | Toggle on the dashboard Home tab or the HA switch |

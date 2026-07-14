@@ -21,7 +21,7 @@ class DndMode(Mode):
             await robot.set_leds(cfg.get("color", "red"), cfg.get("brightness", 0.2))
         greet = cfg.get("greet")
         if greet and robot.supports(CAP_SAY):
-            await robot.say(greet)
+            await robot.say(greet, proactive=True)
 
     async def on_exit(self) -> None:
         robot = self.ctx.robot

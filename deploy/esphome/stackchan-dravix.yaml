@@ -17,7 +17,8 @@
 #  States:  awake = WHITE bg + dark eyes  ·  listening = BIG eyes + YELLOW LEDs
 #           screensaver = dim, face+blink, NO drift  ·  sleep = closed eyes + zzz, black
 #  Wake word "Okay, Nabu" (on-device) · brightness control.
-#  SWIPE:  down → status · up → face · left/right → 3 cards + the CATCH-ME game.
+#  SWIPE:  down → status · up → face · left/right → face · 3 cards · games · vitals ·
+#          climate · 🌐 dashboard (the last only joins the cycle when a Dashboard URL is set).
 #  GAME "CATCH ME!": a teal dot runs around the screen — tap it to score; every 10
 #  catches the robot celebrates (green LEDs + a happy head wiggle).
 #  TRIPLE-tap face = STOP everything · DOUBLE-tap = AI listen (toggle) · single tap = nothing · LONG-PRESS = sleep.
@@ -39,7 +40,7 @@ substitutions:
   # publishes it to HA ("Firmware version" sensor); the dravix dashboard compares it
   # with the version bundled in the add-on and shows "firmware update available".
   # (Maintainers: bump this on every firmware change. Users: don't touch.)
-  fw_version: "31"
+  fw_version: "33"
   # The ESPHome node name (mDNS hostname + the default entity prefix on a fresh flash).
   # Change it only if you run MORE THAN ONE robot — each needs a unique name. NOTE:
   # changing it on an already-adopted robot registers a NEW device in HA.
@@ -240,6 +241,26 @@ online_image:
       - script.execute: img_timeout
     on_error:
       - logger.log: "show-image: download failed"
+  # ── The DASHBOARD page image — a screenshot of a Home Assistant dashboard (rendered by
+  #    the community "Puppet" add-on to a PNG, or any URL that returns an image). Set the
+  #    "Dashboard URL" text slot (from the dravix add-on's Settings) and swipe to the 🌐 page
+  #    to see it. Unlike the ALERT image it does NOT auto-return to the face — it stays until
+  #    you swipe away, and `dash_refresh` re-pulls it every 15s while it's on screen. PNG
+  #    (Puppet's default output); needs the CoreS3's PSRAM, which it has.
+  - id: oi_dash
+    url: "http://127.0.0.1/placeholder.png"   # replaced at runtime via the Dashboard URL slot
+    format: PNG
+    type: RGB565
+    resize: 320x240
+    update_interval: never
+    on_download_finished:
+      - lvgl.image.update: { id: img_dash, src: oi_dash }
+      - lvgl.widget.hide: dash_hint
+    on_error:
+      - logger.log: "dash: download failed"
+      - if:
+          condition: { lvgl.page.is_showing: page_dash }
+          then: [ { lvgl.widget.show: dash_hint } ]
 
 # ── GAME SOUND — 8-bit beeps through the BSP's I2S speaker (`i2s_speaker`, shared with TTS;
 #    the game only plays them while it's running, when nothing else is using the speaker).
@@ -955,6 +976,30 @@ text:
             - online_image.set_url:      # set_url also starts the download itself
                 id: oi_show
                 url: !lambda 'return x;'
+  # ── DASHBOARD URL — a screenshot URL for the swipe-to 🌐 page (e.g. the Puppet add-on:
+  #    http://homeassistant.local:10000/lovelace/0?viewport=320x240). dravix writes this
+  #    from Settings and re-pushes it every few seconds so it survives a robot reboot.
+  #    Non-empty → the 🌐 page joins the swipe cycle; empty → it's skipped. Setting it
+  #    pre-fetches the image so the page is ready before you swipe to it.
+  - platform: template
+    name: "Dashboard URL"
+    id: t_dash_url
+    optimistic: true
+    mode: text
+    max_length: 255
+    initial_value: ""
+    set_action:
+      - if:
+          condition: { lambda: 'return !x.empty();' }
+          then:
+            - online_image.set_url: { id: oi_dash, url: !lambda 'return x;' }
+          else:
+            # cleared while viewing the dashboard → fall back to the face (it just left the cycle)
+            - if:
+                condition: { lvgl.page.is_showing: page_dash }
+                then:
+                  - globals.set: { id: g_card, value: "0" }
+                  - lvgl.page.show: page_face
   # ── CLIMATE page slots — dravix writes the configured AC's live status here every
   #    few seconds; the swipe-to CLIMATE page shows them. The buttons on that page fire
   #    esphome.dravix_climate events back to dravix, which performs the HA service call.
@@ -1543,12 +1588,14 @@ lvgl:
               - script.execute: render_face
     # After 3 min of no touch, drift back to the FACE from any other screen (cards / games /
     # vitals). Touching any screen resets this timer (LVGL counts touches as activity).
+    # EXCEPTION: the 🌐 dashboard stays put — it's meant to be a persistent glanceable page.
     - timeout: 180000ms
       then:
         - if:
             condition:
-              not:
-                lvgl.page.is_showing: page_face
+              and:
+                - not: { lvgl.page.is_showing: page_face }
+                - not: { lvgl.page.is_showing: page_dash }
             then:
               - globals.set: { id: g_card, value: "0" }
               - globals.set: { id: g_sbar, value: "0" }
@@ -2098,6 +2145,23 @@ lvgl:
             id: img_show
             align: CENTER
             src: oi_show
+    # ── DASHBOARD — a live screenshot of a Home Assistant dashboard (swipe slot 7, only in
+    #    the cycle when a Dashboard URL is set). The image covers the hint once it loads;
+    #    the hint reappears on a download error. Stays put until you swipe away (no timeout).
+    - id: page_dash
+      bg_color: 0x000000
+      bg_opa: COVER
+      widgets:
+        - label:
+            id: dash_hint
+            text: "Loading dashboard…"
+            text_font: small_font
+            text_color: 0x8b96a4
+            align: CENTER
+        - image:
+            id: img_dash
+            align: CENTER
+            src: oi_dash
     # ── GAMES MENU — swipe to the "game" slot in the card cycle to open this ──────
     - id: page_games
       bg_color: 0x05080b
@@ -2934,13 +2998,14 @@ script:
             if (full) lv_obj_clear_flag(w, LV_OBJ_FLAG_HIDDEN);
             else      lv_obj_add_flag(w, LV_OBJ_FLAG_HIDDEN);
           }
-          // the update arrow is owned by the 5s interval (gated on g_sbar) — force it
-          // off here too so it can't linger for up to 5s after a full→compact step
-          if (!full) {
-            lv_obj_add_flag(id(upd_a1), LV_OBJ_FLAG_HIDDEN);
-            lv_obj_add_flag(id(upd_a2), LV_OBJ_FLAG_HIDDEN);
-          }
           lv_obj_clear_flag(bar, LV_OBJ_FLAG_HIDDEN);
+      # The update arrows are LINE widgets (LvLineType) — hide them via the LVGL action, NOT a
+      # raw lv_obj_add_flag(id(...)), which ESPHome 2026.6.5 rejects for typed widgets. Force
+      # them off whenever the bar isn't full (the 5s interval owns them while it IS full, and
+      # only shows them when an update is waiting) so they can't linger after a full→compact step.
+      - if:
+          condition: { lambda: 'return id(g_sbar) < 2;' }
+          then: [ { lvgl.widget.hide: upd_a1 }, { lvgl.widget.hide: upd_a2 } ]
   # ── FACE TAP dispatch — single tap = STOP everything · double tap = toggle the AI ──
   - id: panic_stop            # single tap: cut speech + dance + effects, LEDs off, clean face
     then:
@@ -3871,7 +3936,7 @@ script:
               int c;
               if (id(g_sleep) || id(g_saver) || id(g_night)) c = 0x000000;
               else {
-                auto s = id(sel_background).state;
+                auto s = id(sel_background).current_option();
                 c = (s == "Space")  ? 0x0a1830
                   : (s == "Sunset") ? 0x6a3016
                   : (s == "Ocean")  ? 0x0d4a70
@@ -3891,7 +3956,7 @@ script:
       - if:
           condition:
             lambda: |-
-              return id(sel_background).state == "Space"
+              return id(sel_background).current_option() == "Space"
                      && !id(g_sleep) && !id(g_saver) && !id(g_night);
           then:
             - lvgl.widget.show: bg_star1
@@ -3912,21 +3977,21 @@ script:
           bg_color: !lambda |-
             if (id(g_sleep) || id(g_saver)) return lv_color_hex(0x33E6C8);
             if (id(g_night)) return lv_color_hex(0x1f9e88);
-            if (id(sel_background).state != "None") return lv_color_hex(0xF2F5F7);  // light eyes on a dark theme
+            if (id(sel_background).current_option() != "None") return lv_color_hex(0xF2F5F7);  // light eyes on a dark theme
             return lv_color_hex(0x14181d);
       - lvgl.widget.update:
           id: eye_r
           bg_color: !lambda |-
             if (id(g_sleep) || id(g_saver)) return lv_color_hex(0x33E6C8);
             if (id(g_night)) return lv_color_hex(0x1f9e88);
-            if (id(sel_background).state != "None") return lv_color_hex(0xF2F5F7);
+            if (id(sel_background).current_option() != "None") return lv_color_hex(0xF2F5F7);
             return lv_color_hex(0x14181d);
       - lvgl.widget.update:
           id: mouth
           bg_color: !lambda |-
             if (id(g_sleep) || id(g_saver)) return lv_color_hex(0x33E6C8);
             if (id(g_night)) return lv_color_hex(0x1f9e88);
-            if (id(sel_background).state != "None") return lv_color_hex(0xF2F5F7);
+            if (id(sel_background).current_option() != "None") return lv_color_hex(0xF2F5F7);
             return lv_color_hex(0x14181d);
       # privacy + local badges (pills — show/hide the widget, an empty pill still draws)
       - if:
@@ -4088,17 +4153,17 @@ script:
             - lvgl.label.update:
                 id: dz_l
                 text_color: !lambda |-
-                  bool dark_bg = id(g_night) || id(sel_background).state != "None";
+                  bool dark_bg = id(g_night) || id(sel_background).current_option() != "None";
                   return lv_color_hex(dark_bg ? 0x33E6C8 : 0x14181d);
             - lvgl.label.update:
                 id: dz_r
                 text_color: !lambda |-
-                  bool dark_bg = id(g_night) || id(sel_background).state != "None";
+                  bool dark_bg = id(g_night) || id(sel_background).current_option() != "None";
                   return lv_color_hex(dark_bg ? 0x33E6C8 : 0x14181d);
             - lvgl.label.update:
                 id: q_mark
                 text_color: !lambda |-
-                  bool dark_bg = id(g_night) || id(sel_background).state != "None";
+                  bool dark_bg = id(g_night) || id(sel_background).current_option() != "None";
                   return lv_color_hex(dark_bg ? 0xffd54a : 0xB5471F);
             - lvgl.widget.show: dz_l
             - lvgl.widget.show: dz_r
@@ -4129,7 +4194,38 @@ script:
       - if: { condition: { lambda: 'return id(g_card) == 4;' }, then: [ { lvgl.page.show: page_games } ] }
       - if: { condition: { lambda: 'return id(g_card) == 5;' }, then: [ { lvgl.page.show: page_vitals } ] }
       - if: { condition: { lambda: 'return id(g_card) == 6;' }, then: [ { lvgl.page.show: page_climate } ] }
-      - if: { condition: { lambda: 'return id(g_card) <= 0 || id(g_card) > 6;' }, then: [ { lvgl.page.show: page_face } ] }
+      # slot 7 — the 🌐 dashboard (only reachable when a Dashboard URL is set; the swipe
+      # handlers use a modulus of 8 then, 7 otherwise, so this stays skipped when empty)
+      - if: { condition: { lambda: 'return id(g_card) == 7;' }, then: [ { lvgl.page.show: page_dash }, { script.execute: dash_enter } ] }
+      - if: { condition: { lambda: 'return id(g_card) <= 0 || id(g_card) > 7;' }, then: [ { lvgl.page.show: page_face } ] }
+  # Entering the 🌐 dashboard page: pull a fresh screenshot right away, then keep it refreshed.
+  - id: dash_enter
+    then:
+      - if:
+          condition: { lambda: 'return !id(t_dash_url).state.empty();' }
+          then:
+            - online_image.set_url: { id: oi_dash, url: !lambda 'return id(t_dash_url).state;' }
+      - script.execute: dash_refresh
+  # Re-pull the dashboard screenshot every 15s WHILE the page is showing (and not dimmed by
+  # the screensaver). Exits on its own once you swipe away — mode:restart so a re-entry can't
+  # stack two loops.
+  - id: dash_refresh
+    mode: restart
+    then:
+      - while:
+          condition:
+            and:
+              - lvgl.page.is_showing: page_dash
+              - lambda: 'return !id(t_dash_url).state.empty();'
+          then:
+            - delay: 15s
+            - if:
+                condition:
+                  and:
+                    - lvgl.page.is_showing: page_dash
+                    - lambda: 'return !id(g_saver) && !id(t_dash_url).state.empty();'
+                then:
+                  - online_image.set_url: { id: oi_dash, url: !lambda 'return id(t_dash_url).state;' }
   # Greet: someone approached → wake up + a happy face + perk the head up.
   # (Skipped at night / in focus — do-not-disturb — AND while asleep/screensaver: the sleep
   # contract is "only a tap or the wake word wakes it", not someone walking past at night.)
@@ -5447,15 +5543,17 @@ interval:
   # "Alive" looking-around — TRULY random: it skips a beat sometimes (irregular
   # timing), varies how far it looks, and mixes yaw glances with pitch tilts and an
   # occasional look-up "stretch", so it never repeats the same move twice in a row.
-  # Only when fully awake (not screensaver/sleep/busy/calm modes).
-  - interval: 9s
+  # Only when fully awake (not screensaver/sleep/busy/calm modes). Deliberately SPARSE —
+  # the user wants it to move only every so often, so the interval is slow and each part
+  # fires with a low probability (calm at rest, not restless). Tune via sw_drift / these odds.
+  - interval: 14s
     then:
-      # ~30% of ticks it simply doesn't move at all — rhythm is what kills realism
+      # most ticks it simply doesn't move at all — an occasional, gentle glance, not a fidget
       - if:
           condition:
             lambda: |-
               return id(sw_drift).state && !id(g_sleep) && !id(g_saver) && !id(g_busy)
-                     && !id(g_night) && !id(g_focus) && !id(g_quiet) && random_float() < 0.7;
+                     && !id(g_night) && !id(g_focus) && !id(g_quiet) && random_float() < 0.30;
           then:
             - lvgl.widget.update:
                 id: face_box
@@ -5471,7 +5569,7 @@ interval:
               - lambda: |-
                   return id(sw_move).state && id(sw_drift).state && !id(g_sleep) && !id(g_saver)
                          && !id(g_busy) && !id(g_night) && !id(g_focus) && !id(g_quiet) && !id(g_voice)
-                         && !std::isnan(id(servo_x_angle).state) && random_float() < 0.14;
+                         && !std::isnan(id(servo_x_angle).state) && random_float() < 0.08;
           then:
             - number.set:
                 id: servo_x_angle
@@ -5857,7 +5955,10 @@ touchscreen:
               return !id(sw_sleep) && adx >= ady && dx < -40
                      && lv_obj_has_flag(id(statusbar), LV_OBJ_FLAG_HIDDEN);
           then:
-            - globals.set: { id: g_card, value: !lambda 'return (id(g_card) + 1) % 7;' }
+            # cycle length is 8 when a Dashboard URL is set (the 🌐 page joins), 7 otherwise
+            - lambda: |-
+                int n = id(t_dash_url).state.empty() ? 7 : 8;
+                id(g_card) = (id(g_card) + 1) % n;
             - script.execute: show_card
       # swipe RIGHT → previous screen (blocked while the status bar is open — see above)
       - if:
@@ -5868,7 +5969,9 @@ touchscreen:
               if (!lv_obj_has_flag(id(statusbar), LV_OBJ_FLAG_HIDDEN)) return false;
               return !id(sw_sleep) && adx >= ady && dx > 40;
           then:
-            - globals.set: { id: g_card, value: !lambda 'return (id(g_card) + 6) % 7;' }
+            - lambda: |-
+                int n = id(t_dash_url).state.empty() ? 7 : 8;
+                id(g_card) = (id(g_card) + n - 1) % n;
             - script.execute: show_card
 
 # ── Wake word "Okay, Nabu" (on-device) ──────────────────────────────────────────

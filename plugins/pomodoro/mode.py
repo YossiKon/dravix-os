@@ -50,7 +50,7 @@ class PomodoroMode(Mode):
         # the break reminder is the whole point — it SHOULD interrupt focus/quiet; only
         # skip it when the robot is truly off (asleep/screensaver → nobody's there)
         if robot.supports(CAP_SAY) and not await self.ctx.is_asleep():
-            await robot.say(line)
+            await robot.say(line, proactive=True)
         await self.ctx.bus.publish("pomodoro.phase", phase=self._phase)
         self.ctx.log.info("pomodoro -> %s", self._phase)
 

@@ -135,7 +135,7 @@ class ReactionEngine:
                 img = await self._frigate.snapshot(rule["frigate_show"])
                 await robot.show_image(img)
             if rule.get("say") and robot.supports(CAP_SAY):
-                await robot.say(str(rule["say"]).format_map(ctx))
+                await robot.say(str(rule["say"]).format_map(ctx), proactive=True)
             if rule.get("activate_mode") and self._engine is not None:
                 await self._engine.activate(rule["activate_mode"])
             await self._bus.publish("reaction.fired", rule=rule.get("name"), source=event.type)

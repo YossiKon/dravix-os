@@ -37,6 +37,7 @@ const ROLES: Record<string, Bi> = {
   heard_sensor: { he: "מה שמע (Last heard)", en: "Last heard" },
   reply_sensor: { he: "מה ענה (Last reply)", en: "Last reply" },
   image_url_text: { he: "הצגת תמונה (Show image URL)", en: "Show image URL" },
+  dash_url_text: { he: "כתובת דשבורד (🌐)", en: "Dashboard URL (🌐)" },
   privacy_switch: { he: "מצב פרטיות (Privacy)", en: "Privacy mode" },
   islocal_switch: { he: "מקומי בלבד (isLocal)", en: "Local-only (isLocal)" },
   battery_sensor: { he: "אחוז סוללה", en: "Battery %" },
@@ -90,6 +91,9 @@ export function SettingsPage(props: {
   const [app, setApp] = useState<AppConfig | null>(null);
   const [switches, setSwitches] = useState<HAEntity[]>([]);
   const [robotName, setRobotName] = useState<string | null>(null); // null = not user-edited yet
+  // 🌐 dashboard page URL (a HA dashboard screenshot, e.g. via the Puppet add-on)
+  const [dashUrl, setDashUrl] = useState<string | null>(null); // null = not loaded yet
+  const [dashSaved, setDashSaved] = useState(""); // the value the server currently holds
   const [updates, setUpdates] = useState<Updates | null>(null);
   const [modes, setModes] = useState<PluginMode[]>([]);
   const [openMode, setOpenMode] = useState<string | null>(null); // which mode's config is expanded
@@ -123,6 +127,12 @@ export function SettingsPage(props: {
     apiGet<{ entities: HAEntity[] }>("/api/ha/entities?domains=switch")
       .then((r) => setSwitches(r.entities))
       .catch(() => undefined);
+    apiGet<{ url: string }>("/api/config/dashboard_url")
+      .then((r) => {
+        setDashUrl(r.url ?? "");
+        setDashSaved(r.url ?? "");
+      })
+      .catch(() => setDashUrl(""));
   }, []);
 
   // Match each behaviour switch by object_id SUFFIX (switch.<anything>_greet_on_approach or
@@ -485,6 +495,15 @@ export function SettingsPage(props: {
     }
   }
 
+  async function setSpeak(enabled: boolean) {
+    try {
+      await apiSend("/api/robot/spontaneous-speech", "PUT", { enabled });
+      setApp((cur) => (cur ? { ...cur, store: { ...cur.store, spontaneous_speech: enabled } } : cur));
+    } catch (e) {
+      toastErr(e);
+    }
+  }
+
   async function setLocalOnly(enabled: boolean) {
     try {
       const r = await apiSend<{ local_only: boolean; ai_available: boolean; error: string | null }>(
@@ -504,6 +523,28 @@ export function SettingsPage(props: {
       await apiSend("/api/config/robot_name", "PUT", { name: (robotName ?? "").trim() });
       toast(tr("השם נשמר — הרובוט יענה לשם הזה", "Name saved — the robot answers to it"));
       props.onConfigChanged(); // the header picks the new name up from /api/robot/config
+    } catch (e) {
+      toastErr(e);
+    }
+  }
+
+  async function saveDashUrl() {
+    const url = (dashUrl ?? "").trim();
+    try {
+      const r = await apiSend<{ url: string; pushed?: boolean; error?: string }>(
+        "/api/config/dashboard_url",
+        "PUT",
+        { url },
+      );
+      setDashSaved(r.url ?? "");
+      setDashUrl(r.url ?? "");
+      if (r.error) {
+        toast(tr("נשמר, אך הדחיפה לרובוט נכשלה", "Saved, but the push to the robot failed"), "err");
+      } else if (!url) {
+        toast(tr("הדף הוסר — גללו והוא כבר לא יופיע", "Removed — the 🌐 page left the swipe cycle"));
+      } else {
+        toast(tr("נשמר — גללו לדף ה-🌐 כדי לראות את הדשבורד", "Saved — swipe to the 🌐 page to see it"));
+      }
     } catch (e) {
       toastErr(e);
     }
@@ -565,6 +606,42 @@ export function SettingsPage(props: {
             onChange={(e) => setRobotName(e.target.value)}
           />
           <button className="btn btn-primary" disabled={robotName === null} onClick={() => void saveRobotName()}>
+            {tr("שמור", "Save")}
+          </button>
+        </div>
+      </Section>
+
+      {/* ── 🌐 dashboard page — a HA dashboard screenshot on its own swipe page ── */}
+      <Section title={tr("🌐 דף דשבורד", "🌐 Dashboard page")} delay={41}>
+        <p className="mb-2 text-sm text-mute">
+          {tr(
+            "כתובת של תמונה שתוצג כדף נפרד בגלילה של הרובוט — נשארת שם עד שגוללים ממנה, ומתרעננת כל 15 שניות. השאירו ריק כדי להסיר את הדף.",
+            "An image URL shown as its own page in the robot's swipe cycle — it stays until you swipe away and refreshes every 15s. Leave empty to remove the page.",
+          )}
+        </p>
+        <p className="mb-3 text-xs text-mute">
+          {tr(
+            "להצגת דשבורד של Home Assistant התקינו את התוסף הקהילתי „Puppet” והפנו לכתובת שלו, למשל:",
+            "To show a Home Assistant dashboard, install the community “Puppet” add-on and point at its URL, e.g.:",
+          )}{" "}
+          <code dir="ltr" className="rounded bg-card2 px-1 py-0.5 font-mono text-[11px]">
+            http://homeassistant.local:10000/lovelace/0?viewport=320x240
+          </code>
+        </p>
+        <div className="flex gap-2">
+          <input
+            dir="ltr"
+            className="inp flex-1 font-mono text-xs"
+            maxLength={255}
+            placeholder="http://homeassistant.local:10000/lovelace/0?viewport=320x240"
+            value={dashUrl ?? ""}
+            onChange={(e) => setDashUrl(e.target.value)}
+          />
+          <button
+            className="btn btn-primary"
+            disabled={dashUrl === null || (dashUrl ?? "").trim() === dashSaved}
+            onClick={() => void saveDashUrl()}
+          >
             {tr("שמור", "Save")}
           </button>
         </div>
@@ -1131,6 +1208,17 @@ export function SettingsPage(props: {
           on={Boolean(app?.store.idle_motion ?? false)}
           onChange={(v) => void setIdle(v)}
         />
+        <Toggle
+          label={tr("מדבר מיוזמתו", "Speaks on its own")}
+          on={Boolean(app?.store.spontaneous_speech ?? false)}
+          onChange={(v) => void setSpeak(v)}
+        />
+        <p className="-mt-1 px-1 text-xs text-mute">
+          {tr(
+            "כשכבוי — הרובוט מדבר רק בשיחת AI ובכפתורים שאתה לוחץ. כשדולק — גם משפטי שעמום, הפתעות, ברכות והכרזות.",
+            "Off — the robot speaks only in AI conversations and when you press a button. On — also idle quips, surprises, greetings and announcements.",
+          )}
+        </p>
       </Section>
 
       {/* ── backup & restore — the whole add-on config as one JSON file ── */}

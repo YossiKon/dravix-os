@@ -114,6 +114,7 @@ async def lifespan(app: FastAPI):
     # only until the user flips it. (Previously this always used the env default, so a restart
     # silently re-enabled idle motion — the head then moved even in sleep/focus.)
     controller.idle_motion = store.idle_motion(settings.idle_motion)
+    controller.speak_spontaneous = store.spontaneous_speech(settings.spontaneous_speech)
     try:
         await controller.connect()
     except Exception as exc:  # noqa: BLE001 — degrade gracefully, surface in status
@@ -335,13 +336,17 @@ async def lifespan(app: FastAPI):
     fw_notify_task = asyncio.create_task(_fw_notifier(), name="dravix-fw-notify")
 
     async def _climate_pusher() -> None:
-        """Keep the robot's CLIMATE page fresh with the configured AC's live state."""
+        """Keep the robot's CLIMATE page fresh with the configured AC's live state, and
+        re-assert the Dashboard URL (optimistic firmware slots reset on reboot)."""
         from .climate_bridge import push_status
+        from .dashboard_bridge import push_url
 
         while True:
             try:
                 if ha is not None:
-                    await push_status(ha, store.climate_entity(), app.state.discovered_entities or {})
+                    disc = app.state.discovered_entities or {}
+                    await push_status(ha, store.climate_entity(), disc)
+                    await push_url(ha, store.dashboard_url(), disc)
             except Exception:  # noqa: BLE001 — never die
                 pass
             await asyncio.sleep(5)

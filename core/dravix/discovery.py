@@ -37,6 +37,7 @@ _ROLES: dict[str, tuple[str, tuple[str, ...], bool]] = {
     "heard_sensor": ("sensor", ("last_heard",), False),
     "reply_sensor": ("sensor", ("last_reply",), False),
     "image_url_text": ("text", ("show_image_url",), False),
+    "dash_url_text": ("text", ("dashboard_url",), False),
     "bubble_text": ("text", ("bubble",), True),
     "agent_text": ("text", ("agent_status",), False),
     "permission_text": ("text", ("agent_permission",), False),

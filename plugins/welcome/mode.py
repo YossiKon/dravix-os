@@ -190,7 +190,7 @@ class WelcomeMode(Mode):
         line = _greeting_line(base, name, he)
         if line and robot.supports(CAP_SAY):
             try:
-                await robot.say(line)
+                await robot.say(line, proactive=True)
             except Exception:  # noqa: BLE001 — greeting is best-effort
                 pass
         if robot.supports(CAP_HEAD):

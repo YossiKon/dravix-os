@@ -121,7 +121,7 @@ export interface AppConfig {
   ai_available: boolean;
   providers: string[];
   local_only: boolean;
-  store: { idle_motion?: boolean } & Record<string, unknown>;
+  store: { idle_motion?: boolean; spontaneous_speech?: boolean } & Record<string, unknown>;
 }
 
 export interface PluginMode {

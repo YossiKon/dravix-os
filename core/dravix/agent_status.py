@@ -357,7 +357,7 @@ class AgentPresence:
             if base:
                 line = f"{wname}: {base}" if (wname and wname != "agent") else base
                 try:
-                    await robot.say(line)
+                    await robot.say(line, proactive=True)
                 except Exception:  # noqa: BLE001
                     pass
 

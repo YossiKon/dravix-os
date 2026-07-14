@@ -129,6 +129,7 @@ async def status(request: Request):
     data["mood"] = request.app.state.mood.snapshot()
     data["vitals"] = request.app.state.vitals.snapshot()
     data["idle_motion"] = getattr(request.app.state.robot, "idle_motion", True)
+    data["spontaneous_speech"] = getattr(request.app.state.robot, "speak_spontaneous", True)
     xz = getattr(request.app.state, "xiaozhi", None)
     data["xiaozhi"] = {
         "configured": xz is not None,
@@ -329,6 +330,16 @@ async def set_idle_motion(body: IdleMotionBody, request: Request):
     return {"idle_motion": body.enabled}
 
 
+@router.put("/api/robot/spontaneous-speech")
+async def set_spontaneous_speech(body: IdleMotionBody, request: Request):
+    """Enable/disable the robot speaking on its own (mood quips, surprises, greetings,
+    scheduled/reaction lines, mode alerts). When off, it speaks only for AI conversations
+    and things you explicitly trigger. Applies live and persists."""
+    request.app.state.robot.speak_spontaneous = body.enabled
+    request.app.state.store.set_spontaneous_speech(body.enabled)
+    return {"spontaneous_speech": body.enabled}
+
+
 # ── agent presence — an AI agent on your PC uses the robot as a status lamp ──────────
 @router.post("/api/agent/status")
 async def agent_status_set(body: AgentStatusBody, request: Request):
@@ -469,6 +480,7 @@ ROBOT_ENTITY_ROLES = [
     {"key": "heard_sensor", "label": "Last heard (STT sensor)", "domains": ["sensor"]},
     {"key": "reply_sensor", "label": "Last reply (TTS sensor)", "domains": ["sensor"]},
     {"key": "image_url_text", "label": "Show-image URL (text)", "domains": ["text"]},
+    {"key": "dash_url_text", "label": "Dashboard URL (text)", "domains": ["text"]},
     {"key": "privacy_switch", "label": "Privacy mode (switch)", "domains": ["switch"]},
     {"key": "islocal_switch", "label": "Local-only (switch)", "domains": ["switch"]},
     {"key": "battery_sensor", "label": "Battery % (sensor)", "domains": ["sensor"]},
@@ -2062,6 +2074,47 @@ async def get_climate_config(request: Request):
 async def put_climate_config(body: ClimateConfigBody, request: Request):
     request.app.state.store.set_climate_entity(body.entity)
     return {"entity": request.app.state.store.climate_entity()}
+
+
+class DashboardUrlBody(BaseModel):
+    url: str = ""
+
+
+@router.get("/api/config/dashboard_url")
+async def get_dashboard_url(request: Request):
+    return {"url": request.app.state.store.dashboard_url()}
+
+
+@router.put("/api/config/dashboard_url")
+async def put_dashboard_url(body: DashboardUrlBody, request: Request):
+    """Set (or clear) the screenshot URL for the robot's swipe-to 🌐 dashboard page.
+
+    Empty clears it (the page leaves the swipe cycle). A non-empty URL must be http(s), and
+    while the master isLocal flag is on it must be a LAN host — the dashboard is meant to be
+    a local Home Assistant view, not something pulled from the internet."""
+    url = (body.url or "").strip()
+    if url:
+        parsed = urlparse(url)
+        if parsed.scheme.lower() not in ("http", "https"):
+            raise HTTPException(status_code=400, detail="url must be http(s)")
+        if _local_only(request) and not _is_local_host(parsed.hostname or ""):
+            raise HTTPException(
+                status_code=400,
+                detail="isLocal mode is on — only a local (LAN) dashboard URL is allowed",
+            )
+    s = request.app.state
+    s.store.set_dashboard_url(url)
+    # push it to the robot right away (the 5s loop keeps it re-asserted afterwards)
+    pushed = False
+    if s.ha is not None:
+        from ..dashboard_bridge import push_url
+
+        pushed = await push_url(s.ha, url, getattr(s, "discovered_entities", None) or {}, force=True)
+    resp: dict = {"url": s.store.dashboard_url(), "pushed": pushed}
+    if s.ha is not None and not pushed:
+        # it's saved and the 5s loop will keep retrying; tell the UI the robot didn't take it yet
+        resp["error"] = "saved, but the robot didn't receive it (is its firmware flashed & online?)"
+    return resp
 
 
 # ── personality: mood + emotes ────────────────────────────────────────────────

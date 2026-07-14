@@ -54,6 +54,6 @@ class GuardMode(Mode):
         if speak and cfg.get("quiet_no_voice", True) and await self.ctx.is_quiet():
             speak = False
         if speak:
-            await robot.say(cfg.get("alert_line", "Motion detected."))
+            await robot.say(cfg.get("alert_line", "Motion detected."), proactive=True)
         await self.ctx.bus.publish("guard.alert", source=event.type, detail=event.data)
         self.ctx.log.info("guard alert from %s", event.type)

@@ -24,7 +24,7 @@ class FocusMode(Mode):
             await robot.set_leds(cfg.get("led_color", "blue"), cfg.get("led_brightness", 0.25))
         greet = cfg.get("greet")
         if greet and robot.supports(CAP_SAY):
-            await robot.say(greet)
+            await robot.say(greet, proactive=True)
         self.ctx.log.info("focus mode entered")
 
     async def on_exit(self) -> None:

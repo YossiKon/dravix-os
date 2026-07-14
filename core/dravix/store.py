@@ -32,6 +32,7 @@ _DEFAULTS: dict[str, Any] = {
     "inbox": [],  # [{id, text}] — queued notifications for the robot to read out
     "screens": [],  # up to 3 display cards: [{title, entities:[entity_id, ...]}] pushed to the robot
     "climate_entity": "",  # the dashboard's chosen AC / thermostat (climate.*) for the Climate page
+    "dashboard_url": "",  # screenshot URL for the robot's swipe-to 🌐 dashboard page (empty = off)
     # Robot wiring picked from the dashboard (overrides the add-on/env defaults):
     "robot_driver": None,  # None = env default (mock|ha|mcp)
     "robot_entities": {},  # {face_select, head_yaw, head_pitch, media_player, tts_engine,
@@ -53,9 +54,9 @@ _UPDATABLE_KEYS = (
     "ai_provider", "mode_overrides", "disabled_modes", "reactions", "schedule",
     "personas", "active_persona", "memories", "routines", "voice", "voices", "inbox",
     "screens", "robot_driver", "robot_entities", "head_calibration",
-    "climate_entity", "vitals", "nudges_enabled", "language", "wellness_tips",
-    "mood", "idle_motion", "robot_name", "local_only", "birthday", "privacy_camera",
-    "people",
+    "climate_entity", "dashboard_url", "vitals", "nudges_enabled", "language", "wellness_tips",
+    "mood", "idle_motion", "spontaneous_speech", "robot_name", "local_only", "birthday",
+    "privacy_camera", "people",
 )
 
 
@@ -209,6 +210,14 @@ class Store:
         self._data["idle_motion"] = bool(enabled)
         self.save()
 
+    def spontaneous_speech(self, default: bool = False) -> bool:
+        """Whether the robot may speak on its own (ambient chatter); user's master choice."""
+        return bool(self._data.get("spontaneous_speech", default))
+
+    def set_spontaneous_speech(self, enabled: bool) -> None:
+        self._data["spontaneous_speech"] = bool(enabled)
+        self.save()
+
     def agent_prefs(self) -> dict[str, Any]:
         """How multiple AI agents are shown on the robot (dashboard-managed).
 
@@ -331,6 +340,14 @@ class Store:
 
     def set_climate_entity(self, entity: str) -> None:
         self._data["climate_entity"] = str(entity or "")
+        self.save()
+
+    def dashboard_url(self) -> str:
+        """The screenshot URL shown on the robot's swipe-to 🌐 dashboard page (empty = off)."""
+        return str(self._data.get("dashboard_url", "") or "")
+
+    def set_dashboard_url(self, url: str) -> None:
+        self._data["dashboard_url"] = str(url or "").strip()
         self.save()
 
     def mood(self) -> dict[str, Any]:

@@ -72,6 +72,11 @@ class Settings(BaseSettings):
     # already glances on its own (and correctly freezes in sleep/focus/quiet), so leaving dravix's
     # idle motion off avoids two systems fighting over the head. Turn on for the mock/other backends.
 
+    # When False, the robot only speaks for AI conversations + things you explicitly trigger.
+    # Ambient chatter (mood quips, surprises, greetings, scheduled/reaction lines, mode alerts)
+    # is muted. Off by default — quiet unless you opt in. Toggle live from the dashboard.
+    spontaneous_speech: bool = False
+
     # Pet reaction: when petted, tilt the head up (pleased) then return after a hold.
     # Degrees up on a pet (0 disables the head-lift). Values ≤1 are taken as an already-
     # normalized fraction of travel; pethead converts degrees to the -1..1 head API.

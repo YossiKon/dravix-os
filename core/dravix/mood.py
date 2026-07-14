@@ -279,7 +279,7 @@ class MoodEngine:
                     from .config import get_settings
 
                     lang = get_settings().language or "en"
-                await self._robot.say(_pick_quip(lang))
+                await self._robot.say(_pick_quip(lang), proactive=True)
         except Exception:  # noqa: BLE001
             pass
         await self._bus.publish("mood.idle")
