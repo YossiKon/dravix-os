@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.0.96
+
+**🌐 A guided Puppet setup in the dashboard** *(no firmware change — still firmware 35)*
+
+- **Settings → 🌐 Dashboard page** now walks you through it instead of a one-line hint: a
+  one-click **"Add the Puppet repository to Home Assistant"** link plus step-by-step. (Puppet is
+  a small, free, *separate* HA add-on that renders a dashboard to an image — the robot can only
+  show images, not live web pages, so a plain HA dashboard URL can't work on its own, and a HA
+  add-on can't install another add-on for you.)
+- Clarified the two gotchas: use **port 10000** (Puppet), not 8123 (HA itself), and use your HA's
+  **IP address** if `homeassistant.local` doesn't load from the robot.
+
 ## 0.0.95
 
 **🌐 A dashboard page on the robot — glance at any Home Assistant view** *(firmware 35 — update both)*

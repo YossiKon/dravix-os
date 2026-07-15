@@ -643,15 +643,45 @@ export function SettingsPage(props: {
             "An image URL shown as its own page in the robot's swipe cycle — it stays until you swipe away and refreshes every 15s. Leave empty to remove the page.",
           )}
         </p>
-        <p className="mb-3 text-xs text-mute">
-          {tr(
-            "להצגת דשבורד של Home Assistant התקינו את התוסף הקהילתי „Puppet” והפנו לכתובת שלו, למשל:",
-            "To show a Home Assistant dashboard, install the community “Puppet” add-on and point at its URL, e.g.:",
-          )}{" "}
-          <code dir="ltr" className="rounded bg-card2 px-1 py-0.5 font-mono text-[11px]">
-            http://homeassistant.local:10000/lovelace/0?viewport=320x240
-          </code>
-        </p>
+        <div className="mb-3 rounded-2xl border border-line bg-card2 p-3 text-xs text-mute">
+          <p className="mb-2">
+            {tr(
+              "הרובוט מציג תמונה, לא דף אינטרנט — לכן כתובת דשבורד רגילה של HA לא תעבוד. כדי להפוך דשבורד לתמונה צריך את התוסף החינמי „Puppet” (תוסף נפרד של HA; dravix לא יכול להתקין אותו בשבילכם).",
+              "The robot shows an image, not a web page — so a normal HA dashboard URL won't work. To turn a dashboard into an image you need the free Puppet add-on (a separate HA add-on; dravix can't install it for you).",
+            )}
+          </p>
+          <a
+            dir="ltr"
+            href="https://my.home-assistant.io/redirect/supervisor_add_addon_repository/?repository_url=https%3A%2F%2Fgithub.com%2Fballoob%2Fhome-assistant-addons"
+            target="_blank"
+            rel="noreferrer"
+            className="mb-2 inline-block rounded-lg bg-teal/20 px-2 py-1 font-medium text-teal"
+          >
+            ➕ {tr("הוסיפו את מאגר Puppet ל-Home Assistant", "Add the Puppet repository to Home Assistant")}
+          </a>
+          <ol className="ms-4 list-decimal space-y-1">
+            <li>{tr("לחצו על הקישור למעלה → Add, ואז התקינו והפעילו את „Puppet”.", "Click the link above → Add, then install & start “Puppet”.")}</li>
+            <li>
+              {tr(
+                "צרו טוקן (הפרופיל שלכם → Security → Long-lived access tokens) והדביקו אותו ב-Configuration של Puppet → Save → Start.",
+                "Create a token (your profile → Security → Long-lived access tokens), paste it into Puppet's Configuration → Save → Start.",
+              )}
+            </li>
+            <li>
+              {tr("שימו כאן למטה את כתובת Puppet — פורט 10000 + הנתיב של הדשבורד שלכם:", "Put Puppet's URL below — port 10000 + your dashboard's path:")}
+              <br />
+              <code dir="ltr" className="mt-1 inline-block rounded bg-bg px-1 py-0.5 font-mono text-[11px]">
+                http://&lt;HA-IP&gt;:10000/small-panel/0?viewport=320x240
+              </code>
+            </li>
+          </ol>
+          <p className="mt-2">
+            {tr(
+              "טיפ: אם „homeassistant.local” לא נטען מהרובוט, השתמשו בכתובת ה-IP של HA.",
+              "Tip: if “homeassistant.local” doesn't load from the robot, use your HA's IP address.",
+            )}
+          </p>
+        </div>
         <div className="flex gap-2">
           <input
             dir="ltr"
