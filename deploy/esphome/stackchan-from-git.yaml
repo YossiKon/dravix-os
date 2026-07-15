@@ -14,7 +14,7 @@
 #       ref: main                 → always the latest (refresh: 0s re-checks every build)
 #       ref: <a tag or commit>    → pinned; bump it yourself when you want to update
 #  · ROLLBACK — new firmware misbehaving? Every release is tagged: set for example
-#       ref: v0.0.42
+#       ref: v0.0.94
 #    (pick any older tag from the repo's Releases page), press Install, done.
 # ════════════════════════════════════════════════════════════════════════════════
 

@@ -342,13 +342,17 @@ async def lifespan(app: FastAPI):
         from .dashboard_bridge import push_url
 
         while True:
-            try:
-                if ha is not None:
-                    disc = app.state.discovered_entities or {}
+            if ha is not None:
+                disc = app.state.discovered_entities or {}
+                # isolated so a climate hiccup can't skip the dashboard-URL re-assert (or vice-versa)
+                try:
                     await push_status(ha, store.climate_entity(), disc)
+                except Exception:  # noqa: BLE001 — never die
+                    pass
+                try:
                     await push_url(ha, store.dashboard_url(), disc)
-            except Exception:  # noqa: BLE001 — never die
-                pass
+                except Exception:  # noqa: BLE001 — never die
+                    pass
             await asyncio.sleep(5)
 
     climate_task = asyncio.create_task(_climate_pusher(), name="dravix-climate")

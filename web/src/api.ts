@@ -97,11 +97,6 @@ export interface HAEntity {
   state?: string | null;
 }
 
-export interface ScreenCard {
-  title: string;
-  entities: string[];
-}
-
 export interface ClimateState {
   state: string | null;
   current_temperature: number | null;

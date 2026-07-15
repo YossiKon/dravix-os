@@ -204,7 +204,9 @@ export function SettingsPage(props: {
 
   async function saveSchedule() {
     try {
-      const jobs = sched
+      // rows the user actually started filling in (a blank slot is fine to ignore silently)
+      const attempted = sched.filter((r) => r.at || r.mode || r.say);
+      const jobs = attempted
         .filter((r) => /^([01]?\d|2[0-3]):[0-5]\d$/.test(r.at) && (r.mode || r.say))
         .map((r, i) => ({
           name: `day${i + 1}`,
@@ -213,7 +215,18 @@ export function SettingsPage(props: {
           action: { ...(r.mode ? { mode: r.mode } : {}), ...(r.say ? { say: r.say } : {}) },
         }));
       await apiSend("/api/schedule", "PUT", { schedule: jobs });
-      toast(tr("סדר היום נשמר — הרובוט יעקוב אחריו", "Day schedule saved — the robot will follow it"));
+      const dropped = attempted.length - jobs.length;
+      if (dropped > 0) {
+        toast(
+          tr(
+            `נשמר, אבל ${dropped} שורות דולגו — צריך שעה תקינה (HH:MM) + מצב או משפט`,
+            `Saved, but ${dropped} row(s) were skipped — each needs a valid time (HH:MM) + a mode or a line`,
+          ),
+          "err",
+        );
+      } else {
+        toast(tr("סדר היום נשמר — הרובוט יעקוב אחריו", "Day schedule saved — the robot will follow it"));
+      }
     } catch (e) {
       toastErr(e);
     }
@@ -1093,6 +1106,7 @@ export function SettingsPage(props: {
             <input
               type="number"
               inputMode="numeric"
+              dir="ltr"
               className="inp text-center"
               value={timers.saver}
               onChange={(e) => setTimers((t) => ({ ...t, saver: e.target.value }))}
@@ -1103,6 +1117,7 @@ export function SettingsPage(props: {
             <input
               type="number"
               inputMode="numeric"
+              dir="ltr"
               className="inp text-center"
               value={timers.sleep}
               onChange={(e) => setTimers((t) => ({ ...t, sleep: e.target.value }))}

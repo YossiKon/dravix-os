@@ -101,10 +101,11 @@ against guesses.
 
 ## 7. Upstream tracking ("always be able to update")
 
-`m5stack/StackChan` is added as a git submodule under `vendor/upstream/` (reference only —
-we read assets/protocols, we never modify it). `make update-upstream` pulls the latest.
-Because dravix-os layers *beside* the firmware rather than patching it, upstream changes
-never conflict with our code, and the robot itself updates through M5Stack's normal OTA/app.
+`m5stack/StackChan` is kept as **reference-only** material under `vendor/` (we read
+assets/protocols, we never modify it). Our robot firmware is a fresh ESPHome config layered on
+M5Stack's ESPHome **BSP** (pinned under `packages:` in `deploy/esphome/stackchan-dravix.yaml`),
+so upstream changes never conflict with our code. The robot updates by re-flashing the dravix
+ESPHome firmware (ESPHome **Install**), not through M5Stack's app/OTA.
 
 ## 8. Deployment
 

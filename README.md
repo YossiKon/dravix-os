@@ -111,7 +111,7 @@ Pet the robot's head. It will like that.
 | **Update the firmware** | ESPHome → **Install** (the tiny file pulls the latest from the repo) |
 | **Update the add-on** | HA shows the update automatically (Settings → Add-ons) — with a changelog |
 | **Know something's new** | Dashboard → Settings → **Updates** card compares versions for both |
-| **Roll back firmware** | In the tiny file set `ref: v0.0.43` (any tag from [Releases](https://github.com/YossiKon/dravix-os/releases)) → Install |
+| **Roll back firmware** | In the tiny file set `ref: v0.0.94` (any tag from [Releases](https://github.com/YossiKon/dravix-os/releases)) → Install |
 | **Roll back the add-on** | Every version's image is kept — revert the version in `dravix_os/config.yaml` |
 | **Go back to factory** | Re-flash your Step-0 backup (or stock firmware via M5Burner) |
 

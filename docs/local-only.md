@@ -15,16 +15,14 @@ talks to your **Home Assistant**, your **robot**, and your chosen **LLM**, all o
     `DRAVIX_OLLAMA_MODEL`). No HA needed for chat.
 - To deliberately use a cloud model, set `DRAVIX_LOCAL_ONLY=false` *and* pick `claude`/`openai`.
 
-### 2. The robot ↔ M5Stack cloud
-The companion OS **never** needs M5Stack's cloud — the brain runs on your box. For a truly
-cloud-free robot, control it over its **local** surface (the MCP endpoint it publishes on the
-LAN, or M5Stack's ESPHome / "Voice Assistant" firmware, which talks only to your HA) and avoid
-the phone app's cloud "agent." `scripts/discover.py` shows exactly what local control the robot
-exposes — we build the driver against that.
+### 2. The robot
+The robot runs the **dravix ESPHome firmware**, which talks **only to your Home Assistant** on the
+LAN — no M5Stack cloud, no phone-app "agent." dravix-os drives it through the HA entities that
+firmware exposes (the `ha` driver), so all robot control stays inside your network.
 
-> Note: the stock firmware's *own* cloud/app features are M5Stack's; dravix-os can't strip
-> them, but it doesn't use them. If you want zero M5Stack cloud, run the robot in a
-> local-control mode and drive everything through dravix-os.
+> If you're coming from the stock M5Stack firmware, flashing the dravix ESPHome firmware (see
+> [esphome-local-control.md](esphome-local-control.md)) is what makes the robot fully local — it
+> replaces the cloud/app path entirely.
 
 ### 3. Cameras (Frigate)
 Frigate runs on your box; HA proxies its snapshots locally. dravix-os fetches frames via your
@@ -35,7 +33,7 @@ HA / Frigate on the LAN — see [frigate.md](frigate.md). No cloud.
 | dravix-os talks to | When |
 |--------------------|------|
 | Home Assistant (`DRAVIX_HA_URL`, LAN) | Assist, events, camera snapshots, services |
-| The robot (`DRAVIX_ROBOT_MCP_URL`, LAN) | All robot control |
+| The robot (via Home Assistant, LAN) | All robot control (dravix ESPHome firmware → HA entities) |
 | Ollama (`DRAVIX_OLLAMA_URL`, LAN/localhost) | Local LLM chat (if selected) |
 | Frigate (`DRAVIX_FRIGATE_URL`, LAN) | Optional direct snapshots |
 | **the internet** | **only** if you opt into a cloud AI provider |

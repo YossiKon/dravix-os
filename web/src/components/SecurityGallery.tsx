@@ -151,7 +151,7 @@ export function SecurityGallery(props: { onChanged?: () => void }) {
                   {tr("🎬 צור סרטון", "🎬 Make video")}
                 </button>
               )}
-              <button className="chip" onClick={() => void delDay(d.day)}>🗑</button>
+              <button className="chip" aria-label={tr("מחק את היום", "Delete day")} onClick={() => void delDay(d.day)}>🗑</button>
             </div>
           </div>
           {open === d.day && clips.length > 0 && (

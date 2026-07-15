@@ -35,10 +35,9 @@ curl -X PUT localhost:8800/api/config/modes/frigate_watch \
 curl -X POST localhost:8800/api/modes/frigate_watch/activate
 ```
 
-**Requires** the robot to expose a "display image" capability (`show_image`). `discover.py`
-reports whether the robot's MCP surface has it; the driver maps it automatically. If the robot
-can't be told to display an arbitrary image, this is the one spot that may need the M5Stack
-app's image API or a small firmware helper — we'll see from discovery.
+The dravix ESPHome firmware already supports showing an arbitrary image: dravix writes the
+snapshot URL into the robot's `Show image URL` text slot (auto-discovered as `image_url_text`)
+and the robot downloads + displays it full-screen. No M5Stack app or extra helper needed.
 
 Config: `DRAVIX_FRIGATE_CAMERA` sets a default camera; `DRAVIX_FRIGATE_URL` (optional) lets
 dravix-os pull straight from Frigate instead of via HA.
@@ -74,10 +73,9 @@ cameras:
       track: [person]
 ```
 
-**Requires** the robot's camera capability (`take_photo` / a stream) on its control surface.
-The relay polls `take_photo` at `fps` and re-emits MJPEG; if the robot exposes a native RTSP/
-MJPEG stream, we can proxy that directly instead (one driver change once discovery confirms the
-stream URL). On the mock driver these endpoints return `503` (no real frames) — by design.
+This uses the robot's camera (the firmware exposes a `camera.*` entity, auto-discovered). The
+relay polls it at `fps` and re-emits MJPEG. On the mock driver these endpoints return `503` (no
+real frames) — by design.
 
 All of this stays on your LAN: robot → dravix-os → Frigate → Home Assistant.
 

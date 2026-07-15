@@ -29,8 +29,8 @@ the mood engine as a `touch.pet` event, three ways:
 1. **Via Home Assistant** (the official robot exposes its touch zones to HA): the event bridge
    **auto-detects** any `binary_sensor` whose name contains `head` or `touch` and maps it to
    `touch.pet`. Nothing to configure (or pin it explicitly in `DRAVIX_HA_EVENT_MAP`).
-2. **Via the robot's MCP / firmware**: have it `POST /api/event {"type":"touch.pet"}` whenever
-   the head is touched. The generic event-ingest endpoint publishes it onto the bus.
+2. **Via a direct POST** (an HA automation, or any client): `POST /api/event {"type":"touch.pet"}`
+   whenever the head is touched. The generic event-ingest endpoint publishes it onto the bus.
 3. **From the dashboard / API** (test it now): `POST /api/robot/interact {"kind":"pet"}`.
 
 ```bash

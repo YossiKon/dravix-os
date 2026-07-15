@@ -114,8 +114,12 @@
 const $ = (id) => document.getElementById(id);
 const logEl = $("log");
 function logLine(m){ logEl.textContent = `[${new Date().toLocaleTimeString()}] ${m}\n` + logEl.textContent; }
+// Resolve API paths relative to where this page is served, so it works under HA ingress
+// (/api/hassio_ingress/<token>/…) as well as direct :8800 — a root-absolute /api/ would 401.
+const API_BASE = new URL('.', location.href).href;
 async function api(path, opts){
-  const r = await fetch(path, { headers:{'Content-Type':'application/json'}, ...opts });
+  const url = API_BASE + String(path).replace(/^\//, '');
+  const r = await fetch(url, { headers:{'Content-Type':'application/json'}, ...opts });
   const body = await r.json().catch(()=> ({}));
   if(!r.ok) throw new Error(typeof body.detail === 'string' ? body.detail : (body.detail ? JSON.stringify(body.detail) : r.statusText));
   return body;
