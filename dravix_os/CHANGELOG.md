@@ -2,7 +2,7 @@
 
 ## 0.0.95
 
-**🌐 A dashboard page on the robot — glance at any Home Assistant view** *(firmware 34 — update both)*
+**🌐 A dashboard page on the robot — glance at any Home Assistant view** *(firmware 35 — update both)*
 
 - **Dashboard page (Settings → 🌐 Dashboard page)**: paste an image URL and the robot gains a
   new page in its swipe cycle that shows it full-screen. Unlike the alert/snapshot image it
@@ -25,7 +25,7 @@
   lines, and mode alerts — is muted. Turn it on to bring the talkative companion back.
 - Gated at a single point (`say(..., proactive=True)`), so nothing autonomous slips through.
 
-**😌 Calmer at rest — moves only every so often (firmware 34)**
+**😌 Calmer at rest — moves only every so often (firmware 35)**
 
 - The autonomous "looking around" is now much sparser: the idle glance timer slowed (9s → 14s)
   and each move fires far less often — the physical **head turns only ~once every ~3 minutes**
@@ -34,7 +34,7 @@
   (the attentive face no longer jumps mid-turn). For finer control, the dashboard toggles
   **"Body language (head moves)"** and **"Idle glances / motion"** still work.
 
-**🔧 Build fix + hardening (firmware 34)**
+**🔧 Build fix + hardening (firmware 35)**
 
 - **Firmware compiles again on ESPHome 2026.6.5.** A stricter LVGL type made the status-bar
   update-arrows (line widgets) fail to build; fixed, and the `select .state` calls were migrated
@@ -49,6 +49,16 @@
 - **Screen-brightness slider** no longer loses your last drag when you switch tabs right after.
 - The shipped add-on image now includes the firmware version file, so the **"firmware update
   available"** nudge actually works.
+
+**🤫 Even calmer + a mouth that stops talking (firmware 35)**
+
+- **Moves even less often.** The idle "looking around" was slowed further (interval 14s → 20s,
+  lower odds): the physical head now turns only **~once every ~7 minutes**. For an instant, no-flash
+  change you can also just turn off **Body language (head moves)** in Settings.
+- **Fixed: the mouth looked like it was talking even in silence.** The talking-mouth animation
+  followed the media player's *state*, which can linger on "playing" after the sound has actually
+  stopped. It now follows the speaker's **real audio output**, so the mouth stops the instant the
+  robot does.
 
 ## 0.0.94
 

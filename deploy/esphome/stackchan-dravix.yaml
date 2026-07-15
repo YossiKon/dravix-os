@@ -40,7 +40,7 @@ substitutions:
   # publishes it to HA ("Firmware version" sensor); the dravix dashboard compares it
   # with the version bundled in the add-on and shows "firmware update available".
   # (Maintainers: bump this on every firmware change. Users: don't touch.)
-  fw_version: "34"
+  fw_version: "35"
   # The ESPHome node name (mDNS hostname + the default entity prefix on a fresh flash).
   # Change it only if you run MORE THAN ONE robot — each needs a unique name. NOTE:
   # changing it on an already-adopted robot registers a NEW device in HA.
@@ -5501,10 +5501,15 @@ interval:
   # birthday lines) plays on va_media_player WITHOUT the voice pipeline, so g_talk never
   # fired and the mouth sat still while the robot was clearly speaking. Watch playback
   # and animate the mouth for the duration (the pipeline's own states always win).
+  # IMPORTANT: also require the SPEAKER to actually be outputting audio (is_running()) — the
+  # va_media_player STATE can linger on PLAYING/ANNOUNCING after the sound has stopped, which
+  # left the mouth animating "talking" forever even in silence. is_running() is the true
+  # "sound is coming out right now" signal, so the mouth stops the instant the audio does.
   - interval: 500ms
     then:
       - lambda: |-
           bool playing = !id(g_voice) && !id(g_sleep) && !id(g_saver)
+                         && id(i2s_speaker).is_running()
                          && (id(va_media_player).state == media_player::MEDIA_PLAYER_STATE_PLAYING
                              || id(va_media_player).state == media_player::MEDIA_PLAYER_STATE_ANNOUNCING);
           if (playing != id(g_ext_talk)) {
@@ -5552,14 +5557,14 @@ interval:
   # Only when fully awake (not screensaver/sleep/busy/calm modes). Deliberately SPARSE —
   # the user wants it to move only every so often, so the interval is slow and each part
   # fires with a low probability (calm at rest, not restless). Tune via sw_drift / these odds.
-  - interval: 14s
+  - interval: 20s
     then:
       # most ticks it simply doesn't move at all — an occasional, gentle glance, not a fidget
       - if:
           condition:
             lambda: |-
               return id(sw_drift).state && !id(g_sleep) && !id(g_saver) && !id(g_busy) && !id(g_voice)
-                     && !id(g_night) && !id(g_focus) && !id(g_quiet) && random_float() < 0.30;
+                     && !id(g_night) && !id(g_focus) && !id(g_quiet) && random_float() < 0.18;
           then:
             - lvgl.widget.update:
                 id: face_box
@@ -5575,7 +5580,7 @@ interval:
               - lambda: |-
                   return id(sw_move).state && id(sw_drift).state && !id(g_sleep) && !id(g_saver)
                          && !id(g_busy) && !id(g_night) && !id(g_focus) && !id(g_quiet) && !id(g_voice)
-                         && !std::isnan(id(servo_x_angle).state) && random_float() < 0.08;
+                         && !std::isnan(id(servo_x_angle).state) && random_float() < 0.045;
           then:
             - number.set:
                 id: servo_x_angle
