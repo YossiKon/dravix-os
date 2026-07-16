@@ -19,14 +19,14 @@
 <meta property="og:title" content="dravix-os — your StackChan, fully local">
 <meta property="og:description" content="A local-first companion OS for the M5Stack StackChan — a Home Assistant add-on with custom ESPHome firmware, an animated pet face, voice, a games arcade, and a real robot life.">
 <meta property="og:url" content="https://yossikon.github.io/dravix-os/">
-<meta property="og:image" content="https://raw.githubusercontent.com/YossiKon/dravix-os/main/dravix-home.png">
-<meta property="og:image:alt" content="The dravix-os dashboard mirroring the StackChan's animated face">
+<meta property="og:image" content="https://raw.githubusercontent.com/YossiKon/dravix-os/main/docs/dravix-robot.svg">
+<meta property="og:image:alt" content="dravix-os — the StackChan pet face on its screen">
 
 <!-- Twitter -->
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="dravix-os — your StackChan, fully local">
 <meta name="twitter:description" content="Turn the M5Stack StackChan into a living, local-first desk companion. Home Assistant add-on + custom ESPHome firmware. Pet face, voice, games, a real robot life.">
-<meta name="twitter:image" content="https://raw.githubusercontent.com/YossiKon/dravix-os/main/dravix-home.png">
+<meta name="twitter:image" content="https://raw.githubusercontent.com/YossiKon/dravix-os/main/docs/dravix-robot.svg">
 
 <!-- favicon: the little teal face -->
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%2305080b'/%3E%3Crect x='7' y='9' width='7' height='9' rx='3' fill='%2333E6C8'/%3E%3Crect x='18' y='9' width='7' height='9' rx='3' fill='%2333E6C8'/%3E%3Cpath d='M12 22q4 4 8 0' stroke='%2333E6C8' stroke-width='2.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E">
@@ -217,7 +217,7 @@
   /* ── shots ── */
   .shots{display:grid; grid-template-columns:repeat(3,1fr); gap:15px; margin-top:8px}
   .shot{border:1px solid var(--line); border-radius:14px; overflow:hidden; background:var(--panel)}
-  .shot img{width:100%; display:block; aspect-ratio:9/16; object-fit:cover; object-position:top}
+  .shot svg{width:100%; display:block; height:auto; background:#070b10}
   .shot span{display:block; padding:11px 14px; font-size:13px; color:var(--mute); font-family:var(--mono)}
 
   /* ── docs links ── */
@@ -459,7 +459,7 @@
 </section>
 
 <!-- ── SCREENSHOTS ── -->
-<section>
+<section id="dashboard">
   <div class="wrap">
     <div class="sec-head reveal">
       <span class="eyebrow">The dashboard</span>
@@ -467,9 +467,58 @@
       <p>Eight tabs — Home, Agent, Screens, Life, Climate, Controls, Diagnostics, Settings — English by default, Hebrew (RTL) built in.</p>
     </div>
     <div class="shots reveal">
-      <div class="shot"><img loading="lazy" src="https://raw.githubusercontent.com/YossiKon/dravix-os/main/dravix-home.png" alt="dravix-os Home tab: the live face mirror, modes, chat and games"><span>Home · face, modes, chat, games</span></div>
-      <div class="shot"><img loading="lazy" src="https://raw.githubusercontent.com/YossiKon/dravix-os/main/dravix-screens.png" alt="dravix-os Screens editor: choose each card's Home Assistant entities"><span>Screens · choose each card's entities</span></div>
-      <div class="shot"><img loading="lazy" src="https://raw.githubusercontent.com/YossiKon/dravix-os/main/dravix-settings.png" alt="dravix-os Settings: auto-wired entities and head calibration"><span>Settings · auto-wired entities &amp; calibration</span></div>
+      <div class="shot">
+        <svg class="shot-svg" viewBox="0 0 300 188" role="img" aria-label="Dashboard Home tab: the face mirror, modes and chat">
+          <rect x="6" y="6" width="288" height="176" rx="12" fill="#05080b" stroke="#1c2634" stroke-width="1.5"/>
+          <path d="M6 30h288" stroke="#1c2634" stroke-width="1.2"/>
+          <circle cx="18" cy="18" r="2.5" fill="#5c6774"/><circle cx="27" cy="18" r="2.5" fill="#5c6774"/><circle cx="36" cy="18" r="2.5" fill="#5c6774"/>
+          <rect x="52" y="14" width="176" height="8" rx="4" fill="#0e141c"/>
+          <rect x="120" y="44" width="24" height="28" rx="9" fill="#33E6C8"/><rect x="156" y="44" width="24" height="28" rx="9" fill="#33E6C8"/>
+          <ellipse cx="129" cy="78" rx="7" ry="3" fill="#FF9EB5"/><ellipse cx="171" cy="78" rx="7" ry="3" fill="#FF9EB5"/>
+          <path d="M126 82q24 14 48 0" fill="none" stroke="#33E6C8" stroke-width="4" stroke-linecap="round"/>
+          <rect x="40" y="104" width="46" height="16" rx="8" fill="#33E6C8"/>
+          <rect x="94" y="104" width="46" height="16" rx="8" fill="none" stroke="#243244"/>
+          <rect x="148" y="104" width="46" height="16" rx="8" fill="none" stroke="#243244"/>
+          <rect x="202" y="104" width="46" height="16" rx="8" fill="none" stroke="#243244"/>
+          <rect x="40" y="132" width="150" height="14" rx="7" fill="#0e141c"/>
+          <rect x="110" y="152" width="150" height="14" rx="7" fill="rgba(51,230,200,.14)"/>
+        </svg>
+        <span>Home · face, modes, chat, games</span>
+      </div>
+      <div class="shot">
+        <svg class="shot-svg" viewBox="0 0 300 188" role="img" aria-label="Dashboard Screens editor: choose each card's entities, with row toggles">
+          <rect x="6" y="6" width="288" height="176" rx="12" fill="#05080b" stroke="#1c2634" stroke-width="1.5"/>
+          <path d="M6 30h288" stroke="#1c2634" stroke-width="1.2"/>
+          <circle cx="18" cy="18" r="2.5" fill="#5c6774"/><circle cx="27" cy="18" r="2.5" fill="#5c6774"/><circle cx="36" cy="18" r="2.5" fill="#5c6774"/>
+          <text x="52" y="22" font-family="IBM Plex Mono, monospace" font-size="9" fill="#5c6774">Screens</text>
+          <rect x="26" y="44" width="248" height="26" rx="7" fill="#0e141c"/><rect x="38" y="54" width="94" height="6" rx="3" fill="#5c6774"/>
+          <rect x="236" y="50" width="28" height="15" rx="7.5" fill="#33E6C8"/><circle cx="256" cy="57.5" r="5.5" fill="#04120f"/>
+          <rect x="26" y="78" width="248" height="26" rx="7" fill="#0e141c"/><rect x="38" y="88" width="112" height="6" rx="3" fill="#5c6774"/>
+          <rect x="236" y="84" width="28" height="15" rx="7.5" fill="#33E6C8"/><circle cx="256" cy="91.5" r="5.5" fill="#04120f"/>
+          <rect x="26" y="112" width="248" height="26" rx="7" fill="#0e141c"/><rect x="38" y="122" width="70" height="6" rx="3" fill="#5c6774"/>
+          <rect x="236" y="118" width="28" height="15" rx="7.5" fill="#1c2634"/><circle cx="243.5" cy="125.5" r="5.5" fill="#5c6774"/>
+          <rect x="26" y="146" width="248" height="26" rx="7" fill="#0e141c"/><rect x="38" y="156" width="100" height="6" rx="3" fill="#5c6774"/>
+          <rect x="236" y="152" width="28" height="15" rx="7.5" fill="#33E6C8"/><circle cx="256" cy="159.5" r="5.5" fill="#04120f"/>
+        </svg>
+        <span>Screens · choose each card's entities</span>
+      </div>
+      <div class="shot">
+        <svg class="shot-svg" viewBox="0 0 300 188" role="img" aria-label="Dashboard Settings: connected status and auto-wired entities">
+          <rect x="6" y="6" width="288" height="176" rx="12" fill="#05080b" stroke="#1c2634" stroke-width="1.5"/>
+          <path d="M6 30h288" stroke="#1c2634" stroke-width="1.2"/>
+          <circle cx="18" cy="18" r="2.5" fill="#5c6774"/><circle cx="27" cy="18" r="2.5" fill="#5c6774"/><circle cx="36" cy="18" r="2.5" fill="#5c6774"/>
+          <text x="52" y="22" font-family="IBM Plex Mono, monospace" font-size="9" fill="#5c6774">Settings</text>
+          <circle cx="34" cy="48" r="5" fill="#5dffa0"/><rect x="46" y="45" width="66" height="6" rx="3" fill="#8b96a4"/>
+          <rect x="26" y="64" width="248" height="72" rx="8" fill="#0e141c"/>
+          <g font-family="IBM Plex Mono, monospace" font-size="8.5" fill="#33E6C8">
+            <text x="40" y="82">select.dravix_face</text><text x="40" y="98">number.dravix_servo_x</text>
+            <text x="40" y="114">light.dravix_light_bar</text><text x="40" y="130">camera.dravix_camera</text>
+          </g>
+          <rect x="46" y="150" width="84" height="6" rx="3" fill="#8b96a4"/>
+          <rect x="236" y="147" width="28" height="15" rx="7.5" fill="#33E6C8"/><circle cx="256" cy="154.5" r="5.5" fill="#04120f"/>
+        </svg>
+        <span>Settings · auto-wired entities</span>
+      </div>
     </div>
   </div>
 </section>
