@@ -1,0 +1,678 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>dravix-os — StackChan companion OS for Home Assistant (ESPHome · M5Stack CoreS3)</title>
+
+<!-- ── SEO ─────────────────────────────────────────────────────────────── -->
+<meta name="description" content="dravix-os turns the M5Stack StackChan desk robot into a living, local-first companion — a Home Assistant add-on with custom ESPHome firmware: a drawn animated pet face, voice, petting, a games arcade, a real Tamagotchi-style life, and deep smart-home control. No cloud.">
+<meta name="keywords" content="StackChan, dravix, dravix-os, Home Assistant, Home Assistant add-on, ESPHome, M5Stack, M5Stack CoreS3, ESP32-S3, companion robot, desk robot, pet robot, voice assistant, local-first, smart home, Assist, Frigate, robot firmware">
+<meta name="author" content="Yossi Koncha">
+<meta name="robots" content="index, follow">
+<meta name="theme-color" content="#05080b">
+<link rel="canonical" href="https://yossikon.github.io/dravix-os/">
+
+<!-- Open Graph -->
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="dravix-os">
+<meta property="og:title" content="dravix-os — your StackChan, fully local">
+<meta property="og:description" content="A local-first companion OS for the M5Stack StackChan — a Home Assistant add-on with custom ESPHome firmware, an animated pet face, voice, a games arcade, and a real robot life.">
+<meta property="og:url" content="https://yossikon.github.io/dravix-os/">
+<meta property="og:image" content="https://raw.githubusercontent.com/YossiKon/dravix-os/main/dravix-home.png">
+<meta property="og:image:alt" content="The dravix-os dashboard mirroring the StackChan's animated face">
+
+<!-- Twitter -->
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="dravix-os — your StackChan, fully local">
+<meta name="twitter:description" content="Turn the M5Stack StackChan into a living, local-first desk companion. Home Assistant add-on + custom ESPHome firmware. Pet face, voice, games, a real robot life.">
+<meta name="twitter:image" content="https://raw.githubusercontent.com/YossiKon/dravix-os/main/dravix-home.png">
+
+<!-- favicon: the little teal face -->
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%2305080b'/%3E%3Crect x='7' y='9' width='7' height='9' rx='3' fill='%2333E6C8'/%3E%3Crect x='18' y='9' width='7' height='9' rx='3' fill='%2333E6C8'/%3E%3Cpath d='M12 22q4 4 8 0' stroke='%2333E6C8' stroke-width='2.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E">
+
+<!-- structured data -->
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  "name": "dravix-os",
+  "alternateName": "dravix StackChan companion OS",
+  "applicationCategory": "HomeAutomationApplication",
+  "operatingSystem": "Home Assistant OS, Linux, Docker",
+  "description": "A local-first companion OS for the M5Stack StackChan desk robot, delivered as a Home Assistant add-on with custom dravix ESPHome firmware: an animated pet face, voice via Home Assistant Assist, petting, a games arcade, a Tamagotchi-style life, and deep smart-home integration.",
+  "url": "https://yossikon.github.io/dravix-os/",
+  "codeRepository": "https://github.com/YossiKon/dravix-os",
+  "author": { "@type": "Person", "name": "Yossi Koncha" },
+  "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+  "keywords": "StackChan, Home Assistant, ESPHome, M5Stack CoreS3, companion robot, desk robot, local-first"
+}
+</script>
+
+<!-- distinctive type: friendly display + technical body/mono -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script>document.documentElement.classList.add('js');</script>
+
+<style>
+  :root{
+    --bg:#05080b; --bg2:#0b1119; --panel:#0e141c; --panel2:#111a24;
+    --line:#1c2634; --line2:#243244;
+    --teal:#33E6C8; --teal-dim:#1f9d8a; --green:#5dffa0; --pink:#FF9EB5; --amber:#f2c14e;
+    --text:#e8edf2; --mute:#8b96a4; --faint:#5c6774;
+    --display:'Bricolage Grotesque', ui-sans-serif, system-ui, sans-serif;
+    --body:'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif;
+    --mono:'IBM Plex Mono', ui-monospace, monospace;
+    --maxw:1140px;
+    --glow:0 0 40px rgba(51,230,200,.18);
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth; -webkit-text-size-adjust:100%}
+  body{
+    margin:0; background:var(--bg); color:var(--text);
+    font-family:var(--body); font-size:17px; line-height:1.65;
+    -webkit-font-smoothing:antialiased; overflow-x:hidden;
+  }
+  /* layered atmosphere: teal halo + grid + scanlines */
+  body::before{
+    content:""; position:fixed; inset:0; z-index:-2; pointer-events:none;
+    background:
+      radial-gradient(70% 55% at 50% -6%, rgba(51,230,200,.16), transparent 60%),
+      radial-gradient(50% 40% at 90% 10%, rgba(255,158,181,.07), transparent 60%),
+      linear-gradient(180deg,var(--bg2),var(--bg) 60%);
+  }
+  body::after{
+    content:""; position:fixed; inset:0; z-index:-1; pointer-events:none; opacity:.5;
+    background-image:
+      linear-gradient(rgba(51,230,200,.045) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(51,230,200,.045) 1px, transparent 1px);
+    background-size:52px 52px;
+    -webkit-mask-image:radial-gradient(circle at 50% 8%, #000, transparent 78%);
+            mask-image:radial-gradient(circle at 50% 8%, #000, transparent 78%);
+  }
+  a{color:var(--teal); text-decoration:none}
+  a:hover{text-decoration:underline; text-underline-offset:3px}
+  .wrap{max-width:var(--maxw); margin:0 auto; padding:0 22px}
+  h1,h2,h3{font-family:var(--display); font-weight:700; line-height:1.06; letter-spacing:-.02em; margin:0}
+  section{padding:84px 0; position:relative}
+  .eyebrow{font-family:var(--mono); font-size:12.5px; letter-spacing:.28em; text-transform:uppercase; color:var(--teal-dim)}
+  .lead{color:var(--mute); font-size:19px; max-width:62ch}
+
+  /* ── nav ── */
+  nav{position:sticky; top:0; z-index:50; backdrop-filter:blur(11px);
+      background:rgba(5,8,11,.72); border-bottom:1px solid var(--line)}
+  .nav-in{display:flex; align-items:center; gap:22px; height:62px}
+  .brand{display:flex; align-items:center; gap:10px; font-family:var(--display); font-weight:800; font-size:20px; letter-spacing:-.02em; color:var(--text)}
+  .brand:hover{text-decoration:none}
+  .brand svg{width:30px; height:30px; filter:drop-shadow(0 0 6px rgba(51,230,200,.5))}
+  .nav-links{display:flex; gap:22px; margin-left:auto; font-size:14.5px}
+  .nav-links a{color:var(--mute); font-weight:500}
+  .nav-links a:hover{color:var(--teal); text-decoration:none}
+  .nav-cta{display:inline-flex; align-items:center; gap:7px; padding:8px 15px; border-radius:9px;
+           background:var(--teal); color:#04120f; font-weight:700; font-size:14px}
+  .nav-cta:hover{text-decoration:none; box-shadow:var(--glow)}
+  .burger{display:none; margin-left:auto; background:none; border:1px solid var(--line2); color:var(--text); border-radius:8px; padding:7px 10px; cursor:pointer}
+
+  /* ── hero ── */
+  .hero{padding:64px 0 52px; display:grid; grid-template-columns:1.05fr .95fr; gap:46px; align-items:center}
+  .hero h1{font-size:clamp(40px,6vw,68px); font-weight:800}
+  .hero h1 .tint{color:var(--teal)}
+  .hero p.lead{margin:20px 0 0}
+  .badges{display:flex; flex-wrap:wrap; gap:9px; margin-top:26px}
+  .badge{font-family:var(--mono); font-size:12px; color:var(--mute); border:1px solid var(--line2);
+         background:rgba(255,255,255,.02); padding:6px 11px; border-radius:999px}
+  .badge b{color:var(--teal); font-weight:600}
+  .cta-row{display:flex; flex-wrap:wrap; gap:13px; margin-top:30px}
+  .btn{display:inline-flex; align-items:center; gap:9px; padding:13px 22px; border-radius:11px; font-weight:700; font-size:15.5px; transition:transform .15s, box-shadow .2s, background .2s}
+  .btn-primary{background:var(--teal); color:#04120f}
+  .btn-primary:hover{text-decoration:none; transform:translateY(-2px); box-shadow:var(--glow)}
+  .btn-ghost{background:transparent; color:var(--text); border:1px solid var(--line2)}
+  .btn-ghost:hover{text-decoration:none; border-color:var(--teal); color:var(--teal)}
+  .hero-art{position:relative}
+  .hero-art .screen{width:100%; height:auto; border-radius:22px; display:block;
+      box-shadow:0 40px 90px -30px rgba(0,0,0,.85), 0 0 0 1px var(--line); filter:drop-shadow(0 0 30px rgba(51,230,200,.12))}
+  .blink{transform-box:fill-box; transform-origin:center; animation:blink 5.4s infinite}
+  .blink.r{animation-delay:.06s}
+  @keyframes blink{0%,93%,100%{transform:scaleY(1)} 96%{transform:scaleY(.08)}}
+  .float{animation:float 7s ease-in-out infinite}
+  @keyframes float{0%,100%{transform:translateY(0)} 50%{transform:translateY(-12px)}}
+
+  /* ── how it works ── */
+  .flow{display:grid; grid-template-columns:1fr auto 1fr auto 1fr; gap:16px; align-items:stretch; margin-top:34px}
+  .node{background:linear-gradient(180deg,var(--panel),var(--bg2)); border:1px solid var(--line); border-radius:16px; padding:22px}
+  .node h3{font-size:17px; margin-bottom:6px}
+  .node .tag{font-family:var(--mono); font-size:11px; letter-spacing:.18em; text-transform:uppercase; color:var(--teal-dim); display:block; margin-bottom:12px}
+  .node p{margin:0; color:var(--mute); font-size:14.5px}
+  .arrow{align-self:center; color:var(--teal); font-size:26px; font-family:var(--mono)}
+
+  /* ── section headers ── */
+  .sec-head{max-width:64ch; margin-bottom:14px}
+  .sec-head h2{font-size:clamp(28px,3.6vw,40px); margin-top:10px}
+  .sec-head p{color:var(--mute); margin:14px 0 0}
+  .subhead{font-family:var(--mono); font-size:12px; letter-spacing:.2em; text-transform:uppercase; color:var(--faint); margin:38px 0 16px}
+
+  /* ── feature grid ── */
+  .grid{display:grid; grid-template-columns:repeat(3,1fr); gap:15px}
+  .card{background:linear-gradient(180deg,rgba(17,26,36,.85),rgba(11,17,25,.6)); border:1px solid var(--line);
+        border-radius:15px; padding:20px 20px 22px; transition:transform .18s, border-color .18s, box-shadow .18s}
+  .card:hover{transform:translateY(-4px); border-color:var(--teal-dim); box-shadow:0 18px 40px -24px rgba(0,0,0,.9)}
+  .card .ic{font-size:24px; line-height:1; display:block; margin-bottom:12px; filter:drop-shadow(0 0 10px rgba(51,230,200,.25))}
+  .card h3{font-size:16.5px; font-family:var(--body); font-weight:700; letter-spacing:0}
+  .card p{margin:7px 0 0; color:var(--mute); font-size:14px; line-height:1.55}
+
+  /* ── controls list ── */
+  .ctrls{display:grid; grid-template-columns:1fr 1fr; gap:11px 26px; margin-top:8px}
+  .ctrl{display:grid; grid-template-columns:auto 1fr; gap:14px; align-items:start; padding:13px 0; border-bottom:1px solid var(--line)}
+  .ctrl .k{font-family:var(--mono); font-size:13px; color:var(--teal); white-space:normal; min-width:0}
+  .ctrl .v{color:var(--mute); font-size:14.5px}
+
+  /* ── behaviors ── */
+  .two{display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-top:8px}
+  .panel{background:linear-gradient(180deg,var(--panel),var(--bg2)); border:1px solid var(--line); border-radius:16px; padding:24px}
+  .panel h3{font-size:19px; margin-bottom:6px}
+  .panel p{color:var(--mute); font-size:14.5px}
+  .needs{display:flex; flex-direction:column; gap:13px; margin:18px 0 4px}
+  .need{display:grid; grid-template-columns:96px 1fr; align-items:center; gap:12px; font-size:13.5px}
+  .need .lbl{font-family:var(--mono); color:var(--text)}
+  .meter{height:8px; border-radius:6px; background:#0a1017; overflow:hidden; border:1px solid var(--line)}
+  .meter i{display:block; height:100%; border-radius:6px}
+  .chips{display:flex; flex-wrap:wrap; gap:8px; margin-top:6px}
+  .chip{font-family:var(--mono); font-size:12.5px; color:var(--mute); border:1px solid var(--line2); border-radius:8px; padding:6px 10px; background:rgba(255,255,255,.02)}
+  .chip.on{color:var(--teal); border-color:var(--teal-dim)}
+
+  /* ── games marquee ── */
+  .games{display:flex; flex-wrap:wrap; gap:10px; margin-top:8px}
+  .game{font-family:var(--display); font-weight:700; font-size:16px; letter-spacing:-.01em; color:var(--text);
+        border:1px solid var(--line2); border-radius:11px; padding:11px 16px; background:linear-gradient(180deg,var(--panel),var(--bg2))}
+  .game:hover{border-color:var(--teal); color:var(--teal)}
+
+  /* ── install timeline ── */
+  .steps{position:relative; margin-top:14px; padding-left:6px}
+  .step{display:grid; grid-template-columns:auto 1fr; gap:20px; padding:0 0 26px; position:relative}
+  .step:not(:last-child)::before{content:""; position:absolute; left:19px; top:42px; bottom:-4px; width:2px; background:linear-gradient(var(--teal-dim),transparent)}
+  .step .n{width:40px; height:40px; border-radius:11px; display:grid; place-items:center; font-family:var(--mono); font-weight:600;
+           color:var(--teal); background:var(--panel); border:1px solid var(--teal-dim); box-shadow:var(--glow); z-index:1}
+  .step h3{font-size:18px; margin-bottom:5px}
+  .step p{color:var(--mute); font-size:14.5px; margin:0}
+  .need-row{display:flex; flex-wrap:wrap; gap:10px; margin:2px 0 30px}
+  .need-pill{font-size:13.5px; color:var(--text); background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:9px 13px}
+  .need-pill b{color:var(--teal); font-weight:600; font-family:var(--mono); font-size:12px}
+
+  .callout{margin-top:26px; border:1px solid var(--line2); border-left:3px solid var(--amber); background:rgba(242,193,78,.05);
+           border-radius:0 12px 12px 0; padding:16px 20px; color:var(--mute); font-size:14.5px}
+  .callout b{color:var(--amber)}
+
+  /* ── install: illustrated step cards ── */
+  .install-grid{display:grid; grid-template-columns:repeat(3,1fr); gap:15px; margin-top:6px}
+  .istep{background:linear-gradient(180deg,var(--panel),var(--bg2)); border:1px solid var(--line); border-radius:15px; overflow:hidden; transition:transform .18s, border-color .18s, box-shadow .18s}
+  .istep:hover{transform:translateY(-4px); border-color:var(--teal-dim); box-shadow:0 18px 40px -24px rgba(0,0,0,.9)}
+  .istep-art{display:block; width:100%; height:auto; background:radial-gradient(120% 100% at 50% 0%, rgba(51,230,200,.07), transparent 70%); border-bottom:1px solid var(--line)}
+  .istep-body{padding:16px 18px 20px}
+  .istep-n{font-family:var(--mono); font-size:11px; letter-spacing:.18em; text-transform:uppercase; color:var(--teal-dim); display:block; margin-bottom:6px}
+  .istep-body h3{font-size:16.5px; font-family:var(--body); font-weight:700; letter-spacing:0}
+  .istep-body p{margin:7px 0 0; color:var(--mute); font-size:13.5px; line-height:1.55}
+  .istep-body code{font-family:var(--mono); font-size:12px; color:#aab7c5; background:rgba(255,255,255,.03); padding:1px 5px; border-radius:5px}
+
+  /* ── shots ── */
+  .shots{display:grid; grid-template-columns:repeat(3,1fr); gap:15px; margin-top:8px}
+  .shot{border:1px solid var(--line); border-radius:14px; overflow:hidden; background:var(--panel)}
+  .shot img{width:100%; display:block; aspect-ratio:9/16; object-fit:cover; object-position:top}
+  .shot span{display:block; padding:11px 14px; font-size:13px; color:var(--mute); font-family:var(--mono)}
+
+  /* ── docs links ── */
+  .links{display:grid; grid-template-columns:repeat(2,1fr); gap:11px}
+  .link{display:flex; align-items:center; gap:13px; padding:15px 17px; border:1px solid var(--line); border-radius:12px;
+        background:linear-gradient(180deg,var(--panel),var(--bg2)); transition:border-color .16s, transform .16s}
+  .link:hover{border-color:var(--teal-dim); transform:translateX(3px); text-decoration:none}
+  .link .ic{font-size:19px}
+  .link b{color:var(--text); font-weight:600; font-size:15px; display:block}
+  .link small{color:var(--faint); font-family:var(--mono); font-size:11.5px}
+  .link .go{margin-left:auto; color:var(--teal-dim)}
+
+  /* ── footer ── */
+  footer{border-top:1px solid var(--line); padding:46px 0 60px; color:var(--mute); font-size:14px}
+  .foot-in{display:flex; flex-wrap:wrap; gap:18px; align-items:center; justify-content:space-between}
+  .foot-links{display:flex; flex-wrap:wrap; gap:20px}
+  .foot-links a{color:var(--mute)}
+  .foot-links a:hover{color:var(--teal); text-decoration:none}
+
+  /* reveal — hidden ONLY when JS is active (no-JS / crawlers see everything); .in re-shows */
+  html.js .reveal{opacity:0; transform:translateY(22px); transition:opacity .7s ease, transform .7s cubic-bezier(.2,.7,.2,1)}
+  html.js .reveal.in{opacity:1; transform:none}
+
+  @media (max-width:900px){
+    .hero{grid-template-columns:1fr; gap:30px}
+    .hero-art{order:-1; max-width:460px}
+    .grid,.install-grid{grid-template-columns:repeat(2,1fr)}
+    .flow{grid-template-columns:1fr; }
+    .arrow{transform:rotate(90deg); justify-self:center}
+    .two,.ctrls,.links,.shots{grid-template-columns:1fr}
+    .nav-links{display:none}
+    .nav-links.open{display:flex; position:absolute; top:62px; left:0; right:0; flex-direction:column; gap:0;
+        background:rgba(5,8,11,.97); border-bottom:1px solid var(--line); padding:8px 22px 16px}
+    .nav-links.open a{padding:11px 0; border-bottom:1px solid var(--line)}
+    .burger{display:block}
+    .nav-cta{display:none}
+  }
+  @media (max-width:540px){ .grid,.install-grid{grid-template-columns:1fr} body{font-size:16px} }
+  @media (prefers-reduced-motion:reduce){ *{animation:none!important} html.js .reveal{opacity:1!important; transform:none!important} }
+</style>
+</head>
+<body>
+
+<!-- ── NAV ── -->
+<nav>
+  <div class="wrap nav-in">
+    <a class="brand" href="#top">
+      <svg viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="7" fill="#0e141c"/><rect x="7" y="9" width="7" height="9" rx="3" fill="#33E6C8"/><rect x="18" y="9" width="7" height="9" rx="3" fill="#33E6C8"/><path d="M12 22q4 4 8 0" stroke="#33E6C8" stroke-width="2.5" fill="none" stroke-linecap="round"/></svg>
+      dravix-os
+    </a>
+    <button class="burger" aria-label="Menu" onclick="document.getElementById('nl').classList.toggle('open')">☰</button>
+    <div class="nav-links" id="nl">
+      <a href="#how">How it works</a>
+      <a href="#features">Features</a>
+      <a href="#controls">Controls</a>
+      <a href="#life">Life</a>
+      <a href="#install">Install</a>
+      <a href="#docs">Docs</a>
+    </div>
+    <a class="nav-cta" href="https://github.com/YossiKon/dravix-os" target="_blank" rel="noopener">
+      <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8a8 8 0 0 0 5.47 7.59c.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82a7.4 7.4 0 0 1 4 0c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8 8 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>
+      GitHub
+    </a>
+  </div>
+</nav>
+
+<span id="top"></span>
+
+<!-- ── HERO ── -->
+<header class="wrap hero">
+  <div>
+    <span class="eyebrow">M5Stack StackChan · Home Assistant · ESPHome</span>
+    <h1 style="margin-top:16px">Your StackChan,<br><span class="tint">fully alive</span> &amp; fully local.</h1>
+    <p class="lead">dravix-os turns the M5Stack StackChan desk robot into a little creature you completely own — a drawn animated pet face, voice, petting, a games arcade and a <em>real life</em>. It ships as a <b style="color:var(--text)">Home Assistant add-on</b> with custom <b style="color:var(--text)">ESPHome firmware</b>. Nothing phones home.</p>
+    <div class="cta-row">
+      <a class="btn btn-primary" href="#install">Get started →</a>
+      <a class="btn btn-ghost" href="https://github.com/YossiKon/dravix-os" target="_blank" rel="noopener">View on GitHub</a>
+    </div>
+    <div class="badges">
+      <span class="badge"><b>Local-first</b> · no cloud</span>
+      <span class="badge">Home Assistant <b>add-on</b></span>
+      <span class="badge">custom <b>ESPHome</b> firmware</span>
+      <span class="badge">M5Stack <b>CoreS3</b></span>
+      <span class="badge">EN · <b>עברית</b></span>
+    </div>
+  </div>
+  <div class="hero-art">
+    <svg class="screen float" viewBox="0 0 900 440" role="img" aria-label="dravix-os — the StackChan pet face on its CoreS3 screen">
+      <defs>
+        <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#0b1119"/><stop offset="1" stop-color="#05080b"/></linearGradient>
+        <radialGradient id="halo" cx="50%" cy="46%" r="52%"><stop offset="0" stop-color="#33E6C8" stop-opacity="0.20"/><stop offset="1" stop-color="#33E6C8" stop-opacity="0"/></radialGradient>
+        <filter id="glow" x="-40%" y="-40%" width="180%" height="180%"><feGaussianBlur stdDeviation="7" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+      </defs>
+      <rect width="900" height="440" fill="url(#bg)"/>
+      <rect width="900" height="440" fill="url(#halo)"/>
+      <g transform="translate(250,52)">
+        <rect x="-10" y="-10" width="420" height="340" rx="32" fill="#0e141c" stroke="#1c2634" stroke-width="2"/>
+        <rect width="400" height="320" rx="24" fill="#05080b" stroke="#33E6C8" stroke-width="3"/>
+        <g opacity="0.85">
+          <rect x="18" y="18" width="4" height="7" rx="1" fill="#33E6C8"/><rect x="25" y="14" width="4" height="11" rx="1" fill="#33E6C8"/>
+          <rect x="32" y="10" width="4" height="15" rx="1" fill="#33E6C8"/><rect x="39" y="6" width="4" height="19" rx="1" fill="#33E6C8"/>
+          <text x="200" y="23" font-family="IBM Plex Mono, monospace" font-size="16" fill="#8b96a4" text-anchor="middle">20:20</text>
+          <rect x="330" y="9" width="34" height="16" rx="3" fill="none" stroke="#5dffa0" stroke-width="2"/><rect x="333" y="12" width="22" height="10" rx="1" fill="#5dffa0"/><rect x="365" y="13" width="3" height="8" rx="1" fill="#5dffa0"/>
+        </g>
+        <g filter="url(#glow)">
+          <rect class="blink" x="99" y="104" width="86" height="86" rx="30" fill="#33E6C8"/>
+          <rect class="blink r" x="215" y="104" width="86" height="86" rx="30" fill="#33E6C8"/>
+        </g>
+        <ellipse cx="142" cy="214" rx="20" ry="8" fill="#FF9EB5"/><ellipse cx="258" cy="214" rx="20" ry="8" fill="#FF9EB5"/>
+        <path d="M168 226 q32 26 64 0" fill="none" stroke="#33E6C8" stroke-width="9" stroke-linecap="round"/>
+      </g>
+      <text x="450" y="414" font-family="Bricolage Grotesque, sans-serif" font-size="26" font-weight="700" fill="#e8edf2" text-anchor="middle">dravix-os<tspan fill="#33E6C8"> · </tspan><tspan font-weight="400" fill="#8b96a4" font-size="18">your StackChan, fully local</tspan></text>
+    </svg>
+  </div>
+</header>
+
+<!-- ── HOW IT WORKS ── -->
+<section id="how">
+  <div class="wrap reveal">
+    <div class="sec-head">
+      <span class="eyebrow">The shape of it</span>
+      <h2>A body, a brain, and no cloud in between.</h2>
+      <p>The robot joins Home Assistant over the ESPHome native API. The dravix add-on runs inside HA and drives the robot through those entities — everything on your own hardware.</p>
+    </div>
+    <div class="flow">
+      <div class="node"><span class="tag">the body</span><h3>🤖 StackChan · CoreS3</h3><p>Custom dravix ESPHome firmware: drawn pet face, head servos, mic, speaker, touch, camera, LEDs, battery.</p></div>
+      <div class="arrow">⇄</div>
+      <div class="node"><span class="tag">the host</span><h3>🏠 Home Assistant</h3><p>The robot appears as ordinary entities + Assist. Your always-on box; the single source of truth.</p></div>
+      <div class="arrow">⇄</div>
+      <div class="node"><span class="tag">the brain</span><h3>🧠 dravix-os add-on</h3><p>Dashboard, modes, a persistent personality, a pluggable AI brain, and an MCP server.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- ── FEATURES ── -->
+<section id="features">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <span class="eyebrow">Feature map</span>
+      <h2>Everything it can do.</h2>
+      <p>Two halves of one creature: what runs <em>on the robot</em> (the dravix ESPHome firmware) and what runs <em>in the add-on</em> (the service + dashboard).</p>
+    </div>
+
+    <p class="subhead reveal">On the robot — the firmware</p>
+    <div class="grid reveal">
+      <div class="card"><span class="ic">🐣</span><h3>Drawn pet face</h3><p>Two big eyes that blink, look around, squint when happy and widen when listening — plus cheeks and an animated mouth. Every expression has its own LED colour and head pose.</p></div>
+      <div class="card"><span class="ic">🎭</span><h3>7 on-device modes</h3><p><code>awake · morning · focus · quiet · night · busy · sleep</code> — each reshapes the face, LEDs, volume and autonomous behaviour.</p></div>
+      <div class="card"><span class="ic">🗣️</span><h3>Voice + speech bubble</h3><p>On-device wake word “Okay, Nabu” hands off to HA Assist (STT/LLM/TTS); replies pop into a comic bubble with a tail to the mouth.</p></div>
+      <div class="card"><span class="ic">🎩</span><h3>Themes &amp; accessories</h3><p>Dress-up: 7 face backdrops and 22 accessories — glasses, top hat, crown, cat ears, boxing gloves… opt-in, never auto-applied.</p></div>
+      <div class="card"><span class="ic">🌬️</span><h3>Breathing &amp; body language</h3><p>The face rises and settles on a slow sine while idle and sways while talking, with sparse, natural idle glances.</p></div>
+      <div class="card"><span class="ic">🕹️</span><h3>Games arcade</h3><p>Eleven built-in games — from Simon to a tiny Doom raycaster — with a high-score board.</p></div>
+      <div class="card"><span class="ic">💗</span><h3>Vitals &amp; a real life</h3><p>Energy, food, fun and calm as live bars. It drifts, and it looks after itself when a need bottoms out.</p></div>
+      <div class="card"><span class="ic">🔒</span><h3>Privacy mode</h3><p>Kills the mic on-device and blocks the camera, with a red PRIVACY badge you can see across the room.</p></div>
+      <div class="card"><span class="ic">🔋</span><h3>Real battery gauge</h3><p>Level + charging straight from the AXP2101 fuel gauge, a time-left estimate, and sleep-breathing LEDs on the charger.</p></div>
+      <div class="card"><span class="ic">📡</span><h3>IR blaster + receiver</h3><p>Controls your AC as a ready climate entity — and glances over, curious, when anyone uses a TV/AC remote.</p></div>
+      <div class="card"><span class="ic">🗂️</span><h3>3 interactive cards</h3><p>Pick any HA entities; up to four tappable rows per card toggle lights, press buttons, run scripts &amp; scenes right on the robot.</p></div>
+      <div class="card"><span class="ic">🌐</span><h3>Dashboard page</h3><p>A live screenshot of any Home Assistant dashboard on its own swipe page, refreshed every 15 seconds.</p></div>
+    </div>
+
+    <p class="subhead reveal">In the add-on — the service &amp; dashboard</p>
+    <div class="grid reveal">
+      <div class="card"><span class="ic">🪞</span><h3>Live face mirror</h3><p>The robot's face, state and speech mirrored in the browser — bilingual (English · עברית RTL), mobile-friendly.</p></div>
+      <div class="card"><span class="ic">💬</span><h3>Chat with memory</h3><p>Talk to the robot by text; it remembers facts you tell it and answers to its own name.</p></div>
+      <div class="card"><span class="ic">🛡️</span><h3>Security guard mode</h3><p>Arm it and the robot becomes a guard camera: periodic snapshots, a slow head patrol, live teleop and a browsable gallery.</p></div>
+      <div class="card"><span class="ic">💗</span><h3>Life &amp; wellness</h3><p>Needs bars with feed/rest/play/calm, plus wellness nudges for <em>you</em> — 20-20-20 eye breaks, stand up, hydrate.</p></div>
+      <div class="card"><span class="ic">🧠</span><h3>Pluggable AI brain</h3><p>HA Assist by default; switch to Claude, OpenAI or Ollama. Emotion tags in replies drive the face automatically.</p></div>
+      <div class="card"><span class="ic">🤖</span><h3>MCP server</h3><p>Its own MCP server lets any AI agent (Claude Desktop/Code) drive the robot, modes and your whole home.</p></div>
+      <div class="card"><span class="ic">🔌</span><h3>Auto-wired entities</h3><p>Discovery finds every robot entity at startup — face, servos, mode, speaker, LEDs, camera, sensors. Nothing to map.</p></div>
+      <div class="card"><span class="ic">💾</span><h3>Backup &amp; restore</h3><p>Download or upload all your config — personas, routines, memories, schedule, voices — as one JSON file.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- ── CONTROLS ── -->
+<section id="controls">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <span class="eyebrow">Everyday use</span>
+      <h2>Touch it, talk to it, swipe it.</h2>
+      <p>No app required to live with it — the whole cheat sheet, right on the robot.</p>
+    </div>
+    <div class="ctrls reveal">
+      <div class="ctrl"><span class="k">“Okay, Nabu”</span><span class="v">Wakes and listens (big eyes, yellow LEDs) → answers via HA Assist</span></div>
+      <div class="ctrl"><span class="k">Tap the face</span><span class="v">Starts a voice conversation — tap again to stop</span></div>
+      <div class="ctrl"><span class="k">Long-press 1.2s</span><span class="v">Goes to sleep instantly</span></div>
+      <div class="ctrl"><span class="k">Pet the head</span><span class="v">Pink LEDs, nuzzles up into your hand, happy wiggle</span></div>
+      <div class="ctrl"><span class="k">Tickle the back</span><span class="v">Green flash + a giggly double-wiggle</span></div>
+      <div class="ctrl"><span class="k">Walk up close</span><span class="v">Notices you and greets — perks up and nods hello</span></div>
+      <div class="ctrl"><span class="k">Wave 👋</span><span class="v">Wakes, waves back with its head, warm flash</span></div>
+      <div class="ctrl"><span class="k">Boop 👉</span><span class="v">A finger at the nose sensor → love-eyes + a nod</span></div>
+      <div class="ctrl"><span class="k">Turn its head</span><span class="v">Startled wide eyes (x_x)… then it decides it liked it</span></div>
+      <div class="ctrl"><span class="k">Plug in power</span><span class="v">“Nom, electricity!” — happy face + green flash</span></div>
+      <div class="ctrl"><span class="k">Swipe ⬇</span><span class="v">Two-stage status bar: Wi-Fi · clock · battery → sliders + LOCAL</span></div>
+      <div class="ctrl"><span class="k">Swipe ⬅ ➡</span><span class="v">Face → cards → Games → Vitals → Climate → Dashboard</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- ── LIFE / BEHAVIORS ── -->
+<section id="life">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <span class="eyebrow">A robot with a life</span>
+      <h2>It has needs, moods, and a mind of its own.</h2>
+      <p>Inspired by EMO and Vector: a persistent temperament that drifts over time, reacts to being talked to and petted, and survives restarts.</p>
+    </div>
+    <div class="two reveal">
+      <div class="panel">
+        <h3>Tamagotchi-style needs</h3>
+        <p>Four needs, 0–100, on the robot's own VITALS screen and the dashboard. They drift down; you top them up — and petting and talking feed them too.</p>
+        <div class="needs">
+          <div class="need"><span class="lbl">⚡ energy</span><div class="meter"><i style="width:72%; background:linear-gradient(90deg,#5dffa0,#33E6C8)"></i></div></div>
+          <div class="need"><span class="lbl">🍎 food</span><div class="meter"><i style="width:58%; background:linear-gradient(90deg,#ffb648,#f2c14e)"></i></div></div>
+          <div class="need"><span class="lbl">😄 fun</span><div class="meter"><i style="width:84%; background:linear-gradient(90deg,#33E6C8,#7ad4ff)"></i></div></div>
+          <div class="need"><span class="lbl">🧘 calm</span><div class="meter"><i style="width:66%; background:linear-gradient(90deg,#FF9EB5,#c78bff)"></i></div></div>
+        </div>
+        <p style="margin-top:14px"><b style="color:var(--text)">It looks after itself</b> — sleeps when tired, feeds itself, cheers itself up. And a hard do-not-disturb rule keeps it fully silent in <code>focus · quiet · night · busy · sleep</code>.</p>
+      </div>
+      <div class="panel">
+        <h3>Plugin modes</h3>
+        <p>Beyond the on-device modes, dravix runs orchestration behaviours that combine the robot, the AI router and Home Assistant. Foreground modes are exclusive; ambient ones run alongside.</p>
+        <div class="chips" style="margin-top:16px">
+          <span class="chip on">focus</span><span class="chip on">pomodoro</span><span class="chip on">companion</span>
+          <span class="chip on">guard</span><span class="chip on">dnd</span><span class="chip on">dance</span>
+          <span class="chip on">frigate_watch</span><span class="chip on">follow</span><span class="chip on">security</span>
+          <span class="chip">welcome</span><span class="chip">surprises</span><span class="chip">ambient_idle</span><span class="chip">daynight</span>
+        </div>
+        <p style="margin-top:16px">Add your own by dropping a <code>plugins/&lt;name&gt;/plugin.yaml</code> + a <code>Mode</code> subclass — managed live from the dashboard.</p>
+      </div>
+    </div>
+
+    <p class="subhead reveal">The arcade</p>
+    <div class="games reveal">
+      <span class="game">Catch Me</span><span class="game">Reaction</span><span class="game">Simon</span><span class="game">Rock-Paper-Scissors</span>
+      <span class="game">Maple</span><span class="game">Flappy</span><span class="game">Doom</span><span class="game">Breakout</span>
+      <span class="game">Pong</span><span class="game">Snake</span><span class="game">Party</span>
+    </div>
+  </div>
+</section>
+
+<!-- ── SCREENSHOTS ── -->
+<section>
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <span class="eyebrow">The dashboard</span>
+      <h2>A control panel that speaks your language.</h2>
+      <p>Eight tabs — Home, Agent, Screens, Life, Climate, Controls, Diagnostics, Settings — English by default, Hebrew (RTL) built in.</p>
+    </div>
+    <div class="shots reveal">
+      <div class="shot"><img loading="lazy" src="https://raw.githubusercontent.com/YossiKon/dravix-os/main/dravix-home.png" alt="dravix-os Home tab: the live face mirror, modes, chat and games"><span>Home · face, modes, chat, games</span></div>
+      <div class="shot"><img loading="lazy" src="https://raw.githubusercontent.com/YossiKon/dravix-os/main/dravix-screens.png" alt="dravix-os Screens editor: choose each card's Home Assistant entities"><span>Screens · choose each card's entities</span></div>
+      <div class="shot"><img loading="lazy" src="https://raw.githubusercontent.com/YossiKon/dravix-os/main/dravix-settings.png" alt="dravix-os Settings: auto-wired entities and head calibration"><span>Settings · auto-wired entities &amp; calibration</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- ── INSTALL ── -->
+<section id="install">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <span class="eyebrow">From a stock robot to alive</span>
+      <h2>Set it up in six steps.</h2>
+      <p>No prior ESPHome experience needed. Updates are one press afterwards.</p>
+    </div>
+
+    <div class="need-row reveal">
+      <span class="need-pill"><b>need</b> · M5Stack StackChan (CoreS3)</span>
+      <span class="need-pill"><b>need</b> · Home Assistant on an always-on box</span>
+      <span class="need-pill"><b>need</b> · the ESPHome Device Builder add-on</span>
+      <span class="need-pill"><b>need</b> · a USB-C cable (first flash only)</span>
+    </div>
+
+    <div class="install-grid reveal">
+
+      <!-- Step 0 -->
+      <div class="istep">
+        <svg class="istep-art" viewBox="0 0 360 170" role="img" aria-label="Illustration: back up the original firmware to a file">
+          <rect x="44" y="52" width="92" height="72" rx="10" fill="#0e141c" stroke="#33E6C8" stroke-width="2.5"/>
+          <rect x="62" y="70" width="56" height="36" rx="5" fill="none" stroke="#243244" stroke-width="2"/>
+          <g stroke="#5c6774" stroke-width="3" stroke-linecap="round"><path d="M44 66h-10M44 88h-10M44 110h-10"/><path d="M136 66h10M136 88h10M136 110h10"/></g>
+          <text x="90" y="93" font-family="IBM Plex Mono, monospace" font-size="12" fill="#8b96a4" text-anchor="middle">MCU</text>
+          <path d="M150 88h38" fill="none" stroke="#33E6C8" stroke-width="2.5"/>
+          <path d="M182 82l8 6-8 6" fill="none" stroke="#33E6C8" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M212 46h48l24 24v54a6 6 0 0 1-6 6h-66a6 6 0 0 1-6-6V52a6 6 0 0 1 6-6z" fill="#0e141c" stroke="#33E6C8" stroke-width="2.5"/>
+          <path d="M260 46v24h24" fill="none" stroke="#33E6C8" stroke-width="2.5"/>
+          <text x="247" y="114" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="#8b96a4" text-anchor="middle">backup.bin</text>
+          <path d="M304 40l15 5v13c0 9-7 15-15 18-8-3-15-9-15-18V45z" fill="rgba(93,255,160,.12)" stroke="#5dffa0" stroke-width="2"/>
+          <path d="M297 58l5 5 10-11" fill="none" stroke="#5dffa0" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        <div class="istep-body"><span class="istep-n">Step 0</span><h3>Back up the original firmware</h3><p>A byte-for-byte snapshot of the robot as it left the factory — you can always go back. One <code>esptool read_flash</code> command. Do not skip.</p></div>
+      </div>
+
+      <!-- Step 1 -->
+      <div class="istep">
+        <svg class="istep-art" viewBox="0 0 360 170" role="img" aria-label="Illustration: create the tiny ESPHome YAML config and edit the Wi-Fi lines">
+          <rect x="46" y="30" width="268" height="112" rx="10" fill="#05080b" stroke="#33E6C8" stroke-width="2.5"/>
+          <path d="M46 52h268" stroke="#1c2634" stroke-width="2"/>
+          <circle cx="63" cy="41" r="3.5" fill="#ff6b6b"/><circle cx="77" cy="41" r="3.5" fill="#f2c14e"/><circle cx="91" cy="41" r="3.5" fill="#5dffa0"/>
+          <text x="302" y="45" font-family="IBM Plex Mono, monospace" font-size="10" fill="#5c6774" text-anchor="end">.yaml</text>
+          <g font-family="IBM Plex Mono, monospace" font-size="11">
+            <text x="62" y="72" fill="#8b96a4">packages:</text>
+            <rect x="57" y="79" width="246" height="17" rx="4" fill="rgba(51,230,200,.10)"/>
+            <text x="62" y="91" fill="#33E6C8">ssid: "<tspan fill="#FF9EB5">MyWiFi</tspan>"</text>
+            <rect x="57" y="99" width="246" height="17" rx="4" fill="rgba(51,230,200,.10)"/>
+            <text x="62" y="111" fill="#33E6C8">password: "<tspan fill="#FF9EB5">••••••</tspan>"</text>
+            <text x="62" y="131" fill="#8b96a4">wake_word: okay_nabu</text>
+          </g>
+          <g transform="translate(286,120)" stroke="#33E6C8" stroke-width="2" fill="none" stroke-linecap="round"><path d="M0 8a14 14 0 0 1 20 0"/><path d="M4 12a8 8 0 0 1 12 0"/></g>
+          <circle cx="296" cy="136" r="1.6" fill="#33E6C8"/>
+        </svg>
+        <div class="istep-body"><span class="istep-n">Step 1</span><h3>Create the tiny ESPHome config</h3><p>In ESPHome Device Builder, make a new device and paste the ~60-line <a href="https://github.com/YossiKon/dravix-os/blob/main/deploy/esphome/stackchan-from-git.yaml" target="_blank" rel="noopener">git stub</a>. Edit the two Wi-Fi lines — it pulls the real firmware from the repo on every build.</p></div>
+      </div>
+
+      <!-- Step 2 -->
+      <div class="istep">
+        <svg class="istep-art" viewBox="0 0 360 170" role="img" aria-label="Illustration: first flash over USB-C from a computer to the robot">
+          <rect x="34" y="48" width="92" height="60" rx="6" fill="#0e141c" stroke="#33E6C8" stroke-width="2.5"/>
+          <rect x="46" y="58" width="68" height="40" rx="3" fill="#05080b" stroke="#1c2634" stroke-width="1.5"/>
+          <path d="M26 108h108l6 12H20z" fill="#0e141c" stroke="#33E6C8" stroke-width="2.5" stroke-linejoin="round"/>
+          <path d="M140 94c26 0 20-18 46-18" fill="none" stroke="#5c6774" stroke-width="3"/>
+          <rect x="196" y="50" width="122" height="94" rx="14" fill="#0e141c" stroke="#33E6C8" stroke-width="2.5"/>
+          <rect x="206" y="60" width="102" height="74" rx="9" fill="#05080b" stroke="#33E6C8" stroke-width="1.5"/>
+          <rect x="228" y="82" width="18" height="21" rx="6" fill="#33E6C8"/><rect x="268" y="82" width="18" height="21" rx="6" fill="#33E6C8"/>
+          <path d="M240 116q17 12 34 0" fill="none" stroke="#33E6C8" stroke-width="4" stroke-linecap="round"/>
+          <rect x="34" y="132" width="118" height="9" rx="4.5" fill="#0a1017" stroke="#1c2634" stroke-width="1"/>
+          <rect x="35" y="133" width="72" height="7" rx="3.5" fill="#33E6C8"/>
+          <path d="M170 126l-9 13h6l-3 11 12-15h-6z" fill="#f2c14e"/>
+        </svg>
+        <div class="istep-body"><span class="istep-n">Step 2</span><h3>First flash over USB-C</h3><p>Plug in → <code>Install → Plug into this computer</code>. The first build compiles a wake-word model, so it takes a while. Every future update is wireless.</p></div>
+      </div>
+
+      <!-- Step 3 -->
+      <div class="istep">
+        <svg class="istep-art" viewBox="0 0 360 170" role="img" aria-label="Illustration: adopt the device in Home Assistant and rename it to Dravix">
+          <path d="M50 92l42-34 42 34" fill="none" stroke="#33E6C8" stroke-width="2.5" stroke-linejoin="round"/>
+          <rect x="62" y="90" width="60" height="42" rx="4" fill="#0e141c" stroke="#33E6C8" stroke-width="2.5"/>
+          <circle cx="92" cy="111" r="8" fill="none" stroke="#33E6C8" stroke-width="2"/>
+          <path d="M92 104v7l4 4" stroke="#33E6C8" stroke-width="2" fill="none" stroke-linecap="round"/>
+          <text x="92" y="152" font-family="IBM Plex Mono, monospace" font-size="10" fill="#8b96a4" text-anchor="middle">Home Assistant</text>
+          <rect x="168" y="54" width="150" height="64" rx="10" fill="#0e141c" stroke="#1c2634" stroke-width="2"/>
+          <text x="184" y="82" font-family="IBM Plex Mono, monospace" font-size="12" fill="#8b96a4">stackchan</text>
+          <path d="M184 94h58" stroke="#33E6C8" stroke-width="2" fill="none"/>
+          <path d="M238 88l8 6-8 6" fill="none" stroke="#33E6C8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          <text x="256" y="99" font-family="IBM Plex Mono, monospace" font-size="12" fill="#33E6C8">Dravix</text>
+          <g transform="translate(300,58) rotate(45)"><rect x="-3" y="0" width="6" height="15" rx="1.5" fill="#f2c14e"/><path d="M-3 15h6l-3 5z" fill="#f2c14e"/></g>
+        </svg>
+        <div class="istep-body"><span class="istep-n">Step 3</span><h3>Adopt it in Home Assistant</h3><p>HA discovers the ESPHome device automatically. Recommended: rename it to <code>Dravix</code> so the entity ids match the firmware's default prefix.</p></div>
+      </div>
+
+      <!-- Step 4 -->
+      <div class="istep">
+        <svg class="istep-art" viewBox="0 0 360 170" role="img" aria-label="Illustration: install the dravix-os add-on from the add-on store">
+          <rect x="92" y="32" width="176" height="106" rx="12" fill="#0e141c" stroke="#33E6C8" stroke-width="2.5"/>
+          <path d="M92 66h176" stroke="#1c2634" stroke-width="2"/>
+          <rect x="110" y="45" width="9" height="12" rx="3.5" fill="#33E6C8"/><rect x="124" y="45" width="9" height="12" rx="3.5" fill="#33E6C8"/>
+          <path d="M112 60q9 6 18 0" fill="none" stroke="#33E6C8" stroke-width="2" stroke-linecap="round"/>
+          <text x="146" y="57" font-family="Bricolage Grotesque, sans-serif" font-weight="700" font-size="15" fill="#e8edf2">dravix-os</text>
+          <text x="110" y="90" font-family="IBM Plex Mono, monospace" font-size="10" fill="#8b96a4">Home Assistant add-on</text>
+          <rect x="110" y="100" width="92" height="26" rx="8" fill="#33E6C8"/>
+          <text x="156" y="117" font-family="IBM Plex Sans, sans-serif" font-weight="700" font-size="12.5" fill="#04120f" text-anchor="middle">Install</text>
+          <path d="M196 120v22l6-7 4 8 4-2-4-8 8-1z" fill="#e8edf2" stroke="#05080b" stroke-width="1.2" stroke-linejoin="round"/>
+        </svg>
+        <div class="istep-body"><span class="istep-n">Step 4</span><h3>Install the dravix-os add-on</h3><p>Add-on Store → ⋮ → Repositories → add <code>github.com/YossiKon/dravix-os</code> → install → Start. It authenticates itself and auto-discovers every robot entity.</p></div>
+      </div>
+
+      <!-- Step 5 -->
+      <div class="istep">
+        <svg class="istep-art" viewBox="0 0 360 170" role="img" aria-label="Illustration: open the dashboard and say hi to the robot">
+          <rect x="66" y="34" width="222" height="106" rx="10" fill="#05080b" stroke="#33E6C8" stroke-width="2.5"/>
+          <path d="M66 56h222" stroke="#1c2634" stroke-width="2"/>
+          <circle cx="80" cy="45" r="3" fill="#5c6774"/><circle cx="90" cy="45" r="3" fill="#5c6774"/>
+          <rect x="104" y="40" width="172" height="10" rx="5" fill="#0e141c"/>
+          <rect x="148" y="74" width="26" height="30" rx="10" fill="#33E6C8"/><rect x="186" y="74" width="26" height="30" rx="10" fill="#33E6C8"/>
+          <ellipse cx="161" cy="112" rx="9" ry="4" fill="#FF9EB5"/><ellipse cx="199" cy="112" rx="9" ry="4" fill="#FF9EB5"/>
+          <path d="M156 117q24 16 48 0" fill="none" stroke="#33E6C8" stroke-width="5" stroke-linecap="round"/>
+          <rect x="250" y="40" width="54" height="30" rx="9" fill="#0e141c" stroke="#33E6C8" stroke-width="2"/>
+          <path d="M264 70l-3 11 13-11z" fill="#0e141c" stroke="#33E6C8" stroke-width="2"/>
+          <text x="277" y="60" font-family="Bricolage Grotesque, sans-serif" font-weight="700" font-size="15" fill="#33E6C8" text-anchor="middle">hi!</text>
+          <path d="M305 104c-4-6-15-3-15 5 0 7 9 11 15 16 6-5 15-9 15-16 0-8-11-11-15-5z" fill="#FF9EB5"/>
+        </svg>
+        <div class="istep-body"><span class="istep-n">Step 5</span><h3>Open the dashboard and say hi</h3><p>Click Open Web UI (or <code>http://&lt;home-assistant&gt;:8800</code>). Pet the robot's head — it will like that.</p></div>
+      </div>
+
+    </div>
+
+    <div class="callout reveal">
+      <b>Updating &amp; rollback.</b> Firmware update = press <em>Install</em> in ESPHome again (the tiny file always pulls the latest). The add-on updates itself in Home Assistant. Roll back firmware by pinning <code>ref: v&lt;version&gt;</code> from <a href="https://github.com/YossiKon/dravix-os/releases" target="_blank" rel="noopener">Releases</a>, or restore your Step-0 backup to go fully factory.
+    </div>
+    <p class="reveal" style="margin-top:22px; color:var(--mute)">No robot yet? Everything runs against a built-in <b style="color:var(--text)">mock</b> driver — explore the whole dashboard fully offline.</p>
+  </div>
+</section>
+
+<!-- ── DOCS ── -->
+<section id="docs">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <span class="eyebrow">Go deeper</span>
+      <h2>Docs &amp; links.</h2>
+      <p>Every guide lives in the repo. Read the design, the flashing steps, the camera pipeline and more.</p>
+    </div>
+    <div class="links reveal">
+      <a class="link" href="https://github.com/YossiKon/dravix-os/blob/main/docs/architecture.md" target="_blank" rel="noopener"><span class="ic">🏗️</span><span><b>Architecture</b><small>docs/architecture.md</small></span><span class="go">→</span></a>
+      <a class="link" href="https://github.com/YossiKon/dravix-os/blob/main/docs/esphome-local-control.md" target="_blank" rel="noopener"><span class="ic">⚡</span><span><b>Flash &amp; local control</b><small>docs/esphome-local-control.md</small></span><span class="go">→</span></a>
+      <a class="link" href="https://github.com/YossiKon/dravix-os/blob/main/docs/home-assistant.md" target="_blank" rel="noopener"><span class="ic">🏠</span><span><b>Home Assistant recipes</b><small>docs/home-assistant.md</small></span><span class="go">→</span></a>
+      <a class="link" href="https://github.com/YossiKon/dravix-os/blob/main/docs/frigate.md" target="_blank" rel="noopener"><span class="ic">📷</span><span><b>Cameras &amp; Frigate</b><small>docs/frigate.md</small></span><span class="go">→</span></a>
+      <a class="link" href="https://github.com/YossiKon/dravix-os/blob/main/docs/personality.md" target="_blank" rel="noopener"><span class="ic">🎭</span><span><b>Personality</b><small>docs/personality.md</small></span><span class="go">→</span></a>
+      <a class="link" href="https://github.com/YossiKon/dravix-os/blob/main/docs/plugins.md" target="_blank" rel="noopener"><span class="ic">🧩</span><span><b>Plugin modes</b><small>docs/plugins.md</small></span><span class="go">→</span></a>
+      <a class="link" href="https://github.com/YossiKon/dravix-os/blob/main/docs/dashboard-page.md" target="_blank" rel="noopener"><span class="ic">🌐</span><span><b>Dashboard page</b><small>docs/dashboard-page.md</small></span><span class="go">→</span></a>
+      <a class="link" href="https://github.com/YossiKon/dravix-os/blob/main/docs/local-only.md" target="_blank" rel="noopener"><span class="ic">🔒</span><span><b>Local-only mode</b><small>docs/local-only.md</small></span><span class="go">→</span></a>
+    </div>
+
+    <p class="subhead reveal">Built on</p>
+    <div class="links reveal">
+      <a class="link" href="https://www.home-assistant.io/" target="_blank" rel="noopener"><span class="ic">🏠</span><span><b>Home Assistant</b><small>home-assistant.io</small></span><span class="go">↗</span></a>
+      <a class="link" href="https://esphome.io/" target="_blank" rel="noopener"><span class="ic">⚙️</span><span><b>ESPHome</b><small>esphome.io</small></span><span class="go">↗</span></a>
+      <a class="link" href="https://docs.m5stack.com/en/app/stack_chan" target="_blank" rel="noopener"><span class="ic">🤖</span><span><b>M5Stack StackChan</b><small>docs.m5stack.com</small></span><span class="go">↗</span></a>
+      <a class="link" href="https://frigate.video/" target="_blank" rel="noopener"><span class="ic">📹</span><span><b>Frigate NVR</b><small>frigate.video</small></span><span class="go">↗</span></a>
+    </div>
+  </div>
+</section>
+
+<!-- ── FOOTER ── -->
+<footer>
+  <div class="wrap foot-in">
+    <div>
+      <a class="brand" href="#top" style="font-size:18px"><svg viewBox="0 0 32 32" aria-hidden="true" style="width:26px;height:26px"><rect width="32" height="32" rx="7" fill="#0e141c"/><rect x="7" y="9" width="7" height="9" rx="3" fill="#33E6C8"/><rect x="18" y="9" width="7" height="9" rx="3" fill="#33E6C8"/><path d="M12 22q4 4 8 0" stroke="#33E6C8" stroke-width="2.5" fill="none" stroke-linecap="round"/></svg> dravix-os</a>
+      <p style="margin:10px 0 0; max-width:44ch; font-size:13.5px">A local-first companion OS for the M5Stack StackChan. Everything runs on your own hardware — nothing phones home.</p>
+    </div>
+    <div class="foot-links">
+      <a href="https://github.com/YossiKon/dravix-os" target="_blank" rel="noopener">GitHub</a>
+      <a href="https://github.com/YossiKon/dravix-os/releases" target="_blank" rel="noopener">Releases</a>
+      <a href="#install">Install</a>
+      <a href="#features">Features</a>
+      <a href="#docs">Docs</a>
+    </div>
+  </div>
+  <div class="wrap" style="margin-top:26px; color:var(--faint); font-size:12.5px; font-family:var(--mono)">
+    © <span id="yr">2026</span> dravix-os · built with Home Assistant, ESPHome &amp; a StackChan.
+  </div>
+</footer>
+
+<script>
+  document.getElementById('yr').textContent = new Date().getFullYear();
+  // scroll reveal
+  var reveals = document.querySelectorAll('.reveal');
+  if(!('IntersectionObserver' in window)){
+    reveals.forEach(function(el){ el.classList.add('in'); });
+  } else {
+    var io = new IntersectionObserver(function(es){
+      es.forEach(function(e){ if(e.isIntersecting){ e.target.classList.add('in'); io.unobserve(e.target); } });
+    }, {threshold:.12, rootMargin:'0px 0px -8% 0px'});
+    reveals.forEach(function(el){ io.observe(el); });
+  }
+  // close mobile menu on link tap
+  document.querySelectorAll('#nl a').forEach(function(a){ a.addEventListener('click', function(){ document.getElementById('nl').classList.remove('open'); }); });
+</script>
+</body>
+</html>

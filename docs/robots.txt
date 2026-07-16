@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://yossikon.github.io/dravix-os/sitemap.xml
