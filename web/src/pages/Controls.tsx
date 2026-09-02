@@ -135,15 +135,6 @@ export function ControlsPage() {
         />
       </Section>
 
-      <Section title={tr("🕹️ הג'ויסטיק (השלט האלחוטי ESP-NOW)", "🕹️ The joystick (ESP-NOW remote)")} delay={40}>
-        <Rows
-          rows={[
-            ["מוט — כיוון", "stick — direction", "מזיז את ראש הרובוט · שולט במשחקים (מגש / כיוון / כוונת / הליכה)", "moves the robot's head · steers the games (paddle / aim / walk)"],
-            ["כפתור", "button", "דבר עם ה-AI · יורה (Doom) · קופץ (Maple)", "talk to the AI · shoot (Doom) · jump (Maple)"],
-          ]}
-        />
-      </Section>
-
       <Section title={tr("✋ בקשת-אישור (Permission)", "✋ Permission request")} delay={60}>
         <Rows
           rows={[

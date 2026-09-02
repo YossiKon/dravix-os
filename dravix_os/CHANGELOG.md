@@ -1,5 +1,38 @@
 # Changelog
 
+## 0.1.3
+
+**🐾 A desk companion, not an arcade** *(firmware 42 — update both)*
+
+The robot is now built around one idea — a little creature that lives on your desk, the
+way Emo, Eilik or Vector do — and everything that wasn't that is gone from it.
+
+- **What it is now:** a face that blinks, breathes and glances around on its own; emotions;
+  petting, tickling, a nose boop and a wave; it greets you when you come close, gets dizzy
+  when shaken, sleeps when the room goes dark and wakes with the light; a screensaver; a
+  wake word and a voice. Every one of those was already there — they were just buried.
+- **Gone from the robot:** the entire games arcade (nine games, the menu, the high-score
+  board), the on-screen LED colour picker, and the receiver for the official joystick
+  remote. Together they were **119 on-screen objects, five always-running timers, 44
+  variables and a radio listener that ran a routine for every broadcast packet on your Wi-Fi
+  channel**. On-screen objects: **313 → 194**. Screens: **20 → 9**. Firmware: **5,986 → 4,841
+  lines.** Everything is in git under `v0.1.2` if you ever want a game back.
+- **It moves more.** The head now glances around roughly every two to three minutes instead
+  of every seven. Still calm — and the "Body language" switch still turns it off entirely.
+- **Voice stays quiet.** It speaks only when the AI answers; the aliveness is in the eyes, the
+  head, the lights and its little chirps. "Speaks on its own" in Settings turns the ambient
+  chatter back on if you want it.
+- **Faster to respond.** Wi-Fi power-saving is off (the BSP had it on), which was the small
+  lag between "Okay Nabu" and the listening face and the occasional hitch in the camera
+  stream. It costs about 50 mA on a robot that lives on a charger.
+- **Less to draw when nothing is showing.** The entity cards, the vitals bars and the climate
+  page were being re-rendered every five seconds even while the face was on screen. They now
+  render when you swipe to them and refresh only while they're visible — the face page
+  itself no longer pays for screens you aren't looking at.
+- **Kept on purpose:** the three Home Assistant entity cards, the climate page, the vitals
+  page and the agent-permission page — you use them and the dashboard depends on them. Say
+  the word and they go too.
+
 ## 0.1.2
 
 **⏱ The first alert after a Home Assistant restart no longer disappears**

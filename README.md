@@ -9,8 +9,8 @@
 </p>
 
 dravix-os turns the StackChan into a little desk creature you fully own. You re-flash the robot to
-custom **dravix ESPHome firmware** — a drawn animated pet face, petting, voice, camera, LEDs, a
-games arcade and a *real life* (needs it takes care of) — which exposes every part of the hardware
+custom **dravix ESPHome firmware** — a drawn animated pet face, petting, voice, camera, LEDs and
+a *real life* (needs it takes care of) — which exposes every part of the hardware
 to Home Assistant as ordinary entities. The dravix add-on then drives it through those entities,
 adding custom **modes**, a **mobile dashboard**, a persistent **personality**, a pluggable **AI
 brain**, and deep **smart-home** integration. Everything runs on your own hardware; nothing phones
@@ -140,7 +140,6 @@ Everything is done by touching the robot, talking to it, or from the dashboard:
 | **Tap a row on a card** | Controls that HA entity right from the robot — toggles lights/switches, presses buttons, runs scripts & scenes (up to 4 rows per card) |
 | **Swipe ⬆** | Back to the face |
 | **LOCAL** button (on the status bar) | Toggles local-only mode — nothing in or out of your LAN |
-| The **official ESP-NOW remote** | Joystick steers the head; button **B** = talk (set the remote's channel to your router's Wi-Fi channel) |
 
 ## ✨ What's inside — feature map
 
@@ -157,7 +156,7 @@ Everything is done by touching the robot, talking to it, or from the dashboard:
 | 🌬 Breathing + body language | The face rises/settles on a slow sine while idle, sways in tiny moves while talking; **occasional** idle glances (sparse by design — the head turns ~once every few minutes, and it holds still during a conversation) | Always on; fully still in calm modes. Toggles: **Body language (head moves)** and **Idle glances / motion** |
 | 👋 Wave & 👉 boop gestures | Wave at the nose sensor → it waves back; a finger right at the sensor → love-eyes + a nod | Just do it (proximity sensor) |
 | 🫨 Hand-turn reaction | Physically turn its head → startled wide eyes, then it warms up to it | Just do it |
-| 🕹️ Games arcade | **Catch Me · Reaction · Simon · Rock-Paper-Scissors · Flappy · Breakout · Pong · Snake · Party**, plus a **high-score** board | Swipe to **GAMES**, tap a game (Party also has an HA button) |
+| 🕺 Party | A desk disco — rainbow LEDs, a head bop, a little tune | Dashboard → Home, or the **Party** button in HA |
 | 💗 Vitals screen | The robot's live needs as bars (energy/food/fun/calm) | Swipe to **VITALS**; care actions on the dashboard **Life** tab |
 | 🌐 Dashboard page | A live screenshot of any Home Assistant dashboard (or any image URL) on its own swipe page — stays put, refreshes every 15s | Dashboard → **Settings → 🌐 Dashboard page**; render HA views with the **Puppet** add-on. See [docs/dashboard-page.md](docs/dashboard-page.md) |
 | 🗂 3 interactive cards | Any HA entities you pick — and up to 4 **tappable rows** per card: tap to toggle/press/run scripts, scenes, automations, the AC | Dashboard → **Screens**: pick entities per card; tap rows on the robot |
@@ -167,7 +166,6 @@ Everything is done by touching the robot, talking to it, or from the dashboard:
 | 🔋 Real battery gauge | Level + charging straight from the **AXP2101** fuel gauge (hardware charging flag), time-left estimate, sleep-breathing LEDs on the charger; raw W/mA from the INA226 live in HA | Swipe ⬇ — % + bar + time-left on the status bar |
 | 📡 IR blaster + receiver | The robot controls your AC (a ready `Default AC` climate entity) and glances over, curious, when anyone uses a TV/AC remote | Pick `climate.*_default_ac` in the dashboard Climate tab |
 | 🧍 Presence nearby | A proximity-based "someone is at the desk" sensor for HA (gates wellness tips too) | Automatic — a `binary_sensor` in HA |
-| 🎮 Official remote | The M5Stack StackChan ESP-NOW joystick remote | Just use it (match its channel to your router's) |
 | 🖼 Alert images | Any camera/Frigate snapshot full-screen on the robot | Set the `Show image URL` text entity (automations) or dashboard camera actions |
 | 💡 LED effects | Rainbow / Twinkle / Random on the light bar (Party runs the rainbow) | Dashboard → Home → LED effect buttons, or HA |
 | 🧭 Behaviour toggles | Greet-on-approach, sleep-when-dark, blink, idle glances, mood LEDs, tap-to-talk… | Dashboard → Settings → **Robot behaviour** |
@@ -222,15 +220,11 @@ controllable from Home Assistant:
 - **Speech bubble** — a comic bubble at the top of the screen, with a tail pointing to the mouth,
   shows the AI's reply (Hebrew or English) while the animated talking mouth stays fully visible.
   Listening is a **face**, not a label — big curious eyes and an attentive little perk-up.
-- **A games arcade** — a **Games** menu on the robot's screen: **Catch Me** (tap the runaway dot),
-  **Reaction** (a reflex speed test in milliseconds), **Simon** (the growing colour-sequence memory
-  game), **Rock-Paper-Scissors** (it nods when it wins), **Flappy** (slip through the pipes),
-  **Breakout**, **Pong**, **Snake**, and **Party** (a desk disco) — plus a **high-score** board.
 - **A swipe UI** — swipe **down** for a **two-stage** status bar (first a slim strip: Wi-Fi · clock ·
   date · battery % + time-left; swipe down again for the full panel: **three sliders** — volume,
   screen, LED brightness — the **LOCAL** button, a power line, and an amber ⬆ arrow when a firmware
   update is available), and **left/right** through 3 **interactive cards** (you choose the HA
-  entities on each from the dashboard; tap a row to toggle/press/run it), the **Games** arcade, the
+  entities on each from the dashboard; tap a row to toggle/press/run it), the
   **Vitals** page, the **Climate** page, and the opt-in **🌐 dashboard** page — plus a full-screen
   alert-image page for Frigate / doorbell snapshots.
 - **Privacy mode** — kills the microphone on-device (wake word + voice pipeline stopped) and shows a
