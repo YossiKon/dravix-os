@@ -23,7 +23,7 @@ from __future__ import annotations
 import asyncio
 from typing import TYPE_CHECKING, Any
 
-from .bidi import for_robot
+from .bidi import fit_bytes, for_robot
 from .logging import get_logger
 
 if TYPE_CHECKING:
@@ -35,6 +35,17 @@ log = get_logger("screens")
 CARD_COUNT = 3  # the firmware exposes exactly three cards
 ROW_COUNT = 4  # tappable rows per card — more won't fit a 320x240 screen comfortably
 NAME_MAX = 14  # truncate long friendly names so a line fits the small display
+STATE_MAX = 12  # …and the state that sits under the name
+# The firmware's text slots cap their value in BYTES (ESPHome checks std::string::size()),
+# while the caps above count CHARACTERS. A Hebrew letter is two bytes, so a title/body that
+# looks short in Python can be rejected outright by the robot — silently, leaving the card
+# frozen on whatever it showed before. These byte caps are the same limits expressed the way
+# the robot actually measures them: 14 Hebrew letters = 28 bytes, 12 = 24. Four full rows
+# then come to exactly BODY_BYTES, so nothing is ever dropped in either language.
+NAME_BYTES = NAME_MAX * 2
+STATE_BYTES = STATE_MAX * 2
+TITLE_BYTES = 64   # firmware t_c*_title max_length
+BODY_BYTES = 255   # firmware t_c*_body max_length
 
 
 def _style_key(entity_id: str, state: str) -> str:
@@ -155,10 +166,12 @@ class ScreenPusher:
                 continue  # robot not flashed with the card firmware (yet)
             card = cards[i] if i < len(cards) else None
             try:
-                # truncate to the firmware slots' max_length (30 / 160) — an over-long
-                # value fails text.set_value validation and the card would stay stale
-                title = for_robot(str(card.get("title", ""))[:30]) if card else ""
-                body = self._render_body(card, smap)[:160] if card else ""
+                # Fit the firmware slots' max_length, which the robot counts in BYTES —
+                # an over-long value fails text.set_value and the card silently stays stale.
+                title = (
+                    for_robot(fit_bytes(str(card.get("title", "")), TITLE_BYTES)) if card else ""
+                )
+                body = fit_bytes(self._render_body(card, smap), BODY_BYTES) if card else ""
                 await self._sync_text(title_ent, title, smap)
                 await self._sync_text(body_ent, body, smap)
             except Exception as exc:  # noqa: BLE001 — one bad card must not stop the rest
@@ -202,9 +215,10 @@ class ScreenPusher:
                     unit = str(attrs.get("unit_of_measurement") or "").strip()
                     state_txt = f"{state} {unit}".strip() if unit else str(state)
             key = _style_key(entity_id, state)
-            text = (
-                f"{key}|{for_robot(_clean(name, NAME_MAX))}|{for_robot(_clean(state_txt, 12))}"
-            )
+            # byte-fit each field before reordering — see the byte caps above
+            row_name = for_robot(fit_bytes(_clean(name, NAME_MAX), NAME_BYTES))
+            row_state = for_robot(fit_bytes(_clean(state_txt, STATE_MAX), STATE_BYTES))
+            text = f"{key}|{row_name}|{row_state}"
             # free-positioning prefix "x,y|" (from the dashboard drag editor); the firmware
             # moves that row to (x, y). No layout entry → no prefix → the default stacked rows.
             pos = layout.get(entity_id)

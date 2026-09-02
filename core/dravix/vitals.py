@@ -464,11 +464,12 @@ class VitalsEngine:
         if self._ha is not None:
             await self._resolve_entities()
             if self._tip_entity:
-                from .bidi import for_robot
+                from .bidi import fit_bytes, for_robot
 
                 try:
                     await self._ha.call_service(
-                        "text", "set_value", {"entity_id": self._tip_entity, "value": for_robot(text)}
+                        "text", "set_value",
+                        {"entity_id": self._tip_entity, "value": for_robot(fit_bytes(text, 240))},
                     )
                 except Exception as exc:  # noqa: BLE001
                     if _entity_missing(exc):

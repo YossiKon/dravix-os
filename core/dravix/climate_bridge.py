@@ -73,7 +73,8 @@ async def push_status(ha, entity: str, discovered: dict) -> None:
         log.debug("climate push: %s", exc)
         return
     attrs = st.get("attributes") or {}
-    from .bidi import for_robot  # Hebrew AC names → visual order (the robot's LVGL has no BiDi)
+    # Hebrew AC names → visual order (the robot's LVGL has no BiDi) + a byte-safe fit
+    from .bidi import fit_bytes, for_robot
 
     name = str(attrs.get("friendly_name") or entity)[:24]
     mode = str(st.get("state") or "")
@@ -83,11 +84,11 @@ async def push_status(ha, entity: str, discovered: dict) -> None:
         info += f"   fan: {fan}"
     big = "off" if mode in ("off", "") else _fmt_temp(attrs.get("temperature"))
     try:
-        await _set_text(ha, name_e, for_robot(name))
+        await _set_text(ha, name_e, for_robot(fit_bytes(name, 80)))
         await _set_text(ha, set_e, big)
         # "mode|" prefix (fw 30+): the firmware strips it for display and lights the
         # matching Mushroom mode pill. Older firmware shows it as-is — harmless.
-        await _set_text(ha, info_e, f"{mode}|{for_robot(info[:48])}")
+        await _set_text(ha, info_e, f"{mode}|{for_robot(fit_bytes(info, 112))}")
     except Exception as exc:  # noqa: BLE001
         log.debug("climate push write: %s", exc)
 

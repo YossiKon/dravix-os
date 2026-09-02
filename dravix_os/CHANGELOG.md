@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.0.100
+
+**🔤 The cards, the speech bubble and the tips work in Hebrew again**
+*(firmware 39 — update both)*
+
+Everything the robot displays as text was silently failing whenever the text was Hebrew.
+
+- Each text slot on the robot has a maximum length, and the robot measures it in **bytes**,
+  while dravix was trimming by **characters**. A Hebrew letter takes two bytes — so a card
+  that looked comfortably short here arrived at the robot over its limit and was **rejected
+  outright**, with no error anywhere a person would see it. The card simply never changed,
+  and kept showing whatever it had before.
+- That hit every Hebrew path: the **three entity cards** (their titles *and* their rows), the
+  **speech bubble**, the **wellness tips**, the **air-conditioner name** and the **agent
+  permission prompt**. Two of them — the tip and the AC name — were never trimmed at all, so
+  any reasonably long name failed every single time.
+- Fixed on both sides: dravix now measures the way the robot does (and never cuts a letter in
+  half), and the robot's text slots were widened so a full four-row Hebrew card fits with
+  room to spare. English cards are unchanged.
+- A regression test now builds the worst case — four rows, long Hebrew names *and* long
+  Hebrew states — and fails if it would overflow the robot's slot or break a row apart.
+
 ## 0.0.99
 
 **🧹 A clean-out: less on the robot, less in the service, and nothing left that lies**

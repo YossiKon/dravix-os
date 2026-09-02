@@ -40,7 +40,7 @@ substitutions:
   # publishes it to HA ("Firmware version" sensor); the dravix dashboard compares it
   # with the version bundled in the add-on and shows "firmware update available".
   # (Maintainers: bump this on every firmware change. Users: don't touch.)
-  fw_version: "38"
+  fw_version: "39"
   # The ESPHome node name (mDNS hostname + the default entity prefix on a fresh flash).
   # Change it only if you run MORE THAN ONE robot — each needs a unique name. NOTE:
   # changing it on an already-adopted robot registers a NEW device in HA.
@@ -909,42 +909,42 @@ text:
     id: t_c1_title
     optimistic: true
     mode: text
-    max_length: 30
+    max_length: 64
     initial_value: "CARD 1"
   - platform: template
     name: "Card1 body"
     id: t_c1_body
     optimistic: true
     mode: text
-    max_length: 160
+    max_length: 255
     initial_value: ""
   - platform: template
     name: "Card2 title"
     id: t_c2_title
     optimistic: true
     mode: text
-    max_length: 30
+    max_length: 64
     initial_value: "CARD 2"
   - platform: template
     name: "Card2 body"
     id: t_c2_body
     optimistic: true
     mode: text
-    max_length: 160
+    max_length: 255
     initial_value: ""
   - platform: template
     name: "Card3 title"
     id: t_c3_title
     optimistic: true
     mode: text
-    max_length: 30
+    max_length: 64
     initial_value: "CARD 3"
   - platform: template
     name: "Card3 body"
     id: t_c3_body
     optimistic: true
     mode: text
-    max_length: 160
+    max_length: 255
     initial_value: ""
   # Set this to any image URL → the robot shows it full-screen (empty = back to the face).
   # e.g. http://<frigate>:5000/api/<camera>/latest.jpg?height=240
@@ -996,7 +996,7 @@ text:
     id: t_clim_name
     optimistic: true
     mode: text
-    max_length: 40
+    max_length: 80
     initial_value: ""
   - platform: template
     name: "Climate set"         # the big target-temp readout, e.g. "21°"
@@ -1010,7 +1010,7 @@ text:
     id: t_clim_info
     optimistic: true
     mode: text
-    max_length: 60
+    max_length: 120
     initial_value: ""
   # ── BUBBLE — dravix mirrors whatever the robot SAYS (dashboard chat / announce /
   #    TTS) into the speech bubble, so text shows on-screen too (like the original
@@ -1020,7 +1020,7 @@ text:
     id: t_bubble
     optimistic: true
     mode: text
-    max_length: 120
+    max_length: 240
     initial_value: ""
     set_action:
       - if:
@@ -1084,7 +1084,7 @@ text:
     id: t_agent
     optimistic: true
     mode: text
-    max_length: 32
+    max_length: 64
     initial_value: ""
     entity_category: diagnostic
     set_action:
@@ -1105,7 +1105,7 @@ text:
     id: t_permission
     optimistic: true
     mode: text
-    max_length: 80
+    max_length: 160
     initial_value: ""
     entity_category: diagnostic
     set_action:
@@ -1135,7 +1135,7 @@ text:
     id: t_tip
     optimistic: true
     mode: text
-    max_length: 120
+    max_length: 240
     initial_value: ""
     set_action:
       - if:

@@ -44,6 +44,26 @@ def to_visual(text: str) -> str:
     return "\n".join(out)
 
 
+def fit_bytes(text: str, limit: int) -> str:
+    """Trim ``text`` to at most ``limit`` UTF-8 **bytes**, never splitting a character.
+
+    Every ``text`` slot on the robot has a ``max_length``, and ESPHome enforces it in BYTES
+    (``text_call.cpp``: ``this->value_.value().size()``). Python's ``text[:limit]`` counts
+    CHARACTERS, so a Hebrew string — two bytes per letter — sails past a character check and
+    is then REJECTED by the robot with no error anyone sees: the card, bubble or tip simply
+    never updates and keeps showing whatever was there before. Always size a robot-bound
+    string with this, and do it BEFORE ``for_robot`` (visual order puts the logical start at
+    the end of the string, so trimming after reordering eats the beginning of the sentence).
+    """
+    if not text:
+        return text
+    raw = text.encode("utf-8")
+    if len(raw) <= limit:
+        return text
+    # "ignore" drops the partial character the cut may have left dangling
+    return raw[:limit].decode("utf-8", "ignore")
+
+
 def for_robot(text: str) -> str:
     """``to_visual`` unless the RTL fix is disabled (firmware BIDI is doing the job)."""
     try:

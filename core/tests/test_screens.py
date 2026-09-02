@@ -205,3 +205,47 @@ def test_mushroom_style_keys():
     assert _style_key("script.x", "off") == "b"
     assert _style_key("binary_sensor.x", "on") == "l"
     assert _style_key("sensor.x", "21.5") == "n"
+
+
+# ── Hebrew must fit the robot's BYTE limits ──────────────────────────────────
+# ESPHome checks a text slot's max_length against std::string::size() — BYTES. Python's
+# [:n] counts CHARACTERS, so a Hebrew card (two bytes a letter) used to sail past every
+# check here and then be REJECTED by the robot with nothing logged anywhere the user
+# looks: the card just froze on its previous contents. Guard the byte budget, not the
+# character count.
+def test_fit_bytes_never_splits_a_character():
+    from dravix.bidi import fit_bytes
+
+    heb = "שלום עולם"
+    assert fit_bytes(heb, 999) == heb          # under the limit: untouched
+    for limit in range(0, len(heb.encode()) + 1):
+        out = fit_bytes(heb, limit)
+        assert len(out.encode()) <= limit      # never over budget…
+        out.encode().decode("utf-8")           # …and never a half character
+    assert fit_bytes("", 4) == ""
+
+
+def test_hebrew_card_body_fits_the_firmware_slot():
+    from dravix.screens import BODY_BYTES, TITLE_BYTES, ScreenPusher
+
+    ha = _FakeHA()
+    # four rows, every one a long Hebrew name AND a long Hebrew state — the worst case
+    heb_states = {
+        f"sensor.h{i}": {
+            "state": "לא ידוע מאוד",
+            "attributes": {"friendly_name": f"חיישן ארוך מאוד מספר {i}", "unit_of_measurement": ""},
+        }
+        for i in range(4)
+    }
+    ha._states.update(heb_states)
+    card = {"title": "כרטיס עם כותרת ארוכה מאוד בעברית", "entities": list(heb_states)}
+    pusher = ScreenPusher(ha, _StoreStub([card]))
+    body = pusher._render_body(card, ha._states)
+
+    assert len(body.encode()) <= BODY_BYTES, "a full Hebrew card overflows the robot's slot"
+    assert len(body.split("\n")) == 4, "all four rows must survive"
+    for line in body.split("\n"):
+        assert line.count("|") == 2, f"row structure broken by truncation: {line!r}"
+    from dravix.bidi import fit_bytes
+
+    assert len(fit_bytes(card["title"], TITLE_BYTES).encode()) <= TITLE_BYTES

@@ -357,7 +357,7 @@ class HARobotDriver(RobotDriver):
         # original app's text messages). Best-effort — older firmware has no such slot.
         bubble = self._entities.get("bubble_text")
         if bubble:
-            from ..bidi import for_robot
+            from ..bidi import fit_bytes, for_robot
 
             try:
                 # the DISPLAYED bubble gets RTL-reordered (the robot's screen has no BIDI);
@@ -366,7 +366,8 @@ class HARobotDriver(RobotDriver):
                 # logical start at the string END, so reorder-then-truncate chopped the
                 # BEGINNING of the sentence instead of its tail.
                 await self._ha.call_service(
-                    "text", "set_value", {"entity_id": bubble, "value": for_robot(text[:120])}
+                    "text", "set_value",
+                    {"entity_id": bubble, "value": for_robot(fit_bytes(text, 240))},
                 )
             except Exception:  # noqa: BLE001 — showing text must never block speaking
                 pass
@@ -418,11 +419,13 @@ class HARobotDriver(RobotDriver):
         ent = self._entities.get("agent_text")
         if not ent:
             return
-        from ..bidi import for_robot
+        from ..bidi import fit_bytes, for_robot
 
         try:
             # truncate logical, then reorder (see say() — order matters for Hebrew)
-            await self._ha.call_service("text", "set_value", {"entity_id": ent, "value": for_robot(text[:32])})
+            await self._ha.call_service(
+                "text", "set_value", {"entity_id": ent, "value": for_robot(fit_bytes(text, 64))}
+            )
         except Exception:  # noqa: BLE001 — a status badge must never break the caller
             pass
 
@@ -433,8 +436,12 @@ class HARobotDriver(RobotDriver):
         ent = self._entities.get("ai_state_text")
         if not ent:
             return
+        from ..bidi import fit_bytes
+
         try:
-            await self._ha.call_service("text", "set_value", {"entity_id": ent, "value": state[:20]})
+            await self._ha.call_service(
+                "text", "set_value", {"entity_id": ent, "value": fit_bytes(state, 20)}
+            )
         except Exception:  # noqa: BLE001 — a face hint must never break the caller
             pass
 
@@ -445,11 +452,13 @@ class HARobotDriver(RobotDriver):
         ent = self._entities.get("permission_text")
         if not ent:
             return
-        from ..bidi import for_robot
+        from ..bidi import fit_bytes, for_robot
 
         try:
             # truncate logical, then reorder (see say() — order matters for Hebrew)
-            await self._ha.call_service("text", "set_value", {"entity_id": ent, "value": for_robot(text[:80])})
+            await self._ha.call_service(
+                "text", "set_value", {"entity_id": ent, "value": for_robot(fit_bytes(text, 160))}
+            )
         except Exception:  # noqa: BLE001 — the on-robot prompt must never break the caller
             pass
 
