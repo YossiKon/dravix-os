@@ -25,6 +25,16 @@ jobs:
       - name: Test
         run: pytest -q
 
+  addon:
+    # Validates dravix_os/config.yaml against the Home Assistant add-on schema, so a
+    # broken option or a bad version can't reach anyone's Supervisor.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: frenck/action-addon-linter@v2
+        with:
+          path: "./dravix_os"
+
   web:
     runs-on: ubuntu-latest
     defaults:

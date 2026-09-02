@@ -1,5 +1,5 @@
 name: dravix-os
-version: "0.0.100"
+version: "0.1.0"
 slug: dravix_os
 description: Companion OS for the M5Stack StackChan robot (local-first)
 url: https://github.com/YossiKon/dravix-os
@@ -30,7 +30,9 @@ options:
   # dravix controls the robot through Home Assistant entities exposed by the custom
   # dravix ESPHome firmware on the StackChan (see docs/esphome-local-control.md).
   robot_driver: ha
-  # When robot_driver=ha, the StackChan ESPHome entity ids (leave blank what you don't have):
+  # ADVANCED — leave every one of these EMPTY. dravix finds the robot's entities by
+  # itself at startup (it matches them by name suffix, so a renamed device still works).
+  # Fill one in only to override a specific entity dravix picked wrong.
   robot_entity_face: ""          # select.* — expression (neutral|happy|sad|angry|sleepy|doubt|love|dizzy)
   robot_entity_head_yaw: ""      # number.* — head left/right
   robot_entity_head_pitch: ""    # number.* — head up/down

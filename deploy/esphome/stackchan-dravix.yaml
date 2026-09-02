@@ -40,7 +40,7 @@ substitutions:
   # publishes it to HA ("Firmware version" sensor); the dravix dashboard compares it
   # with the version bundled in the add-on and shows "firmware update available".
   # (Maintainers: bump this on every firmware change. Users: don't touch.)
-  fw_version: "39"
+  fw_version: "40"
   # The ESPHome node name (mDNS hostname + the default entity prefix on a fresh flash).
   # Change it only if you run MORE THAN ONE robot — each needs a unique name. NOTE:
   # changing it on an already-adopted robot registers a NEW device in HA.
@@ -64,14 +64,15 @@ substitutions:
   # After "Okay Nabu" / a double-tap the robot listens — if NO voice is detected within
   # this many seconds, it closes the session on its own (no hanging on a big-eyed face).
   listen_timeout_s: "5"
-  # The entity-id prefix HA gave the robot's own sensors (battery, touch, proximity…).
-  # dravix-os convention: rename the device to "Dravix" in HA (Settings → Devices →
-  # rename → let HA update the entity ids) and keep this as "dravix". A FRESH flash
-  # that was never renamed registers as the node name — set "stackchan" in that case.
-  ha_prefix: "dravix"
-  # A second prefix this file ALSO listens on for touch — covers HA's rename quirk
-  # where re-registered entities get an "<area>_<device>" prefix. A prefix that does
-  # not exist is harmless; leave equal to ha_prefix when unsure.
+  # The entity-id prefix Home Assistant gave the robot's own sensors (touch pads,
+  # proximity, ambient light, power). A fresh flash registers under the node name, so
+  # that is the default and NOTHING needs configuring for a new robot.
+  ha_prefix: "${device_name}"
+  # A SECOND prefix every one of those sensors is ALSO imported under, so renaming the
+  # device in Home Assistant can't quietly kill petting, greet-on-approach or
+  # sleep-when-dark. "dravix" is the rename this project suggests (Settings → Devices →
+  # rename → let HA update the entity ids); if you renamed it to something else, put
+  # that slug here. A prefix that doesn't exist simply stays unavailable — harmless.
   ha_prefix_alt: "dravix"
   # Battery — properties of the StackChan HARDWARE, not per-person settings (same kit,
   # same cell). Only change if you physically swapped the battery.
@@ -80,6 +81,12 @@ substitutions:
   # INA226 sign convention: 1 = positive current while DISCHARGING (flip to -1 if your
   # board reports it inverted — the ⚡ charging flag will tell you immediately).
   ina_sign: "1"
+  # BROWNOUT DETECTOR — "n" disables it. On this hardware it false-fires on the current
+  # spike of a servo starting while Wi-Fi transmits, rebooting the robot every few
+  # minutes, so it ships OFF. The tradeoff: a REAL power sag then hangs instead of
+  # rebooting cleanly. Feed the robot a 5V/2A+ charger and a short, thick USB-C cable.
+  # If it still misbehaves, set this to "y" to get honest brownout reboots back.
+  brownout_detector: "n"
   # Presence + room-light thresholds (tune without touching any lambda):
   prox_near: "150"   # proximity counts above this = someone came close → greet
   prox_far: "80"     # …and below this = they moved away
@@ -131,7 +138,7 @@ esp32:
     # robot still resets or hangs, that's a REAL power sag — fix the power, and you can
     # re-enable detection by deleting the CONFIG_ESP_BROWNOUT_DET line.
     sdkconfig_options:
-      CONFIG_ESP_BROWNOUT_DET: "n"
+      CONFIG_ESP_BROWNOUT_DET: "${brownout_detector}"
       # OOM-RESET FIX: move the big WiFi + lwIP buffers into PSRAM (the CoreS3 has 8MB, nearly
       # empty) instead of the scarce ~300KB internal RAM. WiFi alone uses 64 RX + 64 TX buffers —
       # relocating them frees tens of KB of internal heap, which is exactly what the added LVGL
@@ -669,11 +676,14 @@ sensor:
     id: ha_curr
     entity_id: sensor.${ha_prefix}_ina226_current
   - platform: homeassistant
-    id: ha_pow
-    entity_id: sensor.${ha_prefix}_ina226_power
+    id: ha_curr_b
+    entity_id: sensor.${ha_prefix_alt}_ina226_current
   - platform: homeassistant
     id: ha_volt
     entity_id: sensor.${ha_prefix}_ina226_bus_voltage
+  - platform: homeassistant
+    id: ha_volt_b
+    entity_id: sensor.${ha_prefix_alt}_ina226_bus_voltage
   # ── BATTERY % — a real estimate, not a straight line ─────────────────────────────
   # Voltage→% the honest way: (1) undo the LOAD SAG — a LiPo's terminal voltage drops
   # I·R under load, so a servo move used to "drop" the battery a few % (the INA226 gives
@@ -693,7 +703,8 @@ sensor:
     update_interval: 15s
     lambda: |-
       // true charging state straight from the PMU; INA current-sign only as a fallback
-      float amps = id(ha_curr).has_state() ? id(ha_curr).state : 0.0f;
+      float amps = id(ha_curr).has_state() ? id(ha_curr).state
+                   : (id(ha_curr_b).has_state() ? id(ha_curr_b).state : 0.0f);
       bool charging = id(axp_chg).has_state() ? id(axp_chg).state
                                               : ((amps * ${ina_sign}) < -0.02f);
       id(g_batt_chg) = charging;
@@ -703,8 +714,9 @@ sensor:
         return id(axp_batt).state;
       }
       // fallback: the model below (load-sag compensated voltage through the LiPo curve)
-      if (!id(ha_volt).has_state()) return NAN;
-      float v = id(ha_volt).state;
+      bool va = id(ha_volt).has_state();
+      if (!va && !id(ha_volt_b).has_state()) return NAN;
+      float v = va ? id(ha_volt).state : id(ha_volt_b).state;
       // open-circuit voltage: discharging sags (add I·R back), charging is pulled high
       float voc = charging ? v - fabsf(amps) * ${batt_r_int}f
                            : v + fabsf(amps) * ${batt_r_int}f;
@@ -725,156 +737,72 @@ sensor:
         }
       }
       return 100.0f;
-  # Proximity — the robot notices you approach and perks up (greets). The BSP exposes the
-  # ltr_als_ps proximity as "Proximity counts". Thresholds live in the substitutions block.
+  # PRESENCE + ROOM LIGHT. Same story as the touch pads below: the BSP's ltr_als_ps has no
+  # `id:`, so both readings come back from Home Assistant by entity_id, under whichever
+  # prefix HA gave the device — hence the twin import under ${ha_prefix_alt}. Thresholds
+  # live in the substitutions block at the top of this file.
   - platform: homeassistant
     id: ha_prox
     entity_id: sensor.${ha_prefix}_proximity_counts
     on_value:
-      # a finger right at the sensor = a BOOP — beloved ritual of every desk robot
-      - if:
-          condition: { lambda: 'return x > ${prox_boop} && !id(g_sleep) && !id(g_saver) && id(sw_touch).state;' }
-          then: [ { script.execute: boop_react } ]
-      # (boop excludes greet/wave — a finger straight to the sensor is a boop, not both)
-      # PRESENCE is tracked UNCONDITIONALLY — g_near feeds the "Presence nearby" sensor
-      # that dravix's wellness tips + HA automations rely on. Only the greet/wave
-      # REACTIONS are gated by the "Greet on approach" toggle (turning greet off used
-      # to silently kill presence detection entirely).
-      - if:
-          condition: { lambda: 'return x > ${prox_near} && x <= ${prox_boop} && !id(g_near);' }
-          then:
-            - globals.set: { id: g_near, value: "true" }
-            # WAVE 👋 — three near/far swings inside 4s = a hand waving (an approach is
-            # ONE sustained rise; only fast oscillation reaches 3). Waving wins over greet.
-            - lambda: |-
-                long now = (long) millis();
-                if (now - id(g_wv_ms) > 4000) { id(g_wv_cnt) = 1; id(g_wv_ms) = now; }
-                else { id(g_wv_cnt)++; }
-            - if:
-                condition: { lambda: 'return id(sw_greet).state;' }
-                then:
-                  - if:
-                      condition: { lambda: 'return id(g_wv_cnt) >= 3;' }
-                      then:
-                        - lambda: 'id(g_wv_cnt) = 0;'
-                        - script.execute: wave_react
-                      else:
-                        - script.execute: greet
-      - if:
-          condition: { lambda: 'return x < ${prox_far};' }            # they moved away
-          then:
-            - globals.set: { id: g_near, value: "false" }
-  # Ambient light — night = sleep (room goes dark), morning = wake (lights come on).
-  # ltr_als_ps exposes "Ambient light". Lux thresholds live in the substitutions block.
+      - script.execute: { id: prox_seen, v: !lambda 'return x;' }
+  - platform: homeassistant
+    id: ha_prox_b
+    entity_id: sensor.${ha_prefix_alt}_proximity_counts
+    on_value:
+      - script.execute: { id: prox_seen, v: !lambda 'return x;' }
   - platform: homeassistant
     id: ha_lux
     entity_id: sensor.${ha_prefix}_ambient_light
     on_value:
-      - if:
-          condition: { lambda: 'return x < ${lux_dark} && !id(g_sleep) && id(sw_dark).state;' }   # dark → sleep
-          then:
-            - select.set: { id: robot_mode, option: sleep }
-      - if:
-          condition: { lambda: 'return x > ${lux_bright} && id(g_sleep) && id(sw_dark).state;' }  # light → wake
-          then:
-            - select.set: { id: robot_mode, option: awake }
+      - script.execute: { id: lux_seen, v: !lambda 'return x;' }
+  - platform: homeassistant
+    id: ha_lux_b
+    entity_id: sensor.${ha_prefix_alt}_ambient_light
+    on_value:
+      - script.execute: { id: lux_seen, v: !lambda 'return x;' }
 text_sensor:
   # DIAGNOSTIC (temporary): the exact reason for the last reboot — see the debug block above.
   - platform: debug
     reset_reason: { name: "Reset Reason" }
-  # PETTING — the BSP's touch sensors publish TEXT ("No touch" / touch levels), so they
-  # must be imported as text. Any state that isn't "No touch" = you're petting the head →
-  # pink LEDs + nuzzle + happy face (see pet_react). Add sensors 2/3 the same way if you like.
+  # PETTING / TICKLING. The BSP publishes the three touch pads as TEXT sensors with no
+  # `id:` of their own, so the only way to read them is to import them back from Home
+  # Assistant by entity_id — which means their name depends on what HA called the device.
+  # A fresh flash registers as ${device_name}; the dravix convention is to rename the device
+  # to "Dravix", which re-registers everything under a new prefix. So EVERY pad is imported
+  # under BOTH prefixes and both feed the same script: whichever entity doesn't exist simply
+  # stays unavailable and never fires. Nothing to configure, works either way.
   - platform: homeassistant
     id: ha_touch1
     entity_id: sensor.${ha_prefix}_touch_sensor_1
     on_value:
-      - if:
-          condition:
-            lambda: |-
-              return x != "No touch" && x != "unknown" && x != "unavailable" && x != ""
-                     && !id(g_pet) && id(sw_touch).state;
-          then:
-            - globals.set: { id: g_pet, value: "true" }
-            # While an Approve/Reject prompt is up, a HEAD TOUCH approves it (the red
-            # on-screen button rejects). Otherwise it's a pet.
-            - if:
-                condition: { lambda: 'return id(g_perm);' }
-                then:
-                  - script.execute: perm_approve
-                else:
-                  - script.execute: pet_react
-      - if:
-          condition: { lambda: 'return x == "No touch";' }            # released
-          then:
-            - globals.set: { id: g_pet, value: "false" }
-  # Fallback: after an HA device/area rename, re-registered entities can land under an
-  # "<area>_<device>" prefix. Only one of the two prefixes really exists; the other just
-  # stays unavailable (harmless). This makes petting survive either prefix.
+      - script.execute: { id: touch_pet, v: !lambda 'return x;' }
   - platform: homeassistant
     id: ha_touch1b
     entity_id: sensor.${ha_prefix_alt}_touch_sensor_1
     on_value:
-      - if:
-          condition:
-            lambda: |-
-              return x != "No touch" && x != "unknown" && x != "unavailable" && x != ""
-                     && !id(g_pet) && id(sw_touch).state;
-          then:
-            - globals.set: { id: g_pet, value: "true" }
-            # While an Approve/Reject prompt is up, a HEAD TOUCH approves it (the red
-            # on-screen button rejects). Otherwise it's a pet.
-            - if:
-                condition: { lambda: 'return id(g_perm);' }
-                then:
-                  - script.execute: perm_approve
-                else:
-                  - script.execute: pet_react
-      - if:
-          condition: { lambda: 'return x == "No touch";' }
-          then:
-            - globals.set: { id: g_pet, value: "false" }
-  # TOUCH ZONE 2 (middle of the head) — also petting.
+      - script.execute: { id: touch_pet, v: !lambda 'return x;' }
   - platform: homeassistant
     id: ha_touch2
     entity_id: sensor.${ha_prefix}_touch_sensor_2
     on_value:
-      - if:
-          condition:
-            lambda: |-
-              return x != "No touch" && x != "unknown" && x != "unavailable" && x != ""
-                     && !id(g_pet) && id(sw_touch).state;
-          then:
-            - globals.set: { id: g_pet, value: "true" }
-            # While an Approve/Reject prompt is up, a HEAD TOUCH approves it (the red
-            # on-screen button rejects). Otherwise it's a pet.
-            - if:
-                condition: { lambda: 'return id(g_perm);' }
-                then:
-                  - script.execute: perm_approve
-                else:
-                  - script.execute: pet_react
-      - if:
-          condition: { lambda: 'return x == "No touch";' }
-          then:
-            - globals.set: { id: g_pet, value: "false" }
-  # TOUCH ZONE 3 (back of the head) — a TICKLE: giggly wiggle instead of a calm pet.
+      - script.execute: { id: touch_pet, v: !lambda 'return x;' }
+  - platform: homeassistant
+    id: ha_touch2b
+    entity_id: sensor.${ha_prefix_alt}_touch_sensor_2
+    on_value:
+      - script.execute: { id: touch_pet, v: !lambda 'return x;' }
+  # zone 3 (back of the head) is a TICKLE — a giggly wiggle, not a calm pet
   - platform: homeassistant
     id: ha_touch3
     entity_id: sensor.${ha_prefix}_touch_sensor_3
     on_value:
-      - if:
-          condition:
-            lambda: |-
-              return x != "No touch" && x != "unknown" && x != "unavailable" && x != ""
-                     && !id(g_pet) && id(sw_touch).state;
-          then:
-            - globals.set: { id: g_pet, value: "true" }
-            - script.execute: tickle
-      - if:
-          condition: { lambda: 'return x == "No touch";' }
-          then:
-            - globals.set: { id: g_pet, value: "false" }
+      - script.execute: { id: touch_tickle, v: !lambda 'return x;' }
+  - platform: homeassistant
+    id: ha_touch3b
+    entity_id: sensor.${ha_prefix_alt}_touch_sensor_3
+    on_value:
+      - script.execute: { id: touch_tickle, v: !lambda 'return x;' }
   - platform: wifi_info
     ip_address:
       name: "IP address"
@@ -2813,6 +2741,97 @@ lvgl:
               - lvgl.page.show: page_face
 
 script:
+  # ── SENSOR HANDLERS — one body per signal, shared by BOTH prefix imports (see the
+  #    sensor/text_sensor sections). Keeping the logic here instead of inline means the
+  #    fresh-flash entity and the renamed-device entity can never drift apart.
+  - id: touch_pet           # a pad was touched (or released) — pet, or approve a prompt
+    parameters:
+      v: string
+    then:
+      - if:
+          condition:
+            lambda: |-
+              return v != "No touch" && v != "unknown" && v != "unavailable" && v != ""
+                     && !id(g_pet) && id(sw_touch).state;
+          then:
+            - globals.set: { id: g_pet, value: "true" }
+            # While an Approve/Reject prompt is up, a HEAD TOUCH approves it (the red
+            # on-screen button rejects). Otherwise it's a pet.
+            - if:
+                condition: { lambda: 'return id(g_perm);' }
+                then:
+                  - script.execute: perm_approve
+                else:
+                  - script.execute: pet_react
+      - if:
+          condition: { lambda: 'return v == "No touch";' }            # released
+          then:
+            - globals.set: { id: g_pet, value: "false" }
+  - id: touch_tickle        # the back of the head — a giggly wiggle rather than a calm pet
+    parameters:
+      v: string
+    then:
+      - if:
+          condition:
+            lambda: |-
+              return v != "No touch" && v != "unknown" && v != "unavailable" && v != ""
+                     && !id(g_pet) && id(sw_touch).state;
+          then:
+            - globals.set: { id: g_pet, value: "true" }
+            - script.execute: tickle
+      - if:
+          condition: { lambda: 'return v == "No touch";' }
+          then:
+            - globals.set: { id: g_pet, value: "false" }
+  - id: prox_seen           # proximity counts — a boop, an approach, a wave, or a departure
+    parameters:
+      v: float
+    then:
+      # a finger right at the sensor = a BOOP — beloved ritual of every desk robot
+      - if:
+          condition: { lambda: 'return v > ${prox_boop} && !id(g_sleep) && !id(g_saver) && id(sw_touch).state;' }
+          then: [ { script.execute: boop_react } ]
+      # (boop excludes greet/wave — a finger straight to the sensor is a boop, not both)
+      # PRESENCE is tracked UNCONDITIONALLY — g_near feeds the "Presence nearby" sensor
+      # that dravix's wellness tips + HA automations rely on. Only the greet/wave
+      # REACTIONS are gated by the "Greet on approach" toggle (turning greet off used
+      # to silently kill presence detection entirely).
+      - if:
+          condition: { lambda: 'return v > ${prox_near} && v <= ${prox_boop} && !id(g_near);' }
+          then:
+            - globals.set: { id: g_near, value: "true" }
+            # WAVE 👋 — three near/far swings inside 4s = a hand waving (an approach is
+            # ONE sustained rise; only fast oscillation reaches 3). Waving wins over greet.
+            - lambda: |-
+                long now = (long) millis();
+                if (now - id(g_wv_ms) > 4000) { id(g_wv_cnt) = 1; id(g_wv_ms) = now; }
+                else { id(g_wv_cnt)++; }
+            - if:
+                condition: { lambda: 'return id(sw_greet).state;' }
+                then:
+                  - if:
+                      condition: { lambda: 'return id(g_wv_cnt) >= 3;' }
+                      then:
+                        - lambda: 'id(g_wv_cnt) = 0;'
+                        - script.execute: wave_react
+                      else:
+                        - script.execute: greet
+      - if:
+          condition: { lambda: 'return v < ${prox_far};' }            # they moved away
+          then:
+            - globals.set: { id: g_near, value: "false" }
+  - id: lux_seen            # room light — dark sends it to sleep, light wakes it again
+    parameters:
+      v: float
+    then:
+      - if:
+          condition: { lambda: 'return v < ${lux_dark} && !id(g_sleep) && id(sw_dark).state;' }
+          then:
+            - select.set: { id: robot_mode, option: sleep }
+      - if:
+          condition: { lambda: 'return v > ${lux_bright} && id(g_sleep) && id(sw_dark).state;' }
+          then:
+            - select.set: { id: robot_mode, option: awake }
   # ── STATUS BAR — apply the current g_sbar stage. 0 = hidden · 1 = a compact 40px strip
   #    (wifi / time / date / battery only) · 2 = the full 150px panel (+ VOL/SCR/LED
   #    sliders, power line, LOCAL button, update arrow). Swipe down steps 0→1→2; swipe
@@ -5552,7 +5571,8 @@ interval:
           id: sb_power
           text: !lambda |-
             char b[24];
-            float ma = id(ha_curr).has_state() ? fabsf(id(ha_curr).state) * 1000.0f : 0.0f;
+            float ma = id(ha_curr).has_state() ? fabsf(id(ha_curr).state) * 1000.0f
+                             : (id(ha_curr_b).has_state() ? fabsf(id(ha_curr_b).state) * 1000.0f : 0.0f);
             if (id(g_batt_chg)) {
               snprintf(b, sizeof(b), "charging");
             } else if (id(battery_pct).has_state() && ma > 20.0f) {

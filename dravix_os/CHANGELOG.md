@@ -1,5 +1,33 @@
 # Changelog
 
+## 0.1.0
+
+**🎉 First public release — and the fix that made one possible**
+*(firmware 40 — update both)*
+
+The version jump is deliberate: everything before this was tuned, without anyone noticing,
+for one particular robot.
+
+- **A brand-new robot now works out of the box.** The firmware read the robot's own touch
+  pads, proximity, room-light and power sensors back from Home Assistant by entity name —
+  and the name it expected was the one *this* project's author had after renaming his
+  device. On anybody else's fresh flash those entities simply don't exist, so **petting,
+  greet-on-approach, sleep-when-dark and the power readout were all dead on arrival** and
+  nothing said so. Every one of those sensors is now read under **both** names at once: the
+  fresh-flash one and the renamed one. Whichever doesn't exist stays quiet. Nothing to
+  configure either way, and an existing robot keeps working untouched.
+- **The brownout detector is now a setting you can see.** It ships off, because on this
+  hardware it false-fires when a servo starts while Wi-Fi transmits. That tradeoff was
+  buried in a low-level block; it's now one clearly-explained line at the top of the
+  firmware file, with the "feed it a proper 5V/2A charger" advice next to it.
+- **The entity fields in the add-on's configuration are labelled ADVANCED — leave them
+  empty.** dravix finds the robot by itself; the fields exist only to override a wrong
+  guess, and reading like required setup was a trap.
+- Continuous integration now also validates the add-on itself against Home Assistant's
+  schema, so a broken option can't reach anyone's Supervisor.
+- Internally: the duplicated sensor handling collapsed into one shared script per signal,
+  and an unused power-sensor import was dropped.
+
 ## 0.0.100
 
 **🔤 The cards, the speech bubble and the tips work in Hebrew again**
