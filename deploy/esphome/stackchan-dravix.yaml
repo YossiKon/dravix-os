@@ -40,7 +40,7 @@ substitutions:
   # publishes it to HA ("Firmware version" sensor); the dravix dashboard compares it
   # with the version bundled in the add-on and shows "firmware update available".
   # (Maintainers: bump this on every firmware change. Users: don't touch.)
-  fw_version: "35"
+  fw_version: "36"
   # The ESPHome node name (mDNS hostname + the default entity prefix on a fresh flash).
   # Change it only if you run MORE THAN ONE robot — each needs a unique name. NOTE:
   # changing it on an already-adopted robot registers a NEW device in HA.
@@ -48,6 +48,19 @@ substitutions:
   friendly_name: "stackchan"
   # The on-device wake word (see the micro_wake_word docs for available models).
   wake_word_model: "okay_nabu"
+  # HOW LOUD the wake-word model hears you. ESPHome feeds micro_wake_word the RAW mic at
+  # gain 1 by default — while the speech that goes to Home Assistant gets auto_gain +
+  # volume_multiplier below. On this small PDM mic that leaves the wake word listening to
+  # a much quieter signal than the rest of the pipeline, so "Okay Nabu" from across the
+  # room never crosses the model's threshold. 4 is the value ESPHome's own docs use.
+  # Raise it (up to 8) if the robot still doesn't hear you; LOWER it toward 1 if it starts
+  # triggering on its own (too much gain clips loud voices and makes detection worse).
+  wake_word_gain: "4"
+  # HOW SURE the model has to be before it wakes up, 0..1. The model ships with a strict
+  # default (~0.97) that suits a quiet room and a close talker. 0.9 makes it noticeably
+  # easier to trigger; go up toward 0.97 if it wakes at the TV, down toward 0.8 if you
+  # have to shout at it.
+  wake_word_sensitivity: "0.9"
   # After "Okay Nabu" / a double-tap the robot listens — if NO voice is detected within
   # this many seconds, it closes the session on its own (no hanging on a big-eyed face).
   listen_timeout_s: "5"
@@ -565,6 +578,16 @@ binary_sensor:
     name: "Presence nearby"
     device_class: occupancy
     lambda: 'return id(g_near);'
+  # IS THE EAR ACTUALLY ON? "Okay Nabu doesn't work" has two very different causes, and
+  # this tells them apart without reading a single log line: OFF here = the robot isn't
+  # listening for the wake word at all (privacy mode, or a session that never closed);
+  # ON here but nothing happens when you say it = it IS listening and either doesn't hear
+  # you (raise `wake_word_gain` / lower `wake_word_sensitivity`) or Home Assistant's
+  # pipeline is what's failing (the ding will still play — see wake_ack).
+  - platform: template
+    name: "Wake word active"
+    entity_category: diagnostic
+    lambda: 'return id(mww).is_running();'
 
 # If Validate says homeassistant time already exists (from the BSP), delete this block.
 time:
@@ -3013,6 +3036,11 @@ script:
     then:
       - voice_assistant.stop                    # stop listening / speaking mid-sentence
       - media_player.stop: va_media_player      # …and external TTS (dravix chat/notify) too
+      # STOP means stop NOW — neither the wake-ack's fallback nor the end-of-reply settle
+      # may wake up later and repaint the face we are about to clean (the settle would also
+      # sit waiting on audio that this tap just killed)
+      - script.stop: wake_ack
+      - script.stop: voice_settle
       - script.stop: led_flash
       - script.stop: party                      # stop the disco / dance
       - script.stop: identify
@@ -4282,12 +4310,113 @@ script:
           then:
             - script.execute: restore_leds
   # AI-mode LEDs: go YELLOW (gated by the "Speaking LEDs" switch).
-  - id: leds_yellow
+  # ── VOICE-TURN LEDS — one colour per stage, so the light bar alone tells you where the
+  #    conversation is: CYAN = listening to you · AMBER = thinking · GREEN = talking back.
+  #    (It used to hold a single yellow for the whole turn; the per-stage colours are the
+  #    "feedback for every state" ask.) Off switch: "Speaking LEDs" in HA / the dashboard.
+  - id: leds_voice
+    parameters:
+      r: int
+      g: int
+      b: int
     then:
       - if:
           condition: { lambda: 'return id(sw_speak_led).state;' }
           then:
-            - light.turn_on: { id: stackchan_light_bar, brightness: 80%, red: 100%, green: 80%, blue: 0% }
+            - light.turn_on:
+                id: stackchan_light_bar
+                brightness: 80%
+                red: !lambda 'return r / 100.0f;'
+                green: !lambda 'return g / 100.0f;'
+                blue: !lambda 'return b / 100.0f;'
+  # ── "I HEARD THE WAKE WORD" — the one piece of voice feedback that is entirely ON-DEVICE.
+  #    Runs the instant micro_wake_word fires, before Home Assistant is involved at all, so
+  #    you always know the robot's ear works even when the pipeline behind it doesn't.
+  - id: wake_ack
+    mode: restart
+    then:
+      - if:
+          # never while privacy is on, and never mid-conversation — a tap-to-talk session
+          # leaves the ear armed, and the wake word firing inside it must not ding again
+          condition:
+            all:
+              - switch.is_off: sw_privacy
+              - lambda: 'return !id(g_voice);'
+          then:
+            - lambda: 'lv_disp_trig_activity(NULL);'   # heard = activity → no screensaver
+            - if:
+                condition: { lambda: 'return id(sw_sfx).state && !id(g_night) && !id(g_quiet);' }
+                then: [ { rtttl.play: "nabu:d=16,o=6,b=210:e,b" } ]   # a short "mm-hm?" ding
+            # a quick WHITE blink. led_flash is used on purpose: it saves the TRUE original
+            # colour and restores it by itself after 2.5s, so a wake word that Home Assistant
+            # never answers can never leave the bar lit. (It obeys "Mood LEDs" and stays dark
+            # in night/focus/quiet/sleep — in those the ding alone is the acknowledgement.)
+            - script.execute: { id: led_flash, r: 100, g: 100, b: 100 }
+            # eyes wide, listening — the face reacts NOW instead of waiting for HA. No head
+            # nudge here: on_listening owns the head for this turn (one owner per body part).
+            - globals.set: { id: g_listen, value: "true" }
+            - script.execute: render_face
+            # SAFETY NET — if Home Assistant never opens a session (no pipeline assigned, HA
+            # down, no network), nothing else would ever clear this face or switch the ear
+            # back on, because micro_wake_word stops itself the moment it detects.
+            - delay: 4s
+            - if:
+                condition: { lambda: 'return !id(g_voice);' }
+                then:
+                  - globals.set: { id: g_listen, value: "false" }
+                  - script.execute: render_face
+                  - if:
+                      condition: { switch.is_off: sw_privacy }
+                      then: [ micro_wake_word.start ]
+  # ── END OF A VOICE TURN, FOR REAL. Home Assistant's on_end fires when the PIPELINE ends,
+  #    which is when the reply's audio URL is handed over — seconds before the robot has
+  #    finished saying it. Restoring there cut the talking face off mid-sentence. This waits
+  #    for the sound itself to stop, then puts the face, the LEDs and the ear back.
+  - id: voice_settle
+    mode: restart
+    then:
+      - if:
+          condition: { lambda: 'return id(g_talk);' }
+          then:
+            # …the URL still has to be fetched from Home Assistant over WiFi before a single
+            # sample comes out, which is routinely a second or three. Wait for audio to START.
+            - wait_until:
+                condition: { lambda: 'return id(i2s_speaker).is_running();' }
+                timeout: 5s
+            - if:
+                # The reply is playing: the speaker itself is the exact "sound is coming out
+                # right now" signal, so wait for it to fall silent. `va.is_running()` rides
+                # along as the escape hatch — the voice_assistant state machine only leaves
+                # STREAMING_RESPONSE once the media player reports the announcement finished,
+                # so a speaker flag that ever sticks ON can't freeze the face for a minute.
+                condition: { lambda: 'return id(i2s_speaker).is_running();' }
+                then:
+                  - wait_until:
+                      condition:
+                        lambda: 'return !id(i2s_speaker).is_running() || !id(va).is_running();'
+                      timeout: 60s
+                  # a short gap inside the reply is not the end of it — look again after a beat
+                  - delay: 300ms
+                  - wait_until:
+                      condition:
+                        lambda: 'return !id(i2s_speaker).is_running() || !id(va).is_running();'
+                      timeout: 30s
+                else:
+                  # Nothing audible after 5s. Do NOT assume it's over — a slow fetch would
+                  # otherwise restore the face just as the robot starts speaking, which is the
+                  # very bug this script exists to fix. Let the state machine call it instead.
+                  - wait_until:
+                      condition: { lambda: 'return !id(va).is_running();' }
+                      timeout: 60s
+      - globals.set: { id: g_listen, value: "false" }
+      - globals.set: { id: g_think,  value: "false" }
+      - globals.set: { id: g_talk,   value: "false" }
+      - globals.set: { id: g_voice,  value: "false" }
+      - script.execute: render_face      # back to the resting face it had before the turn
+      - script.execute: restore_leds     # …and the LEDs it had before the turn (or off)
+      - if:
+          condition: { switch.is_off: sw_privacy }
+          then: [ micro_wake_word.start ]
   # Put the LEDs back to whatever they were before the voice interaction (or off).
   - id: restore_leds
     then:
@@ -5989,13 +6118,27 @@ touchscreen:
 # Heavy TensorFlow compile — flash from a LOCAL ESPHome (not Nabu Casa remote), be
 # patient (~10-15 min), and don't refresh the browser mid-build.
 micro_wake_word:
-  microphone: i2s_mic
+  id: mww
+  # The wake-word model gets its OWN copy of the mic with its own gain — see
+  # `wake_word_gain` at the top of the file for why the default (1) is too quiet here.
+  microphone:
+    microphone: i2s_mic
+    gain_factor: ${wake_word_gain}
   models:
     - model: ${wake_word_model}   # default: say "Okay, Nabu" to wake it
+      probability_cutoff: ${wake_word_sensitivity}
   on_wake_word_detected:
-    - voice_assistant.start
+    # ACKNOWLEDGE ON THE DEVICE FIRST. Everything else in a voice turn is driven by events
+    # that come back from Home Assistant — so if HA is busy, restarting, or has no pipeline
+    # assigned, the old firmware showed NOTHING at all and the wake word read as broken.
+    # This ding+blink says "I heard you" using only the robot, and doubles as the
+    # diagnostic: ding but no cyan listening face ⇒ the problem is on the HA side.
+    - script.execute: wake_ack
+    - voice_assistant.start:
+        wake_word: !lambda 'return wake_word;'
 
 voice_assistant:
+  id: va
   microphone: i2s_mic
   media_player: va_media_player
   # Mic tuning for better recognition with the HA Assist pipeline (STT hears you
@@ -6015,6 +6158,10 @@ voice_assistant:
           - lambda: 'lv_disp_trig_activity(NULL);'   # a conversation is activity — no screensaver
           # a mood flash may be mid-run — stop it so its delayed restore can't fire mid-talk
           - script.stop: led_flash
+          # the wake-ack's own "HA never answered" fallback must not fire now that HA HAS
+          # answered — and a settle left over from the previous turn must not stomp this one
+          - script.stop: wake_ack
+          - script.stop: voice_settle
           # remember the current LEDs — but only at the START of a conversation, and never
           # while a mood flash is showing (the flash already saved the TRUE original colour).
           - if:
@@ -6039,7 +6186,8 @@ voice_assistant:
           - script.execute: listen_timeout               # …auto-close if none arrives in ${listen_timeout_s}s
           - lvgl.page.show: page_face
           - globals.set: { id: g_card, value: "0" }
-          - script.execute: leds_yellow
+          # LISTENING = CYAN (see leds_voice — each stage of a turn has its own colour now)
+          - script.execute: { id: leds_voice, r: 0, g: 80, b: 100 }
           - script.execute: render_face          # the LISTENING FACE (big curious eyes) — no label
           - script.execute: { id: head_nudge, dx: 0, dy: 6 }   # perks up attentively, like it leans in
   on_stt_vad_start:
@@ -6047,26 +6195,39 @@ voice_assistant:
     - globals.set: { id: g_vad, value: "true" }
   on_stt_end:
     # You finished talking → STOP "listening" and show a "THINKING" face until the reply
-    # starts. The LEDs stay YELLOW — one colour from "it hears me" to the end of the AI's
-    # speech (the cyan thinking-flash made the turn read as three unrelated events).
+    # starts. THINKING = AMBER.
     - text_sensor.template.publish: { id: st_heard, state: !lambda 'return x;' }
     - globals.set: { id: g_listen, value: "false" }
     - globals.set: { id: g_think,  value: "true" }
-    - script.execute: leds_yellow
+    - script.execute: { id: leds_voice, r: 100, g: 70, b: 0 }
     - script.execute: render_face
     - script.execute: { id: head_nudge, dx: 12, dy: -6 }   # tilts up, pondering
   on_tts_start:
-    # AI is speaking → "talking" mouth face, stays YELLOW the whole turn (listen + speak).
+    # AI is speaking → "talking" mouth face. SPEAKING = GREEN.
     - lambda: 'lv_disp_trig_activity(NULL);'
     - text_sensor.template.publish: { id: st_reply, state: !lambda 'return x;' }
     - lvgl.label.update: { id: speech_txt, text: !lambda 'return x;' }   # show what the AI says
     - globals.set: { id: g_listen, value: "false" }
     - globals.set: { id: g_think, value: "false" }
     - globals.set: { id: g_talk, value: "true" }
-    - script.execute: leds_yellow
+    - script.execute: { id: leds_voice, r: 15, g: 100, b: 35 }
     - script.execute: render_face
   on_end:
-    # AI finished the turn → back to the previous face + the previous LEDs (or off).
+    # CAREFUL — this does NOT mean "the robot finished talking". Home Assistant ends the
+    # pipeline RUN the moment it hands the reply's audio URL to the media player, so this
+    # fires while the robot is only just STARTING to speak. Resetting the face and LEDs
+    # here (what the firmware used to do) dropped the talking face mid-sentence and let the
+    # external-speech watcher re-animate the mouth with no bubble — the "weird" flicker.
+    # Only the listening/thinking stages are certainly over; `voice_settle` waits for the
+    # sound to actually stop before restoring anything.
+    - globals.set: { id: g_listen, value: "false" }
+    - globals.set: { id: g_think, value: "false" }
+    - script.execute: voice_settle
+  on_error:
+    # Pipeline error → NEVER stay stuck on a lit bar / listening face; clean up NOW (no
+    # waiting for audio that isn't coming) and re-arm the wake word.
+    - script.stop: wake_ack
+    - script.stop: voice_settle
     - globals.set: { id: g_listen, value: "false" }
     - globals.set: { id: g_talk, value: "false" }
     - globals.set: { id: g_think, value: "false" }
@@ -6076,14 +6237,15 @@ voice_assistant:
     - if:
         condition: { switch.is_off: sw_privacy }
         then: [ micro_wake_word.start ]
-  on_error:
-    # Pipeline error → NEVER stay stuck on yellow/listening; clean up and re-arm the wake word.
-    - globals.set: { id: g_listen, value: "false" }
-    - globals.set: { id: g_talk, value: "false" }
-    - globals.set: { id: g_think, value: "false" }
-    - globals.set: { id: g_voice, value: "false" }
-    - script.execute: render_face
-    - script.execute: restore_leds
+  on_client_connected:
+    # HA CAME BACK. `stop_after_detection` (the micro_wake_word default) stops the ear the
+    # instant it hears the wake word — so a wake word spoken while HA was restarting left
+    # the pipeline unable to start, no on_end/on_error to clean up, and the ear switched
+    # OFF until the next reboot. That is the classic "Okay Nabu just stopped working".
+    # Re-arm on every reconnect, unless privacy is on or a turn is genuinely in progress.
     - if:
-        condition: { switch.is_off: sw_privacy }
+        condition:
+          all:
+            - switch.is_off: sw_privacy
+            - not: { voice_assistant.is_running: }
         then: [ micro_wake_word.start ]

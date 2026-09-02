@@ -1,5 +1,35 @@
 # Changelog
 
+## 0.0.97
+
+**🎙️ "Okay Nabu" that actually answers, and a face that follows the whole conversation**
+*(firmware 36 — update both)*
+
+- **The wake word is much easier to trigger.** ESPHome hands the wake-word model the *raw*
+  microphone while the speech that goes to Home Assistant gets amplified — so the model was
+  listening to a far quieter signal than the rest of the pipeline, and only woke for a loud,
+  close "Okay Nabu". It now gets the same kind of boost (`wake_word_gain`, default 4) and a
+  friendlier confidence threshold (`wake_word_sensitivity`, 0.9 instead of the model's strict
+  0.97). Both are plain settings at the top of the firmware file — raise or lower them to taste.
+- **The ear can no longer switch itself off.** Detecting a wake word stops the detector until
+  the conversation ends. If Home Assistant happened to be restarting, the conversation never
+  started, nothing ever cleaned up, and the wake word stayed dead until the robot rebooted. It
+  now re-arms whenever Home Assistant reconnects, and after four seconds of silence from a
+  session that never opened.
+- **It acknowledges you on the spot.** The robot gives a short ding, a white blink and wide eyes
+  the instant it hears the wake word — from the device itself, before Home Assistant is
+  involved. That is also the fastest way to tell the two failure modes apart: a ding with
+  nothing after it means the robot heard you and the Assist pipeline is the problem.
+- **New diagnostic entity "Wake word active"** shows whether the robot is listening for the
+  wake word at all.
+- **A colour per stage of the conversation**: cyan while it listens to you, amber while it
+  thinks, green while it answers. (It used to hold one yellow for the whole turn.)
+- **It stops looking like it's talking before it has finished talking.** Home Assistant ends a
+  pipeline the moment it hands over the reply's audio, which is *before* the robot says it — so
+  the talking face and the lights were dropping mid-sentence, and the mouth then restarted on
+  its own without the speech bubble. The robot now returns to its previous face and its previous
+  lights only once the reply has actually finished playing.
+
 ## 0.0.96
 
 **🌐 A guided Puppet setup in the dashboard** *(no firmware change — still firmware 35)*
