@@ -1,7 +1,7 @@
 # dravix-os — common tasks
 .DEFAULT_GOAL := help
 
-.PHONY: help install dev run discover test compile lint docker-build docker-up docker-down update-upstream
+.PHONY: help install dev run test compile lint docker-build docker-up docker-down update-upstream
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | \
@@ -16,17 +16,14 @@ dev: ## Run the service with autoreload
 run: ## Run the service
 	cd core && python -m dravix
 
-discover: ## Probe the robot MCP URL + Home Assistant; write docs/capability-report.md
-	cd core && python scripts/discover.py
-
 test: ## Run tests
 	cd core && pytest -q
 
 compile: ## Syntax-check all Python sources
-	cd core && python -m compileall -q dravix scripts
+	cd core && python -m compileall -q dravix
 
 lint: ## Lint with ruff (if installed)
-	cd core && ruff check dravix scripts || true
+	cd core && ruff check dravix || true
 
 docker-build: ## Build the container image
 	docker compose -f deploy/docker-compose.yml build

@@ -25,9 +25,8 @@ from .logging import get_logger
 
 log = get_logger("localmode")
 
-# Serializes concurrent applies (dashboard toggle + the robot switch's echo can land
-# almost together) — without it, two OFF applies could both see xiaozhi=None and leak
-# a second cloud bridge.
+# Serializes concurrent applies — the dashboard toggle and the robot switch's echo can
+# land almost together, and both rebuild the AI provider against the new choice.
 _apply_lock = asyncio.Lock()
 
 
@@ -44,30 +43,7 @@ async def apply_local_only(s: Any, enabled: bool, *, push_to_robot: bool = True)
 async def _apply(s: Any, enabled: bool, *, push_to_robot: bool) -> dict:
     s.store.set_local_only(enabled)
 
-    # 1 · the cloud MCP bridge follows the choice, live
-    bridge_error: str | None = None
-    try:
-        if enabled and getattr(s, "xiaozhi", None) is not None:
-            await s.xiaozhi.stop()
-            s.xiaozhi = None
-        elif not enabled and getattr(s, "xiaozhi", None) is None and s.settings.xiaozhi_mcp_url:
-            from .integrations.xiaozhi_bridge import XiaoZhiBridge
-            from .mcpserver.server import build_server
-
-            include_robot = (s.store.robot_driver() or s.settings.robot_driver).lower() != "mock"
-            s.xiaozhi = XiaoZhiBridge(
-                s.settings.xiaozhi_mcp_url,
-                lambda: build_server(
-                    s.robot, s.engine, s.ai, ha=s.ha, store=s.store, mood=s.mood,
-                    weather_entity=s.settings.weather_entity,
-                    include_robot_control=include_robot,
-                ),
-            )
-            await s.xiaozhi.start()
-    except Exception as exc:  # noqa: BLE001 — the choice itself was saved; surface the rest
-        bridge_error = str(exc)
-
-    # 2 · cloud AI providers are (un)blocked by rebuilding against the new choice
+    # cloud AI providers are (un)blocked by rebuilding against the new choice
     ai_error: str | None = None
     try:
         from .app import build_ai
@@ -93,6 +69,5 @@ async def _apply(s: Any, enabled: bool, *, push_to_robot: bool) -> dict:
     return {
         "local_only": enabled,
         "ai_available": s.ai is not None,
-        "cloud_bridge_connected": getattr(s, "xiaozhi", None) is not None,
-        "error": ai_error or bridge_error,
+        "error": ai_error,
     }

@@ -389,7 +389,7 @@ the API to the Python core on :8800).
 
 | Path | What |
 |------|------|
-| `core/` | The dravix service (Python / FastAPI): DAL + drivers, mode engine, AI router, personality, vitals, MCP client + server, REST/WebSocket API |
+| `core/` | The dravix service (Python / FastAPI): DAL + drivers, mode engine, AI router, personality, vitals, MCP server, REST/WebSocket API |
 | `plugins/` | Drop-in modes — each a `plugin.yaml` + a `Mode` subclass |
 | `web/` | The React / Vite dashboard (Hebrew RTL), built into the add-on image |
 | `deploy/esphome/stackchan-dravix.yaml` | The custom StackChan **ESPHome firmware** |

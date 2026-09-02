@@ -46,3 +46,7 @@ data/
 *.png
 deploy/esphome/secrets.yaml
 deploy/esphome/.esphome/
+
+# Local screenshots / mockups kept next to the repo, not part of it
+*.jpg
+*.jpeg

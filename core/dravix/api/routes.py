@@ -130,13 +130,6 @@ async def status(request: Request):
     data["vitals"] = request.app.state.vitals.snapshot()
     data["idle_motion"] = getattr(request.app.state.robot, "idle_motion", True)
     data["spontaneous_speech"] = getattr(request.app.state.robot, "speak_spontaneous", True)
-    xz = getattr(request.app.state, "xiaozhi", None)
-    data["xiaozhi"] = {
-        "configured": xz is not None,
-        "connected": bool(xz and xz.connected),
-        "last_error": (xz.last_error if xz else ""),
-        "tools": (xz.tools if xz else []),
-    }
     agent = getattr(request.app.state, "agent", None)
     if agent is not None:
         data["agent"] = agent.snapshot()

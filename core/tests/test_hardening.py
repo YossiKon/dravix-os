@@ -18,7 +18,6 @@ def _app(monkeypatch, tmp_path, **env):
     monkeypatch.setenv("DRAVIX_DATA_DIR", str(tmp_path))
     monkeypatch.setenv("DRAVIX_HA_URL", "")
     monkeypatch.setenv("DRAVIX_HA_TOKEN", "")
-    monkeypatch.setenv("DRAVIX_XIAOZHI_MCP_URL", "")
     monkeypatch.setenv("DRAVIX_API_TOKEN", "")
     for key, value in env.items():
         monkeypatch.setenv(key, value)

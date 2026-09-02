@@ -22,7 +22,6 @@ from .events import EventBus
 from .integrations.frigate import Frigate
 from .integrations.ha_events import HAEventBridge, ha_ws_url
 from .integrations.homeassistant import HomeAssistant
-from .integrations.xiaozhi_bridge import XiaoZhiBridge
 from .logging import get_logger, setup_logging
 from .modes import ModeContext, ModeEngine
 from .mood import MoodEngine
@@ -181,28 +180,6 @@ async def lifespan(app: FastAPI):
         )
         ha_bridge.start()
 
-    # xiaozhi bridge: expose dravix's MCP tools to the robot's AI (the robot can control
-    # HA / run dravix features by voice). dravix is the MCP *server* on this connection.
-    xiaozhi: XiaoZhiBridge | None = None
-    # The cloud bridge respects the master isLocal flag (the dashboard can flip it at
-    # runtime — /api/config/local_only stops/starts the bridge accordingly).
-    if settings.xiaozhi_mcp_url and not store.local_only(settings.local_only):
-        from .mcpserver.server import build_server
-
-        # The robot body tools only work with a real driver; over the cloud the driver is
-        # mock, so omit them and serve the useful set (HA / weather / agenda / memory / fun).
-        # Use the store-merged driver — same pick build_robot_driver made above.
-        _include_robot = (store.robot_driver() or settings.robot_driver).lower() != "mock"
-        xiaozhi = XiaoZhiBridge(
-            settings.xiaozhi_mcp_url,
-            lambda: build_server(
-                controller, engine, ai, ha=ha, store=store, mood=mood,
-                weather_entity=settings.weather_entity,
-                include_robot_control=_include_robot,
-            ),
-        )
-        await xiaozhi.start()
-
     app.state.settings = settings
     app.state.bus = bus
     app.state.store = store
@@ -220,7 +197,6 @@ async def lifespan(app: FastAPI):
     app.state.pet_head = pet_head
     app.state.scheduler = scheduler
     app.state.screen_pusher = screen_pusher
-    app.state.xiaozhi = xiaozhi
     from .agent_status import AgentPresence
 
     app.state.agent = AgentPresence(controller, bus, store)
@@ -383,10 +359,6 @@ async def lifespan(app: FastAPI):
                 await t
             except asyncio.CancelledError:
                 pass
-        # read the CURRENT bridge from app.state — /api/config/local_only may have
-        # stopped/replaced the one this scope created.
-        if getattr(app.state, "xiaozhi", None) is not None:
-            await app.state.xiaozhi.stop()
         if ha_bridge is not None:
             await ha_bridge.stop()
         await app.state.agent.stop()

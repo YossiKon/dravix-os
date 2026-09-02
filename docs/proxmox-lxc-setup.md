@@ -38,7 +38,7 @@ Browse to `http://<lxc-ip>:8800`.
 
 With `DRAVIX_ROBOT_DRIVER=ha`, dravix-os **auto-discovers** the robot's HA entities (exposed by
 the dravix ESPHome firmware) at startup — nothing to map by hand. The service logs the discovered
-entity set on boot. (The legacy `scripts/discover.py` probe is only for the non-HA `mcp` driver.)
+entity set on boot.
 
 ## 5. Networking notes
 

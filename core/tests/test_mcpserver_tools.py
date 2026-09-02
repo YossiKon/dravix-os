@@ -1,7 +1,6 @@
-"""Tests for the xiaozhi bridge + the HA tools it exposes to the robot's AI (offline)."""
+"""Tests for the tool set dravix's own MCP server exposes to agents (offline)."""
 from __future__ import annotations
 
-from dravix.integrations.xiaozhi_bridge import XiaoZhiBridge
 from dravix.mcpserver.server import build_server
 
 
@@ -51,11 +50,3 @@ async def test_build_server_omits_ha_tools_without_ha():
     mcp = build_server(_FakeController(), engine=None, ai=None, ha=None)
     names = {t.name for t in await mcp.list_tools()}
     assert not any(n.startswith("home_assistant_") for n in names)
-
-
-async def test_bridge_empty_url_is_noop():
-    bridge = XiaoZhiBridge("", lambda: None)
-    await bridge.start()
-    assert bridge._task is None
-    assert bridge.connected is False
-    await bridge.stop()  # safe even when never started

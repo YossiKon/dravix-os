@@ -62,9 +62,8 @@ The single most important abstraction. Everything above the DAL talks to **one**
 (`RobotController`) with verbs like `set_face`, `move_head`, `say`, `set_leds`,
 `take_photo`, `listen`, `get_status`. Concrete **drivers** implement that interface:
 
-- `mcp_driver` — talks to the robot's MCP server (primary).
-- `ha_driver` — drives the robot through Home Assistant entities/services (fallback / when
-  the robot is exposed to HA as ESPHome entities).
+- `ha_driver` — drives the robot through the Home Assistant entities the dravix ESPHome
+  firmware publishes (the primary, and the only one the add-on ships).
 - `mock_driver` — logs calls only; for offline development and tests.
 
 Because all higher layers depend only on `RobotController`, we can change *how* the robot is
@@ -92,11 +91,11 @@ Pluggable `AIProvider` interface (`converse`, `stream`, tool-use). Default provi
 OpenAI, and local/Ollama can be added without touching callers. The persona engine supplies
 the system prompt + voice + expression mapping.
 
-## 6. Discovery (Phase 0)
+## 6. Discovery
 
-`core/scripts/discover.py` connects to the robot MCP URL and to Home Assistant, lists the
-available tools/entities, and writes `docs/capability-report.md`. This is the contract that
-drives driver implementation — we build against what the robot *actually* exposes, not
+`core/dravix/discovery.py` runs at startup and maps the robot's Home Assistant entities by
+suffix, so nothing is hard-coded and a renamed device keeps working. The service logs the
+discovered entity set on boot — we build against what the robot *actually* exposes, not
 against guesses.
 
 ## 7. Upstream tracking ("always be able to update")

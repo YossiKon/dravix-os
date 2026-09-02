@@ -28,9 +28,8 @@ def build_server(
     """Build the dravix MCP server.
 
     ``include_robot_control`` gates the robot body tools (say/face/head/leds): set it False
-    when the robot driver is ``mock`` (e.g. the cloud/xiaozhi bridge) so the robot's AI isn't
-    offered tools that can't actually move the hardware. The HA / weather / agenda / memory /
-    fun tools below work regardless and are the useful set over the cloud.
+    when the robot driver is ``mock``, so an agent isn't offered tools that can't actually
+    move the hardware. The HA / weather / agenda / memory / fun tools below work regardless.
 
     ``expose_risky_tools`` gates the dangerous HA tools (the generic service call, lock/
     unlock, alarm disarm) — off by default (DRAVIX_EXPOSE_RISKY_TOOLS) so a compromised /

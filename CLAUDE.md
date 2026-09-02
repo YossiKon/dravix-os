@@ -13,18 +13,16 @@ Compose deployment is an alternative, but the HA add-on is the primary path.) Se
   layers on the M5Stack ESPHome **BSP** (pinned under `packages:`); upstream `m5stack/StackChan`
   is reference-only under `vendor/`. Never edit the BSP in place — extend beside it.
 - **Discovery-first.** Don't hard-code HA entity ids. Auto-discovery (`core/dravix/discovery.py`,
-  suffix-anchored) maps the robot's entities at startup; build against what's discovered. The
-  legacy MCP driver + `core/scripts/discover.py` remain for non-HA backends.
+  suffix-anchored) maps the robot's entities at startup; build against what's discovered.
 - **Everything is pluggable** behind interfaces: robot drivers (`core/dravix/dal/`), AI
   providers (`core/dravix/ai/`), modes (`plugins/`). Higher layers depend only on the
   `RobotController` facade — never a driver directly.
 - Robot actions in modes must be **capability-guarded** (`robot.supports(CAP_*)`) so they
-  degrade gracefully across backends (mock / partial HA / full MCP).
+  degrade gracefully across backends (mock / a partially-discovered HA robot / the full set).
 
 ## Layout
 - `core/dravix/` — the service. `dal/` (drivers), `ai/`, `modes/` (engine), `integrations/`
-  (MCP client, HA client), `mcpserver/` (our MCP server), `api/routes.py`, `app.py`.
-- `core/scripts/discover.py` — capability discovery (run first).
+  (HA client + event bridge, Frigate), `mcpserver/` (our MCP server), `api/routes.py`, `app.py`.
 - `plugins/<name>/` — modes (`plugin.yaml` + a `Mode` subclass).
 - `web/` — React dashboard (Vite). `core/dravix/web/static/` — built-in fallback page.
 - `deploy/` — Dockerfile, compose. `docs/proxmox-lxc-setup.md` — deployment.
@@ -33,19 +31,18 @@ Compose deployment is an alternative, but the HA add-on is the primary path.) Se
 ```bash
 pip install -e ".[dev]"          # install
 python -m dravix                 # run service on :8800  (DRAVIX_* env / .env)
-python scripts/discover.py       # probe robot MCP URL + HA -> docs/capability-report.md
 python -m dravix.mcpserver       # run our MCP server over stdio (for Claude/agents)
 python -m pytest -q              # tests (offline, mock driver)
-python -m compileall -q dravix scripts tests   # quick syntax check
+python -m compileall -q dravix tests           # quick syntax check
 ```
 Top-level `make help` lists the same via the Makefile.
 
 ## Config
 All via `DRAVIX_*` env vars / `.env` (see `.env.example`). Key ones:
-`DRAVIX_ROBOT_DRIVER` (mcp|ha|mock), `DRAVIX_ROBOT_MCP_URL`, `DRAVIX_HA_URL`,
-`DRAVIX_HA_TOKEN`, `DRAVIX_AI_PROVIDER` (ha_assist default).
+`DRAVIX_ROBOT_DRIVER` (ha|mock), `DRAVIX_HA_URL`, `DRAVIX_HA_TOKEN`,
+`DRAVIX_AI_PROVIDER` (ha_assist default).
 
 ## Conventions
-- Python 3.11+, FastAPI, async throughout. Optional deps (`mcp`) are imported lazily so the
-  mock path runs without them.
+- Python 3.11+, FastAPI, async throughout. Optional deps (`mcp`, used only by our own MCP
+  server) are imported lazily so the mock path runs without them.
 - Tests must stay offline (use `MockDriver`); never require a live robot or HA.

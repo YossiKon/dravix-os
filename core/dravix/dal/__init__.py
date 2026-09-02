@@ -24,14 +24,6 @@ __all__ = [
 def build_driver(settings: Settings, ha: HomeAssistant | None = None) -> RobotDriver:
     """Construct the robot driver selected by configuration."""
     driver = settings.robot_driver.lower()
-    if driver == "mcp":
-        from .mcp_driver import MCPRobotDriver
-
-        return MCPRobotDriver(
-            url=settings.robot_mcp_url,
-            transport=settings.robot_mcp_transport,
-            token=settings.robot_mcp_token,
-        )
     if driver == "ha":
         from .ha_driver import HARobotDriver
 

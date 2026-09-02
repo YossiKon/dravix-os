@@ -50,21 +50,14 @@ class Settings(BaseSettings):
     # Set false if the firmware ever enables LV_USE_BIDI (otherwise it double-reverses).
     robot_rtl_fix: bool = True
 
-    # Robot (StackChan)
-    robot_driver: str = "mock"  # mcp | ha | mock
-    robot_mcp_url: str = ""
-    robot_mcp_transport: str = "auto"  # auto | streamable_http | sse | websocket
-    robot_mcp_token: str = ""
+    # Robot (StackChan) — the robot is reached through its Home Assistant entities, which the
+    # dravix ESPHome firmware publishes. "mock" keeps the whole service runnable with no robot.
+    robot_driver: str = "mock"  # ha | mock
 
-    # When False (default), the MCP server (incl. the xiaozhi cloud bridge) hides the risky
-    # tools: the generic HA service call, lock/unlock, and alarm disarm. Read-only + robot +
-    # benign tools stay available either way.
+    # When False (default), dravix's own MCP server hides the risky tools: the generic HA
+    # service call, lock/unlock, and alarm disarm. Read-only + robot + benign tools stay
+    # available either way.
     expose_risky_tools: bool = False
-
-    # xiaozhi MCP接入点 (access point): dravix connects here as an MCP *server* and exposes
-    # its tools to the robot's AI (the robot can then control HA / run dravix features by
-    # voice). This is the reverse of robot_mcp_url. Usually a wss://api.xiaozhi.me/mcp/?token=
-    xiaozhi_mcp_url: str = ""
 
     # When False, the robot stops its automatic idle head movement (the ambient glances).
     # Manual control + commanded movements still work. Toggle live from the dashboard too.
@@ -91,7 +84,6 @@ class Settings(BaseSettings):
     # Home Assistant
     ha_url: str = "http://homeassistant.local:8123"
     ha_token: str = ""
-    ha_mcp_url: str = ""
 
     # HA event bridge (motion/presence/door -> event bus)
     ha_events_enabled: bool = True
