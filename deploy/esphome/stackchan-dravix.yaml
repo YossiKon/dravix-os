@@ -7,20 +7,16 @@
 #  expression has a mood LED colour + a head pose (sad droops, doubt tilts, angry shakes)
 #  · it glances around with its head · going to sleep the head droops, waking it rises.
 #  ALL 3 TOUCH ZONES: 1+2 = pet (pink nuzzle) · 3 (back) = TICKLE (giggly wiggle).
-#  OFFICIAL ESP-NOW REMOTE supported: joystick drives the head, button B = talk toggle
-#  (set the remote's channel to your router's Wi-Fi channel). PARTY button = desk disco.
+#  PARTY button = desk disco (rainbow LEDs + a head bop) · DANCE / FEED / WATER buttons in HA.
 #  REAL power metering (INA226): the status bar shows true W / mA / time-left; battery %
 #  falls back to the LiPo voltage curve when no battery sensor exists. Servo pitch is
 #  clamped to M5Stack's recommended 5-85° operating range.
-#  ARCADE (swipe to GAMES): Catch Me · Reaction · Simon · R-P-S · FLAPPY · Party.
 #  Switches: "Body language" = autonomous head moves · "Mood LEDs" = emotion colours.
-#  States:  awake = WHITE bg + dark eyes  ·  listening = BIG eyes + YELLOW LEDs
+#  States:  awake = WHITE bg + dark eyes  ·  listening = BIG eyes + CYAN LEDs (amber = thinking, green = talking)
 #           screensaver = dim, face+blink, NO drift  ·  sleep = closed eyes + zzz, black
 #  Wake word "Okay, Nabu" (on-device) · brightness control.
-#  SWIPE:  down → status · up → face · left/right → face · 3 cards · games · vitals ·
-#          climate · 🌐 dashboard (the last only joins the cycle when a Dashboard URL is set).
-#  GAME "CATCH ME!": a teal dot runs around the screen — tap it to score; every 10
-#  catches the robot celebrates (green LEDs + a happy head wiggle).
+#  SWIPE:  down → status · up → face · left/right → face · 3 cards · vitals · climate ·
+#          🌐 dashboard (the last only joins the cycle when a Dashboard URL is set).
 #  TRIPLE-tap face = STOP everything · DOUBLE-tap = AI listen (toggle) · single tap = nothing · LONG-PRESS = sleep.
 #  Publishes live state to HA:  sensor State (awake/listening/speaking/screensaver/sleep),
 #  Last heard (STT), Last reply (TTS) — the dravix dashboard shows these in real time.
@@ -40,7 +36,7 @@ substitutions:
   # publishes it to HA ("Firmware version" sensor); the dravix dashboard compares it
   # with the version bundled in the add-on and shows "firmware update available".
   # (Maintainers: bump this on every firmware change. Users: don't touch.)
-  fw_version: "41"
+  fw_version: "42"
   # The ESPHome node name (mDNS hostname + the default entity prefix on a fresh flash).
   # Change it only if you run MORE THAN ONE robot — each needs a unique name. NOTE:
   # changing it on an already-adopted robot registers a NEW device in HA.
@@ -184,6 +180,10 @@ ota:
 wifi:
   ssid: !secret wifi_ssid
   password: !secret wifi_password
+  # The BSP defaults to LIGHT power-save, which lets the radio nap between beacons — that
+  # is the lag you feel between "Okay Nabu" and the listening face, and the hitch in the
+  # camera stream. A desk robot lives on a charger; ~50mA is a fine price for immediacy.
+  power_save_mode: none
   ap:
     ssid: "${device_name} Fallback Hotspot"
 
@@ -192,47 +192,6 @@ captive_portal:
 # Lets the robot DOWNLOAD images (Frigate person snapshots, any camera) to its screen.
 http_request:
   verify_ssl: false
-
-# ── The OFFICIAL StackChan remote (ESP-NOW joystick) ─────────────────────────────
-# Packet (reverse-engineered from m5stack/StackChan remote/code): 8 bytes inside the
-# espressif esp-now-lib frame — [id][yaw:int16 LE ±1280][pitch:int16 LE 0..900]
-# [speed:int16 = 600][btnB]. We find it at ANY offset by its speed==600 signature, so
-# the lib's wrapper version doesn't matter. yaw→servo_x (±164), pitch→n_head_pitch
-# (your 158..260 scale), btnB press → talk toggle (like tapping the face).
-# IMPORTANT: on the remote's setup screen set its Wi-Fi CHANNEL to your router's
-# channel (ESP-NOW must share the robot's Wi-Fi channel).
-espnow:
-  auto_add_peer: true
-  on_broadcast:
-    - lambda: |-
-        for (int off = 0; off + 8 <= (int) size; off++) {
-          if (data[off + 5] != 0x58 || data[off + 6] != 0x02) continue;  // speed == 600
-          int16_t yaw, pitch;
-          memcpy(&yaw, data + off + 1, 2);
-          memcpy(&pitch, data + off + 3, 2);
-          if (yaw < -1280 || yaw > 1280 || pitch < 0 || pitch > 900) continue;
-          id(g_rc_yaw)   = yaw * 164.0f / 1280.0f;
-          id(g_rc_pitch) = 158.0f + pitch * 102.0f / 900.0f;
-          id(g_rc_btn)   = data[off + 7];
-          id(g_rc_btna)  = data[off + 0];
-          id(g_rc_fresh) = true;
-          break;
-        }
-  on_unknown_peer:
-    - lambda: |-
-        for (int off = 0; off + 8 <= (int) size; off++) {
-          if (data[off + 5] != 0x58 || data[off + 6] != 0x02) continue;  // speed == 600
-          int16_t yaw, pitch;
-          memcpy(&yaw, data + off + 1, 2);
-          memcpy(&pitch, data + off + 3, 2);
-          if (yaw < -1280 || yaw > 1280 || pitch < 0 || pitch > 900) continue;
-          id(g_rc_yaw)   = yaw * 164.0f / 1280.0f;
-          id(g_rc_pitch) = 158.0f + pitch * 102.0f / 900.0f;
-          id(g_rc_btn)   = data[off + 7];
-          id(g_rc_btna)  = data[off + 0];
-          id(g_rc_fresh) = true;
-          break;
-        }
 
 # ── IR AWARENESS — the robot has an infrared RECEIVER (BSP). When anyone uses a TV/AC
 # remote in the room it notices and glances over, curious. (The BSP also gives it an IR
@@ -401,40 +360,7 @@ globals:
   - { id: sw_sleep, type: bool, restore_value: false, initial_value: "false" }
   - { id: g_card,   type: int,  restore_value: false, initial_value: "0" }
   - { id: g_sbar,   type: int,  restore_value: false, initial_value: "0" }   # status-bar stage: 0 hidden · 1 compact strip (time/date/battery) · 2 full panel (sliders etc.)
-  - { id: g_score,  type: int,  restore_value: false, initial_value: "0" }   # catch-me game score
-  # ── HIGH SCORES — the best each game has seen; restore_value: true → survives reboots ──
-  - { id: hs_catch,    type: int, restore_value: true, initial_value: "0" }
-  - { id: hs_flappy,   type: int, restore_value: true, initial_value: "0" }
-  - { id: hs_breakout, type: int, restore_value: true, initial_value: "0" }
-  - { id: hs_simon,    type: int, restore_value: true, initial_value: "0" }
-  - { id: hs_react,    type: int, restore_value: true, initial_value: "0" }   # best (lowest) reaction ms; 0 = none yet
-  - { id: hs_rps,      type: int, restore_value: true, initial_value: "0" }   # total R-P-S wins
-  # ── PONG — you (joystick, left paddle) vs the robot AI (right). First to 7. ──
-  - { id: pg_bx,     type: float, restore_value: false, initial_value: "160" }
-  - { id: pg_by,     type: float, restore_value: false, initial_value: "120" }
-  - { id: pg_vx,     type: float, restore_value: false, initial_value: "3.2" }
-  - { id: pg_vy,     type: float, restore_value: false, initial_value: "2.0" }
-  - { id: pg_py,     type: int,   restore_value: false, initial_value: "98" }   # player paddle top-Y
-  - { id: pg_ay,     type: int,   restore_value: false, initial_value: "98" }   # robot paddle top-Y
-  - { id: pg_ps,     type: int,   restore_value: false, initial_value: "0" }
-  - { id: pg_as,     type: int,   restore_value: false, initial_value: "0" }
-  - { id: pg_alive,  type: bool,  restore_value: false, initial_value: "false" }
   - { id: g_tempst,  type: int,   restore_value: false, initial_value: "0" }   # temperature mood: 0 ok · 1 hot · 2 cold
-  # ── SNAKE — 13×8 grid (24px cells), body in two arrays, joystick sets a continuous heading ──
-  - id: sn_x
-    type: int[12]
-    restore_value: false
-    initial_value: "std::array<int, 12>{}"
-  - id: sn_y
-    type: int[12]
-    restore_value: false
-    initial_value: "std::array<int, 12>{}"
-  - { id: sn_len, type: int,     restore_value: false, initial_value: "4" }
-  - { id: sn_dir, type: int,     restore_value: false, initial_value: "1" }   # 0 up · 1 right · 2 down · 3 left
-  - { id: sn_fx,  type: int,     restore_value: false, initial_value: "9" }
-  - { id: sn_fy,  type: int,     restore_value: false, initial_value: "4" }
-  - { id: sn_sc,  type: int,     restore_value: false, initial_value: "0" }
-  - { id: sn_alive, type: bool,  restore_value: false, initial_value: "false" }
   # ── PERMISSIONS log — the current request + the last 3 decisions (shown on the Permissions page) ──
   - id: perm_cur
     type: std::string
@@ -457,37 +383,11 @@ globals:
   - { id: g_gloves, type: bool, restore_value: false, initial_value: "false" }  # boxing-gloves accessory is on → arms the auto-punch
   # (g_wink + g_ant removed — winks were permanently disabled and no accessory ever armed the antennae)
   - { id: g_pn,     type: int,  restore_value: false, initial_value: "0" }   # party sway alternator
-  # official ESP-NOW remote state (latest parsed packet + throttling)
-  - { id: g_rc_yaw,   type: float, restore_value: false, initial_value: "0" }     # target yaw (servo scale)
-  - { id: g_rc_pitch, type: float, restore_value: false, initial_value: "209" }   # target pitch (158..260) — 209 = the stick's NEUTRAL centre; 165 made Snake auto-move with no remote touched
-  - { id: g_rc_btn,   type: int,   restore_value: false, initial_value: "0" }
-  - { id: g_rc_btna,  type: int,   restore_value: false, initial_value: "0" }   # 2nd remote button / stick-click (packet byte 0)
-  - { id: g_rc_prev,  type: int,   restore_value: false, initial_value: "0" }
-  - { id: g_rc_fresh, type: bool,  restore_value: false, initial_value: "false" }
-  - { id: g_rc_busy,  type: bool,  restore_value: false, initial_value: "false" }
   - { id: g_tms,    type: long, restore_value: false, initial_value: "0" }   # touch-press start (ms)
-  # flappy game state
-  - { id: fb_y,     type: float, restore_value: false, initial_value: "110" }  # bird y (px)
-  - { id: fb_vy,    type: float, restore_value: false, initial_value: "0" }    # bird velocity
-  - { id: fb_px,    type: int,   restore_value: false, initial_value: "340" }  # pipe x (px)
-  - { id: fb_gap,   type: int,   restore_value: false, initial_value: "90" }   # pipe gap top y
-  - { id: fb_score, type: int,   restore_value: false, initial_value: "0" }
-  # ── BREAKOUT (bricks) — joystick paddle · bouncing ball · 8 bricks (bitmask) ──
-  - { id: bk_bx,    type: float, restore_value: false, initial_value: "160" }  # ball x
-  - { id: bk_by,    type: float, restore_value: false, initial_value: "170" }  # ball y
-  - { id: bk_vx,    type: float, restore_value: false, initial_value: "3" }    # ball vel x
-  - { id: bk_vy,    type: float, restore_value: false, initial_value: "-3.4" } # ball vel y
-  - { id: bk_px,    type: int,   restore_value: false, initial_value: "132" }  # paddle left x
-  - { id: bk_score, type: int,   restore_value: false, initial_value: "0" }
-  - { id: bk_lives, type: int,   restore_value: false, initial_value: "3" }
-  - { id: bk_mask,  type: int,   restore_value: false, initial_value: "255" }  # 8 bricks alive (bits 0..7)
-  - { id: bk_alive, type: bool,  restore_value: false, initial_value: "false" }
-  - { id: bk_ev,    type: int,   restore_value: false, initial_value: "0" }     # last event: 1 brick · 2 paddle · 3 hit
   - { id: g_dc_ms,  type: long,  restore_value: false, initial_value: "0" }     # face tap: millis of the previous tap
   - { id: g_tapc,   type: int,   restore_value: false, initial_value: "0" }     # face tap streak: 2 = AI, 3 = STOP
   - { id: g_food,   type: int,   restore_value: false, initial_value: "0" }     # which treat is being eaten: 0 cookie·1 cake·2 apple·3 croissant
   - { id: g_lowbatt, type: bool, restore_value: false, initial_value: "false" }  # low-battery worried beep already fired
-  - { id: fb_alive, type: bool,  restore_value: false, initial_value: "false" }
   # sleep-breathing LED bookkeeping (so the bar goes dark the moment it wakes)
   - { id: g_breath, type: bool, restore_value: false, initial_value: "false" }
   # last glance time — the breathing y-write pauses briefly so glances aren't stomped
@@ -501,7 +401,6 @@ globals:
   - { id: g_prev_x,  type: float, restore_value: false, initial_value: "-999" }
   - { id: g_prev_y,  type: float, restore_value: false, initial_value: "-999" }
   - { id: g_move_ms, type: long,  restore_value: false, initial_value: "0" }
-  # affection streak — pets within a 90s window escalate the reaction (blush → love-eyes → melt)
   - { id: g_pets_n,  type: int,   restore_value: false, initial_value: "0" }
   - { id: g_pets_ms, type: long,  restore_value: false, initial_value: "0" }
   # shake detection (BMI270): jolt counter + window, and a slow-filtered gravity baseline
@@ -521,15 +420,6 @@ globals:
   - { id: led_r,   type: float, restore_value: false, initial_value: "0" }
   - { id: led_g,   type: float, restore_value: false, initial_value: "0" }
   - { id: led_b,   type: float, restore_value: false, initial_value: "0" }
-  # ── mini-games (the Games menu: Catch Me · Reaction · Simon · Rock-Paper-Scissors) ──
-  - { id: g_react,   type: int,  restore_value: false, initial_value: "0" }   # reaction: 0 wait · 1 go · 2 result
-  - { id: g_react_t, type: long, restore_value: false, initial_value: "0" }   # millis when it turned green
-  - { id: g_slen,    type: int,  restore_value: false, initial_value: "0" }   # simon: sequence length so far
-  - { id: g_spi,     type: int,  restore_value: false, initial_value: "0" }   # simon: playback cursor
-  - { id: g_sipos,   type: int,  restore_value: false, initial_value: "0" }   # simon: your-turn cursor
-  - { id: g_saccept, type: bool, restore_value: false, initial_value: "false" } # simon: accepting your taps
-  - { id: g_rps_bot, type: int,  restore_value: false, initial_value: "0" }   # RPS: the robot's pick
-  - { id: g_rps_out, type: int,  restore_value: false, initial_value: "0" }   # RPS: 0 tie · 1 you win · 2 robot wins
   - id: g_sq
     type: int[16]
     restore_value: false
@@ -1194,13 +1084,6 @@ button:
     id: btn_dance
     on_press:
       - script.execute: dance
-  # LED COLOURS — open the on-screen colour picker.
-  - platform: template
-    name: "LED colours"
-    id: btn_colors
-    on_press:
-      - globals.set: { id: g_card, value: "0" }
-      - lvgl.page.show: page_colors
   # PERMISSIONS LOG — open the recent AI-agent decisions.
   - platform: template
     name: "Permissions log"
@@ -1208,32 +1091,6 @@ button:
     on_press:
       - globals.set: { id: g_card, value: "0" }
       - lvgl.page.show: page_perms
-  # RESET HIGH SCORES — clear the leaderboard from the dashboard.
-  - platform: template
-    name: "Reset high scores"
-    id: btn_reset_scores
-    on_press:
-      - script.execute: reset_scores
-  - platform: restart
-    name: "Reboot"
-    id: btn_reboot
-  # BREAKOUT — start a game on the robot's screen; steer the paddle with the ESP-NOW
-  # joystick. Press from HA / the dashboard (an on-device menu button comes later).
-  - platform: template
-    name: "Play Breakout"
-    id: btn_breakout
-    on_press:
-      - lambda: |-
-          id(bk_mask) = 255; id(bk_score) = 0; id(bk_lives) = 3;
-          id(bk_bx) = 160; id(bk_by) = 170; id(bk_vx) = 3; id(bk_vy) = -3.4f;
-          id(bk_alive) = true;
-      - lvgl.label.update: { id: bk_msg, text: "" }
-      - lvgl.page.show: page_breakout
-      - if:
-          condition: { lambda: 'return id(sw_sfx).state && !id(g_quiet) && !id(g_night);' }
-          then: [ { rtttl.play: "go:d=16,o=6,b=200:e,g,c7" } ]   # launch trill
-
-# ── Behaviour toggles — flip these from Home Assistant / the dravix dashboard ────
 switch:
   - { platform: template, name: "Greet on approach", id: sw_greet,     optimistic: true, restore_mode: RESTORE_DEFAULT_ON }
   - { platform: template, name: "Sleep when dark",   id: sw_dark,      optimistic: true, restore_mode: RESTORE_DEFAULT_ON }
@@ -1513,8 +1370,8 @@ lvgl:
             then:
               - globals.set: { id: g_expr, value: !lambda 'return id(g_face_rest);' }
               - script.execute: render_face
-    # After 3 min of no touch, drift back to the FACE from any other screen (cards / games /
-    # vitals). Touching any screen resets this timer (LVGL counts touches as activity).
+    # After 3 min of no touch, drift back to the FACE from any other screen (cards /
+    # vitals / climate). Touching any screen resets this timer (LVGL counts touches as activity).
     # EXCEPTION: the 🌐 dashboard stays put — it's meant to be a persistent glanceable page.
     - timeout: 180000ms
       then:
@@ -2016,53 +1873,6 @@ lvgl:
               - label: { id: st_c3_r3, text: "", text_font: small_font, text_color: 0x8b96a4, align: LEFT_MID, x: 46, y: 10 }
             on_click:
               - homeassistant.event: { event: esphome.dravix_card, data: { card: "3", row: "3" } }
-    # ── Page 5: CATCH ME! — tap the dot before it runs away (in the swipe cycle) ──
-    - id: page_play
-      bg_color: 0x05080b
-      bg_opa: COVER
-      widgets:
-        - label: { id: lbl_play, text: "CATCH ME!", text_font: title_font, styles: accent_txt, align: TOP_MID, y: 6 }
-        - label: { id: lbl_score, text: "0", text_font: big_font, text_color: 0xFFFFFF, align: TOP_RIGHT, x: -12, y: 0 }
-        - button:
-            id: play_back
-            x: 6
-            y: 6
-            width: 52
-            height: 28
-            radius: 8
-            bg_color: 0x05080b
-            widgets:
-              - label: { text: "<", text_font: text_font, text_color: 0x33E6C8, align: CENTER }
-            on_click:
-              - globals.set: { id: g_card, value: "4" }
-              - lvgl.page.show: page_games
-        - button:
-            id: btn_dot
-            x: 132
-            y: 100
-            width: 56
-            height: 56
-            radius: 28
-            bg_color: 0x33E6C8
-            widgets:
-              # the dot is a tiny creature — it has a face 🙂
-              - label: { text: "o_o", text_font: small_font, text_color: 0x05080b, align: CENTER }
-            on_click:
-              - lambda: 'id(g_score) += 1; if (id(g_score) > id(hs_catch)) id(hs_catch) = id(g_score);'
-              - lvgl.label.update:
-                  id: lbl_score
-                  text: !lambda 'char b[12]; snprintf(b, sizeof(b), "%d", id(g_score)); return std::string(b);'
-              # the dot escapes to a random spot
-              - lvgl.widget.update:
-                  id: btn_dot
-                  x: !lambda 'return (int)(random_float() * 240.0f) + 12;'
-                  y: !lambda 'return (int)(random_float() * 130.0f) + 46;'
-              # every 10 catches → celebration!
-              - if:
-                  condition: { lambda: 'return id(g_score) % 10 == 0;' }
-                  then:
-                    - script.execute: { id: led_flash, r: 20, g: 100, b: 30 }
-                    - script.execute: head_shake
     # ── Page 6: ALERT IMAGE — a downloaded snapshot (Frigate person, doorbell, …) ──
     - id: page_image
       bg_color: 0x000000
@@ -2091,436 +1901,6 @@ lvgl:
             id: img_dash
             align: CENTER
             src: oi_dash
-    # ── GAMES MENU — swipe to the "game" slot in the card cycle to open this ──────
-    - id: page_games
-      bg_color: 0x05080b
-      bg_opa: COVER
-      scrollable: false          # otherwise a swipe scrolls the grid and hides the bottom games
-      scrollbar_mode: "OFF"
-      widgets:
-        - label: { text: "GAMES", text_font: title_font, styles: accent_txt, align: TOP_MID, y: 2 }
-        - button:
-            id: btn_g_catch
-            x: 22
-            y: 36
-            width: 132
-            height: 46
-            radius: 10
-            bg_color: 0x14324a
-            widgets:
-              - label: { text: "CATCH ME", text_font: text_font, text_color: 0xFFFFFF, align: CENTER }
-            on_click:
-              - globals.set: { id: g_score, value: "0" }
-              - lvgl.label.update: { id: lbl_score, text: "0" }
-              - lvgl.page.show: page_play
-        - button:
-            id: btn_g_react
-            x: 166
-            y: 36
-            width: 132
-            height: 46
-            radius: 10
-            bg_color: 0x14324a
-            widgets:
-              - label: { text: "REACTION", text_font: text_font, text_color: 0xFFFFFF, align: CENTER }
-            on_click:
-              - lvgl.page.show: page_react
-              - script.execute: react_start
-        - button:
-            id: btn_g_simon
-            x: 22
-            y: 86
-            width: 132
-            height: 46
-            radius: 10
-            bg_color: 0x14324a
-            widgets:
-              - label: { text: "SIMON", text_font: small_font, text_color: 0xFFFFFF, align: CENTER }
-            on_click:
-              - lvgl.page.show: page_simon
-              - script.execute: simon_new
-        - button:
-            id: btn_g_rps
-            x: 166
-            y: 86
-            width: 132
-            height: 46
-            radius: 10
-            bg_color: 0x14324a
-            widgets:
-              - label: { text: "R-P-S", text_font: small_font, text_color: 0xFFFFFF, align: CENTER }
-            on_click:
-              - lvgl.label.update: { id: rps_msg, text: "Pick one!" }
-              - lvgl.page.show: page_rps
-        - button:
-            id: btn_g_flappy
-            x: 22
-            y: 136
-            width: 132
-            height: 46
-            radius: 10
-            bg_color: 0x14324a
-            widgets:
-              - label: { text: "FLAPPY", text_font: small_font, text_color: 0xFFFFFF, align: CENTER }
-            on_click:
-              - lambda: 'id(fb_alive) = false; id(fb_y) = 110.0f; id(fb_vy) = 0.0f; id(fb_px) = 340; id(fb_score) = 0;'
-              - lvgl.label.update: { id: fb_lbl, text: "TAP!" }
-              - lvgl.label.update: { id: fb_sc, text: "0" }
-              - lvgl.page.show: page_flappy
-        - button:
-            id: btn_g_party
-            x: 166
-            y: 136
-            width: 132
-            height: 46
-            radius: 10
-            bg_color: 0x3a2a10
-            widgets:
-              - label: { text: "PARTY!", text_font: small_font, text_color: 0xFFC23D, align: CENTER }
-            on_click:
-              - script.execute: party
-        # bottom row: BREAKOUT · PONG · SNAKE · SCORES (four across)
-        - button:
-            id: btn_g_breakout
-            x: 6
-            y: 186
-            width: 74
-            height: 46
-            radius: 10
-            bg_color: 0x14463a
-            widgets:
-              - label: { text: "BREAK", text_font: small_font, text_color: 0x5dffa0, align: CENTER }
-            on_click:
-              - lambda: |-
-                  id(bk_mask) = 255; id(bk_score) = 0; id(bk_lives) = 3;
-                  id(bk_bx) = 160; id(bk_by) = 170; id(bk_vx) = 3; id(bk_vy) = -3.4f;
-                  id(bk_alive) = true;
-              - lvgl.label.update: { id: bk_msg, text: "" }
-              - lvgl.page.show: page_breakout
-        - button:
-            id: btn_g_pong
-            x: 84
-            y: 186
-            width: 74
-            height: 46
-            radius: 10
-            bg_color: 0x1a3a4a
-            widgets:
-              - label: { text: "PONG", text_font: small_font, text_color: 0x9fe0ff, align: CENTER }
-            on_click:
-              - lambda: |-
-                  id(pg_ps) = 0; id(pg_as) = 0;
-                  id(pg_bx) = 160; id(pg_by) = 120; id(pg_vx) = 3.2f; id(pg_vy) = 2.0f;
-                  id(pg_py) = 98; id(pg_ay) = 98; id(pg_alive) = true;
-              - lvgl.label.update: { id: pg_msg, text: "" }
-              - lvgl.page.show: page_pong
-        - button:
-            id: btn_g_snake
-            x: 162
-            y: 186
-            width: 74
-            height: 46
-            radius: 10
-            bg_color: 0x14402a
-            widgets:
-              - label: { text: "SNAKE", text_font: small_font, text_color: 0x5dffa0, align: CENTER }
-            on_click:
-              - lambda: |-
-                  id(sn_len) = 4; id(sn_dir) = 1; id(sn_sc) = 0;
-                  id(sn_x)[0] = 6; id(sn_y)[0] = 4; id(sn_x)[1] = 5; id(sn_y)[1] = 4;
-                  id(sn_x)[2] = 4; id(sn_y)[2] = 4; id(sn_x)[3] = 3; id(sn_y)[3] = 4;
-                  id(sn_fx) = 9; id(sn_fy) = 2; id(sn_alive) = true;
-              - lvgl.label.update: { id: sn_msg, text: "" }
-              - lvgl.page.show: page_snake
-        - button:
-            id: btn_g_scores
-            x: 240
-            y: 186
-            width: 74
-            height: 46
-            radius: 10
-            bg_color: 0x2a2440
-            widgets:
-              - label: { text: "SCORES", text_font: small_font, text_color: 0xFFC23D, align: CENTER }
-            on_click:
-              - lvgl.label.update: { id: sc_catch,    text: !lambda 'char b[24]; snprintf(b, sizeof(b), "Catch:  %d", id(hs_catch)); return std::string(b);' }
-              - lvgl.label.update: { id: sc_flappy,   text: !lambda 'char b[24]; snprintf(b, sizeof(b), "Flappy:  %d", id(hs_flappy)); return std::string(b);' }
-              - lvgl.label.update: { id: sc_breakout, text: !lambda 'char b[24]; snprintf(b, sizeof(b), "Breakout:  %d", id(hs_breakout)); return std::string(b);' }
-              - lvgl.label.update: { id: sc_simon,    text: !lambda 'char b[24]; snprintf(b, sizeof(b), "Simon:  %d", id(hs_simon)); return std::string(b);' }
-              - lvgl.label.update: { id: sc_react,    text: !lambda 'char b[28]; if (id(hs_react) == 0) return std::string("React:  —"); snprintf(b, sizeof(b), "React:  %d ms", id(hs_react)); return std::string(b);' }
-              - lvgl.label.update: { id: sc_rps,      text: !lambda 'char b[24]; snprintf(b, sizeof(b), "R-P-S wins:  %d", id(hs_rps)); return std::string(b);' }
-              - lvgl.page.show: page_scores
-    # ── FLAPPY — tap to flap, slip through the pipe gaps (the official has one too) ──
-    - id: page_flappy
-      bg_color: 0x0a1420
-      bg_opa: COVER
-      scrollable: false
-      scrollbar_mode: "OFF"
-      widgets:
-        # the pipe pair (one, recycled right→left; the gap moves each pass)
-        - obj: { id: fb_top, x: 340, y: 0,   width: 34, height: 90,  radius: 4, bg_color: 0x2ea35c, bg_opa: COVER, border_width: 0 }
-        - obj: { id: fb_bot, x: 340, y: 170, width: 34, height: 240, radius: 4, bg_color: 0x2ea35c, bg_opa: COVER, border_width: 0 }
-        # the bird — a little teal creature, of course
-        - obj:
-            id: fb_bird
-            x: 60
-            y: 110
-            width: 26
-            height: 26
-            radius: 13
-            bg_color: 0x33E6C8
-            bg_opa: COVER
-            border_width: 0
-            widgets:
-              - label: { text: "o", text_font: small_font, text_color: 0x0a1420, align: CENTER }
-        # full-screen tap catcher (transparent, drawn above the playfield): tap = flap / start
-        - button:
-            id: fb_tapzone
-            x: 0
-            y: 0
-            width: 320
-            height: 240
-            radius: 0
-            bg_opa: TRANSP
-            border_width: 0
-            shadow_width: 0
-            on_click:
-              - if:
-                  condition: { lambda: 'return id(fb_alive);' }
-                  then:
-                    - lambda: 'id(fb_vy) = -5.5f;'   # flap!
-                  else:
-                    - lambda: |-
-                        id(fb_alive) = true; id(fb_score) = 0;
-                        id(fb_y) = 110.0f; id(fb_vy) = -5.5f; id(fb_px) = 340;
-                    - lvgl.label.update: { id: fb_lbl, text: "" }
-                    - lvgl.label.update: { id: fb_sc, text: "0" }
-        # HUD on top of the tap zone (labels don't block clicks)
-        - label: { id: fb_lbl, text: "TAP!", text_font: title_font, styles: accent_txt, align: TOP_MID, y: 6 }
-        - label: { id: fb_sc,  text: "0",    text_font: title_font, text_color: 0xFFFFFF, align: TOP_RIGHT, x: -10, y: 6 }
-        # back to the menu (drawn after the tap zone so it stays clickable)
-        - button:
-            id: fb_back
-            x: 6
-            y: 6
-            width: 52
-            height: 28
-            radius: 8
-            bg_color: 0x05080b
-            widgets:
-              - label: { text: "<", text_font: text_font, text_color: 0x33E6C8, align: CENTER }
-            on_click:
-              - lambda: 'id(fb_alive) = false;'
-              - globals.set: { id: g_card, value: "4" }
-              - lvgl.page.show: page_games
-    # ── REACTION — wait for GREEN, then tap as fast as you can (shows your ms) ─────
-    - id: page_react
-      bg_color: 0x000000
-      bg_opa: COVER
-      widgets:
-        - button:
-            id: react_pad
-            x: 0
-            y: 0
-            width: 320
-            height: 240
-            radius: 0
-            bg_color: 0x8a1c1c
-            widgets:
-              - label: { id: react_txt, text: "WAIT...", text_font: title_font, text_color: 0xFFFFFF, align: CENTER }
-            on_click:
-              - script.execute: react_tap
-        - button:
-            id: react_back
-            x: 6
-            y: 6
-            width: 52
-            height: 28
-            radius: 8
-            bg_color: 0x05080b
-            widgets:
-              - label: { text: "<", text_font: text_font, text_color: 0x33E6C8, align: CENTER }
-            on_click:
-              - globals.set: { id: g_card, value: "4" }
-              - lvgl.page.show: page_games
-    # ── SIMON — watch the colour sequence, repeat it; it grows one step each round ─
-    - id: page_simon
-      bg_color: 0x05080b
-      bg_opa: COVER
-      widgets:
-        - button: { id: sq0, x: 20,  y: 44,  width: 130, height: 88, radius: 10, bg_color: 0x1f6b3a, on_click: [ { script.execute: { id: simon_tap, tap: 0 } } ] }
-        - button: { id: sq1, x: 170, y: 44,  width: 130, height: 88, radius: 10, bg_color: 0x6b1f1f, on_click: [ { script.execute: { id: simon_tap, tap: 1 } } ] }
-        - button: { id: sq2, x: 20,  y: 140, width: 130, height: 88, radius: 10, bg_color: 0x1f3a6b, on_click: [ { script.execute: { id: simon_tap, tap: 2 } } ] }
-        - button: { id: sq3, x: 170, y: 140, width: 130, height: 88, radius: 10, bg_color: 0x6b5f1f, on_click: [ { script.execute: { id: simon_tap, tap: 3 } } ] }
-        - label: { id: simon_msg, text: "WATCH", text_font: text_font, styles: accent_txt, align: TOP_MID, y: 12 }
-        - button:
-            id: simon_back
-            x: 6
-            y: 6
-            width: 52
-            height: 28
-            radius: 8
-            bg_color: 0x05080b
-            widgets:
-              - label: { text: "<", text_font: text_font, text_color: 0x33E6C8, align: CENTER }
-            on_click:
-              - globals.set: { id: g_card, value: "4" }
-              - lvgl.page.show: page_games
-    # ── ROCK · PAPER · SCISSORS — beat the robot (it nods when it wins) ───────────
-    - id: page_rps
-      bg_color: 0x05080b
-      bg_opa: COVER
-      widgets:
-        - label: { id: rps_msg, text: "Pick one!", text_font: text_font, text_color: 0xFFFFFF, align: CENTER, y: -12 }
-        - button:
-            id: rps_rock
-            x: 16
-            y: 158
-            width: 92
-            height: 64
-            radius: 10
-            bg_color: 0x14324a
-            widgets:
-              - label: { text: "ROCK", text_font: small_font, text_color: 0xFFFFFF, align: CENTER }
-            on_click:
-              - script.execute: { id: rps_play, me: 0 }
-        - button:
-            id: rps_paper
-            x: 114
-            y: 158
-            width: 92
-            height: 64
-            radius: 10
-            bg_color: 0x14324a
-            widgets:
-              - label: { text: "PAPER", text_font: small_font, text_color: 0xFFFFFF, align: CENTER }
-            on_click:
-              - script.execute: { id: rps_play, me: 1 }
-        - button:
-            id: rps_sciss
-            x: 212
-            y: 158
-            width: 92
-            height: 64
-            radius: 10
-            bg_color: 0x14324a
-            widgets:
-              - label: { text: "SCISSORS", text_font: small_font, text_color: 0xFFFFFF, align: CENTER }
-            on_click:
-              - script.execute: { id: rps_play, me: 2 }
-        - button:
-            id: rps_back
-            x: 6
-            y: 6
-            width: 52
-            height: 28
-            radius: 8
-            bg_color: 0x05080b
-            widgets:
-              - label: { text: "<", text_font: text_font, text_color: 0x33E6C8, align: CENTER }
-            on_click:
-              - globals.set: { id: g_card, value: "4" }
-              - lvgl.page.show: page_games
-    # ── VITALS — the robot's "life" needs (dravix pushes the 0-100 values in real time) ──
-    # ── BREAKOUT — move the paddle with the joystick, clear all the bricks ──
-    - id: page_breakout
-      bg_color: 0x05080b
-      bg_opa: COVER
-      scrollable: false
-      scrollbar_mode: "OFF"
-      widgets:
-        # 8 bricks (4 cols × 2 rows) — bk_mask decides which are still standing
-        - obj: { id: bk_b0, x: 8,   y: 30, width: 72, height: 16, radius: 3, bg_color: 0xff5a52, bg_opa: COVER, border_width: 0 }
-        - obj: { id: bk_b1, x: 84,  y: 30, width: 72, height: 16, radius: 3, bg_color: 0xff5a52, bg_opa: COVER, border_width: 0 }
-        - obj: { id: bk_b2, x: 160, y: 30, width: 72, height: 16, radius: 3, bg_color: 0xff5a52, bg_opa: COVER, border_width: 0 }
-        - obj: { id: bk_b3, x: 236, y: 30, width: 72, height: 16, radius: 3, bg_color: 0xff5a52, bg_opa: COVER, border_width: 0 }
-        - obj: { id: bk_b4, x: 8,   y: 52, width: 72, height: 16, radius: 3, bg_color: 0xffc23d, bg_opa: COVER, border_width: 0 }
-        - obj: { id: bk_b5, x: 84,  y: 52, width: 72, height: 16, radius: 3, bg_color: 0xffc23d, bg_opa: COVER, border_width: 0 }
-        - obj: { id: bk_b6, x: 160, y: 52, width: 72, height: 16, radius: 3, bg_color: 0xffc23d, bg_opa: COVER, border_width: 0 }
-        - obj: { id: bk_b7, x: 236, y: 52, width: 72, height: 16, radius: 3, bg_color: 0xffc23d, bg_opa: COVER, border_width: 0 }
-        # paddle + ball
-        - obj: { id: bk_paddle, x: 132, y: 214, width: 56, height: 8,  radius: 4, bg_color: 0x33E6C8, bg_opa: COVER, border_width: 0 }
-        - obj: { id: bk_ball,   x: 160, y: 170, width: 10, height: 10, radius: 5, bg_color: 0xFFFFFF, bg_opa: COVER, border_width: 0 }
-        # HUD
-        - label: { id: bk_sc,  text: "0", text_font: title_font, text_color: 0xFFFFFF, align: TOP_RIGHT, x: -10, y: 4 }
-        - label: { id: bk_lv,  text: "LIVES 3", text_font: small_font, text_color: 0x8b96a4, align: TOP_MID, y: 8 }
-        - label: { id: bk_msg, text: "",  text_font: title_font, text_color: 0x33E6C8, align: CENTER, y: -10 }
-        - button:
-            id: bk_back
-            x: 6
-            y: 6
-            width: 52
-            height: 28
-            radius: 8
-            bg_color: 0x05080b
-            widgets:
-              - label: { text: "<", text_font: text_font, text_color: 0x33E6C8, align: CENTER }
-            on_click:
-              - globals.set: { id: bk_alive, value: "false" }
-              - globals.set: { id: g_card, value: "0" }
-              - lvgl.page.show: page_face
-    # ── SNAKE — joystick steers a continuous heading; eat the food, don't hit walls/yourself ──
-    - id: page_snake
-      bg_color: 0x0a1420
-      bg_opa: COVER
-      scrollable: false
-      scrollbar_mode: "OFF"
-      widgets:
-        - obj: { id: sn_food, x: 217, y: 137, width: 20, height: 20, radius: 10, bg_color: 0xff5a52, bg_opa: COVER, border_width: 0 }
-        - obj: { id: sn_s0,  x: 0, y: 40, width: 22, height: 22, radius: 5, bg_color: 0x5dffa0, bg_opa: COVER, border_width: 0 }
-        - obj: { id: sn_s1,  x: 0, y: 40, width: 22, height: 22, radius: 5, bg_color: 0x33E6C8, bg_opa: COVER, border_width: 0 }
-        - obj: { id: sn_s2,  x: 0, y: 40, width: 22, height: 22, radius: 5, bg_color: 0x33E6C8, bg_opa: COVER, border_width: 0 }
-        - obj: { id: sn_s3,  x: 0, y: 40, width: 22, height: 22, radius: 5, bg_color: 0x33E6C8, bg_opa: COVER, border_width: 0 }
-        - obj: { id: sn_s4,  x: 0, y: 40, width: 22, height: 22, radius: 5, bg_color: 0x33E6C8, bg_opa: COVER, border_width: 0, hidden: true }
-        - obj: { id: sn_s5,  x: 0, y: 40, width: 22, height: 22, radius: 5, bg_color: 0x33E6C8, bg_opa: COVER, border_width: 0, hidden: true }
-        - obj: { id: sn_s6,  x: 0, y: 40, width: 22, height: 22, radius: 5, bg_color: 0x33E6C8, bg_opa: COVER, border_width: 0, hidden: true }
-        - obj: { id: sn_s7,  x: 0, y: 40, width: 22, height: 22, radius: 5, bg_color: 0x33E6C8, bg_opa: COVER, border_width: 0, hidden: true }
-        - obj: { id: sn_s8,  x: 0, y: 40, width: 22, height: 22, radius: 5, bg_color: 0x33E6C8, bg_opa: COVER, border_width: 0, hidden: true }
-        - obj: { id: sn_s9,  x: 0, y: 40, width: 22, height: 22, radius: 5, bg_color: 0x33E6C8, bg_opa: COVER, border_width: 0, hidden: true }
-        - obj: { id: sn_s10, x: 0, y: 40, width: 22, height: 22, radius: 5, bg_color: 0x33E6C8, bg_opa: COVER, border_width: 0, hidden: true }
-        - obj: { id: sn_s11, x: 0, y: 40, width: 22, height: 22, radius: 5, bg_color: 0x33E6C8, bg_opa: COVER, border_width: 0, hidden: true }
-        - label: { id: sn_lbl, text: "0", text_font: title_font, text_color: 0x8b96a4, align: TOP_RIGHT, x: -10, y: 4 }
-        - label: { id: sn_msg, text: "", text_font: title_font, text_color: 0x33E6C8, align: CENTER, y: -8 }
-        - button:
-            id: sn_back
-            x: 6
-            y: 6
-            width: 48
-            height: 26
-            radius: 8
-            bg_color: 0x0a1420
-            widgets:
-              - label: { text: "<", text_font: text_font, text_color: 0x33E6C8, align: CENTER }
-            on_click:
-              - globals.set: { id: sn_alive, value: "false" }
-              - globals.set: { id: g_card, value: "0" }
-              - lvgl.page.show: page_face
-    # ── PONG — joystick (up/down) moves your paddle; beat the robot to 7 ──
-    - id: page_pong
-      bg_color: 0x05080b
-      bg_opa: COVER
-      scrollable: false
-      scrollbar_mode: "OFF"
-      widgets:
-        - obj: { id: pg_pl,   x: 8,   y: 98,  width: 7, height: 44, radius: 3, bg_color: 0x33E6C8, bg_opa: COVER, border_width: 0 }
-        - obj: { id: pg_pr,   x: 305, y: 98,  width: 7, height: 44, radius: 3, bg_color: 0xff9eb5, bg_opa: COVER, border_width: 0 }
-        - obj: { id: pg_ball, x: 160, y: 120, width: 9, height: 9,  radius: 4, bg_color: 0xFFFFFF, bg_opa: COVER, border_width: 0 }
-        - label: { id: pg_sc,  text: "0 : 0", text_font: title_font, text_color: 0x8b96a4, align: TOP_MID, y: 6 }
-        - label: { id: pg_msg, text: "",      text_font: title_font, text_color: 0x33E6C8, align: CENTER, y: -20 }
-        - button:
-            id: pg_back
-            x: 6
-            y: 6
-            width: 48
-            height: 26
-            radius: 8
-            bg_color: 0x05080b
-            widgets:
-              - label: { text: "<", text_font: text_font, text_color: 0x33E6C8, align: CENTER }
-            on_click:
-              - globals.set: { id: pg_alive, value: "false" }
-              - globals.set: { id: g_card, value: "0" }
-              - lvgl.page.show: page_face
     # ── PERMISSIONS log — the last few AI-agent decisions (opened from the "Permissions log" button) ──
     - id: page_perms
       bg_color: 0x05080b
@@ -2543,85 +1923,6 @@ lvgl:
             bg_color: 0x05080b
             widgets:
               - label: { text: "<", text_font: text_font, text_color: 0x33E6C8, align: CENTER }
-            on_click:
-              - globals.set: { id: g_card, value: "0" }
-              - lvgl.page.show: page_face
-    # ── HIGH SCORES table — the best each game has seen (persists across reboots) ──
-    - id: page_scores
-      bg_color: 0x05080b
-      bg_opa: COVER
-      scrollable: false
-      scrollbar_mode: "OFF"
-      widgets:
-        - label: { text: "HIGH SCORES", text_font: title_font, styles: accent_txt, align: TOP_MID, y: 6 }
-        - button:
-            id: btn_sc_reset
-            x: 248
-            y: 6
-            width: 66
-            height: 28
-            radius: 8
-            bg_color: 0x3a1414
-            widgets:
-              - label: { text: "RESET", text_font: small_font, text_color: 0xff7b7b, align: CENTER }
-            on_click:
-              - script.execute: reset_scores
-        - label: { id: sc_catch,    text: "Catch:  0",      text_font: small_font, text_color: 0xFFFFFF, align: TOP_LEFT, x: 30, y: 48 }
-        - label: { id: sc_flappy,   text: "Flappy:  0",     text_font: small_font, text_color: 0xFFFFFF, align: TOP_LEFT, x: 30, y: 78 }
-        - label: { id: sc_breakout, text: "Breakout:  0",   text_font: small_font, text_color: 0xFFFFFF, align: TOP_LEFT, x: 30, y: 108 }
-        - label: { id: sc_simon,    text: "Simon:  0",      text_font: small_font, text_color: 0xFFFFFF, align: TOP_LEFT, x: 30, y: 138 }
-        - label: { id: sc_react,    text: "React:  —",      text_font: small_font, text_color: 0xFFFFFF, align: TOP_LEFT, x: 30, y: 168 }
-        - label: { id: sc_rps,      text: "R-P-S wins:  0", text_font: small_font, text_color: 0xFFFFFF, align: TOP_LEFT, x: 30, y: 198 }
-        - button:
-            id: btn_sc_back
-            x: 6
-            y: 6
-            width: 52
-            height: 28
-            radius: 8
-            bg_color: 0x05080b
-            widgets:
-              - label: { text: "<", text_font: text_font, text_color: 0x33E6C8, align: CENTER }
-            on_click:
-              - lvgl.page.show: page_games
-    # ── LED COLOUR PICKER — tap a swatch to set the LED bar (opened from the "LED colours" button) ──
-    - id: page_colors
-      bg_color: 0x05080b
-      bg_opa: COVER
-      scrollable: false
-      scrollbar_mode: "OFF"
-      widgets:
-        - label: { text: "LED COLOUR", text_font: title_font, styles: accent_txt, align: TOP_MID, y: 6 }
-        - button: { id: col_red,    x: 10,  y: 46,  width: 68, height: 52, radius: 8, bg_color: 0xff2a2a, on_click: [ { light.turn_on: { id: stackchan_light_bar, brightness: 100%, red: 100%, green: 0%,  blue: 0%,   effect: "None" } } ] }
-        - button: { id: col_orange, x: 86,  y: 46,  width: 68, height: 52, radius: 8, bg_color: 0xff8000, on_click: [ { light.turn_on: { id: stackchan_light_bar, brightness: 100%, red: 100%, green: 45%, blue: 0%,   effect: "None" } } ] }
-        - button: { id: col_yellow, x: 162, y: 46,  width: 68, height: 52, radius: 8, bg_color: 0xffdd00, on_click: [ { light.turn_on: { id: stackchan_light_bar, brightness: 100%, red: 100%, green: 80%, blue: 0%,   effect: "None" } } ] }
-        - button: { id: col_green,  x: 238, y: 46,  width: 68, height: 52, radius: 8, bg_color: 0x22cc33, on_click: [ { light.turn_on: { id: stackchan_light_bar, brightness: 100%, red: 0%,   green: 85%, blue: 12%,  effect: "None" } } ] }
-        - button: { id: col_cyan,   x: 10,  y: 104, width: 68, height: 52, radius: 8, bg_color: 0x00dddd, on_click: [ { light.turn_on: { id: stackchan_light_bar, brightness: 100%, red: 0%,   green: 85%, blue: 85%,  effect: "None" } } ] }
-        - button: { id: col_blue,   x: 86,  y: 104, width: 68, height: 52, radius: 8, bg_color: 0x2266ff, on_click: [ { light.turn_on: { id: stackchan_light_bar, brightness: 100%, red: 15%,  green: 30%, blue: 100%, effect: "None" } } ] }
-        - button: { id: col_purple, x: 162, y: 104, width: 68, height: 52, radius: 8, bg_color: 0x9933ff, on_click: [ { light.turn_on: { id: stackchan_light_bar, brightness: 100%, red: 55%,  green: 15%, blue: 100%, effect: "None" } } ] }
-        - button: { id: col_pink,   x: 238, y: 104, width: 68, height: 52, radius: 8, bg_color: 0xff55aa, on_click: [ { light.turn_on: { id: stackchan_light_bar, brightness: 100%, red: 100%, green: 30%, blue: 55%,  effect: "None" } } ] }
-        - button:
-            id: col_off
-            x: 10
-            y: 168
-            width: 220
-            height: 46
-            radius: 8
-            bg_color: 0x1a2233
-            widgets:
-              - label: { text: "OFF", text_font: text_font, text_color: 0x8b96a4, align: CENTER }
-            on_click:
-              - light.turn_off: stackchan_light_bar
-        - button:
-            id: col_back
-            x: 238
-            y: 168
-            width: 68
-            height: 46
-            radius: 8
-            bg_color: 0x05080b
-            widgets:
-              - label: { text: "<", text_font: title_font, text_color: 0x33E6C8, align: CENTER }
             on_click:
               - globals.set: { id: g_card, value: "0" }
               - lvgl.page.show: page_face
@@ -2752,6 +2053,121 @@ lvgl:
               - lvgl.page.show: page_face
 
 script:
+  - id: render_cards
+    # the 3 entity cards: titles + the 12 Mushroom rows. Called on entering a card page and every 5s WHILE one shows.
+    then:
+      - lvgl.label.update: { id: lbl_c1_title, text: !lambda 'return id(t_c1_title).state;' }
+      - lvgl.label.update: { id: lbl_c2_title, text: !lambda 'return id(t_c2_title).state;' }
+      - lvgl.label.update: { id: lbl_c3_title, text: !lambda 'return id(t_c3_title).state;' }
+      # ── MUSHROOM CARD ROWS — one pass renders all 12 rows. dravix sends one line per
+      #    entity: "[x,y|]K|name|state" — K picks the lovelace-mushroom accent colour,
+      #    name/state fill the two stacked labels, "x,y|" places the row as a mini-card.
+      #    Legacy bodies (plain "name  STATE" lines) still render — all text in line 1.
+      - lambda: |-
+          auto colour = [](char k) -> uint32_t {
+            switch (k) {
+              case 'l': return 0xFFB300;  // light on / triggered sensor - amber
+              case 's': return 0x448AFF;  // switch family on - blue
+              case 'c': return 0xAB47BC;  // cover open - purple
+              case 'K': return 0xEF5350;  // lock OPEN - red, needs attention
+              case 'k': return 0x66BB6A;  // lock locked - green
+              case 't': return 0xFF7043;  // climate active - orange
+              case 'm': return 0x5C6BC0;  // media playing - indigo
+              case 'b': return 0x26A69A;  // script / scene / button - teal
+              case 'o': return 0x555b66;  // off / idle - grey
+              default:  return 0x4a90d9;  // 'n' sensors / info - blue
+            }
+          };
+          auto row = [&](lv_obj_t* btn, lv_obj_t* tint, lv_obj_t* dot, lv_obj_t* nm, lv_obj_t* stt,
+                         const std::string& body, int k, int defy) {
+            size_t s = 0;
+            for (int i = 0; i < k; i++) {
+              size_t p = body.find(10, s);
+              if (p == std::string::npos) { lv_obj_add_flag(btn, LV_OBJ_FLAG_HIDDEN); return; }
+              s = p + 1;
+            }
+            size_t e = body.find(10, s);
+            std::string line = body.substr(s, e == std::string::npos ? std::string::npos : e - s);
+            if (line.empty()) { lv_obj_add_flag(btn, LV_OBJ_FLAG_HIDDEN); return; }
+            lv_obj_clear_flag(btn, LV_OBJ_FLAG_HIDDEN);
+            // optional free-position prefix "x,y|" (comma before the first bar = a position)
+            size_t bar = line.find('|');
+            size_t comma = line.find(',');
+            if (bar != std::string::npos && comma != std::string::npos && comma < bar) {
+              lv_obj_set_size(btn, 150, 48);
+              lv_obj_set_pos(btn, atoi(line.substr(0, comma).c_str()),
+                                  atoi(line.substr(comma + 1, bar - comma - 1).c_str()));
+              line = line.substr(bar + 1);
+            } else {
+              lv_obj_set_size(btn, 300, 46);
+              lv_obj_set_pos(btn, 10, defy);
+            }
+            // "K|name|state" (a legacy line without the key shows whole-line as the name)
+            char key = 'n';
+            std::string name = line, st = "";
+            if (line.size() > 1 && line[1] == '|') {
+              key = line[0];
+              size_t b2 = line.find('|', 2);
+              name = line.substr(2, b2 == std::string::npos ? std::string::npos : b2 - 2);
+              if (b2 != std::string::npos) st = line.substr(b2 + 1);
+            }
+            lv_label_set_text(nm, name.c_str());
+            lv_label_set_text(stt, st.c_str());
+            uint32_t col = colour(key);
+            lv_obj_set_style_bg_color(tint, lv_color_hex(col), 0);
+            lv_obj_set_style_bg_color(dot, lv_color_hex(col), 0);
+            lv_obj_set_style_bg_opa(tint, key == 'o' ? 28 : 64, 0);   // dimmer halo when off
+          };
+          std::string body1 = id(t_c1_body).state;
+          std::string body2 = id(t_c2_body).state;
+          std::string body3 = id(t_c3_body).state;
+          row(id(c1_r0), id(chip_c1_r0), id(dot_c1_r0), id(lbl_c1_r0), id(st_c1_r0), body1, 0, 38);
+          row(id(c1_r1), id(chip_c1_r1), id(dot_c1_r1), id(lbl_c1_r1), id(st_c1_r1), body1, 1, 88);
+          row(id(c1_r2), id(chip_c1_r2), id(dot_c1_r2), id(lbl_c1_r2), id(st_c1_r2), body1, 2, 138);
+          row(id(c1_r3), id(chip_c1_r3), id(dot_c1_r3), id(lbl_c1_r3), id(st_c1_r3), body1, 3, 188);
+          row(id(c2_r0), id(chip_c2_r0), id(dot_c2_r0), id(lbl_c2_r0), id(st_c2_r0), body2, 0, 38);
+          row(id(c2_r1), id(chip_c2_r1), id(dot_c2_r1), id(lbl_c2_r1), id(st_c2_r1), body2, 1, 88);
+          row(id(c2_r2), id(chip_c2_r2), id(dot_c2_r2), id(lbl_c2_r2), id(st_c2_r2), body2, 2, 138);
+          row(id(c2_r3), id(chip_c2_r3), id(dot_c2_r3), id(lbl_c2_r3), id(st_c2_r3), body2, 3, 188);
+          row(id(c3_r0), id(chip_c3_r0), id(dot_c3_r0), id(lbl_c3_r0), id(st_c3_r0), body3, 0, 38);
+          row(id(c3_r1), id(chip_c3_r1), id(dot_c3_r1), id(lbl_c3_r1), id(st_c3_r1), body3, 1, 88);
+          row(id(c3_r2), id(chip_c3_r2), id(dot_c3_r2), id(lbl_c3_r2), id(st_c3_r2), body3, 2, 138);
+          row(id(c3_r3), id(chip_c3_r3), id(dot_c3_r3), id(lbl_c3_r3), id(st_c3_r3), body3, 3, 188);
+  - id: render_vitals
+    # the 4 vitals bars. Called on entering the page and every 5s while it shows.
+    then:
+      # vitals bars (dravix pushes the 0-100 values into the number entities)
+      - lvgl.bar.update: { id: bar_energy, value: !lambda 'return (int) id(n_vital_energy).state;' }
+      - lvgl.bar.update: { id: bar_food,   value: !lambda 'return (int) id(n_vital_food).state;' }
+      - lvgl.bar.update: { id: bar_fun,    value: !lambda 'return (int) id(n_vital_fun).state;' }
+      - lvgl.bar.update: { id: bar_calm,   value: !lambda 'return (int) id(n_vital_calm).state;' }
+  - id: render_climate
+    # the climate page labels + mode pills. Called on entering the page and every 5s while it shows.
+    then:
+      # climate page — dravix keeps these slots fresh from the configured AC
+      - lvgl.label.update: { id: lbl_clim_name, text: !lambda 'return id(t_clim_name).state.empty() ? std::string("No AC configured") : id(t_clim_name).state;' }
+      - lvgl.label.update: { id: lbl_clim_set,  text: !lambda 'return id(t_clim_set).state;' }
+      # info slot = "mode|display text" (add-on 0.0.90+): strip the mode for display and
+      # light the ACTIVE mode pill Mushroom-style (tinted fill + border in its accent).
+      - lambda: |-
+          std::string raw = id(t_clim_info).state;
+          std::string mode = "", info = raw;
+          size_t bar = raw.find('|');
+          if (bar != std::string::npos) { mode = raw.substr(0, bar); info = raw.substr(bar + 1); }
+          lv_label_set_text(id(lbl_clim_info), info.c_str());
+          auto pill = [&](lv_obj_t* b, const char* m, uint32_t col) {
+            bool on = (mode == m) || (strcmp(m, "auto") == 0 && mode == "heat_cool");
+            lv_obj_set_style_bg_color(b, on ? lv_color_hex(col) : lv_color_hex(0x1c222c), 0);
+            lv_obj_set_style_bg_opa(b, on ? 64 : 255, 0);
+            lv_obj_set_style_border_width(b, on ? 2 : 0, 0);
+            lv_obj_set_style_border_color(b, lv_color_hex(col), 0);
+          };
+          pill(id(clim_cool), "cool", 0x448AFF);
+          pill(id(clim_heat), "heat", 0xFF7043);
+          pill(id(clim_fan),  "fan_only", 0x26A69A);
+          pill(id(clim_dry),  "dry", 0xFFB300);
+          pill(id(clim_auto), "auto", 0x66BB6A);
+          pill(id(clim_off),  "off", 0xEF5350);
   # ── SENSOR HANDLERS — one body per signal, shared by BOTH prefix imports (see the
   #    sensor/text_sensor sections). Keeping the logic here instead of inline means the
   #    fresh-flash entity and the renamed-device entity can never drift apart.
@@ -3659,18 +3075,6 @@ script:
           condition: { lambda: 'return !id(g_voice);' }
           then:
             - script.execute: restore_leds
-  # ── RESET SCORES — zero the leaderboard (from the SCORES page or Home Assistant).
-  - id: reset_scores
-    then:
-      - lambda: |-
-          id(hs_catch) = 0; id(hs_flappy) = 0; id(hs_breakout) = 0;
-          id(hs_simon) = 0; id(hs_react) = 0; id(hs_rps) = 0;
-      - lvgl.label.update: { id: sc_catch,    text: "Catch:  0" }
-      - lvgl.label.update: { id: sc_flappy,   text: "Flappy:  0" }
-      - lvgl.label.update: { id: sc_breakout, text: "Breakout:  0" }
-      - lvgl.label.update: { id: sc_simon,    text: "Simon:  0" }
-      - lvgl.label.update: { id: sc_react,    text: "React:  —" }
-      - lvgl.label.update: { id: sc_rps,      text: "R-P-S wins:  0" }
   # ── DANCE 💃 — bops its head + paws to a beat with rainbow LEDs (from HA / the dashboard).
   - id: dance
     mode: single
@@ -4056,16 +3460,15 @@ script:
   # Show the current "home screen" (0 = face, 1..3 = cards, 4 = the game).
   - id: show_card
     then:
-      - if: { condition: { lambda: 'return id(g_card) == 1;' }, then: [ { lvgl.page.show: page_card1 } ] }
-      - if: { condition: { lambda: 'return id(g_card) == 2;' }, then: [ { lvgl.page.show: page_card2 } ] }
-      - if: { condition: { lambda: 'return id(g_card) == 3;' }, then: [ { lvgl.page.show: page_card3 } ] }
-      - if: { condition: { lambda: 'return id(g_card) == 4;' }, then: [ { lvgl.page.show: page_games } ] }
-      - if: { condition: { lambda: 'return id(g_card) == 5;' }, then: [ { lvgl.page.show: page_vitals } ] }
-      - if: { condition: { lambda: 'return id(g_card) == 6;' }, then: [ { lvgl.page.show: page_climate } ] }
-      # slot 7 — the 🌐 dashboard (only reachable when a Dashboard URL is set; the swipe
-      # handlers use a modulus of 8 then, 7 otherwise, so this stays skipped when empty)
-      - if: { condition: { lambda: 'return id(g_card) == 7;' }, then: [ { lvgl.page.show: page_dash }, { script.execute: dash_enter } ] }
-      - if: { condition: { lambda: 'return id(g_card) <= 0 || id(g_card) > 7;' }, then: [ { lvgl.page.show: page_face } ] }
+      - if: { condition: { lambda: 'return id(g_card) == 1;' }, then: [ { lvgl.page.show: page_card1 }, { script.execute: render_cards } ] }
+      - if: { condition: { lambda: 'return id(g_card) == 2;' }, then: [ { lvgl.page.show: page_card2 }, { script.execute: render_cards } ] }
+      - if: { condition: { lambda: 'return id(g_card) == 3;' }, then: [ { lvgl.page.show: page_card3 }, { script.execute: render_cards } ] }
+      - if: { condition: { lambda: 'return id(g_card) == 4;' }, then: [ { lvgl.page.show: page_vitals }, { script.execute: render_vitals } ] }
+      - if: { condition: { lambda: 'return id(g_card) == 5;' }, then: [ { lvgl.page.show: page_climate }, { script.execute: render_climate } ] }
+      # slot 6 — the 🌐 dashboard (only reachable when a Dashboard URL is set; the swipe
+      # handlers use a modulus of 7 then, 6 otherwise, so this stays skipped when empty)
+      - if: { condition: { lambda: 'return id(g_card) == 6;' }, then: [ { lvgl.page.show: page_dash }, { script.execute: dash_enter } ] }
+      - if: { condition: { lambda: 'return id(g_card) <= 0 || id(g_card) > 6;' }, then: [ { lvgl.page.show: page_face } ] }
   # Entering the 🌐 dashboard page: pull a fresh screenshot right away, then keep it refreshed.
   - id: dash_enter
     then:
@@ -4290,159 +3693,6 @@ script:
                 blue: !lambda 'return id(led_b);'
           else:
             - light.turn_off: stackchan_light_bar
-  # ── GAME: Reaction — red → (random wait) → green; tap to see your ms ──────────
-  - id: react_start
-    mode: restart
-    then:
-      - globals.set: { id: g_react, value: "0" }
-      - lvgl.widget.update: { id: react_pad, bg_color: 0x8a1c1c }
-      - lvgl.label.update: { id: react_txt, text: "WAIT..." }
-      - delay: !lambda 'return 1200 + (uint32_t)(random_float() * 2800.0f);'
-      - if:
-          condition:
-            and:
-              - lambda: 'return id(g_react) == 0;'
-              - lvgl.page.is_showing: page_react
-          then:
-            - globals.set: { id: g_react, value: "1" }
-            - globals.set: { id: g_react_t, value: !lambda 'return (long) millis();' }
-            - lvgl.widget.update: { id: react_pad, bg_color: 0x14713a }
-            - lvgl.label.update: { id: react_txt, text: "TAP!" }
-  - id: react_tap
-    then:
-      - if:
-          condition: { lambda: 'return id(g_react) == 1;' }   # GREEN → measure
-          then:
-            - globals.set: { id: g_react, value: "2" }
-            - lvgl.widget.update: { id: react_pad, bg_color: 0x123a5a }
-            - lambda: |-
-                long ms = (long) millis() - id(g_react_t);
-                if (id(hs_react) == 0 || ms < id(hs_react)) id(hs_react) = (int) ms;   // best time
-            - lvgl.label.update:
-                id: react_txt
-                text: !lambda |-
-                  long ms = (long) millis() - id(g_react_t);
-                  char b[28]; snprintf(b, sizeof(b), "%ld ms\n(tap to retry)", ms);
-                  return std::string(b);
-          else:
-            - if:
-                condition: { lambda: 'return id(g_react) == 0;' }   # RED → jumped the gun
-                then:
-                  - globals.set: { id: g_react, value: "2" }
-                  - lvgl.widget.update: { id: react_pad, bg_color: 0x123a5a }
-                  - lvgl.label.update: { id: react_txt, text: "too soon!\n(tap to retry)" }
-                else:                                              # result → play again
-                  - script.execute: react_start
-  # ── GAME: Simon — grow-and-repeat the colour sequence ────────────────────────
-  - id: simon_new
-    then:
-      - globals.set: { id: g_slen, value: "0" }
-      - script.execute: simon_add
-  - id: simon_add            # add one random step, then replay the whole sequence
-    then:
-      - lambda: |-
-          if (id(g_slen) < 16) { id(g_sq)[id(g_slen)] = (int)(random_float() * 4.0f); id(g_slen) += 1; }
-      - globals.set: { id: g_sipos, value: "0" }
-      - globals.set: { id: g_saccept, value: "false" }
-      - script.execute: simon_play
-  - id: simon_play
-    mode: restart
-    then:
-      - globals.set: { id: g_spi, value: "0" }
-      - lvgl.label.update: { id: simon_msg, text: "WATCH" }
-      - delay: 600ms
-      - repeat:
-          count: !lambda 'return id(g_slen);'
-          then:
-            - script.execute: { id: simon_flash, q: !lambda 'return id(g_sq)[id(g_spi)];' }
-            - delay: 520ms
-            - globals.set: { id: g_spi, value: !lambda 'return id(g_spi) + 1;' }
-      - globals.set: { id: g_saccept, value: "true" }
-      - lvgl.label.update: { id: simon_msg, text: "YOUR TURN" }
-  - id: simon_flash          # briefly light quadrant q, then restore all four
-    parameters:
-      q: int
-    then:
-      - if: { condition: { lambda: 'return q == 0;' }, then: [ { lvgl.widget.update: { id: sq0, bg_color: 0x5dffa0 } } ] }
-      - if: { condition: { lambda: 'return q == 1;' }, then: [ { lvgl.widget.update: { id: sq1, bg_color: 0xff7b7b } } ] }
-      - if: { condition: { lambda: 'return q == 2;' }, then: [ { lvgl.widget.update: { id: sq2, bg_color: 0x7bb0ff } } ] }
-      - if: { condition: { lambda: 'return q == 3;' }, then: [ { lvgl.widget.update: { id: sq3, bg_color: 0xffe680 } } ] }
-      - delay: 300ms
-      - lvgl.widget.update: { id: sq0, bg_color: 0x1f6b3a }
-      - lvgl.widget.update: { id: sq1, bg_color: 0x6b1f1f }
-      - lvgl.widget.update: { id: sq2, bg_color: 0x1f3a6b }
-      - lvgl.widget.update: { id: sq3, bg_color: 0x6b5f1f }
-  - id: simon_tap
-    parameters:
-      tap: int
-    then:
-      - if:
-          condition: { lambda: 'return id(g_saccept);' }   # ignore taps during playback
-          then:
-            - script.execute: { id: simon_flash, q: !lambda 'return tap;' }
-            - if:
-                condition: { lambda: 'return id(g_sq)[id(g_sipos)] == tap;' }   # right one
-                then:
-                  - globals.set: { id: g_sipos, value: !lambda 'return id(g_sipos) + 1;' }
-                  - if:
-                      condition: { lambda: 'return id(g_sipos) >= id(g_slen);' }   # round done
-                      then:
-                        - globals.set: { id: g_saccept, value: "false" }
-                        - lvgl.label.update: { id: simon_msg, text: "GOOD!" }
-                        - delay: 700ms
-                        - if:
-                            condition:
-                              lvgl.page.is_showing: page_simon
-                            then:
-                              - script.execute: simon_add
-                else:                                                        # wrong → game over
-                  - globals.set: { id: g_saccept, value: "false" }
-                  - lambda: 'if (id(g_slen) - 1 > id(hs_simon)) id(hs_simon) = id(g_slen) - 1;'
-                  - lvgl.label.update:
-                      id: simon_msg
-                      text: !lambda |-
-                        char b[28]; snprintf(b, sizeof(b), "OOPS!  score %d", id(g_slen) - 1);
-                        return std::string(b);
-                  # it feels the loss too — a sympathetic blue + a little slump
-                  - script.execute: { id: led_flash, r: 10, g: 25, b: 100 }
-                  - script.execute: { id: head_nudge, dx: 0, dy: -8 }
-  # ── GAME: Rock-Paper-Scissors — the robot nods when it wins, shakes when it loses
-  - id: rps_play
-    parameters:
-      me: int          # 0 rock · 1 paper · 2 scissors
-    then:
-      - globals.set: { id: g_rps_bot, value: !lambda 'return (int)(random_float() * 3.0f);' }
-      - globals.set:
-          id: g_rps_out
-          value: !lambda |-
-            int bot = id(g_rps_bot);
-            if (me == bot) return 0;                 // tie
-            if ((me + 1) % 3 == bot) return 2;       // robot beats you
-            return 1;                                // you beat the robot
-      - lvgl.label.update:
-          id: rps_msg
-          text: !lambda |-
-            const char* n[] = {"Rock", "Paper", "Scissors"};
-            const char* v[] = {"Tie!", "You win!", "I win!"};
-            char b[52]; snprintf(b, sizeof(b), "You: %s   Me: %s\n%s", n[me], n[id(g_rps_bot)], v[id(g_rps_out)]);
-            return std::string(b);
-      # EMOTIONAL STAKES (the Cozmo magic): it CARES about the result — gloats a
-      # double-nod + green flash when it wins, huffs and turns away when it loses.
-      - if:
-          condition: { lambda: 'return id(g_rps_out) == 2;' }
-          then:
-            - script.execute: { id: led_flash, r: 20, g: 100, b: 30 }
-            - script.execute: head_nod
-            - delay: 1200ms
-            - script.execute: head_nod
-      - if:
-          condition: { lambda: 'return id(g_rps_out) == 1;' }
-          then:
-            - lambda: 'id(hs_rps) += 1;'                          # count your wins
-            - script.execute: { id: led_flash, r: 100, g: 15, b: 0 }
-            - script.execute: head_shake
-            - delay: 900ms
-            - script.execute: { id: head_nudge, dx: -14, dy: 0 }   # ...huffy turn away
 select:
   # ── FACE BACKGROUND — a themed backdrop behind the face. Default None (black). ──
   - platform: template
@@ -4744,7 +3994,7 @@ select:
             - globals.set: { id: g_flash, value: "false" }
             - light.turn_off: stackchan_light_bar
       # GRACEFUL MOTION — the serial-bus servos take a speed setting (the BSP exposes
-      # it; the official remote drives them at 600). Calm modes get slow, gentle moves.
+      # it). Calm modes get slow, gentle moves.
       - number.set:
           id: servo_x_speed
           value: !lambda |-
@@ -4846,46 +4096,6 @@ select:
                   - select.set: { id: robot_mode, option: awake }
 
 interval:
-  # OFFICIAL REMOTE — apply the freshest joystick packet, throttled to ~3Hz so the
-  # SCS9009 serial bus never sees back-to-back writes. Button B = talk toggle.
-  - interval: 150ms
-    then:
-      - if:
-          condition: { lambda: 'return id(g_rc_fresh) && !id(g_rc_busy) && !id(g_sleep);' }
-          then:
-            - lambda: |-
-                id(g_rc_fresh) = false;
-                id(g_rc_busy) = true;
-                id(g_move_ms) = (long) millis();   // remote-driven moves aren't a hand
-                lv_disp_trig_activity(NULL);
-            # button B rising edge → toggle the voice assistant (privacy-respecting)
-            - if:
-                condition: { lambda: 'return id(g_rc_btn) != 0 && id(g_rc_prev) == 0;' }
-                then:
-                  - if:
-                      condition: { lambda: 'return id(g_voice);' }
-                      then:
-                        - voice_assistant.stop
-                      else:
-                        - if:
-                            condition: { switch.is_off: sw_privacy }
-                            then: [ voice_assistant.start ]
-            - lambda: 'id(g_rc_prev) = id(g_rc_btn);'
-            # The joystick only steers the HEAD on the face page. During a game it drives the
-            # game (paddle / aim / walk) — the games read g_rc_yaw/pitch directly — so the head
-            # stays still instead of mirroring your play.
-            - if:
-                condition:
-                  lvgl.page.is_showing: page_face
-                then:
-                  - number.set:
-                      id: servo_x_angle
-                      value: !lambda 'return id(g_rc_yaw);'
-                  - delay: 140ms
-                  - number.set:
-                      id: n_head_pitch
-                      value: !lambda 'return id(g_rc_pitch);'
-            - lambda: 'id(g_rc_busy) = false;'
   # HAND-TURN DETECTION — the serial servos report their true position back into the
   # angle numbers, so when a hand twists the head the numbers change with NO command.
   # Sample both axes every 800ms: a big jump, with no commanded move in the last 4s,
@@ -4905,155 +4115,6 @@ interval:
             id(g_prev_x) = x;
             id(g_prev_y) = y;
           }
-  # FLAPPY physics — ~11 fps is plenty for a 320px playfield. Only ticks while the
-  # game page is showing AND a run is alive; otherwise this is a single cheap check.
-  - interval: 90ms
-    then:
-      - if:
-          condition:
-            and:
-              - lvgl.page.is_showing: page_flappy
-              - lambda: 'return id(fb_alive);'
-          then:
-            - lambda: |-
-                id(fb_vy) += 0.9f;                                  // gravity
-                if (id(fb_vy) > 7.0f) id(fb_vy) = 7.0f;
-                id(fb_y) += id(fb_vy);
-                id(fb_px) -= 6;                                     // pipe scrolls left
-                if (id(fb_px) < -40) {                              // passed → recycle + score
-                  id(fb_px) = 330;
-                  id(fb_gap) = 40 + (int)(random_float() * 100.0f); // gap top: 40..140 (gap = 84px)
-                  id(fb_score) += 1;
-                }
-                // collision: bird box x 60..86; pipes at fb_px..fb_px+34; gap fb_gap..fb_gap+84
-                bool hit = (id(fb_y) < 34.0f) || (id(fb_y) > 214.0f);
-                if (id(fb_px) < 86 && id(fb_px) + 34 > 60) {
-                  if (id(fb_y) < id(fb_gap) || id(fb_y) + 26.0f > id(fb_gap) + 84.0f) hit = true;
-                }
-                if (hit) id(fb_alive) = false;
-            - lvgl.widget.update: { id: fb_bird, y: !lambda 'return (int) id(fb_y);' }
-            - lvgl.widget.update: { id: fb_top, x: !lambda 'return id(fb_px);', height: !lambda 'return id(fb_gap);' }
-            - lvgl.widget.update: { id: fb_bot, x: !lambda 'return id(fb_px);', y: !lambda 'return id(fb_gap) + 84;' }
-            - lvgl.label.update: { id: fb_sc, text: !lambda 'char b[8]; snprintf(b, sizeof(b), "%d", id(fb_score)); return std::string(b);' }
-            - if:
-                condition: { lambda: 'return !id(fb_alive);' }
-                then:
-                  - lambda: 'if (id(fb_score) > id(hs_flappy)) id(hs_flappy) = id(fb_score);'
-                  - lvgl.label.update: { id: fb_lbl, text: "GAME OVER" }
-                  - script.execute: { id: led_flash, r: 10, g: 25, b: 100 }   # a sad blue
-                  - script.execute: head_shake
-  # BREAKOUT physics — ~25 fps. Joystick paddle (read DIRECTLY, no servo → no delay).
-  # Ticks only while the page shows AND a run is alive; otherwise a single cheap check.
-  - interval: 40ms
-    then:
-      - if:
-          condition:
-            and:
-              - lvgl.page.is_showing: page_breakout
-              - lambda: 'return id(bk_alive);'
-          then:
-            - lambda: |-
-                // paddle follows the ESP-NOW joystick (g_rc_yaw ∈ ±164)
-                int px = 160 + (int) id(g_rc_yaw) - 28;
-                id(bk_px) = px < 2 ? 2 : (px > 262 ? 262 : px);
-                // move the ball
-                id(bk_bx) += id(bk_vx);
-                id(bk_by) += id(bk_vy);
-                // walls
-                if (id(bk_bx) < 2)   { id(bk_bx) = 2;   id(bk_vx) =  fabsf(id(bk_vx)); }
-                if (id(bk_bx) > 308) { id(bk_bx) = 308; id(bk_vx) = -fabsf(id(bk_vx)); }
-                if (id(bk_by) < 24)  { id(bk_by) = 24;  id(bk_vy) =  fabsf(id(bk_vy)); }
-                // paddle bounce (paddle top y=214, 56 wide)
-                if (id(bk_vy) > 0 && id(bk_by) + 10 >= 214 && id(bk_by) <= 220
-                    && id(bk_bx) + 10 >= id(bk_px) && id(bk_bx) <= id(bk_px) + 56) {
-                  id(bk_vy) = -fabsf(id(bk_vy));
-                  id(bk_vx) += (id(bk_bx) + 5 - (id(bk_px) + 28)) * 0.05f;   // put english on it
-                  id(bk_ev) = 2;                                             // paddle save
-                }
-                // brick hit — grid 4×2 (cols step 76 from x8; rows y30 & y52)
-                int cx = (int) id(bk_bx) + 5, cy = (int) id(bk_by) + 5;
-                if (cy >= 30 && cy <= 68) {
-                  int col = (cx - 8) / 76, row = (cy - 30) / 22;
-                  if (col >= 0 && col < 4 && row >= 0 && row < 2) {
-                    int bi = row * 4 + col;
-                    if (id(bk_mask) & (1 << bi)) {
-                      id(bk_mask) &= ~(1 << bi);
-                      id(bk_vy) = -id(bk_vy);
-                      id(bk_score) += 1;
-                      id(bk_ev) = 1;                                    // smashed a brick
-                    }
-                  }
-                }
-                // miss → lose a life; empty mask → you cleared the board
-                if (id(bk_by) > 236) {
-                  id(bk_lives) -= 1;
-                  id(bk_ev) = 3;                                             // the ball beat you
-                  if (id(bk_lives) <= 0) id(bk_alive) = false;
-                  else { id(bk_bx) = 160; id(bk_by) = 170; id(bk_vx) = 3; id(bk_vy) = -3.4f; }
-                }
-                if (id(bk_mask) == 0) id(bk_alive) = false;
-            - lvgl.widget.update: { id: bk_ball,   x: !lambda 'return (int) id(bk_bx);', y: !lambda 'return (int) id(bk_by);' }
-            - lvgl.widget.update: { id: bk_paddle, x: !lambda 'return id(bk_px);' }
-            - lvgl.label.update:  { id: bk_sc, text: !lambda 'char b[8]; snprintf(b, sizeof(b), "%d", id(bk_score)); return std::string(b);' }
-            - if: { condition: { lambda: 'return ((id(bk_mask) >> 0) & 1) != 0;' }, then: [ { lvgl.widget.show: bk_b0 } ], else: [ { lvgl.widget.hide: bk_b0 } ] }
-            - if: { condition: { lambda: 'return ((id(bk_mask) >> 1) & 1) != 0;' }, then: [ { lvgl.widget.show: bk_b1 } ], else: [ { lvgl.widget.hide: bk_b1 } ] }
-            - if: { condition: { lambda: 'return ((id(bk_mask) >> 2) & 1) != 0;' }, then: [ { lvgl.widget.show: bk_b2 } ], else: [ { lvgl.widget.hide: bk_b2 } ] }
-            - if: { condition: { lambda: 'return ((id(bk_mask) >> 3) & 1) != 0;' }, then: [ { lvgl.widget.show: bk_b3 } ], else: [ { lvgl.widget.hide: bk_b3 } ] }
-            - if: { condition: { lambda: 'return ((id(bk_mask) >> 4) & 1) != 0;' }, then: [ { lvgl.widget.show: bk_b4 } ], else: [ { lvgl.widget.hide: bk_b4 } ] }
-            - if: { condition: { lambda: 'return ((id(bk_mask) >> 5) & 1) != 0;' }, then: [ { lvgl.widget.show: bk_b5 } ], else: [ { lvgl.widget.hide: bk_b5 } ] }
-            - if: { condition: { lambda: 'return ((id(bk_mask) >> 6) & 1) != 0;' }, then: [ { lvgl.widget.show: bk_b6 } ], else: [ { lvgl.widget.hide: bk_b6 } ] }
-            - if: { condition: { lambda: 'return ((id(bk_mask) >> 7) & 1) != 0;' }, then: [ { lvgl.widget.show: bk_b7 } ], else: [ { lvgl.widget.hide: bk_b7 } ] }
-            # lives readout — turns red on your last ball
-            - lvgl.label.update:
-                id: bk_lv
-                text: !lambda 'char b[12]; snprintf(b, sizeof(b), "LIVES %d", id(bk_lives)); return std::string(b);'
-                text_color: !lambda 'return id(bk_lives) <= 1 ? lv_color_hex(0xFF5555) : lv_color_hex(0x8b96a4);'
-            # per-event JUICE — LED + an 8-bit beep on every hit (beeps respect "Robot
-            # sounds" + quiet/night like every other sound); head shake when the ball beats you
-            - if:
-                condition: { lambda: 'return id(bk_ev) == 1;' }
-                then:
-                  - script.execute: { id: led_flash, r: 0, g: 90, b: 80 }                # brick → cyan
-                  - if:
-                      condition: { lambda: 'return id(sw_sfx).state && !id(g_quiet) && !id(g_night);' }
-                      then: [ { rtttl.play: "bk:d=16,o=7,b=220:c" } ]                     # bright blip
-            - if:
-                condition: { lambda: 'return id(bk_ev) == 2;' }
-                then:
-                  - script.execute: { id: led_flash, r: 55, g: 55, b: 15 }               # paddle → soft
-                  - if:
-                      condition: { lambda: 'return id(sw_sfx).state && !id(g_quiet) && !id(g_night);' }
-                      then: [ { rtttl.play: "bk:d=16,o=6,b=220:g" } ]                     # bloop
-            - if:
-                condition: { lambda: 'return id(bk_ev) == 3;' }
-                then:
-                  - script.execute: { id: led_flash, r: 100, g: 8, b: 8 }                # hit → red
-                  - script.execute: head_shake
-                  - if:
-                      condition: { lambda: 'return id(sw_sfx).state && !id(g_quiet) && !id(g_night);' }
-                      then: [ { rtttl.play: "bk:d=8,o=4,b=150:c,a#" } ]                   # sad buzz down
-            - lambda: 'id(bk_ev) = 0;'
-            - if:
-                condition: { lambda: 'return !id(bk_alive);' }
-                then:
-                  - lambda: 'if (id(bk_score) > id(hs_breakout)) id(hs_breakout) = id(bk_score);'
-                  - if:
-                      condition: { lambda: 'return id(bk_mask) == 0;' }
-                      then:
-                        - lvgl.label.update: { id: bk_msg, text: "YOU WIN!" }
-                        - script.execute: { id: led_flash, r: 20, g: 100, b: 30 }        # win → green
-                        - script.execute: head_nod                                        # a happy nod
-                        - if:
-                            condition: { lambda: 'return id(sw_sfx).state && !id(g_quiet) && !id(g_night);' }
-                            then: [ { rtttl.play: "win:d=8,o=6,b=180:c,e,g,c7" } ]        # victory fanfare
-                        - script.execute: clap                                            # 👏 claps for you
-                      else:
-                        - lvgl.label.update: { id: bk_msg, text: "GAME OVER" }
-                        - script.execute: { id: led_flash, r: 100, g: 8, b: 8 }           # lose → red
-                        - script.execute: head_shake
-                        - if:
-                            condition: { lambda: 'return id(sw_sfx).state && !id(g_quiet) && !id(g_night);' }
-                            then: [ { rtttl.play: "lose:d=8,o=5,b=120:g,e,c,c4" } ]       # sad descent
   # SPONTANEOUS SNACK — every so often, while you're on the face and it's awake + idle, the
   # robot gets peckish and eats a little treat on its own (Ropet/Tamagotchi charm).
   - interval: 113s
@@ -5070,64 +4131,6 @@ interval:
                 condition: { lambda: 'return random_float() < 0.5;' }
                 then: [ { script.execute: eat } ]
                 else: [ { script.execute: drink } ]
-  # PONG physics — ~25 fps. Joystick pitch moves your paddle; the robot AI tracks the ball
-  # but is capped at 3 px/frame so it's beatable. Only ticks while the page shows + alive.
-  - interval: 40ms
-    then:
-      - if:
-          condition:
-            and:
-              - lvgl.page.is_showing: page_pong
-              - lambda: 'return id(pg_alive);'
-          then:
-            - lambda: |-
-                // your paddle follows the joystick pitch (g_rc_pitch ∈ 158..260)
-                int py = (int) ((id(g_rc_pitch) - 158.0f) * 1.92f);
-                id(pg_py) = py < 2 ? 2 : (py > 194 ? 194 : py);
-                // robot AI: chase the ball, but capped at 3 px/frame
-                int target = (int) id(pg_by) - 18;
-                if (target < 2) target = 2; else if (target > 194) target = 194;
-                int d = target - id(pg_ay);
-                if (d > 3) d = 3; else if (d < -3) d = -3;
-                id(pg_ay) += d;
-                // move the ball
-                id(pg_bx) += id(pg_vx);
-                id(pg_by) += id(pg_vy);
-                // top / bottom walls
-                if (id(pg_by) < 2)   { id(pg_by) = 2;   id(pg_vy) =  fabsf(id(pg_vy)); }
-                if (id(pg_by) > 229) { id(pg_by) = 229; id(pg_vy) = -fabsf(id(pg_vy)); }
-                // your paddle (x 8..15)
-                if (id(pg_vx) < 0 && id(pg_bx) <= 16 && id(pg_bx) >= 4
-                    && id(pg_by) + 9 >= id(pg_py) && id(pg_by) <= id(pg_py) + 44) {
-                  id(pg_vx) = fabsf(id(pg_vx));
-                  id(pg_vy) += (id(pg_by) + 4 - (id(pg_py) + 22)) * 0.06f;
-                }
-                // robot paddle (x 305..312)
-                if (id(pg_vx) > 0 && id(pg_bx) + 9 >= 305 && id(pg_bx) + 9 <= 316
-                    && id(pg_by) + 9 >= id(pg_ay) && id(pg_by) <= id(pg_ay) + 44) {
-                  id(pg_vx) = -fabsf(id(pg_vx));
-                  id(pg_vy) += (id(pg_by) + 4 - (id(pg_ay) + 22)) * 0.06f;
-                }
-                // scoring — off the left = robot point; off the right = your point
-                if (id(pg_bx) < -6)  { id(pg_as) += 1; id(pg_bx) = 160; id(pg_by) = 120; id(pg_vx) =  3.2f; id(pg_vy) = 2.0f; }
-                if (id(pg_bx) > 322) { id(pg_ps) += 1; id(pg_bx) = 160; id(pg_by) = 120; id(pg_vx) = -3.2f; id(pg_vy) = 2.0f; }
-                if (id(pg_ps) >= 7 || id(pg_as) >= 7) id(pg_alive) = false;   // first to 7
-            - lvgl.widget.update: { id: pg_pl,   y: !lambda 'return id(pg_py);' }
-            - lvgl.widget.update: { id: pg_pr,   y: !lambda 'return id(pg_ay);' }
-            - lvgl.widget.update: { id: pg_ball, x: !lambda 'return (int) id(pg_bx);', y: !lambda 'return (int) id(pg_by);' }
-            - lvgl.label.update:  { id: pg_sc, text: !lambda 'char b[16]; snprintf(b, sizeof(b), "%d : %d", id(pg_ps), id(pg_as)); return std::string(b);' }
-            - if:
-                condition: { lambda: 'return !id(pg_alive);' }
-                then:
-                  - if:
-                      condition: { lambda: 'return id(pg_ps) > id(pg_as);' }
-                      then:
-                        - lvgl.label.update: { id: pg_msg, text: "YOU WIN!" }
-                        - script.execute: clap
-                        - script.execute: head_nod
-                      else:
-                        - lvgl.label.update: { id: pg_msg, text: "ROBOT WINS" }
-                        - script.execute: head_shake
   # TEMPERATURE MOOD — reacts to the chip temperature (axp_temp) crossing a threshold: too warm
   # → "phew" + sweat; too cool → a shiver. Edge-detected via g_tempst, only while on the face.
   # (Thresholds are for the AXP chip, which runs warm — tune 46/33 to taste for your room.)
@@ -5152,72 +4155,6 @@ interval:
       - if:
           condition: { lambda: 'return id(axp_temp).has_state() && id(axp_temp).state >= 35.0 && id(axp_temp).state <= 44.0;' }
           then: [ { globals.set: { id: g_tempst, value: "0" } } ]
-  # SNAKE physics — ~6 fps. Joystick sets a continuous heading; grid 13×8; grows on food.
-  - interval: 160ms
-    then:
-      - if:
-          condition:
-            and:
-              - lvgl.page.is_showing: page_snake
-              - lambda: 'return id(sn_alive);'
-          then:
-            - lambda: |-
-                // heading from the joystick (continuous; can't reverse into itself)
-                float dx = id(g_rc_yaw);
-                float dy = id(g_rc_pitch) - 209.0f;
-                if (fabsf(dx) > 55.0f || fabsf(dy) > 22.0f) {
-                  if (fabsf(dx) > fabsf(dy)) {
-                    if (dx > 0 && id(sn_dir) != 3) id(sn_dir) = 1;
-                    else if (dx < 0 && id(sn_dir) != 1) id(sn_dir) = 3;
-                  } else {
-                    if (dy > 0 && id(sn_dir) != 0) id(sn_dir) = 2;
-                    else if (dy < 0 && id(sn_dir) != 2) id(sn_dir) = 0;
-                  }
-                }
-                for (int i = id(sn_len) - 1; i > 0; i--) { id(sn_x)[i] = id(sn_x)[i-1]; id(sn_y)[i] = id(sn_y)[i-1]; }
-                if (id(sn_dir) == 0) id(sn_y)[0]--;
-                else if (id(sn_dir) == 1) id(sn_x)[0]++;
-                else if (id(sn_dir) == 2) id(sn_y)[0]++;
-                else id(sn_x)[0]--;
-                if (id(sn_x)[0] < 0 || id(sn_x)[0] > 12 || id(sn_y)[0] < 0 || id(sn_y)[0] > 7) id(sn_alive) = false;
-                for (int i = 1; i < id(sn_len); i++) if (id(sn_x)[i] == id(sn_x)[0] && id(sn_y)[i] == id(sn_y)[0]) id(sn_alive) = false;
-                if (id(sn_x)[0] == id(sn_fx) && id(sn_y)[0] == id(sn_fy)) {
-                  id(sn_sc) += 1;
-                  if (id(sn_len) < 12) id(sn_len) += 1;
-                  id(sn_fx) = (int)(random_float() * 12.99f);
-                  id(sn_fy) = (int)(random_float() * 7.99f);
-                }
-            - lvgl.widget.update: { id: sn_food, x: !lambda 'return id(sn_fx) * 24 + 2;', y: !lambda 'return id(sn_fy) * 24 + 42;' }
-            - lvgl.label.update:  { id: sn_lbl, text: !lambda 'char b[8]; snprintf(b, sizeof(b), "%d", id(sn_sc)); return std::string(b);' }
-            - lvgl.widget.update: { id: sn_s0,  x: !lambda 'return id(sn_x)[0]  * 24;', y: !lambda 'return id(sn_y)[0]  * 24 + 40;' }
-            - lvgl.widget.update: { id: sn_s1,  x: !lambda 'return id(sn_x)[1]  * 24;', y: !lambda 'return id(sn_y)[1]  * 24 + 40;' }
-            - lvgl.widget.update: { id: sn_s2,  x: !lambda 'return id(sn_x)[2]  * 24;', y: !lambda 'return id(sn_y)[2]  * 24 + 40;' }
-            - lvgl.widget.update: { id: sn_s3,  x: !lambda 'return id(sn_x)[3]  * 24;', y: !lambda 'return id(sn_y)[3]  * 24 + 40;' }
-            - lvgl.widget.update: { id: sn_s4,  x: !lambda 'return id(sn_x)[4]  * 24;', y: !lambda 'return id(sn_y)[4]  * 24 + 40;' }
-            - lvgl.widget.update: { id: sn_s5,  x: !lambda 'return id(sn_x)[5]  * 24;', y: !lambda 'return id(sn_y)[5]  * 24 + 40;' }
-            - lvgl.widget.update: { id: sn_s6,  x: !lambda 'return id(sn_x)[6]  * 24;', y: !lambda 'return id(sn_y)[6]  * 24 + 40;' }
-            - lvgl.widget.update: { id: sn_s7,  x: !lambda 'return id(sn_x)[7]  * 24;', y: !lambda 'return id(sn_y)[7]  * 24 + 40;' }
-            - lvgl.widget.update: { id: sn_s8,  x: !lambda 'return id(sn_x)[8]  * 24;', y: !lambda 'return id(sn_y)[8]  * 24 + 40;' }
-            - lvgl.widget.update: { id: sn_s9,  x: !lambda 'return id(sn_x)[9]  * 24;', y: !lambda 'return id(sn_y)[9]  * 24 + 40;' }
-            - lvgl.widget.update: { id: sn_s10, x: !lambda 'return id(sn_x)[10] * 24;', y: !lambda 'return id(sn_y)[10] * 24 + 40;' }
-            - lvgl.widget.update: { id: sn_s11, x: !lambda 'return id(sn_x)[11] * 24;', y: !lambda 'return id(sn_y)[11] * 24 + 40;' }
-            - if: { condition: { lambda: 'return 1  < id(sn_len);' }, then: [ { lvgl.widget.show: sn_s1 } ],  else: [ { lvgl.widget.hide: sn_s1 } ] }
-            - if: { condition: { lambda: 'return 2  < id(sn_len);' }, then: [ { lvgl.widget.show: sn_s2 } ],  else: [ { lvgl.widget.hide: sn_s2 } ] }
-            - if: { condition: { lambda: 'return 3  < id(sn_len);' }, then: [ { lvgl.widget.show: sn_s3 } ],  else: [ { lvgl.widget.hide: sn_s3 } ] }
-            - if: { condition: { lambda: 'return 4  < id(sn_len);' }, then: [ { lvgl.widget.show: sn_s4 } ],  else: [ { lvgl.widget.hide: sn_s4 } ] }
-            - if: { condition: { lambda: 'return 5  < id(sn_len);' }, then: [ { lvgl.widget.show: sn_s5 } ],  else: [ { lvgl.widget.hide: sn_s5 } ] }
-            - if: { condition: { lambda: 'return 6  < id(sn_len);' }, then: [ { lvgl.widget.show: sn_s6 } ],  else: [ { lvgl.widget.hide: sn_s6 } ] }
-            - if: { condition: { lambda: 'return 7  < id(sn_len);' }, then: [ { lvgl.widget.show: sn_s7 } ],  else: [ { lvgl.widget.hide: sn_s7 } ] }
-            - if: { condition: { lambda: 'return 8  < id(sn_len);' }, then: [ { lvgl.widget.show: sn_s8 } ],  else: [ { lvgl.widget.hide: sn_s8 } ] }
-            - if: { condition: { lambda: 'return 9  < id(sn_len);' }, then: [ { lvgl.widget.show: sn_s9 } ],  else: [ { lvgl.widget.hide: sn_s9 } ] }
-            - if: { condition: { lambda: 'return 10 < id(sn_len);' }, then: [ { lvgl.widget.show: sn_s10 } ], else: [ { lvgl.widget.hide: sn_s10 } ] }
-            - if: { condition: { lambda: 'return 11 < id(sn_len);' }, then: [ { lvgl.widget.show: sn_s11 } ], else: [ { lvgl.widget.hide: sn_s11 } ] }
-            - if:
-                condition: { lambda: 'return !id(sn_alive);' }
-                then:
-                  - lvgl.label.update: { id: sn_msg, text: "GAME OVER" }
-                  - script.execute: { id: led_flash, r: 10, g: 25, b: 100 }
-                  - script.execute: head_shake
   # AI-AGENT "WORKING" PULSE — while an agent is active (its status badge is up), gently pulse
   # the badge's colour so you can tell at a glance the AI is doing something.
   - interval: 550ms
@@ -5424,7 +4361,7 @@ interval:
               - lambda: |-
                   return id(sw_move).state && id(sw_drift).state && !id(g_sleep) && !id(g_saver)
                          && !id(g_busy) && !id(g_night) && !id(g_focus) && !id(g_quiet) && !id(g_voice)
-                         && !std::isnan(id(servo_x_angle).state) && random_float() < 0.045;
+                         && !std::isnan(id(servo_x_angle).state) && random_float() < 0.13;
           then:
             - number.set:
                 id: servo_x_angle
@@ -5485,83 +4422,15 @@ interval:
       - if:
           condition: { lambda: 'return id(g_batt_chg) || (id(battery_pct).has_state() && id(battery_pct).state > 25);' }
           then: [ { globals.set: { id: g_lowbatt, value: "false" } } ]
-      - lvgl.label.update: { id: lbl_c1_title, text: !lambda 'return id(t_c1_title).state;' }
-      - lvgl.label.update: { id: lbl_c2_title, text: !lambda 'return id(t_c2_title).state;' }
-      - lvgl.label.update: { id: lbl_c3_title, text: !lambda 'return id(t_c3_title).state;' }
-      # ── MUSHROOM CARD ROWS — one pass renders all 12 rows. dravix sends one line per
-      #    entity: "[x,y|]K|name|state" — K picks the lovelace-mushroom accent colour,
-      #    name/state fill the two stacked labels, "x,y|" places the row as a mini-card.
-      #    Legacy bodies (plain "name  STATE" lines) still render — all text in line 1.
-      - lambda: |-
-          auto colour = [](char k) -> uint32_t {
-            switch (k) {
-              case 'l': return 0xFFB300;  // light on / triggered sensor - amber
-              case 's': return 0x448AFF;  // switch family on - blue
-              case 'c': return 0xAB47BC;  // cover open - purple
-              case 'K': return 0xEF5350;  // lock OPEN - red, needs attention
-              case 'k': return 0x66BB6A;  // lock locked - green
-              case 't': return 0xFF7043;  // climate active - orange
-              case 'm': return 0x5C6BC0;  // media playing - indigo
-              case 'b': return 0x26A69A;  // script / scene / button - teal
-              case 'o': return 0x555b66;  // off / idle - grey
-              default:  return 0x4a90d9;  // 'n' sensors / info - blue
-            }
-          };
-          auto row = [&](lv_obj_t* btn, lv_obj_t* tint, lv_obj_t* dot, lv_obj_t* nm, lv_obj_t* stt,
-                         const std::string& body, int k, int defy) {
-            size_t s = 0;
-            for (int i = 0; i < k; i++) {
-              size_t p = body.find(10, s);
-              if (p == std::string::npos) { lv_obj_add_flag(btn, LV_OBJ_FLAG_HIDDEN); return; }
-              s = p + 1;
-            }
-            size_t e = body.find(10, s);
-            std::string line = body.substr(s, e == std::string::npos ? std::string::npos : e - s);
-            if (line.empty()) { lv_obj_add_flag(btn, LV_OBJ_FLAG_HIDDEN); return; }
-            lv_obj_clear_flag(btn, LV_OBJ_FLAG_HIDDEN);
-            // optional free-position prefix "x,y|" (comma before the first bar = a position)
-            size_t bar = line.find('|');
-            size_t comma = line.find(',');
-            if (bar != std::string::npos && comma != std::string::npos && comma < bar) {
-              lv_obj_set_size(btn, 150, 48);
-              lv_obj_set_pos(btn, atoi(line.substr(0, comma).c_str()),
-                                  atoi(line.substr(comma + 1, bar - comma - 1).c_str()));
-              line = line.substr(bar + 1);
-            } else {
-              lv_obj_set_size(btn, 300, 46);
-              lv_obj_set_pos(btn, 10, defy);
-            }
-            // "K|name|state" (a legacy line without the key shows whole-line as the name)
-            char key = 'n';
-            std::string name = line, st = "";
-            if (line.size() > 1 && line[1] == '|') {
-              key = line[0];
-              size_t b2 = line.find('|', 2);
-              name = line.substr(2, b2 == std::string::npos ? std::string::npos : b2 - 2);
-              if (b2 != std::string::npos) st = line.substr(b2 + 1);
-            }
-            lv_label_set_text(nm, name.c_str());
-            lv_label_set_text(stt, st.c_str());
-            uint32_t col = colour(key);
-            lv_obj_set_style_bg_color(tint, lv_color_hex(col), 0);
-            lv_obj_set_style_bg_color(dot, lv_color_hex(col), 0);
-            lv_obj_set_style_bg_opa(tint, key == 'o' ? 28 : 64, 0);   // dimmer halo when off
-          };
-          std::string body1 = id(t_c1_body).state;
-          std::string body2 = id(t_c2_body).state;
-          std::string body3 = id(t_c3_body).state;
-          row(id(c1_r0), id(chip_c1_r0), id(dot_c1_r0), id(lbl_c1_r0), id(st_c1_r0), body1, 0, 38);
-          row(id(c1_r1), id(chip_c1_r1), id(dot_c1_r1), id(lbl_c1_r1), id(st_c1_r1), body1, 1, 88);
-          row(id(c1_r2), id(chip_c1_r2), id(dot_c1_r2), id(lbl_c1_r2), id(st_c1_r2), body1, 2, 138);
-          row(id(c1_r3), id(chip_c1_r3), id(dot_c1_r3), id(lbl_c1_r3), id(st_c1_r3), body1, 3, 188);
-          row(id(c2_r0), id(chip_c2_r0), id(dot_c2_r0), id(lbl_c2_r0), id(st_c2_r0), body2, 0, 38);
-          row(id(c2_r1), id(chip_c2_r1), id(dot_c2_r1), id(lbl_c2_r1), id(st_c2_r1), body2, 1, 88);
-          row(id(c2_r2), id(chip_c2_r2), id(dot_c2_r2), id(lbl_c2_r2), id(st_c2_r2), body2, 2, 138);
-          row(id(c2_r3), id(chip_c2_r3), id(dot_c2_r3), id(lbl_c2_r3), id(st_c2_r3), body2, 3, 188);
-          row(id(c3_r0), id(chip_c3_r0), id(dot_c3_r0), id(lbl_c3_r0), id(st_c3_r0), body3, 0, 38);
-          row(id(c3_r1), id(chip_c3_r1), id(dot_c3_r1), id(lbl_c3_r1), id(st_c3_r1), body3, 1, 88);
-          row(id(c3_r2), id(chip_c3_r2), id(dot_c3_r2), id(lbl_c3_r2), id(st_c3_r2), body3, 2, 138);
-          row(id(c3_r3), id(chip_c3_r3), id(dot_c3_r3), id(lbl_c3_r3), id(st_c3_r3), body3, 3, 188);
+      # the three entity cards — only while one of them is on screen (render_cards);
+      # show_card renders on entry, so a card is never stale when you swipe to it
+      - if:
+          condition:
+            or:
+              - lvgl.page.is_showing: page_card1
+              - lvgl.page.is_showing: page_card2
+              - lvgl.page.is_showing: page_card3
+          then: [ { script.execute: render_cards } ]
       # ── status-bar overlay (compact time · date · battery · wifi) ──
       - lvgl.label.update:
           id: sb_time
@@ -5658,35 +4527,18 @@ interval:
           condition: { lambda: 'return id(wifi_db).state < -58;' }
           then: [ { lvgl.widget.hide: sb_w4 } ]
           else: [ { lvgl.widget.show: sb_w4 } ]
-      # vitals bars (dravix pushes the 0-100 values into the number entities)
-      - lvgl.bar.update: { id: bar_energy, value: !lambda 'return (int) id(n_vital_energy).state;' }
-      - lvgl.bar.update: { id: bar_food,   value: !lambda 'return (int) id(n_vital_food).state;' }
-      - lvgl.bar.update: { id: bar_fun,    value: !lambda 'return (int) id(n_vital_fun).state;' }
-      - lvgl.bar.update: { id: bar_calm,   value: !lambda 'return (int) id(n_vital_calm).state;' }
-      # climate page — dravix keeps these slots fresh from the configured AC
-      - lvgl.label.update: { id: lbl_clim_name, text: !lambda 'return id(t_clim_name).state.empty() ? std::string("No AC configured") : id(t_clim_name).state;' }
-      - lvgl.label.update: { id: lbl_clim_set,  text: !lambda 'return id(t_clim_set).state;' }
-      # info slot = "mode|display text" (add-on 0.0.90+): strip the mode for display and
-      # light the ACTIVE mode pill Mushroom-style (tinted fill + border in its accent).
-      - lambda: |-
-          std::string raw = id(t_clim_info).state;
-          std::string mode = "", info = raw;
-          size_t bar = raw.find('|');
-          if (bar != std::string::npos) { mode = raw.substr(0, bar); info = raw.substr(bar + 1); }
-          lv_label_set_text(id(lbl_clim_info), info.c_str());
-          auto pill = [&](lv_obj_t* b, const char* m, uint32_t col) {
-            bool on = (mode == m) || (strcmp(m, "auto") == 0 && mode == "heat_cool");
-            lv_obj_set_style_bg_color(b, on ? lv_color_hex(col) : lv_color_hex(0x1c222c), 0);
-            lv_obj_set_style_bg_opa(b, on ? 64 : 255, 0);
-            lv_obj_set_style_border_width(b, on ? 2 : 0, 0);
-            lv_obj_set_style_border_color(b, lv_color_hex(col), 0);
-          };
-          pill(id(clim_cool), "cool", 0x448AFF);
-          pill(id(clim_heat), "heat", 0xFF7043);
-          pill(id(clim_fan),  "fan_only", 0x26A69A);
-          pill(id(clim_dry),  "dry", 0xFFB300);
-          pill(id(clim_auto), "auto", 0x66BB6A);
-          pill(id(clim_off),  "off", 0xEF5350);
+      # vitals bars — only while the page is on screen (render_vitals)
+      - if:
+          condition:
+            or:
+              - lvgl.page.is_showing: page_vitals
+          then: [ { script.execute: render_vitals } ]
+      # climate page — only while it is on screen (render_climate)
+      - if:
+          condition:
+            or:
+              - lvgl.page.is_showing: page_climate
+          then: [ { script.execute: render_climate } ]
 
 # ── Manual SWIPE detection (ESPHome LVGL has no built-in gesture) ────────────────
 touchscreen:
@@ -5800,7 +4652,7 @@ touchscreen:
                 else:
                   - globals.set: { id: g_card, value: "0" }
                   - lvgl.page.show: page_face
-      # swipe LEFT → next screen (face → c1 → c2 → c3 → games → vitals → climate → face)
+      # swipe LEFT → next screen (face → c1 → c2 → c3 → vitals → climate → face)
       # BUT NOT while the status bar is open — there, a horizontal drag is a slider
       # (volume / screen / LED brightness), not a screen change.
       - if:
@@ -5813,7 +4665,7 @@ touchscreen:
           then:
             # cycle length is 8 when a Dashboard URL is set (the 🌐 page joins), 7 otherwise
             - lambda: |-
-                int n = id(t_dash_url).state.empty() ? 7 : 8;
+                int n = id(t_dash_url).state.empty() ? 6 : 7;
                 id(g_card) = (id(g_card) + 1) % n;
             - script.execute: show_card
       # swipe RIGHT → previous screen (blocked while the status bar is open — see above)
@@ -5826,7 +4678,7 @@ touchscreen:
               return !id(sw_sleep) && adx >= ady && dx > 40;
           then:
             - lambda: |-
-                int n = id(t_dash_url).state.empty() ? 7 : 8;
+                int n = id(t_dash_url).state.empty() ? 6 : 7;
                 id(g_card) = (id(g_card) + n - 1) % n;
             - script.execute: show_card
 
