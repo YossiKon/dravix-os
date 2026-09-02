@@ -1,5 +1,32 @@
 # Changelog
 
+## 0.0.99
+
+**🧹 A clean-out: less on the robot, less in the service, and nothing left that lies**
+*(firmware 38 — update both)*
+
+A pass over the whole project to remove what can't work, fix what was wrong, and tighten
+what stayed.
+
+- **Two games are gone, and the robot has 20% less to draw.** DOOM-3D was a real
+  first-person raycaster: forty wall columns plus sprites resized and recoloured fifteen
+  times a second, on a board that already runs with a disabled brownout detector, a
+  stretched watchdog and three separate memory workarounds. Sixty-six on-screen objects —
+  **17% of the entire interface** — for one game. MAPLE-lite, a platformer nothing but the
+  menu ever referenced, went with it. **393 on-screen objects → 313, 22 screens → 20.**
+  Nine games remain: Catch Me, Reaction, Simon, Rock-Paper-Scissors, Flappy, Party,
+  Breakout, Pong and Snake. The games menu was re-laid out so there are no gaps.
+- **The cloud bridge is gone.** dravix used to be able to hand its tools to the xiaozhi
+  cloud service. It has driven the robot through Home Assistant for months, the add-on
+  removed the setting in July, and a cloud bridge sat oddly in a product whose headline
+  switch is "keep everything local". Removed along with the old MCP robot driver, its
+  client, the one-off discovery probe and every setting that fed them — roughly 700 lines
+  that nothing could reach.
+- **dravix's own MCP server is untouched** — that is still how Claude and other agents
+  drive the robot, and its tests stay (under a name that finally says what they test).
+- **The developer notes no longer claim things that aren't true**, and `git status` is
+  readable again (stray screenshots ignored).
+
 ## 0.0.98
 
 **🩺 The one stuck flag that made the robot look dead** *(firmware 37 — update both)*
