@@ -15,7 +15,7 @@ from dravix.config import get_settings
 from dravix.dal.base import CAP_DISPLAY, CAP_FACE, Expression
 from dravix.integrations.frigate import Frigate
 from dravix.events import Event
-from dravix.modes import Mode, ModeMeta
+from dravix.modes import LONG_AGO, Mode, ModeMeta
 
 
 class FrigateWatchMode(Mode):
@@ -29,7 +29,7 @@ class FrigateWatchMode(Mode):
         self._url = str(self.ctx.config.get("frigate_url") or get_settings().frigate_url or "").rstrip("/")
         self._frigate = Frigate(self.ctx.ha, self._url)
         self._throttle_s = float(self.ctx.config.get("throttle_s", 15))
-        self._last = 0.0
+        self._last = LONG_AGO   # never shown yet — see LONG_AGO
         if self.ctx.robot.supports(CAP_FACE):
             await self.ctx.robot.set_face(Expression.NEUTRAL)
 

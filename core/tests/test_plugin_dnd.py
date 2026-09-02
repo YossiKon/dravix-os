@@ -135,3 +135,31 @@ async def test_guard_throttle_and_quiet_no_voice():
     await m.on_event(Event(type="ha.motion"))
     assert quiet.said == []          # no spoken alert at night…
     assert quiet.leds                # …but the visual alert still fires
+
+
+# ── throttles must not swallow their first event on a freshly-booted host ────
+# time.monotonic() is machine UPTIME, so a `_last = 0.0` seed means "at boot", not
+# "never". On a host that came up seconds ago every `now - last < gap` throttle then
+# eats its FIRST event — and Home Assistant restarting is exactly when uptime is small.
+# It also fails deterministically on CI, whose runners are always freshly booted, which
+# is how this was found. Pin the behaviour rather than the seed value.
+async def test_throttles_fire_on_a_freshly_booted_host(monkeypatch):
+    import time as _time
+
+    from dravix.events import Event
+
+    real = _time.monotonic
+    base = real()
+    # pretend the machine booted three seconds ago
+    monkeypatch.setattr(_time, "monotonic", lambda: real() - base + 3.0)
+
+    Mode = _load("guard").GuardMode
+    robot = _Robot("awake")
+    # a throttle far longer than the fake uptime — the seed is the only thing that can
+    # let the first alert through
+    m = Mode(_ctx(robot, throttle_s=3600, alert_line="Alert!"))
+    await m.on_enter()
+    await m.on_event(Event(type="ha.motion"))
+    assert robot.said == ["Alert!"], "the first alert was swallowed on a fresh boot"
+    await m.on_event(Event(type="ha.motion"))
+    assert robot.said == ["Alert!"], "…but the throttle must still hold afterwards"

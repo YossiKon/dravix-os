@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.1.2
+
+**⏱ The first alert after a Home Assistant restart no longer disappears**
+*(no firmware change — still firmware 41)*
+
+- Modes that rate-limit themselves — the desk **sentry**, the **Frigate watcher** — measured
+  "how long since last time" against the machine's **uptime**, and started life believing the
+  last time was *at boot* rather than *never*. So on a host that had just started, the very
+  first motion alert was thrown away as a duplicate, and on a host with a 20-second throttle
+  that meant the first twenty seconds after every Home Assistant restart were silent. The
+  security patrol's cleanup and the follow mode's "lost them" timer had the same flaw.
+- All four now start from "never", and a test pins the behaviour by running the suite with a
+  freshly-booted clock — which is also how this was found: it fails on a build server every
+  time, and on a developer's machine never.
+
 ## 0.1.1
 
 **🔎 When a voice turn fails, the robot now says so** *(firmware 41 — update both)*

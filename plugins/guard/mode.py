@@ -11,7 +11,7 @@ import time
 
 from dravix.dal.base import CAP_FACE, CAP_LEDS, CAP_SAY, Expression
 from dravix.events import Event
-from dravix.modes import Mode, ModeMeta
+from dravix.modes import LONG_AGO, Mode, ModeMeta
 
 
 class GuardMode(Mode):
@@ -20,7 +20,7 @@ class GuardMode(Mode):
     async def on_enter(self) -> None:
         self._triggers = set(self.ctx.config.get("triggers", ["ha.motion"]))
         self._throttle_s = float(self.ctx.config.get("throttle_s", 20))
-        self._last = 0.0
+        self._last = LONG_AGO   # never alerted yet — see LONG_AGO
         if self.ctx.robot.supports(CAP_FACE):
             await self.ctx.robot.set_face(Expression.DOUBT)
         if self.ctx.robot.supports(CAP_LEDS):

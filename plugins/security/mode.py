@@ -27,7 +27,7 @@ from datetime import datetime, timedelta
 
 from dravix.config import get_settings, security_dir
 from dravix.dal.base import CAP_HEAD, CAP_PHOTO, CAP_SAY
-from dravix.modes import Mode, ModeMeta
+from dravix.modes import LONG_AGO, Mode, ModeMeta
 
 
 class SecurityMode(Mode):
@@ -81,7 +81,7 @@ class SecurityMode(Mode):
         span = min(1.0, max(0.1, float(cfg.get("patrol_span", 0.7))))
         keep_days = max(1, int(cfg.get("keep_days", 7)))
         next_patrol = time.monotonic() + patrol_s if patrol_s else float("inf")
-        last_prune = 0.0
+        last_prune = LONG_AGO   # prune once at start, then hourly — see LONG_AGO
         while True:
             started = time.monotonic()
             try:

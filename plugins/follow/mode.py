@@ -24,7 +24,7 @@ import httpx
 from dravix.config import get_settings
 from dravix.dal.base import CAP_HEAD
 from dravix.integrations.frigate import Frigate
-from dravix.modes import Mode, ModeMeta
+from dravix.modes import LONG_AGO, Mode, ModeMeta
 
 
 def _clamp(v: float, lo: float = -1.0, hi: float = 1.0) -> float:
@@ -104,7 +104,7 @@ class FollowMode(Mode):
         recenter = bool(cfg.get("recenter_when_lost", True))
         hz = float(cfg.get("update_hz", 2.0)) or 2.0
         period = 1.0 / min(max(hz, 0.2), 5.0)  # the servo bus caps ~2 Hz; don't spin faster
-        last_seen = 0.0
+        last_seen = LONG_AGO    # nobody seen yet — see LONG_AGO
         recentred = False
         while True:
             try:
