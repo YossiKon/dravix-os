@@ -40,7 +40,7 @@ substitutions:
   # publishes it to HA ("Firmware version" sensor); the dravix dashboard compares it
   # with the version bundled in the add-on and shows "firmware update available".
   # (Maintainers: bump this on every firmware change. Users: don't touch.)
-  fw_version: "36"
+  fw_version: "37"
   # The ESPHome node name (mDNS hostname + the default entity prefix on a fresh flash).
   # Change it only if you run MORE THAN ONE robot — each needs a unique name. NOTE:
   # changing it on an already-adopted robot registers a NEW device in HA.
@@ -372,6 +372,7 @@ globals:
   - { id: g_agent,  type: bool, restore_value: false, initial_value: "false" }  # an AI-agent badge is set
   - { id: g_perm,   type: bool, restore_value: false, initial_value: "false" }  # an approve/reject prompt is up
   - { id: g_voice,  type: bool, restore_value: false, initial_value: "false" }  # voice pipeline active
+  - { id: g_vstale, type: int,  restore_value: false, initial_value: "0" }      # consecutive ticks the voice state has looked abandoned
   - { id: g_sleep,  type: bool, restore_value: false, initial_value: "false" }
   - { id: g_saver,  type: bool, restore_value: false, initial_value: "false" }
   - { id: g_busy,   type: bool, restore_value: false, initial_value: "false" }
@@ -5613,6 +5614,73 @@ interval:
                 then:
                   - light.turn_off: stackchan_light_bar
                   - globals.set: { id: g_breath, value: "false" }
+  # ── VOICE-STATE WATCHDOG — the single most important safety net in this file.
+  #    A conversation that starts and then dies without ever reaching on_end/on_error (HA
+  #    restarts, the network drops, the pipeline is removed mid-turn) used to leave g_voice
+  #    latched TRUE forever, and that ONE flag quietly kills the whole robot:
+  #      · the idle looking-around is gated on !g_voice   → the eyes stop moving
+  #      · g_listen/g_talk stay set                       → it stops blinking
+  #      · led_flash is gated on !g_voice                 → petting/greeting light up nothing
+  #      · micro_wake_word stopped itself on detection    → "Okay Nabu" is dead
+  #    None of these globals is restored across reboots, which is exactly why a power-cycle
+  #    "fixed" it and nothing else did. Notice an abandoned state and clean it up.
+  #    ARBITRATION: g_listen/g_think have a SECOND owner — the "AI state" text slot, which
+  #    dravix uses for dashboard chat and coding-agent status WITHOUT starting a voice turn
+  #    (see t_ai_state). While that slot is non-empty those two are legitimately set and are
+  #    left strictly alone; g_voice and g_talk belong to the pipeline alone.
+  - interval: 5s
+    then:
+      - lambda: |-
+          bool busy = id(va).is_running()             // a real turn is running
+                      || id(voice_settle).is_running()   // …or its reply is still playing out
+                      || id(wake_ack).is_running()       // …or we're still waiting for HA to answer
+                      || id(g_ext_talk)                  // …or dravix is speaking through the media player
+                      || id(i2s_speaker).is_running();   // …or sound is coming out right now
+          bool ext = !id(t_ai_state).state.empty();      // dravix owns think/listen at the moment
+          bool stale = !busy && (id(g_voice) || id(g_talk)
+                                 || (!ext && (id(g_listen) || id(g_think))));
+          id(g_vstale) = stale ? id(g_vstale) + 1 : 0;
+      - if:
+          # two ticks in a row, so a momentary gap between pipeline states can never trip it
+          condition: { lambda: 'return id(g_vstale) >= 2;' }
+          then:
+            - logger.log: "voice watchdog: a voice turn was abandoned — releasing the face, the LEDs and the wake word"
+            - globals.set: { id: g_vstale, value: "0" }
+            - globals.set: { id: g_voice, value: "false" }
+            - globals.set: { id: g_talk,  value: "false" }
+            - if:
+                condition: { lambda: 'return id(t_ai_state).state.empty();' }
+                then:
+                  - globals.set: { id: g_listen, value: "false" }
+                  - globals.set: { id: g_think,  value: "false" }
+            - script.execute: render_face
+            # the dead turn also left the light bar lit on its stage colour — lights must
+            # always return to themselves, so put back what was showing before it started
+            - script.execute: restore_leds
+            - if:
+                condition:
+                  all:
+                    - switch.is_off: sw_privacy
+                    - lambda: 'return !id(mww).is_running();'
+                then: [ micro_wake_word.start ]
+  # ── THE EYES THEMSELVES — drawn, on-screen, no servo: no noise, no current spike, nothing
+  #    to wear out. The "calm it down" passes (fw33/fw35) slowed the whole looking-around
+  #    block below to one glance every ~2 minutes, and a face that holds a single stare for
+  #    two minutes reads as frozen rather than calm. The ask back then was about the PHYSICAL
+  #    head, so that stays exactly as rare as it is — this gives the drawn eyes a gentle
+  #    wander every ~15s so the robot looks alive while sitting perfectly still.
+  - interval: 6s
+    then:
+      - if:
+          condition:
+            lambda: |-
+              return id(sw_drift).state && !id(g_sleep) && !id(g_saver) && !id(g_busy) && !id(g_voice)
+                     && !id(g_night) && !id(g_focus) && !id(g_quiet) && random_float() < 0.40;
+          then:
+            - lvgl.widget.update:
+                id: face_box
+                x: !lambda 'id(g_glance_ms) = (long) millis(); return (int)(random_float() * 26 - 13);'
+                y: !lambda 'return (int)(random_float() * 14 - 7);'
   # Random blink (never while sleeping / listening / talking — nor on the dizzy x-eyes,
   # which aren't real eyes and used to flash full-width slits over the x-es every blink).
   - interval: 1s

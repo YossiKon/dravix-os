@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.0.98
+
+**🩺 The one stuck flag that made the robot look dead** *(firmware 37 — update both)*
+
+This is the answer to "it doesn't blink any more, its eyes don't move, and it barely reacts".
+All of it — including "Okay Nabu stopped working" — came from a **single** latched flag.
+
+- When a conversation started and then died without ever finishing (Home Assistant restarts,
+  the network drops, the pipeline is removed mid-turn), the robot stayed convinced it was
+  still in that conversation, forever — the flag is never restored across reboots, which is
+  exactly why power-cycling "fixed" it and nothing else did. And that one flag gates almost
+  everything that makes the robot look alive:
+  - the idle looking-around → **the eyes stop moving**
+  - the listening/talking state → **it stops blinking**
+  - every reaction light → **petting and greeting light up nothing**
+  - and the wake-word detector, which stops itself on every detection → **"Okay Nabu" is dead**
+- **A watchdog now notices an abandoned conversation** and releases the face, the lights and
+  the wake word within ten seconds. It knows to keep its hands off the states the dashboard's
+  own chat and the coding-agent status legitimately own.
+- **The eyes wander again.** The "calm it down" passes had slowed the whole looking-around
+  block to one glance every ~2 minutes, which reads as frozen rather than calm. The drawn eyes
+  now drift gently every ~15 seconds. The **physical head stays exactly as rare as it was** —
+  that was the actual request back then, and it hasn't changed.
+
 ## 0.0.97
 
 **🎙️ "Okay Nabu" that actually answers, and a face that follows the whole conversation**
