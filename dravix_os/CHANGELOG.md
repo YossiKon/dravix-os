@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.1.1
+
+**🔎 When a voice turn fails, the robot now says so** *(firmware 41 — update both)*
+
+"I say Okay Nabu, a light comes on, it listens, then the light goes out and nothing
+happens." The robot behaved *identically* whether the Assist pipeline errored, heard
+nothing, or simply had no answer — in every case the lights quietly went back to normal.
+There was no way to tell which had happened, on the robot or in Home Assistant.
+
+- **A failed turn now looks failed**: a short down-beep, an amber flash, a quizzical face
+  and a little shake of the head. A turn that worked still ends silently, as before.
+- **New diagnostic entity "Last voice problem"** spells out the reason in words — the
+  Assist pipeline's own error, or *"heard nothing — check the pipeline's speech-to-text"*,
+  or *"no reply — check the pipeline's conversation agent"*. It clears itself the moment a
+  turn succeeds, so what it shows is always the most recent failure.
+- **It stops cutting you off after five seconds.** The listening window was closed by a
+  timer that only Home Assistant's "speech detected" event could cancel — and not every
+  speech-to-text engine sends one. Where none arrives, that timer ended *every* turn
+  regardless of what you said. It is now generous (15s); Home Assistant's own pipeline
+  timeout is the real limit.
+
 ## 0.1.0
 
 **🎉 First public release — and the fix that made one possible**

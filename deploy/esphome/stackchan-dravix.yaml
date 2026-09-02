@@ -40,7 +40,7 @@ substitutions:
   # publishes it to HA ("Firmware version" sensor); the dravix dashboard compares it
   # with the version bundled in the add-on and shows "firmware update available".
   # (Maintainers: bump this on every firmware change. Users: don't touch.)
-  fw_version: "40"
+  fw_version: "41"
   # The ESPHome node name (mDNS hostname + the default entity prefix on a fresh flash).
   # Change it only if you run MORE THAN ONE robot — each needs a unique name. NOTE:
   # changing it on an already-adopted robot registers a NEW device in HA.
@@ -63,7 +63,10 @@ substitutions:
   wake_word_sensitivity: "0.9"
   # After "Okay Nabu" / a double-tap the robot listens — if NO voice is detected within
   # this many seconds, it closes the session on its own (no hanging on a big-eyed face).
-  listen_timeout_s: "5"
+  # It is only disarmed by Home Assistant's "speech detected" event, and not every
+  # speech-to-text engine sends one — where none arrives this timer ends EVERY turn, so
+  # it is deliberately generous. Home Assistant's own pipeline timeout is the real limit.
+  listen_timeout_s: "15"
   # The entity-id prefix Home Assistant gave the robot's own sensors (touch pads,
   # proximity, ambient light, power). A fresh flash registers under the node name, so
   # that is the default and NOTHING needs configuring for a new robot.
@@ -829,6 +832,14 @@ text_sensor:
   - platform: template
     name: "Last reply"
     id: st_reply
+  # WHY did the last voice turn fail? A pipeline that errors and a pipeline that simply
+  # has nothing to say both used to end the same way — the lights go out and nothing
+  # happens — which makes "Okay Nabu does nothing" impossible to diagnose. This says it
+  # in words: the Assist pipeline's own error code, or "heard nothing", or "no reply".
+  - platform: template
+    name: "Last voice problem"
+    id: st_va_err
+    entity_category: diagnostic
 
 # ── Dynamic card slots — dravix-os writes these (you choose the entities in the UI) ──
 text:
@@ -4156,6 +4167,27 @@ script:
                 red: !lambda 'return r / 100.0f;'
                 green: !lambda 'return g / 100.0f;'
                 blue: !lambda 'return b / 100.0f;'
+  # ── "THAT DIDN'T WORK" — a voice turn that fails must LOOK different from one that
+  #    succeeds. Both used to end by quietly restoring the face and the lights, so a
+  #    missing Assist pipeline was indistinguishable from a normal, quiet finish.
+  - id: va_error_show
+    mode: restart
+    then:
+      - if:
+          condition:
+            lambda: 'return !id(g_sleep) && !id(g_saver) && !id(g_voice);'
+          then:
+            - lambda: 'lv_disp_trig_activity(NULL);'
+            - if:
+                condition: { lambda: 'return id(sw_sfx).state && !id(g_night) && !id(g_quiet);' }
+                then: [ { rtttl.play: "err:d=8,o=5,b=140:e,c" } ]   # a short "nope" down-beep
+            - script.execute: { id: led_flash, r: 100, g: 30, b: 0 }   # amber, self-reverting
+            - globals.set: { id: g_expr, value: "5" }                  # the quizzical face
+            - script.execute: render_face
+            - script.execute: head_shake                               # a little "no"
+            - delay: 2500ms
+            - globals.set: { id: g_expr, value: !lambda 'return id(g_face_rest);' }
+            - script.execute: render_face
   # ── "I HEARD THE WAKE WORD" — the one piece of voice feedback that is entirely ON-DEVICE.
   #    Runs the instant micro_wake_word fires, before Home Assistant is involved at all, so
   #    you always know the robot's ear works even when the pipeline behind it doesn't.
@@ -5881,6 +5913,11 @@ voice_assistant:
     # You finished talking → STOP "listening" and show a "THINKING" face until the reply
     # starts. THINKING = AMBER.
     - text_sensor.template.publish: { id: st_heard, state: !lambda 'return x;' }
+    # nothing transcribed = the pipeline ran but the microphone/STT gave it no words
+    - if:
+        condition: { lambda: 'return x.empty();' }
+        then:
+          - text_sensor.template.publish: { id: st_va_err, state: "heard nothing — check the pipeline's speech-to-text" }
     - globals.set: { id: g_listen, value: "false" }
     - globals.set: { id: g_think,  value: "true" }
     - script.execute: { id: leds_voice, r: 100, g: 70, b: 0 }
@@ -5894,6 +5931,7 @@ voice_assistant:
     - globals.set: { id: g_listen, value: "false" }
     - globals.set: { id: g_think, value: "false" }
     - globals.set: { id: g_talk, value: "true" }
+    - text_sensor.template.publish: { id: st_va_err, state: "" }   # it worked — clear the last problem
     - script.execute: { id: leds_voice, r: 15, g: 100, b: 35 }
     - script.execute: render_face
   on_end:
@@ -5906,10 +5944,21 @@ voice_assistant:
     # sound to actually stop before restoring anything.
     - globals.set: { id: g_listen, value: "false" }
     - globals.set: { id: g_think, value: "false" }
+    # the pipeline finished without ever starting to speak — usually no conversation
+    # agent, or one that returned nothing. Worth saying, since the robot looks identical
+    # to a normal quiet finish otherwise.
+    - if:
+        condition: { lambda: 'return !id(g_talk);' }
+        then:
+          - text_sensor.template.publish: { id: st_va_err, state: "no reply — check the pipeline's conversation agent" }
+          - script.execute: va_error_show
     - script.execute: voice_settle
   on_error:
     # Pipeline error → NEVER stay stuck on a lit bar / listening face; clean up NOW (no
-    # waiting for audio that isn't coming) and re-arm the wake word.
+    # waiting for audio that isn't coming), SAY SO, and re-arm the wake word.
+    - text_sensor.template.publish:
+        id: st_va_err
+        state: !lambda 'return message.empty() ? code : (code + ": " + message);'
     - script.stop: wake_ack
     - script.stop: voice_settle
     - globals.set: { id: g_listen, value: "false" }
@@ -5918,6 +5967,7 @@ voice_assistant:
     - globals.set: { id: g_voice, value: "false" }
     - script.execute: render_face
     - script.execute: restore_leds
+    - script.execute: va_error_show
     - if:
         condition: { switch.is_off: sw_privacy }
         then: [ micro_wake_word.start ]
