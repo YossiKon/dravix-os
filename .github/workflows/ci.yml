@@ -19,9 +19,9 @@ jobs:
       - name: Install
         run: pip install -e ".[dev]"
       - name: Lint (ruff)
-        run: ruff check dravix scripts
+        run: ruff check dravix tests
       - name: Compile
-        run: python -m compileall -q dravix scripts tests
+        run: python -m compileall -q dravix tests
       - name: Test
         run: pytest -q
 
