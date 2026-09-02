@@ -8,7 +8,7 @@ from __future__ import annotations
 import importlib.util
 
 from dravix.config import PLUGINS_DIR
-from dravix.dal.base import CAP_FACE, CAP_HEAD, CAP_LEDS, CAP_SAY, Expression
+from dravix.dal.base import CAP_FACE, CAP_HEAD, CAP_LEDS, CAP_SAY
 from dravix.events import EventBus
 from dravix.modes.base import ModeContext
 
@@ -100,14 +100,16 @@ async def test_dance_silent_when_asleep():
     asleep = _Robot("sleep")
     m = Mode(_ctx(asleep))
     await m.on_enter()
-    asleep.moves.clear(); asleep.leds.clear()
+    asleep.moves.clear()
+    asleep.leds.clear()
     await m.tick()
     assert asleep.moves == [] and asleep.leds == []
 
     awake = _Robot("awake")
     m = Mode(_ctx(awake))
     await m.on_enter()
-    awake.moves.clear(); awake.leds.clear()
+    awake.moves.clear()
+    awake.leds.clear()
     await m.tick()
     assert awake.moves and awake.leds
 
@@ -128,7 +130,8 @@ async def test_guard_throttle_and_quiet_no_voice():
     quiet = _Robot("night")
     m = Mode(_ctx(quiet, throttle_s=0, quiet_no_voice=True))
     await m.on_enter()
-    quiet.said.clear(); quiet.leds.clear()
+    quiet.said.clear()
+    quiet.leds.clear()
     await m.on_event(Event(type="ha.motion"))
     assert quiet.said == []          # no spoken alert at night…
     assert quiet.leds                # …but the visual alert still fires

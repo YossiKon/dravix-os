@@ -157,7 +157,7 @@ Everything is done by touching the robot, talking to it, or from the dashboard:
 | 🌬 Breathing + body language | The face rises/settles on a slow sine while idle, sways in tiny moves while talking; **occasional** idle glances (sparse by design — the head turns ~once every few minutes, and it holds still during a conversation) | Always on; fully still in calm modes. Toggles: **Body language (head moves)** and **Idle glances / motion** |
 | 👋 Wave & 👉 boop gestures | Wave at the nose sensor → it waves back; a finger right at the sensor → love-eyes + a nod | Just do it (proximity sensor) |
 | 🫨 Hand-turn reaction | Physically turn its head → startled wide eyes, then it warms up to it | Just do it |
-| 🕹️ Games arcade | **Catch Me · Reaction · Simon · Rock-Paper-Scissors · Maple · Flappy · Doom · Breakout · Pong · Snake · Party**, plus a **high-score** board | Swipe to **GAMES**, tap a game (Party also has an HA button) |
+| 🕹️ Games arcade | **Catch Me · Reaction · Simon · Rock-Paper-Scissors · Flappy · Breakout · Pong · Snake · Party**, plus a **high-score** board | Swipe to **GAMES**, tap a game (Party also has an HA button) |
 | 💗 Vitals screen | The robot's live needs as bars (energy/food/fun/calm) | Swipe to **VITALS**; care actions on the dashboard **Life** tab |
 | 🌐 Dashboard page | A live screenshot of any Home Assistant dashboard (or any image URL) on its own swipe page — stays put, refreshes every 15s | Dashboard → **Settings → 🌐 Dashboard page**; render HA views with the **Puppet** add-on. See [docs/dashboard-page.md](docs/dashboard-page.md) |
 | 🗂 3 interactive cards | Any HA entities you pick — and up to 4 **tappable rows** per card: tap to toggle/press/run scripts, scenes, automations, the AC | Dashboard → **Screens**: pick entities per card; tap rows on the robot |
@@ -224,9 +224,8 @@ controllable from Home Assistant:
   Listening is a **face**, not a label — big curious eyes and an attentive little perk-up.
 - **A games arcade** — a **Games** menu on the robot's screen: **Catch Me** (tap the runaway dot),
   **Reaction** (a reflex speed test in milliseconds), **Simon** (the growing colour-sequence memory
-  game), **Rock-Paper-Scissors** (it nods when it wins), **Maple** (a platformer), **Flappy** (slip
-  through the pipes), **Doom** (a tiny raycaster), **Breakout**, **Pong**, **Snake**, and **Party**
-  (a desk disco) — plus a **high-score** board.
+  game), **Rock-Paper-Scissors** (it nods when it wins), **Flappy** (slip through the pipes),
+  **Breakout**, **Pong**, **Snake**, and **Party** (a desk disco) — plus a **high-score** board.
 - **A swipe UI** — swipe **down** for a **two-stage** status bar (first a slim strip: Wi-Fi · clock ·
   date · battery % + time-left; swipe down again for the full panel: **three sliders** — volume,
   screen, LED brightness — the **LOCAL** button, a power line, and an amber ⬆ arrow when a firmware

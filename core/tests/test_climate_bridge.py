@@ -58,7 +58,6 @@ async def test_mode_buttons_set_hvac_mode_and_guard_unsupported():
     assert ha.calls[-1] == ("climate", "set_hvac_mode", {"entity_id": "climate.ac", "hvac_mode": "heat_cool"})
 
     # an unsupported mode is skipped (no call added)
-    n = len(ha.calls)
     ha2 = _HA("cool", {**_AC, "hvac_modes": ["off", "cool"]})
     await handle_control(ha2, "climate.ac", "heat")
     assert ha2.calls == []

@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import pytest
 
-from dravix.dal.base import ALL_CAPABILITIES, RobotController
+from dravix.dal.base import RobotController
 from dravix.dal.ha_driver import _hex_to_rgb
 from dravix.dal.mock_driver import MockDriver
 from dravix.events import EventBus

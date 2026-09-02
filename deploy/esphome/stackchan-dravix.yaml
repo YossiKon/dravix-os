@@ -2240,7 +2240,7 @@ lvgl:
               - label: { text: "PARTY!", text_font: small_font, text_color: 0xFFC23D, align: CENTER }
             on_click:
               - script.execute: party
-        # bottom row: BREAKOUT · PONG · SCORES (three across)
+        # bottom row: BREAKOUT · PONG · SNAKE · SCORES (four across)
         - button:
             id: btn_g_breakout
             x: 6
