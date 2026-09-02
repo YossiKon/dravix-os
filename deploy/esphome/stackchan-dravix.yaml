@@ -40,7 +40,7 @@ substitutions:
   # publishes it to HA ("Firmware version" sensor); the dravix dashboard compares it
   # with the version bundled in the add-on and shows "firmware update available".
   # (Maintainers: bump this on every firmware change. Users: don't touch.)
-  fw_version: "37"
+  fw_version: "38"
   # The ESPHome node name (mDNS hostname + the default entity prefix on a fresh flash).
   # Change it only if you run MORE THAN ONE robot — each needs a unique name. NOTE:
   # changing it on an already-adopted robot registers a NEW device in HA.
@@ -425,18 +425,6 @@ globals:
   - { id: sn_fy,  type: int,     restore_value: false, initial_value: "4" }
   - { id: sn_sc,  type: int,     restore_value: false, initial_value: "0" }
   - { id: sn_alive, type: bool,  restore_value: false, initial_value: "false" }
-  # (DOOM-lite removed — it was unreachable: the games menu opens the real DOOM-3D.)
-  # ── MAPLE-lite — a little platformer: joystick moves, the remote button jumps, stomp mushrooms ──
-  - { id: mp_x,     type: float, restore_value: false, initial_value: "20" }
-  - { id: mp_y,     type: float, restore_value: false, initial_value: "180" }
-  - { id: mp_vy,    type: float, restore_value: false, initial_value: "0" }
-  - { id: mp_mx,    type: float, restore_value: false, initial_value: "200" }  # mushroom x
-  - { id: mp_mdir,  type: int,   restore_value: false, initial_value: "-1" }
-  - { id: mp_sc,    type: int,   restore_value: false, initial_value: "0" }
-  - { id: mp_lives, type: int,   restore_value: false, initial_value: "3" }
-  - { id: mp_bp,    type: bool,  restore_value: false, initial_value: "false" }
-  - { id: mp_grnd,  type: bool,  restore_value: false, initial_value: "false" }  # standing on a platform
-  - { id: mp_run,   type: bool,  restore_value: false, initial_value: "false" }
   # ── PERMISSIONS log — the current request + the last 3 decisions (shown on the Permissions page) ──
   - id: perm_cur
     type: std::string
@@ -458,34 +446,10 @@ globals:
   - { id: g_apulse, type: bool, restore_value: false, initial_value: "false" }  # AI-agent "working" pulse phase
   - { id: g_gloves, type: bool, restore_value: false, initial_value: "false" }  # boxing-gloves accessory is on → arms the auto-punch
   # (g_wink + g_ant removed — winks were permanently disabled and no accessory ever armed the antennae)
-  # ── DOOM-3D — a real first-person raycaster: joystick turns/walks, the button shoots ──
-  - { id: r3_px,   type: float, restore_value: false, initial_value: "2.5" }   # player x (map units)
-  - { id: r3_py,   type: float, restore_value: false, initial_value: "2.5" }   # player y
-  - { id: r3_pa,   type: float, restore_value: false, initial_value: "0.6" }   # player angle (radians)
-  - { id: r3_hp,   type: int,   restore_value: false, initial_value: "100" }
-  - { id: r3_ammo, type: int,   restore_value: false, initial_value: "50" }
-  - { id: r3_bp,   type: bool,  restore_value: false, initial_value: "false" } # fire button, previous frame
-  - { id: r3_flash, type: int,  restore_value: false, initial_value: "0" }     # muzzle-flash frames left
-  - { id: r3_run,  type: bool,  restore_value: false, initial_value: "false" }
-  - id: en_x
-    type: float[4]
-    restore_value: false
-    initial_value: "std::array<float, 4>{}"
-  - id: en_y
-    type: float[4]
-    restore_value: false
-    initial_value: "std::array<float, 4>{}"
-  - id: en_alive
-    type: int[4]
-    restore_value: false
-    initial_value: "std::array<int, 4>{}"
-  - { id: r3_kills, type: int,  restore_value: false, initial_value: "0" }
-  - { id: r3_hit,   type: int,  restore_value: false, initial_value: "0" }   # damage-flash frames
-  - { id: r3_over,  type: bool, restore_value: false, initial_value: "false" }
   - { id: g_pn,     type: int,  restore_value: false, initial_value: "0" }   # party sway alternator
   # official ESP-NOW remote state (latest parsed packet + throttling)
   - { id: g_rc_yaw,   type: float, restore_value: false, initial_value: "0" }     # target yaw (servo scale)
-  - { id: g_rc_pitch, type: float, restore_value: false, initial_value: "209" }   # target pitch (158..260) — 209 = the stick's NEUTRAL centre; 165 made Snake/DOOM-3D auto-move with no remote touched
+  - { id: g_rc_pitch, type: float, restore_value: false, initial_value: "209" }   # target pitch (158..260) — 209 = the stick's NEUTRAL centre; 165 made Snake auto-move with no remote touched
   - { id: g_rc_btn,   type: int,   restore_value: false, initial_value: "0" }
   - { id: g_rc_btna,  type: int,   restore_value: false, initial_value: "0" }   # 2nd remote button / stick-click (packet byte 0)
   - { id: g_rc_prev,  type: int,   restore_value: false, initial_value: "0" }
@@ -2225,9 +2189,9 @@ lvgl:
               - script.execute: react_start
         - button:
             id: btn_g_simon
-            x: 8
+            x: 22
             y: 86
-            width: 98
+            width: 132
             height: 46
             radius: 10
             bg_color: 0x14324a
@@ -2238,9 +2202,9 @@ lvgl:
               - script.execute: simon_new
         - button:
             id: btn_g_rps
-            x: 111
+            x: 166
             y: 86
-            width: 98
+            width: 132
             height: 46
             radius: 10
             bg_color: 0x14324a
@@ -2250,27 +2214,10 @@ lvgl:
               - lvgl.label.update: { id: rps_msg, text: "Pick one!" }
               - lvgl.page.show: page_rps
         - button:
-            id: btn_g_maple
-            x: 214
-            y: 86
-            width: 98
-            height: 46
-            radius: 10
-            bg_color: 0x2a1a3a
-            widgets:
-              - label: { text: "MAPLE", text_font: small_font, text_color: 0xff8c1a, align: CENTER }
-            on_click:
-              - lambda: |-
-                  id(mp_sc) = 0; id(mp_lives) = 3; id(mp_x) = 20.0f; id(mp_y) = 180.0f;
-                  id(mp_vy) = 0; id(mp_mx) = 200.0f; id(mp_mdir) = -1; id(mp_bp) = false;
-                  id(mp_grnd) = false; id(mp_run) = true;
-              - lvgl.label.update: { id: mp_msg, text: "" }
-              - lvgl.page.show: page_maple
-        - button:
             id: btn_g_flappy
-            x: 8
+            x: 22
             y: 136
-            width: 98
+            width: 132
             height: 46
             radius: 10
             bg_color: 0x14324a
@@ -2283,9 +2230,9 @@ lvgl:
               - lvgl.page.show: page_flappy
         - button:
             id: btn_g_party
-            x: 111
+            x: 166
             y: 136
-            width: 98
+            width: 132
             height: 46
             radius: 10
             bg_color: 0x3a2a10
@@ -2293,28 +2240,6 @@ lvgl:
               - label: { text: "PARTY!", text_font: small_font, text_color: 0xFFC23D, align: CENTER }
             on_click:
               - script.execute: party
-        - button:
-            id: btn_g_doom
-            x: 214
-            y: 136
-            width: 98
-            height: 46
-            radius: 10
-            bg_color: 0x3a1414
-            widgets:
-              - label: { text: "DOOM", text_font: small_font, text_color: 0xff7b7b, align: CENTER }
-            on_click:
-              - lambda: |-
-                  id(r3_px) = 2.5f; id(r3_py) = 2.5f; id(r3_pa) = 0.6f;
-                  id(r3_hp) = 100; id(r3_ammo) = 50; id(r3_bp) = false;
-                  id(r3_flash) = 0; id(r3_kills) = 0; id(r3_hit) = 0; id(r3_over) = false;
-                  id(en_x)[0] = 5.5f; id(en_y)[0] = 5.5f; id(en_alive)[0] = 1;
-                  id(en_x)[1] = 6.5f; id(en_y)[1] = 1.5f; id(en_alive)[1] = 1;
-                  id(en_x)[2] = 1.5f; id(en_y)[2] = 5.5f; id(en_alive)[2] = 1;
-                  id(en_x)[3] = 5.5f; id(en_y)[3] = 3.5f; id(en_alive)[3] = 1;
-                  id(r3_run) = true;
-              - lvgl.label.update: { id: d3_over, text: "" }
-              - lvgl.page.show: page_doom3d
         # bottom row: BREAKOUT · PONG · SCORES (three across)
         - button:
             id: btn_g_breakout
@@ -2595,124 +2520,6 @@ lvgl:
               - globals.set: { id: bk_alive, value: "false" }
               - globals.set: { id: g_card, value: "0" }
               - lvgl.page.show: page_face
-    # ── MAPLE-lite — a mini platformer: joystick moves, the button jumps, stomp the mushroom ──
-    - id: page_maple
-      bg_color: 0x0e1830
-      bg_opa: COVER
-      scrollable: false
-      scrollbar_mode: "OFF"
-      widgets:
-        - obj: { id: mp_ground_o, x: 0,   y: 214, width: 320, height: 26, radius: 0, bg_color: 0x6b4a2a, bg_opa: COVER, border_width: 0 }
-        - obj: { id: mp_pa, x: 40,  y: 156, width: 110, height: 10, radius: 3, bg_color: 0x2ea35c, bg_opa: COVER, border_width: 0 }
-        - obj: { id: mp_pb, x: 180, y: 110, width: 110, height: 10, radius: 3, bg_color: 0x2ea35c, bg_opa: COVER, border_width: 0 }
-        - obj: { id: mp_mush,   x: 200, y: 192, width: 22, height: 22, radius: 10, bg_color: 0xff8c1a, bg_opa: COVER, border_width: 2, border_color: 0x8a4a00 }
-        - obj: { id: mp_player, x: 20,  y: 180, width: 20, height: 24, radius: 5,  bg_color: 0xffd24a, bg_opa: COVER, border_width: 2, border_color: 0xc98a00 }
-        - label: { id: mp_lbl,       text: "0",       text_font: title_font, text_color: 0xffd24a, align: TOP_RIGHT, x: -10, y: 4 }
-        - label: { id: mp_lives_lbl, text: "LIVES 3", text_font: small_font, text_color: 0xffd24a, align: TOP_MID,  y: 8 }
-        - label: { id: mp_msg,       text: "",        text_font: title_font, text_color: 0x33E6C8, align: CENTER,   y: -20 }
-        - button:
-            id: mp_back
-            x: 6
-            y: 6
-            width: 48
-            height: 26
-            radius: 8
-            bg_color: 0x0e1830
-            widgets:
-              - label: { text: "<", text_font: text_font, text_color: 0x33E6C8, align: CENTER }
-            on_click:
-              - globals.set: { id: mp_run, value: "false" }
-              - globals.set: { id: g_card, value: "0" }
-              - lvgl.page.show: page_face
-    # ── DOOM-3D — a REAL first-person raycaster. 40 vertical wall columns the loop resizes +
-    #    shades each frame; the two background bands are the ceiling + floor; the gun is bottom-
-    #    centre. Joystick turns/walks, the remote button shoots. ──
-    - id: page_doom3d
-      bg_color: 0x000000
-      bg_opa: COVER
-      scrollable: false
-      scrollbar_mode: "OFF"
-      widgets:
-        - obj: { id: d3_ceil,  x: 0, y: 0,   width: 320, height: 100, radius: 0, bg_color: 0x232a3a, bg_opa: COVER, border_width: 0 }
-        - obj: { id: d3_floor, x: 0, y: 100, width: 320, height: 100, radius: 0, bg_color: 0x37291c, bg_opa: COVER, border_width: 0 }
-        - obj: { id: dw00, x: 0,   y: 60, width: 8, height: 80, radius: 0, bg_color: 0x606060, bg_opa: COVER, border_width: 0 }
-        - obj: { id: dw01, x: 8,   y: 60, width: 8, height: 80, radius: 0, bg_color: 0x606060, bg_opa: COVER, border_width: 0 }
-        - obj: { id: dw02, x: 16,  y: 60, width: 8, height: 80, radius: 0, bg_color: 0x606060, bg_opa: COVER, border_width: 0 }
-        - obj: { id: dw03, x: 24,  y: 60, width: 8, height: 80, radius: 0, bg_color: 0x606060, bg_opa: COVER, border_width: 0 }
-        - obj: { id: dw04, x: 32,  y: 60, width: 8, height: 80, radius: 0, bg_color: 0x606060, bg_opa: COVER, border_width: 0 }
-        - obj: { id: dw05, x: 40,  y: 60, width: 8, height: 80, radius: 0, bg_color: 0x606060, bg_opa: COVER, border_width: 0 }
-        - obj: { id: dw06, x: 48,  y: 60, width: 8, height: 80, radius: 0, bg_color: 0x606060, bg_opa: COVER, border_width: 0 }
-        - obj: { id: dw07, x: 56,  y: 60, width: 8, height: 80, radius: 0, bg_color: 0x606060, bg_opa: COVER, border_width: 0 }
-        - obj: { id: dw08, x: 64,  y: 60, width: 8, height: 80, radius: 0, bg_color: 0x606060, bg_opa: COVER, border_width: 0 }
-        - obj: { id: dw09, x: 72,  y: 60, width: 8, height: 80, radius: 0, bg_color: 0x606060, bg_opa: COVER, border_width: 0 }
-        - obj: { id: dw10, x: 80,  y: 60, width: 8, height: 80, radius: 0, bg_color: 0x606060, bg_opa: COVER, border_width: 0 }
-        - obj: { id: dw11, x: 88,  y: 60, width: 8, height: 80, radius: 0, bg_color: 0x606060, bg_opa: COVER, border_width: 0 }
-        - obj: { id: dw12, x: 96,  y: 60, width: 8, height: 80, radius: 0, bg_color: 0x606060, bg_opa: COVER, border_width: 0 }
-        - obj: { id: dw13, x: 104, y: 60, width: 8, height: 80, radius: 0, bg_color: 0x606060, bg_opa: COVER, border_width: 0 }
-        - obj: { id: dw14, x: 112, y: 60, width: 8, height: 80, radius: 0, bg_color: 0x606060, bg_opa: COVER, border_width: 0 }
-        - obj: { id: dw15, x: 120, y: 60, width: 8, height: 80, radius: 0, bg_color: 0x606060, bg_opa: COVER, border_width: 0 }
-        - obj: { id: dw16, x: 128, y: 60, width: 8, height: 80, radius: 0, bg_color: 0x606060, bg_opa: COVER, border_width: 0 }
-        - obj: { id: dw17, x: 136, y: 60, width: 8, height: 80, radius: 0, bg_color: 0x606060, bg_opa: COVER, border_width: 0 }
-        - obj: { id: dw18, x: 144, y: 60, width: 8, height: 80, radius: 0, bg_color: 0x606060, bg_opa: COVER, border_width: 0 }
-        - obj: { id: dw19, x: 152, y: 60, width: 8, height: 80, radius: 0, bg_color: 0x606060, bg_opa: COVER, border_width: 0 }
-        - obj: { id: dw20, x: 160, y: 60, width: 8, height: 80, radius: 0, bg_color: 0x606060, bg_opa: COVER, border_width: 0 }
-        - obj: { id: dw21, x: 168, y: 60, width: 8, height: 80, radius: 0, bg_color: 0x606060, bg_opa: COVER, border_width: 0 }
-        - obj: { id: dw22, x: 176, y: 60, width: 8, height: 80, radius: 0, bg_color: 0x606060, bg_opa: COVER, border_width: 0 }
-        - obj: { id: dw23, x: 184, y: 60, width: 8, height: 80, radius: 0, bg_color: 0x606060, bg_opa: COVER, border_width: 0 }
-        - obj: { id: dw24, x: 192, y: 60, width: 8, height: 80, radius: 0, bg_color: 0x606060, bg_opa: COVER, border_width: 0 }
-        - obj: { id: dw25, x: 200, y: 60, width: 8, height: 80, radius: 0, bg_color: 0x606060, bg_opa: COVER, border_width: 0 }
-        - obj: { id: dw26, x: 208, y: 60, width: 8, height: 80, radius: 0, bg_color: 0x606060, bg_opa: COVER, border_width: 0 }
-        - obj: { id: dw27, x: 216, y: 60, width: 8, height: 80, radius: 0, bg_color: 0x606060, bg_opa: COVER, border_width: 0 }
-        - obj: { id: dw28, x: 224, y: 60, width: 8, height: 80, radius: 0, bg_color: 0x606060, bg_opa: COVER, border_width: 0 }
-        - obj: { id: dw29, x: 232, y: 60, width: 8, height: 80, radius: 0, bg_color: 0x606060, bg_opa: COVER, border_width: 0 }
-        - obj: { id: dw30, x: 240, y: 60, width: 8, height: 80, radius: 0, bg_color: 0x606060, bg_opa: COVER, border_width: 0 }
-        - obj: { id: dw31, x: 248, y: 60, width: 8, height: 80, radius: 0, bg_color: 0x606060, bg_opa: COVER, border_width: 0 }
-        - obj: { id: dw32, x: 256, y: 60, width: 8, height: 80, radius: 0, bg_color: 0x606060, bg_opa: COVER, border_width: 0 }
-        - obj: { id: dw33, x: 264, y: 60, width: 8, height: 80, radius: 0, bg_color: 0x606060, bg_opa: COVER, border_width: 0 }
-        - obj: { id: dw34, x: 272, y: 60, width: 8, height: 80, radius: 0, bg_color: 0x606060, bg_opa: COVER, border_width: 0 }
-        - obj: { id: dw35, x: 280, y: 60, width: 8, height: 80, radius: 0, bg_color: 0x606060, bg_opa: COVER, border_width: 0 }
-        - obj: { id: dw36, x: 288, y: 60, width: 8, height: 80, radius: 0, bg_color: 0x606060, bg_opa: COVER, border_width: 0 }
-        - obj: { id: dw37, x: 296, y: 60, width: 8, height: 80, radius: 0, bg_color: 0x606060, bg_opa: COVER, border_width: 0 }
-        - obj: { id: dw38, x: 304, y: 60, width: 8, height: 80, radius: 0, bg_color: 0x606060, bg_opa: COVER, border_width: 0 }
-        - obj: { id: dw39, x: 312, y: 60, width: 8, height: 80, radius: 0, bg_color: 0x606060, bg_opa: COVER, border_width: 0 }
-        - obj: { id: e_spr0, x: 150, y: 90, width: 30, height: 40, radius: 8, bg_color: 0x9a2617, bg_opa: COVER, border_width: 2, border_color: 0x2a0a04, hidden: true }
-        - obj: { id: e_spr1, x: 150, y: 90, width: 30, height: 40, radius: 8, bg_color: 0x9a2617, bg_opa: COVER, border_width: 2, border_color: 0x2a0a04, hidden: true }
-        - obj: { id: e_spr2, x: 150, y: 90, width: 30, height: 40, radius: 8, bg_color: 0x9a2617, bg_opa: COVER, border_width: 2, border_color: 0x2a0a04, hidden: true }
-        - obj: { id: e_spr3, x: 150, y: 90, width: 30, height: 40, radius: 8, bg_color: 0x9a2617, bg_opa: COVER, border_width: 2, border_color: 0x2a0a04, hidden: true }
-        - obj: { id: d3_gun,    x: 128, y: 152, width: 64, height: 50, radius: 6, bg_color: 0x2b2b2b, bg_opa: COVER, border_width: 2, border_color: 0x0e0e0e }
-        - obj: { id: d3_barrel, x: 150, y: 138, width: 20, height: 18, radius: 3, bg_color: 0x1a1a1a, bg_opa: COVER, border_width: 0 }
-        - obj: { id: d3_muzzle, x: 148, y: 120, width: 24, height: 20, radius: 10, bg_color: 0xffd23a, bg_opa: COVER, border_width: 0, hidden: true }
-        - label: { id: d3_cross, text: "+", text_font: title_font, text_color: 0xE8E8E8, align: CENTER, y: -22 }
-        - obj:   { id: d3_bartop, x: 0, y: 196, width: 320, height: 3,  radius: 0, bg_color: 0x8a744a, bg_opa: COVER, border_width: 0 }
-        - obj:   { id: d3_bar,    x: 0, y: 199, width: 320, height: 41, radius: 0, bg_color: 0x33281a, bg_opa: COVER, border_width: 0 }
-        - label: { id: d3_ammo_n,  text: "50",  text_font: text_font,  text_color: 0xffcf7a, align: TOP_LEFT,  x: 12,  y: 202 }
-        - label: { text: "AMMO",                text_font: small_font, text_color: 0x9a8352, align: TOP_LEFT,  x: 12,  y: 224 }
-        - label: { id: d3_hp_n,    text: "100", text_font: text_font,  text_color: 0xff8a6a, align: TOP_LEFT,  x: 72,  y: 202 }
-        - label: { text: "HEALTH",              text_font: small_font, text_color: 0x9a8352, align: TOP_LEFT,  x: 72,  y: 224 }
-        - obj:   { id: d3_face,  x: 145, y: 201, width: 30, height: 36, radius: 3, bg_color: 0xc0895a, bg_opa: COVER, border_width: 2, border_color: 0x2a1808 }
-        - obj:   { id: d3_eyeL,  x: 151, y: 210, width: 5,  height: 6,  radius: 0, bg_color: 0x201008, bg_opa: COVER, border_width: 0 }
-        - obj:   { id: d3_eyeR,  x: 163, y: 210, width: 5,  height: 6,  radius: 0, bg_color: 0x201008, bg_opa: COVER, border_width: 0 }
-        - obj:   { id: d3_mouth, x: 151, y: 227, width: 18, height: 4,  radius: 0, bg_color: 0x3a1810, bg_opa: COVER, border_width: 0 }
-        - label: { id: d3_kills_n, text: "0",   text_font: text_font,  text_color: 0xffcf7a, align: TOP_RIGHT, x: -14, y: 202 }
-        - label: { text: "KILLS",               text_font: small_font, text_color: 0x9a8352, align: TOP_RIGHT, x: -14, y: 224 }
-        - obj: { id: d3_blood, x: 0, y: 0, width: 320, height: 240, radius: 0, bg_color: 0xcc0000, bg_opa: 40%, border_width: 0, hidden: true }
-        - label: { id: d3_over, text: "", text_font: title_font, text_color: 0xff5555, align: CENTER, y: 6 }
-        - button:
-            id: d3_back
-            x: 6
-            y: 6
-            width: 44
-            height: 26
-            radius: 8
-            bg_color: 0x000000
-            widgets:
-              - label: { text: "<", text_font: text_font, text_color: 0x33E6C8, align: CENTER }
-            on_click:
-              - globals.set: { id: r3_run, value: "false" }
-              - globals.set: { id: g_card, value: "0" }
-              - lvgl.page.show: page_face
-    # (page_doom removed — it was unreachable: the games menu opens DOOM-3D. ~13 widgets +
-    #  a 50ms interval of RAM/CPU back.)
     # ── SNAKE — joystick steers a continuous heading; eat the food, don't hit walls/yourself ──
     - id: page_snake
       bg_color: 0x0a1420
@@ -5002,7 +4809,7 @@ interval:
                 lv_disp_trig_activity(NULL);
             # button B rising edge → toggle the voice assistant (privacy-respecting)
             - if:
-                condition: { lambda: 'return id(g_rc_btn) != 0 && id(g_rc_prev) == 0 && !id(mp_run) && !id(r3_run);' }   # not while a game uses the button
+                condition: { lambda: 'return id(g_rc_btn) != 0 && id(g_rc_prev) == 0;' }
                 then:
                   - if:
                       condition: { lambda: 'return id(g_voice);' }
@@ -5360,59 +5167,6 @@ interval:
                   - lvgl.label.update: { id: sn_msg, text: "GAME OVER" }
                   - script.execute: { id: led_flash, r: 10, g: 25, b: 100 }
                   - script.execute: head_shake
-  # (DOOM-lite physics interval removed with page_doom.)
-  # MAPLE-lite physics — ~25 fps. Joystick walks, button jumps, gravity + platform landing;
-  # land ON the mushroom to stomp it (score), touch it from the side and you lose a life.
-  - interval: 40ms
-    then:
-      - if:
-          condition:
-            and:
-              - lvgl.page.is_showing: page_maple
-              - lambda: 'return id(mp_run);'
-          then:
-            - lambda: |-
-                float mv = id(g_rc_yaw);
-                if (mv > 40.0f) id(mp_x) += 3.5f;
-                else if (mv < -40.0f) id(mp_x) -= 3.5f;
-                if (id(mp_x) < 2.0f) id(mp_x) = 2.0f;
-                if (id(mp_x) > 298.0f) id(mp_x) = 298.0f;
-                bool jb = (id(g_rc_btn) != 0) && !id(mp_bp);
-                id(mp_bp) = (id(g_rc_btn) != 0);
-                if (jb && id(mp_grnd)) { id(mp_vy) = -9.0f; id(mp_grnd) = false; }
-                id(mp_vy) += 0.55f;
-                if (id(mp_vy) > 11.0f) id(mp_vy) = 11.0f;
-                id(mp_y) += id(mp_vy);
-                id(mp_grnd) = false;
-                float feet = id(mp_y) + 24.0f;
-                if (id(mp_vy) >= 0 && feet >= 214.0f && feet <= 226.0f) { id(mp_y) = 190.0f; id(mp_vy) = 0; id(mp_grnd) = true; }
-                if (id(mp_vy) >= 0 && feet >= 156.0f && feet <= 168.0f && id(mp_x) + 20 > 40.0f  && id(mp_x) < 150.0f) { id(mp_y) = 132.0f; id(mp_vy) = 0; id(mp_grnd) = true; }
-                if (id(mp_vy) >= 0 && feet >= 110.0f && feet <= 122.0f && id(mp_x) + 20 > 180.0f && id(mp_x) < 290.0f) { id(mp_y) = 86.0f;  id(mp_vy) = 0; id(mp_grnd) = true; }
-                if (id(mp_y) > 240.0f) { id(mp_lives) -= 1; id(mp_x) = 20.0f; id(mp_y) = 180.0f; id(mp_vy) = 0; if (id(mp_lives) <= 0) id(mp_run) = false; }
-                id(mp_mx) += id(mp_mdir) * 1.7f;
-                if (id(mp_mx) < 6.0f)   id(mp_mdir) = 1;
-                if (id(mp_mx) > 292.0f) id(mp_mdir) = -1;
-                if (id(mp_x) + 20 > id(mp_mx) && id(mp_x) < id(mp_mx) + 22 && feet >= 190.0f && id(mp_y) < 214.0f) {
-                  if (id(mp_vy) > 0 && feet <= 202.0f) {
-                    id(mp_sc) += 1;
-                    id(mp_vy) = -6.5f;
-                    id(mp_mx) = 20.0f + random_float() * 260.0f;
-                  } else {
-                    id(mp_lives) -= 1;
-                    id(mp_x) = 20.0f; id(mp_y) = 180.0f; id(mp_vy) = 0;
-                    if (id(mp_lives) <= 0) id(mp_run) = false;
-                  }
-                }
-            - lvgl.widget.update: { id: mp_player, x: !lambda 'return (int) id(mp_x);', y: !lambda 'return (int) id(mp_y);' }
-            - lvgl.widget.update: { id: mp_mush,   x: !lambda 'return (int) id(mp_mx);' }
-            - lvgl.label.update:  { id: mp_lbl, text: !lambda 'char b[8]; snprintf(b, sizeof(b), "%d", id(mp_sc)); return std::string(b);' }
-            - lvgl.label.update:  { id: mp_lives_lbl, text: !lambda 'char b[12]; snprintf(b, sizeof(b), "LIVES %d", id(mp_lives)); return std::string(b);' }
-            - if:
-                condition: { lambda: 'return !id(mp_run);' }
-                then:
-                  - lvgl.label.update: { id: mp_msg, text: "GAME OVER" }
-                  - script.execute: { id: led_flash, r: 100, g: 60, b: 15 }
-                  - script.execute: head_shake
   # AI-AGENT "WORKING" PULSE — while an agent is active (its status badge is up), gently pulse
   # the badge's colour so you can tell at a glance the AI is doing something.
   - interval: 550ms
@@ -5424,164 +5178,6 @@ interval:
             - lvgl.label.update:
                 id: lbl_agent
                 text_color: !lambda 'return id(g_apulse) ? lv_color_hex(0x5dffe0) : lv_color_hex(0x1f8a7a);'
-  # DOOM-3D raycaster — ~15 fps. Joystick turns (yaw) + walks (pitch, with wall collision), the
-  # button shoots. Each of the 40 wall columns is one ray: march it across the 8x8 map, then size
-  # + shade the column by the fisheye-corrected hit distance (E/W faces a touch darker for depth).
-  - interval: 66ms
-    then:
-      - if:
-          condition:
-            and:
-              - lvgl.page.is_showing: page_doom3d
-              - lambda: 'return id(r3_run);'
-          then:
-            - lambda: |-
-                static const uint8_t M[8][8] = {
-                  {2,2,2,2,2,2,2,2},
-                  {2,0,0,0,0,0,0,3},
-                  {2,0,0,1,1,0,0,3},
-                  {2,0,0,0,0,0,0,3},
-                  {2,0,1,0,0,1,0,3},
-                  {2,0,0,0,0,0,0,3},
-                  {2,0,0,0,0,0,0,3},
-                  {2,2,2,2,2,2,2,2},
-                };
-                static lv_obj_t* COL[40] = {
-                  id(dw00),id(dw01),id(dw02),id(dw03),id(dw04),id(dw05),id(dw06),id(dw07),
-                  id(dw08),id(dw09),id(dw10),id(dw11),id(dw12),id(dw13),id(dw14),id(dw15),
-                  id(dw16),id(dw17),id(dw18),id(dw19),id(dw20),id(dw21),id(dw22),id(dw23),
-                  id(dw24),id(dw25),id(dw26),id(dw27),id(dw28),id(dw29),id(dw30),id(dw31),
-                  id(dw32),id(dw33),id(dw34),id(dw35),id(dw36),id(dw37),id(dw38),id(dw39),
-                };
-                float yaw = id(g_rc_yaw);
-                if (yaw > 30.0f) id(r3_pa) += 0.05f;
-                else if (yaw < -30.0f) id(r3_pa) -= 0.05f;
-                float pit = id(g_rc_pitch);
-                float mv = (pit < 188.0f) ? 0.07f : ((pit > 232.0f) ? -0.07f : 0.0f);
-                if (mv != 0.0f) {
-                  float nx = id(r3_px) + cosf(id(r3_pa)) * mv;
-                  float ny = id(r3_py) + sinf(id(r3_pa)) * mv;
-                  int px0 = (int) id(r3_px), py0 = (int) id(r3_py);
-                  int nxc = (int) nx, nyc = (int) ny;
-                  if (px0 >= 0 && px0 < 8 && py0 >= 0 && py0 < 8) {
-                    if (nxc >= 0 && nxc < 8 && M[py0][nxc] == 0) id(r3_px) = nx;
-                    if (nyc >= 0 && nyc < 8 && M[nyc][px0] == 0) id(r3_py) = ny;
-                  }
-                }
-                bool pressed = (id(g_rc_btn) != 0) || (id(g_rc_btna) != 0);
-                bool sb = pressed && !id(r3_bp);
-                id(r3_bp) = pressed;
-                bool shot = false;
-                if (sb && id(r3_ammo) > 0) { id(r3_ammo) -= 1; id(r3_flash) = 3; shot = true; }
-                if (id(r3_flash) > 0) id(r3_flash) -= 1;
-                static float zbuf[40];
-                const float FOV = 1.05f;
-                for (int i = 0; i < 40; i++) {
-                  float ra = id(r3_pa) - FOV * 0.5f + FOV * ((float) i / 39.0f);
-                  float rc = cosf(ra), rs = sinf(ra);
-                  float dist = 0.0f; int side = 0; int wtype = 1;
-                  for (int s = 0; s < 160; s++) {
-                    dist += 0.05f;
-                    float x = id(r3_px) + rc * dist;
-                    float y = id(r3_py) + rs * dist;
-                    int mx = (int) x, my = (int) y;
-                    if (mx < 0 || mx >= 8 || my < 0 || my >= 8) break;
-                    if (M[my][mx] != 0) {
-                      wtype = M[my][mx];
-                      float fx = x - mx; if (fx > 0.5f) fx = 1.0f - fx;
-                      float fy = y - my; if (fy > 0.5f) fy = 1.0f - fy;
-                      side = (fx < fy) ? 0 : 1;
-                      break;
-                    }
-                  }
-                  float corr = dist * cosf(ra - id(r3_pa));
-                  if (corr < 0.2f) corr = 0.2f;
-                  int h = (int) (150.0f / corr);
-                  if (h > 200) h = 200;
-                  if (h < 2) h = 2;
-                  int yy = 100 - h / 2;
-                  int sh = 210 - (int) (corr * 20.0f);
-                  if (sh < 45) sh = 45;
-                  if (sh > 210) sh = 210;
-                  if (side != 0) sh = sh * 65 / 100;
-                  uint32_t r = sh, g = sh, b = sh;
-                  if (wtype == 2)      { r = (uint32_t)(sh * 60 / 100); g = (uint32_t)(sh * 68 / 100); b = (uint32_t) sh; }               // steel-blue tech
-                  else if (wtype == 3) { r = (uint32_t)(sh * 45 / 100); g = (uint32_t) sh;             b = (uint32_t)(sh * 45 / 100); }    // green tech
-                  else                 { r = (uint32_t) sh;             g = (uint32_t)(sh * 62 / 100); b = (uint32_t)(sh * 40 / 100); }    // brown
-                  uint32_t col = (r << 16) | (g << 8) | b;
-                  zbuf[i] = corr;
-                  lv_obj_set_height(COL[i], h);
-                  lv_obj_set_y(COL[i], yy);
-                  lv_obj_set_style_bg_color(COL[i], lv_color_hex(col), 0);
-                }
-                static lv_obj_t* ESP[4] = { id(e_spr0), id(e_spr1), id(e_spr2), id(e_spr3) };
-                int hitT = -1; float hitA = 0.16f;
-                for (int e = 0; e < 4; e++) {
-                  if (id(en_alive)[e] == 0) { lv_obj_add_flag(ESP[e], LV_OBJ_FLAG_HIDDEN); continue; }
-                  float ex = id(en_x)[e], ey = id(en_y)[e];
-                  float ddx = id(r3_px) - ex, ddy = id(r3_py) - ey;
-                  float ed = sqrtf(ddx * ddx + ddy * ddy);
-                  if (ed > 0.7f) {
-                    float mxs = ex + (ddx / ed) * 0.018f, mys = ey + (ddy / ed) * 0.018f;
-                    if ((int) ey >= 0 && (int) ey < 8 && (int) mxs >= 0 && (int) mxs < 8 && M[(int) ey][(int) mxs] == 0) ex = mxs;
-                    if ((int) mys >= 0 && (int) mys < 8 && (int) ex >= 0 && (int) ex < 8 && M[(int) mys][(int) ex] == 0) ey = mys;
-                    id(en_x)[e] = ex; id(en_y)[e] = ey;
-                  } else if (id(r3_hit) == 0) {
-                    id(r3_hp) -= 4; id(r3_hit) = 3;
-                  }
-                  float dx = ex - id(r3_px), dy = ey - id(r3_py);
-                  float edist = sqrtf(dx * dx + dy * dy);
-                  float eang = atan2f(dy, dx) - id(r3_pa);
-                  while (eang >  3.14159f) eang -= 6.28318f;
-                  while (eang < -3.14159f) eang += 6.28318f;
-                  if (fabsf(eang) > FOV * 0.55f || edist < 0.25f) { lv_obj_add_flag(ESP[e], LV_OBJ_FLAG_HIDDEN); continue; }
-                  int zc = (int) ((eang / (FOV * 0.5f) * 0.5f + 0.5f) * 39.0f);
-                  if (zc < 0) zc = 0;
-                  if (zc > 39) zc = 39;
-                  if (edist > zbuf[zc] + 0.3f) { lv_obj_add_flag(ESP[e], LV_OBJ_FLAG_HIDDEN); continue; }
-                  int sx = (int) (160.0f + (eang / (FOV * 0.5f)) * 160.0f);
-                  int esz = (int) (150.0f / edist);
-                  if (esz > 200) esz = 200;
-                  if (esz < 8) esz = 8;
-                  int ew = esz * 3 / 4;
-                  int eyp = 100 - esz / 2 + esz / 8;
-                  lv_obj_set_size(ESP[e], ew, esz);
-                  lv_obj_set_pos(ESP[e], sx - ew / 2, eyp);
-                  lv_obj_clear_flag(ESP[e], LV_OBJ_FLAG_HIDDEN);
-                  if (fabsf(eang) < hitA) { hitA = fabsf(eang); hitT = e; }
-                }
-                if (shot && hitT >= 0) {
-                  id(en_alive)[hitT] = 0;
-                  id(r3_kills) += 1;
-                  lv_obj_add_flag(ESP[hitT], LV_OBJ_FLAG_HIDDEN);
-                }
-                if (id(r3_hit) > 0) id(r3_hit) -= 1;
-                if (id(r3_hp) <= 0 && !id(r3_over)) { id(r3_hp) = 0; id(r3_over) = true; id(r3_run) = false; }
-            - if:
-                condition: { lambda: 'return id(r3_flash) > 0;' }
-                then: [ { lvgl.widget.show: d3_muzzle } ]
-                else: [ { lvgl.widget.hide: d3_muzzle } ]
-            - if:
-                condition: { lambda: 'return id(r3_hit) > 0;' }
-                then: [ { lvgl.widget.show: d3_blood } ]
-                else: [ { lvgl.widget.hide: d3_blood } ]
-            - if:
-                condition: { lambda: 'return id(r3_over);' }
-                then:
-                  - lvgl.label.update: { id: d3_over, text: "YOU DIED" }
-                  - lvgl.widget.hide: d3_muzzle
-                  - script.execute: { id: led_flash, r: 100, g: 5, b: 0 }
-            - lvgl.label.update: { id: d3_ammo_n,  text: !lambda 'char b[8]; snprintf(b, sizeof(b), "%d", id(r3_ammo)); return std::string(b);' }
-            - lvgl.label.update: { id: d3_hp_n,    text: !lambda 'char b[8]; snprintf(b, sizeof(b), "%d", id(r3_hp) < 0 ? 0 : id(r3_hp)); return std::string(b);' }
-            - lvgl.label.update: { id: d3_kills_n, text: !lambda 'char b[8]; snprintf(b, sizeof(b), "%d", id(r3_kills)); return std::string(b);' }
-            - lvgl.widget.update:
-                id: d3_face
-                bg_color: !lambda |-
-                  if (id(r3_hit) > 0) return lv_color_hex(0xd85a4a);
-                  int hp = id(r3_hp);
-                  if (hp < 30) return lv_color_hex(0xa8674a);
-                  if (hp < 60) return lv_color_hex(0xb87e56);
-                  return lv_color_hex(0xc0895a);
   # AUTO-PUNCH — with the gloves on, a chance every few seconds to throw a jab (face page only).
   - interval: 3200ms
     then:
