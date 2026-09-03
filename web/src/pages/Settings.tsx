@@ -134,7 +134,29 @@ export function SettingsPage(props: {
       })
       .catch(() => setDashUrl(""));
     loadVoice();
+    loadHealth();
   }, []);
+
+  // ── 🩺 robot health — why does it reboot? (reads the robot's debug sensors via dravix)
+  type Reboot = { at: string; reason?: string; kind?: string; he?: string; en?: string; heap_free_before?: number | null; loop_time_before?: number | null; uptime_before?: number | null; from_history?: boolean };
+  type Health = {
+    live: { uptime?: number | null; heap_free?: number | null; heap_largest_block?: number | null; loop_time?: number | null; psram_free?: number | null; reset_reason?: string | null; firmware_version?: string | null };
+    warnings: { loop: boolean; heap: boolean };
+    reboots_24h: number;
+    last_reboot: Reboot | null;
+    reboots: Reboot[];
+    thresholds: { loop_ms: number; heap_bytes: number };
+  };
+  const [health, setHealth] = useState<Health | null>(null);
+  function loadHealth() {
+    apiGet<Health>("/api/robot/health").then(setHealth).catch(() => setHealth(null));
+  }
+  const kb = (v: number | null | undefined) => (v == null ? "—" : `${Math.round(v / 1024)} KB`);
+  const hms = (v: number | null | undefined) => {
+    if (v == null) return "—";
+    const h = Math.floor(v / 3600), m = Math.floor((v % 3600) / 60);
+    return h > 0 ? `${h}h ${m}m` : `${m}m`;
+  };
 
   // ── 🎙️ "Okay Nabu" — what is the robot's Assist pipeline missing? (read on demand only:
   //    each check opens a WebSocket to HA, so it runs on mount + the Re-check button, never a loop)
@@ -681,6 +703,50 @@ export function SettingsPage(props: {
             {tr("שמור", "Save")}
           </button>
         </div>
+      </Section>
+
+      {/* ── 🩺 robot health — every reboot with its reason, and the live loop/heap picture ── */}
+      <Section title={tr("🩺 בריאות הרובוט", "🩺 Robot health")} delay={39}>
+        {health === null ? (
+          <p className="text-xs text-mute">{tr("אין עדיין נתונים (הרובוט מחובר?)", "No data yet (is the robot connected?)")}</p>
+        ) : (
+          <>
+            <p className="mb-2 text-sm" dir="auto">
+              {health.last_reboot
+                ? <>
+                    <b>{tr("אתחול אחרון", "Last reboot")}:</b> {new Date(health.last_reboot.at).toLocaleString()} · {tr(health.last_reboot.he ?? "", health.last_reboot.en ?? "")}
+                    {health.last_reboot.loop_time_before != null && (
+                      <span className="text-mute"> ({tr("לפני האתחול", "before it")}: Loop {Math.round(health.last_reboot.loop_time_before)} ms · Heap {kb(health.last_reboot.heap_free_before)})</span>
+                    )}
+                  </>
+                : tr("לא נרשם אתחול מאז ש-dravix התחילה לעקוב", "No reboot recorded since dravix started watching")}
+            </p>
+            <p className={`mb-2 text-sm ${health.reboots_24h >= 3 ? "text-warn" : ""}`}>
+              {tr(`אתחולים ב-24 השעות האחרונות: ${health.reboots_24h}`, `Reboots in the last 24 hours: ${health.reboots_24h}`)}
+            </p>
+            <ul className="mb-2 grid grid-cols-2 gap-x-4 gap-y-1 text-xs sm:grid-cols-3">
+              <li className={health.warnings.loop ? "text-warn" : "text-mute"}>Loop Time: <b>{health.live.loop_time == null ? "—" : `${Math.round(health.live.loop_time)} ms`}</b>{health.warnings.loop && ` ⚠ > ${health.thresholds.loop_ms}`}</li>
+              <li className={health.warnings.heap ? "text-warn" : "text-mute"}>Heap Free: <b>{kb(health.live.heap_free)}</b>{health.warnings.heap && " ⚠"}</li>
+              <li className="text-mute">Largest block: <b>{kb(health.live.heap_largest_block)}</b></li>
+              <li className="text-mute">PSRAM Free: <b>{kb(health.live.psram_free)}</b></li>
+              <li className="text-mute">Uptime: <b>{hms(health.live.uptime)}</b></li>
+              <li className="text-mute">Firmware: <b>{health.live.firmware_version ?? "—"}</b> · Reset: <b dir="auto">{health.live.reset_reason ?? "—"}</b></li>
+            </ul>
+            {health.reboots.length > 0 && (
+              <details className="text-xs text-mute">
+                <summary className="cursor-pointer">{tr("יומן אתחולים", "Reboot log")} ({health.reboots.length})</summary>
+                <ul className="mt-1 space-y-0.5">
+                  {[...health.reboots].reverse().map((r) => (
+                    <li key={r.at} dir="auto">🔁 {new Date(r.at).toLocaleString()} · {r.reason || "?"}{r.from_history ? tr(" (מההיסטוריה של HA)", " (from HA history)") : ""}{r.loop_time_before != null ? ` · Loop ${Math.round(r.loop_time_before)} ms · Heap ${kb(r.heap_free_before)}` : ""}</li>
+                  ))}
+                </ul>
+              </details>
+            )}
+            <div className="mt-2 flex flex-wrap gap-2 text-xs">
+              <button type="button" className="btn" onClick={loadHealth}>{tr("🔄 רענן", "🔄 Refresh")}</button>
+            </div>
+          </>
+        )}
       </Section>
 
       {/* ── 🎙️ Okay Nabu — the Assist pipeline the robot is wired to, and what it's missing ── */}

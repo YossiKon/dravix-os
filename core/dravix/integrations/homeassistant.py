@@ -56,6 +56,20 @@ class HomeAssistant:
         r.raise_for_status()
         return r.json()
 
+    async def history(self, entity_ids: list[str], hours: int = 24) -> list[list[dict[str, Any]]]:
+        """Recorder history for a few entities: one list per entity of ``{entity_id, state,
+        last_changed}`` rows (minimal response — no attributes). What HA has been quietly
+        recording all along; the robot's reboot log lives here before dravix ever ran."""
+        import datetime as _dt
+
+        start = (_dt.datetime.now(_dt.timezone.utc) - _dt.timedelta(hours=hours)).isoformat(timespec="seconds")
+        r = await self._client.get(
+            f"/api/history/period/{start}",
+            params={"filter_entity_id": ",".join(entity_ids), "minimal_response": "", "no_attributes": ""},
+        )
+        r.raise_for_status()
+        return r.json()
+
     async def call_service(
         self, domain: str, service: str, data: dict[str, Any] | None = None
     ) -> Any:

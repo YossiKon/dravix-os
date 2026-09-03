@@ -17,6 +17,7 @@ const LABELS: Record<string, { icon: string; he: string; en: string }> = {
   "touch.pet": { icon: "💗", he: "לוטף בראש", en: "petted on the head" },
   "touch.tap": { icon: "👆", he: "קיבל טאפ", en: "tapped" },
   "robot.touched": { icon: "🤗", he: "נגעו בו", en: "touched" },
+  "robot.rebooted": { icon: "🔁", he: "אתחל מחדש", en: "rebooted" },
   "user.spoke": { icon: "🗣", he: "שמע אותך", en: "heard you" },
   "robot.say": { icon: "💬", he: "אמר", en: "said" },
   "robot.face": { icon: "🎭", he: "החליף פרצוף", en: "changed face" },

@@ -604,6 +604,17 @@ async def ha_switch(body: HASwitchBody, request: Request):
     return {"ok": True, "entity_id": body.entity_id, "on": body.on}
 
 
+@router.get("/api/robot/health")
+async def robot_health(request: Request):
+    """Why does it reboot? Live Loop Time / heap / PSRAM / uptime / firmware from the robot's
+    debug sensors, a 24h reboot count, the last reboot with its verdict, and the reboot log
+    (each entry keeps the memory/loop picture from just BEFORE the reboot)."""
+    h = getattr(request.app.state, "health", None)
+    if h is None:
+        raise HTTPException(status_code=503, detail="health tracker not available")
+    return h.snapshot()
+
+
 @router.get("/api/robot/config")
 async def get_robot_config(request: Request):
     return _robot_config_payload(request)

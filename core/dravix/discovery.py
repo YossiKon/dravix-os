@@ -43,6 +43,15 @@ _ROLES: dict[str, tuple[str, tuple[str, ...], bool]] = {
     "permission_text": ("text", ("agent_permission",), False),
     "ai_state_text": ("text", ("ai_state",), False),
     "latest_fw_text": ("text", ("latest_firmware",), False),
+    # health — the firmware's debug sensors (why did it reboot, how starved is it). Generic
+    # names, so they only count under the robot's own prefix.
+    "reset_reason": ("sensor", ("reset_reason",), True),
+    "heap_free": ("sensor", ("heap_free",), True),
+    "heap_largest_block": ("sensor", ("heap_largest_block",), True),
+    "loop_time": ("sensor", ("loop_time",), True),
+    "psram_free": ("sensor", ("psram_free",), True),
+    "uptime": ("sensor", ("uptime",), True),
+    "firmware_version": ("sensor", ("firmware_version",), True),
     "climate_name_text": ("text", ("climate_name",), False),
     "climate_set_text": ("text", ("climate_set",), False),
     "climate_info_text": ("text", ("climate_info",), False),

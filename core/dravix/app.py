@@ -317,6 +317,7 @@ async def lifespan(app: FastAPI):
         from .climate_bridge import push_status
         from .dashboard_bridge import push_url
 
+        tick = 0
         while True:
             if ha is not None:
                 disc = app.state.discovered_entities or {}
@@ -329,8 +330,20 @@ async def lifespan(app: FastAPI):
                     await push_url(ha, store.dashboard_url(), disc)
                 except Exception:  # noqa: BLE001 — never die
                     pass
+                # robot HEALTH every 30s (6th tick): why did it reboot, how starved is it —
+                # the debug sensors nobody reads; plus a one-time backfill from HA's history
+                tick += 1
+                if tick % 6 == 1:
+                    try:
+                        await app.state.health.backfill(disc)
+                        await app.state.health.sample(disc)
+                    except Exception:  # noqa: BLE001 — never die
+                        pass
             await asyncio.sleep(5)
 
+    from .health import RobotHealth
+
+    app.state.health = RobotHealth(ha, store, bus)   # reboot log + live loop/heap picture
     climate_task = asyncio.create_task(_climate_pusher(), name="dravix-climate")
 
     async def _personality_drift() -> None:

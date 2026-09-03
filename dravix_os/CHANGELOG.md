@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.1.8
+
+**🩺 Every reboot, with its reason** *(no firmware change — still firmware 44)*
+
+The robot has been writing *why* it rebooted to Home Assistant all along — **Reset Reason**,
+plus **Heap Free**, **Loop Time**, **PSRAM Free** and **Uptime** — and nobody was reading it.
+Now dravix does.
+
+- **Settings → 🩺 Robot health**: a plain-language verdict first (“voltage sag — charger or
+  cable”, “main loop starved — see Loop Time”, “software crash — the ESPHome log is needed”),
+  then the live numbers with thresholds, the reboot count for the last 24 hours, and the log.
+- **Each reboot is recorded with the picture from just before it** — how much memory was
+  free and how slow the loop was in the last sample before uptime dropped. That is the
+  difference between guessing and knowing.
+- **It backfills from Home Assistant's history on first start**, so yesterday's crashes are
+  already in the log the first time you open it.
+- A reboot shows up in the live diary too (🔁 rebooted · reason).
+
 ## 0.1.7
 
 **🧪 Diagnostic build — firmware 44** *(update both)*
