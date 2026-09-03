@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.1.9
+
+**📶 Wi-Fi power-saving off — for the right reason this time** *(firmware 45 — update both)*
+
+Reading the robot's own diagnostics changed the picture: it was **not** crashing hundreds of
+times. Its uptime showed hours of stable running — what the history actually recorded was
+about **200 Home Assistant connection drops in 48 hours**, plus one real burst of power-loss
+reboots. A robot that keeps losing its Home Assistant connection freezes every screen that
+Home Assistant feeds and looks exactly like a robot that crashed.
+
+- **Wi-Fi power-saving is off again.** Firmware 44 had put it back to the board's default as a
+  power hedge, when the diagnosis was still "it reboots". For dropped *connections* that
+  default is the suspect, not the cure — so it goes back off. It costs about 50 mA on a robot
+  that lives on a charger.
+- The two other load reductions from firmware 44 stay: no loud-noise level meter, and the head
+  glance at its calmer rate.
+
 ## 0.1.8
 
 **🩺 Every reboot, with its reason** *(no firmware change — still firmware 44)*

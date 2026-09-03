@@ -36,7 +36,7 @@ substitutions:
   # publishes it to HA ("Firmware version" sensor); the dravix dashboard compares it
   # with the version bundled in the add-on and shows "firmware update available".
   # (Maintainers: bump this on every firmware change. Users: don't touch.)
-  fw_version: "44"
+  fw_version: "45"
   # The ESPHome node name (mDNS hostname + the default entity prefix on a fresh flash).
   # Change it only if you run MORE THAN ONE robot — each needs a unique name. NOTE:
   # changing it on an already-adopted robot registers a NEW device in HA.
@@ -187,6 +187,11 @@ ota:
 wifi:
   ssid: !secret wifi_ssid
   password: !secret wifi_password
+  # POWER-SAVE OFF, and this time for the right reason. The board's default (LIGHT) lets the
+  # radio nap between beacons, and the diagnostics showed ~200 Home-Assistant API
+  # disconnect/reconnect cycles in 48h on a -58dBm link — each one freezes the robot's HA-fed
+  # screens and makes it look crashed. It also costs ~50mA, which is nothing on a charger.
+  power_save_mode: none
   ap:
     ssid: "${device_name} Fallback Hotspot"
 
