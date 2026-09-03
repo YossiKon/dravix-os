@@ -36,7 +36,7 @@ substitutions:
   # publishes it to HA ("Firmware version" sensor); the dravix dashboard compares it
   # with the version bundled in the add-on and shows "firmware update available".
   # (Maintainers: bump this on every firmware change. Users: don't touch.)
-  fw_version: "43"
+  fw_version: "44"
   # The ESPHome node name (mDNS hostname + the default entity prefix on a fresh flash).
   # Change it only if you run MORE THAN ONE robot — each needs a unique name. NOTE:
   # changing it on an already-adopted robot registers a NEW device in HA.
@@ -187,10 +187,6 @@ ota:
 wifi:
   ssid: !secret wifi_ssid
   password: !secret wifi_password
-  # The BSP defaults to LIGHT power-save, which lets the radio nap between beacons — that
-  # is the lag you feel between "Okay Nabu" and the listening face, and the hitch in the
-  # camera stream. A desk robot lives on a charger; ~50mA is a fine price for immediacy.
-  power_save_mode: none
   ap:
     ssid: "${device_name} Fallback Hotspot"
 
@@ -604,35 +600,6 @@ sensor:
                     else if (tnow - id(g_calm_ms) > 1500) { id(g_lift) = 0; id(g_calm_ms) = 0; id(lift_relief).execute(); }
                   }
                 }
-              }
-  # ── LOUD NOISE → it looks up (Emo / Vector turn to a clap). A PASSIVE level meter on the
-  #    microphone the wake word already keeps open — no second audio stream, and it goes
-  #    quiet under privacy mode with the wake word. The room's usual level is learned slowly
-  #    (the dB scale of this meter is arbitrary, so only the DIFFERENCE matters), and the
-  #    robot's own voice, chirps and TTS are masked out, plus a beat after them.
-  - platform: sound_level
-    microphone: i2s_mic
-    passive: true
-    measurement_duration: 200ms
-    peak:
-      id: snd_peak
-      internal: true
-      on_value:
-        then:
-          - lambda: |-
-              if (std::isnan(x)) return;
-              long now = (long) millis();
-              bool own = id(g_talk) || id(g_voice) || id(g_ext_talk)
-                         || id(i2s_speaker).is_running() || id(game_sfx).is_playing();
-              if (own) { id(g_snd_own) = now; return; }
-              if (now - id(g_snd_own) < 1500) return;          // the tail of its own sound
-              if (id(g_snd_base) == 0.0f) { id(g_snd_base) = x; return; }
-              bool loud = x > id(g_snd_base) + ${startle_db};
-              if (!loud) id(g_snd_base) += 0.03f * (x - id(g_snd_base));   // learn the room only when calm
-              if (loud && id(sw_startle).state && !id(g_sleep) && !id(g_saver) && !id(g_yawn)
-                  && now - id(g_snd_ms) > 10000) {
-                id(g_snd_ms) = now;
-                id(startle).execute();
               }
   # REAL power metering — the BSP exposes the INA226 battery monitor to HA. Current is in A,
   # power in W, bus voltage in V. These make the status page show true consumption + a true
@@ -4613,7 +4580,7 @@ interval:
               - lambda: |-
                   return id(sw_move).state && id(sw_drift).state && !id(g_sleep) && !id(g_saver)
                          && !id(g_busy) && !id(g_night) && !id(g_focus) && !id(g_quiet) && !id(g_voice)
-                         && !std::isnan(id(servo_x_angle).state) && random_float() < 0.13;
+                         && !std::isnan(id(servo_x_angle).state) && random_float() < 0.045;
           then:
             - number.set:
                 id: servo_x_angle

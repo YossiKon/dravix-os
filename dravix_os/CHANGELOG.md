@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.1.7
+
+**🧪 Diagnostic build — firmware 44** *(update both)*
+
+The robot was reported crashing after the big 36→43 flash. Everything in that range is
+event-driven or a reduction — except three changes to what the robot does *all the time*.
+This build takes exactly those three back, and nothing else, so one flash answers one question:
+
+- the **loud-noise level meter** (the only new continuous work) is out for now — the
+  *Startles at loud noises* switch stays but does nothing until it returns;
+- **Wi-Fi power-saving** is back to the board's default;
+- the **head glance** is back to its previous rate (~once per 7 minutes; the drawn eyes still wander).
+
+Every behaviour from 0.1.4 is still here. If this build is stable, the three come back one per
+release, power-saving first. If it still crashes, the cause is elsewhere and the robot's
+**Reset Reason** entity plus the ESPHome log are needed before the next flash.
+
 ## 0.1.6
 
 **☁️ One click: "Okay Nabu" through Home Assistant Cloud — in Hebrew** *(no firmware change — still firmware 43)*
