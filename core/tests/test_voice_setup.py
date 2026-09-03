@@ -63,6 +63,53 @@ def test_named_selection_beats_preferred_and_a_vanished_name_is_reported():
     assert _problems(r) == ["pipeline"]
 
 
+# ── Home Assistant Cloud: the pure halves of the one-click connect ───────────────
+def test_cloud_available_needs_login_subscription_and_both_engines():
+    from dravix.voice_setup import CLOUD_STT, CLOUD_TTS, cloud_available
+
+    both = [{"entity_id": CLOUD_STT, "state": "idle"}, {"entity_id": CLOUD_TTS, "state": "idle"}]
+    assert cloud_available({"logged_in": True, "active_subscription": True}, both)["available"] is True
+    assert cloud_available({"logged_in": True, "active_subscription": False}, both)["available"] is False
+    assert cloud_available(None, both)["available"] is False          # cloud integration not loaded
+    assert cloud_available({"logged_in": True, "active_subscription": True}, both[:1])["available"] is False
+
+
+def test_pick_cloud_voice_prefers_region_and_plain_voice():
+    from dravix.voice_setup import pick_cloud_voice
+
+    info = {"languages": [
+        ["en-GB", "SoniaNeural", "Sonia"], ["en-US", "JennyNeural|cheerful", "Jenny (cheerful)"],
+        ["en-US", "JennyNeural", "Jenny"], ["he-IL", "HilaNeural", "Hila"], ["he-IL", "AvriNeural", "Avri"],
+    ]}
+    assert pick_cloud_voice(info, "he") == ("he-IL", "HilaNeural")
+    assert pick_cloud_voice(info, "en") == ("en-US", "JennyNeural")   # region first, no style variant
+    assert pick_cloud_voice(info, "fr") is None
+    assert pick_cloud_voice(None, "he") is None
+
+
+def test_pick_stt_language_from_engine_list():
+    from dravix.voice_setup import CLOUD_STT, pick_stt_language
+
+    providers = [{"engine_id": CLOUD_STT, "supported_languages": ["en-GB", "en-US", "he-IL"]},
+                 {"engine_id": "stt.faster_whisper", "supported_languages": ["en"]}]
+    assert pick_stt_language(providers, CLOUD_STT, "he") == "he-IL"
+    assert pick_stt_language(providers, CLOUD_STT, "en") == "en-US"
+    assert pick_stt_language([{"engine_id": CLOUD_STT, "supported_languages": ["en-AU"]}], CLOUD_STT, "en") == "en-AU"
+    assert pick_stt_language(None, CLOUD_STT, "he") == "he-IL"        # command missing → canonical on faith
+
+
+def test_cloud_pipeline_fields_are_complete():
+    from dravix.voice_setup import CLOUD_STT, CLOUD_TTS, HA_BUILTIN_AGENT, cloud_pipeline_fields
+
+    f = cloud_pipeline_fields("he", "he-IL", "he-IL", "HilaNeural")
+    for k in ("name", "language", "conversation_engine", "conversation_language", "stt_engine",
+              "stt_language", "tts_engine", "tts_language", "tts_voice", "wake_word_entity", "wake_word_id"):
+        assert k in f, k                                          # HA requires every one of these
+    assert f["stt_engine"] == CLOUD_STT and f["tts_engine"] == CLOUD_TTS
+    assert f["conversation_engine"] == HA_BUILTIN_AGENT and f["wake_word_entity"] is None
+    assert f["prefer_local_intents"] is True
+
+
 def test_no_satellite_and_ambiguous_satellites():
     r = diagnose([PIPE_OK], "p1", [], STATES, "dravix")
     assert _problems(r) == ["satellite"] and r["pipeline"] is None

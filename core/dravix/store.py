@@ -33,6 +33,7 @@ _DEFAULTS: dict[str, Any] = {
     "screens": [],  # up to 3 display cards: [{title, entities:[entity_id, ...]}] pushed to the robot
     "climate_entity": "",  # the dashboard's chosen AC / thermostat (climate.*) for the Climate page
     "dashboard_url": "",  # screenshot URL for the robot's swipe-to 🌐 dashboard page (empty = off)
+    "voice_pipeline_id": None,  # the HA Assist pipeline dravix created for the robot (cloud connect)
     # Robot wiring picked from the dashboard (overrides the add-on/env defaults):
     "robot_driver": None,  # None = env default (mock|ha|mcp)
     "robot_entities": {},  # {face_select, head_yaw, head_pitch, media_player, tts_engine,
@@ -59,7 +60,7 @@ _UPDATABLE_KEYS = (
     "ai_provider", "mode_overrides", "disabled_modes", "reactions", "schedule",
     "personas", "active_persona", "memories", "routines", "voice", "voices", "inbox",
     "screens", "robot_driver", "robot_entities", "head_calibration",
-    "climate_entity", "dashboard_url", "vitals", "nudges_enabled", "language", "wellness_tips",
+    "climate_entity", "dashboard_url", "voice_pipeline_id", "vitals", "nudges_enabled", "language", "wellness_tips",
     "mood", "idle_motion", "spontaneous_speech", "robot_name", "local_only", "birthday",
     "privacy_camera", "people", "personality", "agent_prefs",
 )
@@ -203,6 +204,13 @@ class Store:
 
     def voice(self) -> str | None:
         return self._data.get("voice")
+
+    def voice_pipeline_id(self) -> str | None:
+        return self._data.get("voice_pipeline_id")
+
+    def set_voice_pipeline_id(self, pipeline_id: str | None) -> None:
+        self._data["voice_pipeline_id"] = pipeline_id or None
+        self.save()
 
     def set_voice(self, voice: str | None) -> None:
         self._data["voice"] = voice

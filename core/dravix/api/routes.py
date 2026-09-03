@@ -25,7 +25,7 @@ from ..fun import GAMES, game_names
 from ..memory import build_memory_context
 from ..persona import parse_expression, resolve_persona, resolve_voice
 from ..routines import run_routine
-from ..voice_setup import check_voice_setup
+from ..voice_setup import check_voice_setup, connect_cloud
 
 router = APIRouter()
 
@@ -613,7 +613,7 @@ async def get_robot_config(request: Request):
 async def put_robot_config(body: RobotConfigBody, request: Request):
     s = request.app.state
     if body.driver is not None:
-        if body.driver not in ("mock", "ha", "mcp"):
+        if body.driver not in ("mock", "ha"):
             raise HTTPException(status_code=400, detail=f"unknown driver {body.driver!r}")
         s.store.set_robot_driver(body.driver)
     if body.entities is not None:
@@ -2089,6 +2089,35 @@ async def voice_setup(request: Request):
         raise HTTPException(status_code=503, detail="Home Assistant is not configured")
     discovered = getattr(request.app.state, "discovered_entities", None) or {}
     return await check_voice_setup(ha, discovered)
+
+
+class CloudVoiceBody(BaseModel):
+    language: str = "en"   # short code: "he" / "en" (the cloud has to have a voice for it)
+
+
+@router.post("/api/voice/setup/cloud")
+async def voice_setup_cloud(body: CloudVoiceBody, request: Request):
+    """One click: wire "Okay Nabu" through Home Assistant Cloud (Nabu Casa) in the chosen
+    language — a pipeline named Dravix with cloud speech-to-text + text-to-speech and HA's
+    built-in agent, the robot pointed at it, and dravix's own voice moved onto the same engine.
+    Writes to HA; never touches other pipelines or HA's preferred one."""
+    s = request.app.state
+    ha = getattr(s, "ha", None)
+    if ha is None or not getattr(ha, "configured", False):
+        raise HTTPException(status_code=503, detail="Home Assistant is not configured")
+    lang = (body.language or "en").strip().lower()
+    if not re.fullmatch(r"[a-z]{2,3}", lang):
+        raise HTTPException(status_code=400, detail="language must be a short code like he or en")
+    discovered = getattr(s, "discovered_entities", None) or {}
+    try:
+        result = await connect_cloud(ha, discovered, s.store, lang)
+    except Exception as exc:  # noqa: BLE001 — HA refused something; say what
+        raise HTTPException(status_code=502, detail=f"Home Assistant refused: {exc}") from exc
+    if result.get("ok"):
+        result["driver_error"] = await _apply_robot_config(request)   # dravix now speaks via the cloud engine
+        _refresh_voice(request)
+    result["diagnosis"] = await check_voice_setup(ha, discovered)
+    return result
 
 
 @router.get("/api/config/dashboard_url")

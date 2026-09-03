@@ -145,11 +145,36 @@ export function SettingsPage(props: {
     languages?: string[];
     pipeline?: { name?: string; language?: string } | null;
     satellite?: { pipeline_entity: string; selected?: string | null } | null;
+    cloud?: { available: boolean; logged_in?: boolean; subscription?: boolean };
     checks: VoiceCheck[];
     error?: string;
   };
   const [voice, setVoice] = useState<VoiceSetup | null>(null);
   const [voiceBusy, setVoiceBusy] = useState(false);
+  // Home Assistant Cloud (Nabu Casa) one-click connect — language defaults to the dashboard's
+  const [cloudLang, setCloudLang] = useState<string>(
+    typeof document !== "undefined" && document.documentElement.dir === "rtl" ? "he" : "en"
+  );
+  const [cloudBusy, setCloudBusy] = useState(false);
+  type CloudResult = { ok: boolean; he?: string; en?: string; voice?: string; assigned?: boolean; updated?: boolean; driver_error?: string | null };
+  const [cloudResult, setCloudResult] = useState<CloudResult | null>(null);
+  function connectCloud() {
+    setCloudBusy(true);
+    setCloudResult(null);
+    apiSend<CloudResult>("/api/voice/setup/cloud", "POST", { language: cloudLang }, 60000)
+      .then((r) => {
+        setCloudResult(r);
+        if (r.ok) toast(tr("החיבור ל-Home Assistant Cloud הושלם", "Connected to Home Assistant Cloud"));
+      })
+      .catch((e) => {
+        setCloudResult({ ok: false, he: String(e?.message ?? e), en: String(e?.message ?? e) });
+        toastErr(e);
+      })
+      .finally(() => {
+        setCloudBusy(false);
+        loadVoice();
+      });
+  }
   function loadVoice() {
     setVoiceBusy(true);
     apiGet<VoiceSetup>("/api/voice/setup", 30000)
@@ -691,6 +716,37 @@ export function SettingsPage(props: {
               </li>
             )}
           </ul>
+        )}
+        {voice?.cloud?.available && (
+          <div className="mb-3 rounded-2xl border border-line bg-card2 p-3 text-xs">
+            <p className="mb-2 font-medium">☁️ {tr("יש לך Home Assistant Cloud — חיבור בלחיצה אחת", "You have Home Assistant Cloud — connect in one click")}</p>
+            <p className="mb-2 text-mute">
+              {tr(
+                "יוצר pipeline בשם „Dravix” עם דיבור-לטקסט וטקסט-לדיבור של הענן בשפה שתבחר, מכוון אליו את הרובוט, ומעביר גם את הקול של dravix (צ'אט, התראות) לאותו מנוע. סוכן השיחה נשאר Home Assistant המובנה. לא נוגע ב-pipelines אחרים.",
+                "Creates a pipeline named \"Dravix\" with the cloud's speech-to-text and text-to-speech in the language you pick, points the robot at it, and moves dravix's own voice (chat, notifications) onto the same engine. The conversation agent stays Home Assistant's built-in one. Other pipelines are left alone."
+              )}
+            </p>
+            <div className="flex flex-wrap items-center gap-2">
+              <select className="inp w-auto" value={cloudLang} onChange={(e) => setCloudLang(e.target.value)} disabled={cloudBusy}>
+                <option value="he">{tr("עברית", "Hebrew")}</option>
+                <option value="en">{tr("אנגלית", "English")}</option>
+              </select>
+              <button type="button" className="btn" disabled={cloudBusy} onClick={connectCloud}>
+                {cloudBusy ? tr("מחבר…", "Connecting…") : tr("☁️ חבר ל-Home Assistant Cloud", "☁️ Connect to Home Assistant Cloud")}
+              </button>
+            </div>
+            {cloudResult && (
+              <p className={`mt-2 ${cloudResult.ok ? "text-teal" : "text-warn"}`} dir="auto">
+                {cloudResult.ok
+                  ? tr(
+                      `✅ pipeline „Dravix” ${cloudResult.updated ? "עודכן" : "נוצר"} · קול: ${cloudResult.voice} · הרובוט ${cloudResult.assigned ? "מכוון אליו" : "לא כוון — בחר „Dravix” ב-Assistant בעמוד המכשיר"}`,
+                      `✅ pipeline "Dravix" ${cloudResult.updated ? "updated" : "created"} · voice: ${cloudResult.voice} · robot ${cloudResult.assigned ? "pointed at it" : "not assigned — pick \"Dravix\" in the Assistant select on its device page"}`
+                    )
+                  : tr(cloudResult.he ?? "", cloudResult.en ?? "")}
+                {cloudResult.driver_error && ` · ${cloudResult.driver_error}`}
+              </p>
+            )}
+          </div>
         )}
         <div className="flex flex-wrap gap-2 text-xs">
           <button type="button" className="btn" disabled={voiceBusy} onClick={loadVoice}>

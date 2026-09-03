@@ -65,6 +65,25 @@ wake word Home Assistant runs. This robot runs **its own** wake word on the devi
 (`micro_wake_word`), so that picker is empty or absent. It is expected — the wake word works
 regardless of the pipeline, and it keeps working under privacy mode's rules (off) and offline.
 
+## One click with Home Assistant Cloud (Nabu Casa)
+
+If you subscribe to Home Assistant Cloud, the dravix dashboard can do steps 2–4 for you —
+in **Hebrew** or English: **Settings → 🎙️ Okay Nabu → ☁️ Connect to Home Assistant Cloud**,
+pick the language, press the button. It
+
+1. creates an Assist pipeline named **Dravix** (or updates the one it made before) with the
+   cloud's speech-to-text and text-to-speech in that language and HA's built-in agent —
+   other pipelines and HA's *preferred* one are left alone;
+2. points the robot's **Assistant** select at it;
+3. moves dravix's own speech (dashboard chat, notifications) onto the same engine and voice.
+
+What the cloud gives you is speech in and speech out — **not a conversation brain**. The
+agent stays Home Assistant's built-in one, which handles house control, timers and weather in
+Hebrew; for open chat, add an LLM agent to the pipeline afterwards.
+
+To undo: pick another pipeline in the robot's **Assistant** select, and clear the TTS override
+under Settings → robot entities (dravix then goes back to auto-discovery).
+
 ## 5 · Try it
 
 Say **"Okay, Nabu"**. The light turns **cyan** (listening); ask something; **amber** (thinking);

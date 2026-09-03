@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.1.6
+
+**☁️ One click: "Okay Nabu" through Home Assistant Cloud — in Hebrew** *(no firmware change — still firmware 43)*
+
+- If you subscribe to Home Assistant Cloud (Nabu Casa), **Settings → 🎙️ Okay Nabu** now
+  offers **☁️ Connect to Home Assistant Cloud**: pick Hebrew or English and press it. dravix
+  creates an Assist pipeline named **Dravix** with the cloud's speech-to-text and text-to-speech
+  in that language (updated in place next time, never touching your other pipelines or HA's
+  preferred one), points the robot at it, and moves its own voice — dashboard chat,
+  notifications — onto the same engine and voice.
+- The cloud provides speech in and speech out, **not a conversation brain**: the agent stays
+  Home Assistant's built-in one (house control, timers and weather work in Hebrew); add an LLM
+  to the pipeline afterwards if you want open chat.
+- The check card now also says whether Home Assistant Cloud is available (logged in, active
+  subscription, both speech engines present).
+
 ## 0.1.5
 
 **🎙️ "Okay Nabu" — now it tells you what's missing** *(no firmware change — still firmware 43)*
