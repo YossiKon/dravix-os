@@ -39,8 +39,15 @@ _PREFIX_ROLES = (("mode_select", "mode"), ("face_select", "face"), ("state_senso
                  ("bubble_text", "bubble"), ("media_player", "media_player"))
 
 
-def robot_prefix(discovered: dict[str, str]) -> str | None:
-    """The robot's entity-id prefix ("dravix" in select.dravix_mode), from discovery."""
+def robot_prefixes(discovered: dict[str, str]) -> list[str]:
+    """EVERY entity-id prefix the robot's entities carry, longest first.
+
+    One device can genuinely own two prefixes: after a rename in Home Assistant some entities
+    are re-registered as "<area>_<device>_…" while the rest keep the old slug. A real robot in
+    the wild has ``select.dravix_mode`` next to ``text.mmd_room_dravix_bubble`` — so matching on
+    a single prefix misses half its entities, and the satellite's pipeline select is in the half
+    you didn't pick. Collect them all and match any."""
+    found: list[str] = []
     for role, suffix in _PREFIX_ROLES:
         eid = discovered.get(role)
         if not eid or "." not in eid:
@@ -48,8 +55,16 @@ def robot_prefix(discovered: dict[str, str]) -> str | None:
         object_id = eid.split(".", 1)[1]
         tail = "_" + suffix
         if object_id.endswith(tail) and len(object_id) > len(tail):
-            return object_id[: -len(tail)]
-    return None
+            prefix = object_id[: -len(tail)]
+            if prefix not in found:
+                found.append(prefix)
+    return sorted(found, key=len, reverse=True)
+
+
+def robot_prefix(discovered: dict[str, str]) -> str | None:
+    """The robot's most specific entity-id prefix, or None. See ``robot_prefixes``."""
+    all_ = robot_prefixes(discovered)
+    return all_[0] if all_ else None
 
 
 def _check(key: str, ok: bool, level: str, he: str, en: str) -> dict[str, Any]:
@@ -60,17 +75,19 @@ def _by_id(states: list[dict] | dict[str, dict]) -> dict[str, dict]:
     return states if isinstance(states, dict) else {s.get("entity_id", ""): s for s in states}
 
 
-def satellite_select(devices: list[dict], prefix: str | None) -> tuple[str | None, str]:
+def satellite_select(devices: list[dict], prefix: str | list[str] | None) -> tuple[str | None, str]:
     """The robot's pipeline SELECT entity from ``assist_pipeline/device/list`` — taken verbatim,
-    matched to the robot by the discovered prefix. Returns (entity_id, reason) where reason is
-    "" / "none" (no satellites at all) / "ambiguous" (several, none matched)."""
+    matched to the robot by ANY of its discovered prefixes (a renamed device carries two).
+    Returns (entity_id, reason) where reason is "" / "none" (no satellites at all) /
+    "ambiguous" (several, none matched)."""
     devices = [d for d in (devices or []) if d.get("pipeline_entity")]
     if not devices:
         return None, "none"
-    if prefix:
+    prefixes = [prefix] if isinstance(prefix, str) else list(prefix or [])
+    for p in prefixes:
         for d in devices:
             object_id = str(d["pipeline_entity"]).split(".", 1)[-1]
-            if object_id.startswith(prefix):
+            if object_id.startswith(p):
                 return str(d["pipeline_entity"]), ""
     if len(devices) == 1:
         return str(devices[0]["pipeline_entity"]), ""
@@ -115,7 +132,8 @@ def _engine_check(kind: str, engine: str | None, states: dict[str, dict]) -> dic
 
 
 def diagnose(pipelines: list[dict], preferred_id: str | None, devices: list[dict],
-             states: list[dict] | dict[str, dict], prefix: str | None) -> dict[str, Any]:
+             states: list[dict] | dict[str, dict],
+             prefix: str | list[str] | None) -> dict[str, Any]:
     """Pure: given what HA reports, say what the robot's voice path looks like."""
     by_id = _by_id(states)
     checks: list[dict[str, Any]] = []
@@ -257,7 +275,7 @@ async def check_voice_setup(ha: "HomeAssistant", discovered: dict[str, str]) -> 
         }
     langs = await _ws_soft(ha, {"type": "assist_pipeline/language/list"}) or {}
     result = diagnose(pl.get("pipelines") or [], pl.get("preferred_pipeline"), devices, states,
-                      robot_prefix(discovered or {}))
+                      robot_prefixes(discovered or {}))
     result["languages"] = (langs or {}).get("languages") or []
     result["cloud"] = cloud_available(await _ws_soft(ha, {"type": "cloud/status"}), states)
     return result
@@ -306,7 +324,7 @@ async def connect_cloud(ha: "HomeAssistant", discovered: dict[str, str], store: 
 
     # point the robot at it — the select's option list catches up a moment after a create
     devices = await ha._ws_command({"type": "assist_pipeline/device/list"}) or []
-    sel_id, _why = satellite_select(devices, robot_prefix(discovered or {}))
+    sel_id, _why = satellite_select(devices, robot_prefixes(discovered or {}))
     assigned = False
     if sel_id:
         for _ in range(6):

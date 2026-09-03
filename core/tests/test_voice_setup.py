@@ -118,3 +118,21 @@ def test_no_satellite_and_ambiguous_satellites():
     assert _problems(r) == ["satellite"]
     r = diagnose([PIPE_OK], "p1", two, STATES, "dravix")      # prefix picks the robot
     assert r["configured"] is True
+
+
+# ── a renamed device really does carry TWO prefixes (seen in the wild) ───────────
+def test_two_prefixes_are_both_found_and_either_matches_the_satellite():
+    from dravix.voice_setup import robot_prefixes, satellite_select
+
+    # this is a real robot: our own text/state entities were re-registered under the area
+    # prefix after a rename, while the BSP's selects kept the old slug
+    disc = {"mode_select": "select.dravix_mode", "face_select": "select.dravix_face",
+            "bubble_text": "text.mmd_room_dravix_bubble",
+            "state_sensor": "sensor.mmd_room_dravix_state"}
+    assert robot_prefixes(disc) == ["mmd_room_dravix", "dravix"]     # longest first
+    devices = [{"device_id": "d1", "pipeline_entity": "select.mmd_room_dravix_assistant"},
+               {"device_id": "d2", "pipeline_entity": "select.kitchen_assistant"}]
+    sel, why = satellite_select(devices, robot_prefixes(disc))
+    assert sel == "select.mmd_room_dravix_assistant" and why == ""
+    # the shorter prefix alone used to miss it entirely
+    assert satellite_select(devices, "dravix")[0] is None
