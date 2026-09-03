@@ -98,6 +98,7 @@ substitutions:
   charger_sleep_until: "7"    # …it puts itself to sleep (the light / a touch / the wake word wake it)
   charger_sleep_after_min: "20"
   handled_g: "0.18"           # being moved about: acceleration this far off gravity (fraction of g)
+  startle_db: "12"            # a sound this many dB above the room's usual level makes it look up
 
 esphome:
   name: ${device_name}
@@ -423,6 +424,9 @@ globals:
   - { id: g_calm_ms,  type: long,  restore_value: false, initial_value: "0" }
   - { id: g_az_rest,  type: float, restore_value: false, initial_value: "0" }   # slow-filtered resting Z accel — its SIGN says which way is up
   - { id: g_timer_on, type: bool,  restore_value: false, initial_value: "false" }  # an Assist timer is ringing (any touch silences it)
+  - { id: g_snd_base, type: float, restore_value: false, initial_value: "0" }   # the room's usual peak level (dB), learned slowly while calm
+  - { id: g_snd_ms,   type: long,  restore_value: false, initial_value: "0" }   # last startle
+  - { id: g_snd_own,  type: long,  restore_value: false, initial_value: "0" }   # last moment the robot itself was making sound
   - { id: g_grav,     type: float, restore_value: false, initial_value: "-1" }
   # battery engine (see battery_pct): smoothed open-circuit voltage + charging flag
   - { id: g_batt_v_filt, type: float, restore_value: false, initial_value: "-1" }
@@ -605,6 +609,35 @@ sensor:
                     else if (tnow - id(g_calm_ms) > 1500) { id(g_lift) = 0; id(g_calm_ms) = 0; id(lift_relief).execute(); }
                   }
                 }
+              }
+  # ── LOUD NOISE → it looks up (Emo / Vector turn to a clap). A PASSIVE level meter on the
+  #    microphone the wake word already keeps open — no second audio stream, and it goes
+  #    quiet under privacy mode with the wake word. The room's usual level is learned slowly
+  #    (the dB scale of this meter is arbitrary, so only the DIFFERENCE matters), and the
+  #    robot's own voice, chirps and TTS are masked out, plus a beat after them.
+  - platform: sound_level
+    microphone: i2s_mic
+    passive: true
+    measurement_duration: 200ms
+    peak:
+      id: snd_peak
+      internal: true
+      on_value:
+        then:
+          - lambda: |-
+              if (std::isnan(x)) return;
+              long now = (long) millis();
+              bool own = id(g_talk) || id(g_voice) || id(g_ext_talk)
+                         || id(i2s_speaker).is_running() || id(game_sfx).is_playing();
+              if (own) { id(g_snd_own) = now; return; }
+              if (now - id(g_snd_own) < 1500) return;          // the tail of its own sound
+              if (id(g_snd_base) == 0.0f) { id(g_snd_base) = x; return; }
+              bool loud = x > id(g_snd_base) + ${startle_db};
+              if (!loud) id(g_snd_base) += 0.03f * (x - id(g_snd_base));   // learn the room only when calm
+              if (loud && id(sw_startle).state && !id(g_sleep) && !id(g_saver) && !id(g_yawn)
+                  && now - id(g_snd_ms) > 10000) {
+                id(g_snd_ms) = now;
+                id(startle).execute();
               }
   # REAL power metering — the BSP exposes the INA226 battery monitor to HA. Current is in A,
   # power in W, bus voltage in V. These make the status page show true consumption + a true
@@ -1151,6 +1184,7 @@ switch:
   - { platform: template, name: "Sleeps on the charger at night", id: sw_charger_sleep, optimistic: true, restore_mode: RESTORE_DEFAULT_ON }
   - { platform: template, name: "Snores",               id: sw_snore,     optimistic: true, restore_mode: RESTORE_DEFAULT_ON }
   - { platform: template, name: "Reacts to being picked up", id: sw_handled, optimistic: true, restore_mode: RESTORE_DEFAULT_ON }
+  - { platform: template, name: "Startles at loud noises", id: sw_startle, optimistic: true, restore_mode: RESTORE_DEFAULT_ON }
   # isLOCAL — the user's master "everything stays inside the home network" choice, made
   # HERE on the robot (the LOCAL button on the swipe-down status bar), in HA, or in the
   # dravix dashboard — dravix keeps all three in sync. The enforcement (blocking cloud AI,
@@ -2103,6 +2137,18 @@ lvgl:
 
 script:
   # ── COMPANION BEHAVIOURS (fw43) — the little things Emo / Eilik / Vector do ──
+  - id: startle             # a loud noise: wide eyes, a quick glance toward it, then back to business
+    mode: single
+    then:
+      - lambda: 'lv_disp_trig_activity(NULL);'
+      - globals.set: { id: g_expr, value: "5" }          # wide, surprised
+      - script.execute: render_face
+      - if:
+          condition: { lambda: 'return id(sw_move).state && !id(head_nudge).is_running();' }
+          then: [ { script.execute: { id: head_nudge, dx: !lambda 'return random_float() < 0.5f ? -14 : 14;', dy: 4 } } ]
+      - delay: 1300ms
+      - globals.set: { id: g_expr, value: !lambda 'return id(g_face_rest);' }
+      - script.execute: render_face
   - id: yawn                # bored: heavy lids, a big round mouth, a slow droop and a sleepy sound
     mode: single
     then:
@@ -2474,6 +2520,7 @@ script:
       - script.stop: lift_relief
       - script.stop: grumpy_pet
       - script.stop: timer_ring
+      - script.stop: startle
       - globals.set: { id: g_yawn, value: "false" }
       - globals.set: { id: g_timer_on, value: "false" }
       - script.stop: react_hot
