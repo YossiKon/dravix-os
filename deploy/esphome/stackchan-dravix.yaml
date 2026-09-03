@@ -587,7 +587,8 @@ sensor:
               if (id(g_az_rest) == 0.0f) id(g_az_rest) = az;
               if (!moving && id(g_lift) == 0) id(g_az_rest) += 0.01f * (az - id(g_az_rest));
               bool upside  = (az * id(g_az_rest) < 0.0f) && fabsf(az) > 0.6f * id(g_grav);
-              bool handled = dev > ${handled_g} * id(g_grav) && dev <= 0.55f * id(g_grav);
+              bool handled = dev > ${handled_g} * id(g_grav) && dev <= 0.55f * id(g_grav)
+                             && (tnow - id(g_shake_ms)) > 1500;   // between the jolts of a SHAKE, dev sits in this band — that is the shake, not handling
               if (id(sw_handled).state && !moving && !id(g_sleep) && !id(g_voice)) {
                 if (upside || handled) {
                   id(g_calm_ms) = 0;
@@ -2221,6 +2222,12 @@ script:
     mode: restart
     then:
       - globals.set: { id: g_timer_on, value: "true" }
+      # an alarm is the one event that should wake a sleeping robot (sleep-on-charger can
+      # easily have put it to sleep during a long timer) — the awake mode restores the
+      # backlight and the head, the way on_listening does it
+      - if:
+          condition: { lambda: 'return id(g_sleep) || id(g_saver);' }
+          then: [ { select.set: { id: robot_mode, option: awake } } ]
       - lambda: 'lv_disp_trig_activity(NULL);'
       - globals.set: { id: g_card, value: "0" }
       - lvgl.page.show: page_face
@@ -2517,6 +2524,7 @@ script:
       - script.stop: startle
       - globals.set: { id: g_yawn, value: "false" }
       - globals.set: { id: g_timer_on, value: "false" }
+      - lambda: 'id(g_lift) = 0; id(g_lift_ms) = 0; id(g_calm_ms) = 0;'   # a STOP mid-carry must not leave a "phew" armed
       - script.stop: react_hot
       - script.stop: react_cold
       - script.stop: rub_eyes
