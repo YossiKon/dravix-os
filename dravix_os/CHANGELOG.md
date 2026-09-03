@@ -1,5 +1,39 @@
 # Changelog
 
+## 0.1.4
+
+**🧸 The little things Emo, Eilik and Vector do** *(firmware 43 — update both)*
+
+Eight new behaviours. Every one has its own on/off switch in Home Assistant, so nothing
+here needs a reflash to turn off.
+
+- **Yawns when bored** — nobody has touched it, talked to it or come near for a while
+  (8 minutes by default): heavy lids, a big round mouth, a slow droop and a sleepy sound.
+  Now and then a **sneeze** instead, the way Emo catches a cold.
+- **Sleeps on the charger at night** (Vector) — plugged in, between 23:00 and 07:00, nobody
+  around for twenty minutes: it puts itself to sleep. The room light, a touch or the wake
+  word wake it, as they always did.
+- **Snores** (Vector) — a soft, slow two-tone every dozen seconds while asleep. Not in
+  quiet or night mode. If it bothers you, that's the *Snores* switch.
+- **Timers finally ring.** "Okay Nabu, set a timer for five minutes" was being *refused*
+  on this robot, because it never told Home Assistant it could do timers. Now: a nod when
+  the timer starts, three rings with a happy face and green lights when it ends, and any
+  touch silences it.
+- **Reacts to being picked up** (Vector's "hey, put me down") — carried about: startled
+  eyes and a little "eep"; turned upside-down: dizzy x-eyes and a "help!"; set back down
+  and still: a relieved "phew". It ignores its own head movements, so a nuzzle doesn't
+  count. *Uses the same motion sensor as shake-to-dizzy — still unverified on hardware.*
+- **Gets cross if you keep shaking it** (Eilik) — shakes stack up; a pet while it's cross
+  gets a huff and a head-shake instead of love, and calms it a notch. Forty-five seconds of
+  peace and all is forgiven.
+- **Startles at a loud noise** (Emo / Vector turn to a clap) — wide eyes and a quick glance
+  to one side. It learns your room's normal level and only reacts to a real jump above it;
+  it never jumps at its own voice. This piggybacks on the microphone the wake word already
+  keeps open, so it adds no second audio stream — and it goes quiet under privacy mode.
+
+Everything reads one shared "how long since anyone was here" clock, stamped by every touch,
+tap, approach, wake word and conversation.
+
 ## 0.1.3
 
 **🐾 A desk companion, not an arcade** *(firmware 42 — update both)*

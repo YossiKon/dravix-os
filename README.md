@@ -156,6 +156,13 @@ Everything is done by touching the robot, talking to it, or from the dashboard:
 | 🌬 Breathing + body language | The face rises/settles on a slow sine while idle, sways in tiny moves while talking; **occasional** idle glances (sparse by design — the head turns ~once every few minutes, and it holds still during a conversation) | Always on; fully still in calm modes. Toggles: **Body language (head moves)** and **Idle glances / motion** |
 | 👋 Wave & 👉 boop gestures | Wave at the nose sensor → it waves back; a finger right at the sensor → love-eyes + a nod | Just do it (proximity sensor) |
 | 🫨 Hand-turn reaction | Physically turn its head → startled wide eyes, then it warms up to it | Just do it |
+| 🥱 Bored yawns & sneezes | Left alone for a while, it yawns (heavy lids, round mouth, a droop) — and now and then sneezes | Automatic; *Yawns when bored* switch |
+| 🔌 Sleeps on the charger at night | Plugged in, night hours, nobody around → it puts itself to sleep; light / touch / wake word wake it | *Sleeps on the charger at night* switch + hours in the firmware substitutions |
+| 💤 Snores | A soft two-tone while asleep | *Snores* switch |
+| ⏲ Assist timers ring | "Set a timer for 5 minutes" — a nod at start, three rings + a happy face at the end, any touch stops it | Voice; automatic |
+| 🙌 Reacts to being picked up | Carried → startled eyes; upside-down → dizzy "help!"; set down → "phew" | *Reacts to being picked up* switch (IMU) |
+| 😤 Gets cross if shaken | Repeated shaking stacks up; pets while cross get a huff, then it softens | Automatic (part of shake → dizzy) |
+| 💥 Startles at loud noises | A clap or a bang → wide eyes and a glance toward it; never at its own voice | *Startles at loud noises* switch |
 | 🕺 Party | A desk disco — rainbow LEDs, a head bop, a little tune | Dashboard → Home, or the **Party** button in HA |
 | 💗 Vitals screen | The robot's live needs as bars (energy/food/fun/calm) | Swipe to **VITALS**; care actions on the dashboard **Life** tab |
 | 🌐 Dashboard page | A live screenshot of any Home Assistant dashboard (or any image URL) on its own swipe page — stays put, refreshes every 15s | Dashboard → **Settings → 🌐 Dashboard page**; render HA views with the **Puppet** add-on. See [docs/dashboard-page.md](docs/dashboard-page.md) |
