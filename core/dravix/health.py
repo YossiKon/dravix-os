@@ -125,12 +125,15 @@ def parse_history(rows: list[list[dict]], entities: dict[str, str]) -> list[dict
     up_id, rr_id = entities.get("uptime"), entities.get("reset_reason")
     for series in rows or []:
         for row in series:
-            eid = row.get("entity_id"); st = row.get("state"); when = row.get("last_changed") or row.get("last_updated") or ""
+            eid = row.get("entity_id")
+            st = row.get("state")
+            when = row.get("last_changed") or row.get("last_updated") or ""
             if eid == up_id and st not in _UNAVAILABLE and _num(st) is not None:
                 ups.append((when, _num(st)))
             elif eid == rr_id and st not in _UNAVAILABLE:
                 reasons.append((when, str(st)))
-    ups.sort(); reasons.sort()
+    ups.sort()
+    reasons.sort()
     found: list[dict[str, Any]] = []
     prev: tuple[str, float] | None = None
     for when, up in ups:
@@ -219,7 +222,8 @@ class RobotHealth:
                 continue
         last = ring[-1] if ring else None
         live = self.last or {}
-        loop = live.get("loop_time"); heap = live.get("heap_free")
+        loop = live.get("loop_time")
+        heap = live.get("heap_free")
         return {
             "live": live,
             "warnings": {
