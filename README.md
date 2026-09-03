@@ -124,7 +124,7 @@ Everything is done by touching the robot, talking to it, or from the dashboard:
 
 | You do | The robot does |
 |--------|----------------|
-| Say **"Okay, Nabu"** | Wakes and listens (big eyes, yellow LEDs) → answers via HA Assist, reply shown in its speech bubble |
+| Say **"Okay, Nabu"** | Wakes and listens (big eyes, cyan LEDs → amber while thinking → green while answering) → answers via your HA Assist pipeline, reply shown in its speech bubble. Setting up the pipeline: [docs/voice-setup.md](docs/voice-setup.md) |
 | **Tap the face** | Starts a voice conversation (tap again to stop) |
 | **Long-press the face** (1.2 s) | Goes to sleep instantly |
 | **Pet the head** (front / middle zones) | Pink LEDs, nuzzles up into your hand, happy wiggle |

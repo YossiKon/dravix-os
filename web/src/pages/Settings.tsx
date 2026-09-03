@@ -133,7 +133,30 @@ export function SettingsPage(props: {
         setDashSaved(r.url ?? "");
       })
       .catch(() => setDashUrl(""));
+    loadVoice();
   }, []);
+
+  // ── 🎙️ "Okay Nabu" — what is the robot's Assist pipeline missing? (read on demand only:
+  //    each check opens a WebSocket to HA, so it runs on mount + the Re-check button, never a loop)
+  type VoiceCheck = { key: string; ok: boolean; level: string; he: string; en: string };
+  type VoiceSetup = {
+    configured: boolean;
+    problems?: number;
+    languages?: string[];
+    pipeline?: { name?: string; language?: string } | null;
+    satellite?: { pipeline_entity: string; selected?: string | null } | null;
+    checks: VoiceCheck[];
+    error?: string;
+  };
+  const [voice, setVoice] = useState<VoiceSetup | null>(null);
+  const [voiceBusy, setVoiceBusy] = useState(false);
+  function loadVoice() {
+    setVoiceBusy(true);
+    apiGet<VoiceSetup>("/api/voice/setup", 30000)
+      .then(setVoice)
+      .catch((e) => setVoice({ configured: false, checks: [], error: String(e?.message ?? e) }))
+      .finally(() => setVoiceBusy(false));
+  }
 
   // Match each behaviour switch by object_id SUFFIX (switch.<anything>_greet_on_approach or
   // switch.greet_on_approach) — prefix-agnostic, so any device name works. Shortest wins on ties.
@@ -632,6 +655,53 @@ export function SettingsPage(props: {
           <button className="btn btn-primary" disabled={robotName === null} onClick={() => void saveRobotName()}>
             {tr("שמור", "Save")}
           </button>
+        </div>
+      </Section>
+
+      {/* ── 🎙️ Okay Nabu — the Assist pipeline the robot is wired to, and what it's missing ── */}
+      <Section title={tr("🎙️ Okay Nabu — הגדרת הקול", "🎙️ Okay Nabu — voice setup")} delay={40}>
+        <p className="mb-2 text-sm text-mute">
+          {tr(
+            "מילת ההשכמה וההקשבה רצות על הרובוט. כל מה שאחרי — לשמוע את המילים, להחליט מה לענות, לומר את זה — הוא ה-Assist pipeline של Home Assistant. אם אחד משלושת אלה חסר, הרובוט מקשיב ואז שותק.",
+            "The wake word and listening run on the robot. Everything after — hearing the words, deciding what to say, saying it — is Home Assistant's Assist pipeline. If any of the three is missing, the robot listens and then goes quiet."
+          )}
+        </p>
+        {voice === null ? (
+          <p className="text-xs text-mute">{tr("בודק…", "Checking…")}</p>
+        ) : voice.error ? (
+          <p className="text-xs text-warn" dir="auto">{voice.error}</p>
+        ) : (
+          <ul className="mb-3 space-y-1 text-sm">
+            {voice.checks.map((c) => (
+              <li key={c.key} dir="auto" className={c.ok ? (c.level === "info" || c.level === "unknown" ? "text-mute" : "") : "text-warn"}>
+                <span className="me-1">{c.ok ? (c.level === "info" ? "ℹ️" : c.level === "unknown" ? "❔" : "✅") : c.level === "absent" ? "⚠️" : "❌"}</span>
+                {tr(c.he, c.en)}
+              </li>
+            ))}
+            {voice.pipeline?.name && (
+              <li className="text-xs text-mute" dir="auto">
+                {tr("pipeline", "Pipeline")}: <b>{voice.pipeline.name}</b>
+                {voice.satellite?.selected === "preferred" && tr(" (המועדף של HA)", " (HA's preferred)")}
+              </li>
+            )}
+            {voice.languages && voice.languages.length > 0 && (
+              <li className="text-xs text-mute" dir="auto">
+                {tr("שפות עם מחסנית מקומית מלאה ב-HA הזה: ", "Languages with a complete local stack on this HA: ")}
+                <span dir="ltr">{voice.languages.join(", ")}</span>
+              </li>
+            )}
+          </ul>
+        )}
+        <div className="flex flex-wrap gap-2 text-xs">
+          <button type="button" className="btn" disabled={voiceBusy} onClick={loadVoice}>
+            {voiceBusy ? tr("בודק…", "Checking…") : tr("🔄 בדוק שוב", "🔄 Re-check")}
+          </button>
+          <a dir="ltr" href="https://my.home-assistant.io/redirect/voice_assistants/" target="_blank" rel="noreferrer" className="rounded-lg bg-teal/20 px-2 py-1 font-medium text-teal">
+            {tr("פתח „עוזרים קוליים” ב-HA", "Open Voice assistants in HA")}
+          </a>
+          <a dir="ltr" href="https://github.com/YossiKon/dravix-os/blob/main/docs/voice-setup.md" target="_blank" rel="noreferrer" className="rounded-lg bg-card2 px-2 py-1 text-mute">
+            {tr("המדריך המלא", "The full guide")}
+          </a>
         </div>
       </Section>
 

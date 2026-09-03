@@ -25,6 +25,7 @@ from ..fun import GAMES, game_names
 from ..memory import build_memory_context
 from ..persona import parse_expression, resolve_persona, resolve_voice
 from ..routines import run_routine
+from ..voice_setup import check_voice_setup
 
 router = APIRouter()
 
@@ -2076,6 +2077,18 @@ async def put_climate_config(body: ClimateConfigBody, request: Request):
 
 class DashboardUrlBody(BaseModel):
     url: str = ""
+
+
+@router.get("/api/voice/setup")
+async def voice_setup(request: Request):
+    """What is "Okay Nabu" wired to? Reads the Assist pipeline the robot's satellite follows
+    and names what is missing (speech-to-text / conversation agent / text-to-speech). Read-only,
+    on demand — it opens a WebSocket to HA per question, so never poll it."""
+    ha = getattr(request.app.state, "ha", None)
+    if ha is None or not getattr(ha, "configured", False):
+        raise HTTPException(status_code=503, detail="Home Assistant is not configured")
+    discovered = getattr(request.app.state, "discovered_entities", None) or {}
+    return await check_voice_setup(ha, discovered)
 
 
 @router.get("/api/config/dashboard_url")

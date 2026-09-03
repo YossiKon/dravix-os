@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.1.5
+
+**🎙️ "Okay Nabu" — now it tells you what's missing** *(no firmware change — still firmware 43)*
+
+- **Settings → 🎙️ Okay Nabu**: a new card that reads the Assist pipeline your robot is
+  actually wired to and checks the three things a voice turn needs — speech-to-text, a
+  conversation agent, text-to-speech. Each line says what it found or what to install, in plain
+  words, and tells apart “nothing chosen” from “chosen but its add-on isn't running”. It also
+  shows the pipeline's language and which languages have a complete local stack on your box.
+- **New guide: [docs/voice-setup.md](https://github.com/YossiKon/dravix-os/blob/main/docs/voice-setup.md)**
+  — English fully local (Whisper + Piper), Hebrew via Home Assistant Cloud, how to point the
+  robot at the pipeline, and why HA shows no wake-word picker for this robot (its wake word runs
+  on the device — expected).
+
 ## 0.1.4
 
 **🧸 The little things Emo, Eilik and Vector do** *(firmware 43 — update both)*
