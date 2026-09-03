@@ -440,12 +440,6 @@ globals:
   - { id: led_r,   type: float, restore_value: false, initial_value: "0" }
   - { id: led_g,   type: float, restore_value: false, initial_value: "0" }
   - { id: led_b,   type: float, restore_value: false, initial_value: "0" }
-  - id: g_sq
-    type: int[16]
-    restore_value: false
-    # plain '{}' is ambiguous between GlobalsComponent's two ctors (scalar vs array) in
-    # ESPHome 2026.6.4 — pass an explicit std::array so it binds the array ctor cleanly.
-    initial_value: "std::array<int, 16>{}"
 
 # The robot itself tells HA when newer firmware exists (see "Latest firmware" above).
 binary_sensor:
