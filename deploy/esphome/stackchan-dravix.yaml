@@ -36,7 +36,7 @@ substitutions:
   # publishes it to HA ("Firmware version" sensor); the dravix dashboard compares it
   # with the version bundled in the add-on and shows "firmware update available".
   # (Maintainers: bump this on every firmware change. Users: don't touch.)
-  fw_version: "42"
+  fw_version: "43"
   # The ESPHome node name (mDNS hostname + the default entity prefix on a fresh flash).
   # Change it only if you run MORE THAN ONE robot — each needs a unique name. NOTE:
   # changing it on an already-adopted robot registers a NEW device in HA.
@@ -92,6 +92,12 @@ substitutions:
   prox_boop: "650"   # nearly-touching (a finger at the sensor) = a BOOP 👉 → love
   lux_dark: "5"      # lux below this = room went dark → sleep (if enabled)
   lux_bright: "30"   # lux above this = light came back → wake
+  # COMPANION BEHAVIOURS (each also has an on/off switch in Home Assistant):
+  bored_after_min: "8"        # nobody around for this long → the occasional yawn (or a sneeze)
+  charger_sleep_from: "23"    # on the charger between these hours with nobody around…
+  charger_sleep_until: "7"    # …it puts itself to sleep (the light / a touch / the wake word wake it)
+  charger_sleep_after_min: "20"
+  handled_g: "0.18"           # being moved about: acceleration this far off gravity (fraction of g)
 
 esphome:
   name: ${device_name}
@@ -407,6 +413,16 @@ globals:
   # so the maths works whether the driver reports m/s² or g.
   - { id: g_shake_n,  type: int,   restore_value: false, initial_value: "0" }
   - { id: g_shake_ms, type: long,  restore_value: false, initial_value: "0" }
+  # ── companion behaviours (fw43) ──
+  - { id: g_ia_ms,    type: long,  restore_value: false, initial_value: "0" }   # last INTERACTION (touch/voice/approach/tap) — the one clock bored/charger-sleep read
+  - { id: g_yawn,     type: bool,  restore_value: false, initial_value: "false" }  # mid-yawn: render_face draws heavy lids + a round mouth
+  - { id: g_grump,    type: int,   restore_value: false, initial_value: "0" }   # Eilik-style: shakes stack up, pets calm it down
+  - { id: g_grump_ms, type: long,  restore_value: false, initial_value: "0" }
+  - { id: g_lift,     type: int,   restore_value: false, initial_value: "0" }   # 0 on the desk · 1 being handled · 2 upside-down
+  - { id: g_lift_ms,  type: long,  restore_value: false, initial_value: "0" }
+  - { id: g_calm_ms,  type: long,  restore_value: false, initial_value: "0" }
+  - { id: g_az_rest,  type: float, restore_value: false, initial_value: "0" }   # slow-filtered resting Z accel — its SIGN says which way is up
+  - { id: g_timer_on, type: bool,  restore_value: false, initial_value: "false" }  # an Assist timer is ringing (any touch silences it)
   - { id: g_grav,     type: float, restore_value: false, initial_value: "-1" }
   # battery engine (see battery_pct): smoothed open-circuit voltage + charging flag
   - { id: g_batt_v_filt, type: float, restore_value: false, initial_value: "-1" }
@@ -559,7 +575,35 @@ sensor:
                 id(g_shake_ms) = now;
                 if (id(g_shake_n) >= 3) {              // 3 jolts in the window = SHAKEN
                   id(g_shake_n) = 0;
+                  // Eilik-style: each shaking stacks up crossness; pets calm it, time forgives it
+                  id(g_grump) += 1; id(g_grump_ms) = now;
                   id(dizzy_react).execute();
+                }
+              }
+              // ── HANDLED / UPSIDE-DOWN (Vector's "hey, put me down"). NOT a jolt: a sustained
+              //    small acceleration = being carried about; the Z axis flipping sign = upside-down.
+              //    The CoreS3 IS the head, so every servo move shakes this sensor — ignore the 1.5s
+              //    after any commanded move (all head writers stamp g_move_ms).
+              long tnow = (long) millis();
+              bool moving = (tnow - id(g_move_ms)) < 1500;
+              if (id(g_az_rest) == 0.0f) id(g_az_rest) = az;
+              if (!moving && id(g_lift) == 0) id(g_az_rest) += 0.01f * (az - id(g_az_rest));
+              bool upside  = (az * id(g_az_rest) < 0.0f) && fabsf(az) > 0.6f * id(g_grav);
+              bool handled = dev > ${handled_g} * id(g_grav) && dev <= 0.55f * id(g_grav);
+              if (id(sw_handled).state && !moving && !id(g_sleep) && !id(g_voice)) {
+                if (upside || handled) {
+                  id(g_calm_ms) = 0;
+                  if (id(g_lift_ms) == 0) id(g_lift_ms) = tnow;
+                  else if (tnow - id(g_lift_ms) > (upside ? 600 : 450)) {
+                    int want = upside ? 2 : 1;
+                    if (id(g_lift) != want) { id(g_lift) = want; id(lift_react).execute(); }
+                  }
+                } else {
+                  id(g_lift_ms) = 0;
+                  if (id(g_lift) != 0) {
+                    if (id(g_calm_ms) == 0) id(g_calm_ms) = tnow;
+                    else if (tnow - id(g_calm_ms) > 1500) { id(g_lift) = 0; id(g_calm_ms) = 0; id(lift_relief).execute(); }
+                  }
                 }
               }
   # REAL power metering — the BSP exposes the INA226 battery monitor to HA. Current is in A,
@@ -1102,6 +1146,11 @@ switch:
   - { platform: template, name: "Tap face to talk",  id: sw_tap_talk,  optimistic: true, restore_mode: RESTORE_DEFAULT_ON }
   - { platform: template, name: "Body language",     id: sw_move,      optimistic: true, restore_mode: RESTORE_DEFAULT_ON }
   - { platform: template, name: "Mood LEDs",         id: sw_mood_led,  optimistic: true, restore_mode: RESTORE_DEFAULT_ON }
+  # companion behaviours (fw43) — every one can be switched off from HA without a reflash
+  - { platform: template, name: "Yawns when bored",     id: sw_yawn,      optimistic: true, restore_mode: RESTORE_DEFAULT_ON }
+  - { platform: template, name: "Sleeps on the charger at night", id: sw_charger_sleep, optimistic: true, restore_mode: RESTORE_DEFAULT_ON }
+  - { platform: template, name: "Snores",               id: sw_snore,     optimistic: true, restore_mode: RESTORE_DEFAULT_ON }
+  - { platform: template, name: "Reacts to being picked up", id: sw_handled, optimistic: true, restore_mode: RESTORE_DEFAULT_ON }
   # isLOCAL — the user's master "everything stays inside the home network" choice, made
   # HERE on the robot (the LOCAL button on the swipe-down status bar), in HA, or in the
   # dravix dashboard — dravix keeps all three in sync. The enforcement (blocking cloud AI,
@@ -2053,6 +2102,103 @@ lvgl:
               - lvgl.page.show: page_face
 
 script:
+  # ── COMPANION BEHAVIOURS (fw43) — the little things Emo / Eilik / Vector do ──
+  - id: yawn                # bored: heavy lids, a big round mouth, a slow droop and a sleepy sound
+    mode: single
+    then:
+      - if:
+          condition: { lambda: 'return !id(g_sleep) && !id(g_saver) && !id(g_voice) && !id(g_yawn);' }
+          then:
+            - globals.set: { id: g_yawn, value: "true" }
+            - script.execute: render_face
+            - if:
+                condition: { lambda: 'return id(sw_sfx).state && !id(g_quiet) && !id(g_night);' }
+                then: [ { rtttl.play: "yawn:d=4,o=4,b=85:c,e,d,c" } ]
+            - if:   # one owner per body part: only droop if nothing else is moving the head
+                condition: { lambda: 'return id(sw_move).state && !id(head_nudge).is_running();' }
+                then: [ { script.execute: { id: head_nudge, dx: 0, dy: -8 } } ]
+            - delay: 1800ms
+            - globals.set: { id: g_yawn, value: "false" }
+            - script.execute: render_face
+  - id: sneeze              # Emo catches a cold now and then: a scrunch, an "achoo", a shake
+    mode: single
+    then:
+      - if:
+          condition: { lambda: 'return !id(g_sleep) && !id(g_saver) && !id(g_voice) && !id(g_yawn);' }
+          then:
+            - globals.set: { id: g_expr, value: "3" }          # the scrunched-up face
+            - script.execute: render_face
+            - delay: 450ms
+            - if:
+                condition: { lambda: 'return id(sw_sfx).state && !id(g_quiet) && !id(g_night);' }
+                then: [ { rtttl.play: "achoo:d=16,o=6,b=210:c7,p,g,c" } ]
+            - script.execute: head_nod
+            - script.execute: { id: led_flash, r: 60, g: 25, b: 100 }
+            - delay: 900ms
+            - globals.set: { id: g_expr, value: !lambda 'return id(g_face_rest);' }
+            - script.execute: render_face
+  - id: lift_react          # picked up / carried: startled wide eyes; upside-down: x-eyes + a squeak
+    mode: restart
+    then:
+      - lambda: 'lv_disp_trig_activity(NULL);'
+      - globals.set: { id: g_expr, value: !lambda 'return id(g_lift) == 2 ? 7 : 5;' }
+      - script.execute: render_face
+      - if:
+          condition: { lambda: 'return id(sw_sfx).state && !id(g_quiet) && !id(g_night);' }
+          then:
+            - if:
+                condition: { lambda: 'return id(g_lift) == 2;' }
+                then: [ { rtttl.play: "help:d=16,o=6,b=220:e,c,e,c,e" } ]
+                else: [ { rtttl.play: "eep:d=32,o=6,b=220:e,e" } ]
+      - script.execute: { id: led_flash, r: 100, g: 100, b: 100 }
+  - id: lift_relief         # set back down: a little "phew" and the resting face
+    mode: single
+    then:
+      - if:
+          condition: { lambda: 'return id(sw_sfx).state && !id(g_quiet) && !id(g_night);' }
+          then: [ { rtttl.play: "phew:d=8,o=5,b=140:e,c" } ]
+      - globals.set: { id: g_expr, value: !lambda 'return id(g_face_rest);' }
+      - script.execute: render_face
+      - script.execute: { id: led_flash, r: 20, g: 100, b: 30 }
+  - id: grumpy_pet          # a pet while it is still cross about being shaken: a huff, then it softens a notch
+    mode: single
+    then:
+      - globals.set: { id: g_expr, value: "3" }
+      - script.execute: render_face
+      - if:
+          condition: { lambda: 'return id(sw_sfx).state && !id(g_quiet) && !id(g_night);' }
+          then: [ { rtttl.play: "huff:d=16,o=5,b=180:g,e" } ]
+      - script.execute: { id: led_flash, r: 100, g: 10, b: 10 }
+      - script.execute: head_shake
+      - delay: 1200ms
+      - lambda: 'if (id(g_grump) > 0) id(g_grump) -= 1;'
+      - if:
+          condition: { lambda: 'return id(g_grump) < 2;' }
+          then:
+            - globals.set: { id: g_expr, value: !lambda 'return id(g_face_rest);' }
+            - script.execute: render_face
+  - id: timer_ring          # an Assist timer finished: three rings, a happy face, green — any touch stops it
+    mode: restart
+    then:
+      - globals.set: { id: g_timer_on, value: "true" }
+      - lambda: 'lv_disp_trig_activity(NULL);'
+      - globals.set: { id: g_card, value: "0" }
+      - lvgl.page.show: page_face
+      - globals.set: { id: g_expr, value: "1" }
+      - script.execute: render_face
+      - repeat:
+          count: 3
+          then:
+            - if:
+                condition: { lambda: 'return id(g_timer_on);' }
+                then:
+                  - rtttl.play: "ring:d=16,o=6,b=180:c,e,g,c7,g,e,c,e,g,c7"
+                  - script.execute: { id: led_flash, r: 20, g: 100, b: 30 }
+                  - script.execute: head_nod
+                  - delay: 1600ms
+      - globals.set: { id: g_timer_on, value: "false" }
+      - globals.set: { id: g_expr, value: !lambda 'return id(g_face_rest);' }
+      - script.execute: render_face
   - id: render_cards
     # the 3 entity cards: titles + the 12 Mushroom rows. Called on entering a card page and every 5s WHILE one shows.
     then:
@@ -2182,14 +2328,19 @@ script:
                      && !id(g_pet) && id(sw_touch).state;
           then:
             - globals.set: { id: g_pet, value: "true" }
+            - lambda: 'id(g_ia_ms) = (long) millis();'
             # While an Approve/Reject prompt is up, a HEAD TOUCH approves it (the red
-            # on-screen button rejects). Otherwise it's a pet.
+            # on-screen button rejects). Otherwise it's a pet — unless it is still cross
+            # about being shaken (Eilik-style): then it huffs, and each pet calms it a little.
             - if:
                 condition: { lambda: 'return id(g_perm);' }
                 then:
                   - script.execute: perm_approve
                 else:
-                  - script.execute: pet_react
+                  - if:
+                      condition: { lambda: 'return id(g_grump) >= 2;' }
+                      then: [ { script.execute: grumpy_pet } ]
+                      else: [ { script.execute: pet_react } ]
       - if:
           condition: { lambda: 'return v == "No touch";' }            # released
           then:
@@ -2205,6 +2356,7 @@ script:
                      && !id(g_pet) && id(sw_touch).state;
           then:
             - globals.set: { id: g_pet, value: "true" }
+            - lambda: 'id(g_ia_ms) = (long) millis();'
             - script.execute: tickle
       - if:
           condition: { lambda: 'return v == "No touch";' }
@@ -2227,6 +2379,7 @@ script:
           condition: { lambda: 'return v > ${prox_near} && v <= ${prox_boop} && !id(g_near);' }
           then:
             - globals.set: { id: g_near, value: "true" }
+            - lambda: 'id(g_ia_ms) = (long) millis();'
             # WAVE 👋 — three near/far swings inside 4s = a hand waving (an approach is
             # ONE sustained rise; only fast oscillation reaches 3). Waving wins over greet.
             - lambda: |-
@@ -2315,6 +2468,14 @@ script:
       - script.stop: plug_react
       - script.stop: ir_glance
       - script.stop: dizzy_react
+      - script.stop: yawn
+      - script.stop: sneeze
+      - script.stop: lift_react
+      - script.stop: lift_relief
+      - script.stop: grumpy_pet
+      - script.stop: timer_ring
+      - globals.set: { id: g_yawn, value: "false" }
+      - globals.set: { id: g_timer_on, value: "false" }
       - script.stop: react_hot
       - script.stop: react_cold
       - script.stop: rub_eyes
@@ -3365,8 +3526,13 @@ script:
           then:
             - script.execute: { id: set_eyes, w: 58, h: 40, r: 16, dy: 0 }
             - script.execute: { id: set_mouth, w: 28, h: 6, r: 3, dy: 64 }
+      - if:  # YAWN — heavy lids and a big round mouth, for as long as g_yawn holds
+          condition: { lambda: 'return !id(g_sleep) && id(g_yawn);' }
+          then:
+            - script.execute: { id: set_eyes, w: 64, h: 12, r: 6, dy: 8 }
+            - script.execute: { id: set_mouth, w: 30, h: 30, r: 15, dy: 60 }
       - if:  # idle → the chosen expression
-          condition: { lambda: 'return !id(g_sleep) && !id(g_blink) && !id(g_listen) && !id(g_talk) && !id(g_think) && !id(g_saver) && !id(g_focus) && !id(g_conc);' }
+          condition: { lambda: 'return !id(g_sleep) && !id(g_blink) && !id(g_listen) && !id(g_talk) && !id(g_think) && !id(g_saver) && !id(g_focus) && !id(g_conc) && !id(g_yawn);' }
           then:
             - if:  # neutral
                 condition: { lambda: 'return id(g_expr) == 0;' }
@@ -3605,7 +3771,7 @@ script:
               - switch.is_off: sw_privacy
               - lambda: 'return !id(g_voice);'
           then:
-            - lambda: 'lv_disp_trig_activity(NULL);'   # heard = activity → no screensaver
+            - lambda: 'lv_disp_trig_activity(NULL); id(g_ia_ms) = (long) millis();'   # heard = activity → no screensaver
             - if:
                 condition: { lambda: 'return id(sw_sfx).state && !id(g_night) && !id(g_quiet);' }
                 then: [ { rtttl.play: "nabu:d=16,o=6,b=210:e,b" } ]   # a short "mm-hm?" ding
@@ -4265,13 +4431,20 @@ interval:
                 id: face_box
                 x: !lambda 'id(g_glance_ms) = (long) millis(); return (int)(random_float() * 26 - 13);'
                 y: !lambda 'return (int)(random_float() * 14 - 7);'
+  # SNORE (Vector) — a soft, slow two-tone every dozen seconds while asleep. Audio only, so it
+  # does NOT hang off the animation tick (which stops once the backlight is off).
+  - interval: 12s
+    then:
+      - if:
+          condition: { lambda: 'return id(sw_snore).state && id(sw_sfx).state && id(g_sleep) && !id(g_quiet) && !id(g_night) && !id(i2s_speaker).is_running() && random_float() < 0.7;' }
+          then: [ { rtttl.play: "zz:d=2,o=4,b=50:c,p,c#" } ]
   # Random blink (never while sleeping / listening / talking — nor on the dizzy x-eyes,
   # which aren't real eyes and used to flash full-width slits over the x-es every blink).
   - interval: 1s
     then:
       - if:
           condition:
-            lambda: 'return id(sw_blink).state && !id(g_sleep) && !id(g_talk) && !id(g_listen) && !id(g_saver) && id(g_expr) != 7 && random_float() < 0.22;'
+            lambda: 'return id(sw_blink).state && !id(g_sleep) && !id(g_talk) && !id(g_listen) && !id(g_saver) && !id(g_yawn) && id(g_expr) != 7 && random_float() < 0.22;'
           then:
             - globals.set: { id: g_blink, value: "true" }
             - script.execute: render_face
@@ -4340,6 +4513,36 @@ interval:
   # fires with a low probability (calm at rest, not restless). Tune via sw_drift / these odds.
   - interval: 20s
     then:
+      # BORED — nobody has touched, spoken to or come near it for a while: a yawn, now and
+      # then a sneeze (Emo). Only awake, only with nobody there, never in the calm modes.
+      - if:
+          condition:
+            lambda: |-
+              return id(sw_yawn).state && !id(g_sleep) && !id(g_saver) && !id(g_voice) && !id(g_near)
+                     && !id(g_night) && !id(g_focus) && !id(g_quiet) && !id(g_yawn)
+                     && ((long) millis() - id(g_ia_ms)) > ${bored_after_min} * 60000L
+                     && random_float() < 0.25;
+          then:
+            - if:
+                condition: { lambda: 'return random_float() < 0.15;' }
+                then: [ { script.execute: sneeze } ]
+                else: [ { script.execute: yawn } ]
+      # SLEEPS ON THE CHARGER AT NIGHT (Vector) — plugged in, night hours, nobody around for
+      # a while → it puts itself to sleep. Waking is left to what already wakes it (the room
+      # light, a touch, the wake word): an hour-based wake would fight sleep-when-dark.
+      - if:
+          condition:
+            lambda: |-
+              if (!id(sw_charger_sleep).state || !id(g_batt_chg) || id(g_sleep) || id(g_voice) || id(g_near)) return false;
+              auto t = id(dravix_time).now();
+              if (!t.is_valid()) return false;
+              int h = t.hour, from = ${charger_sleep_from}, until = ${charger_sleep_until};
+              bool night = from > until ? (h >= from || h < until) : (h >= from && h < until);
+              return night && ((long) millis() - id(g_ia_ms)) > ${charger_sleep_after_min} * 60000L
+                     && id(robot_mode).current_option() != std::string("sleep");
+          then: [ { select.set: { id: robot_mode, option: sleep } } ]
+      # …and time forgives a shaking: the crossness fades after ~45s of peace
+      - lambda: 'if (id(g_grump) > 0 && ((long) millis() - id(g_grump_ms)) > 45000) id(g_grump) = 0;'
       # most ticks it simply doesn't move at all — an occasional, gentle glance, not a fidget
       - if:
           condition:
@@ -4545,7 +4748,11 @@ touchscreen:
   - id: !extend touch
     on_touch:
       - globals.set: { id: sw_sleep, value: !lambda 'return id(g_sleep);' }
-      - lambda: 'id(sw_x0) = 0; id(sw_y0) = 0; id(sw_x1) = 0; id(sw_y1) = 0; id(g_tms) = (long) millis();'
+      - lambda: |-
+          id(sw_x0) = 0; id(sw_y0) = 0; id(sw_x1) = 0; id(sw_y1) = 0; id(g_tms) = (long) millis();
+          id(g_ia_ms) = (long) millis();
+          // a ringing Assist timer: any touch silences it
+          if (id(g_timer_on)) { id(g_timer_on) = false; id(timer_ring).stop(); id(render_face).execute(); }
       # Any touch exits the screensaver (restore full brightness + redraw NOW — the dozy
       # breathing eyes and the "screensaver" HA state used to linger until the next blink).
       - if:
@@ -4723,7 +4930,7 @@ voice_assistant:
         then:
           - voice_assistant.stop
         else:
-          - lambda: 'lv_disp_trig_activity(NULL);'   # a conversation is activity — no screensaver
+          - lambda: 'lv_disp_trig_activity(NULL); id(g_ia_ms) = (long) millis();'   # a conversation is activity — no screensaver
           # a mood flash may be mid-run — stop it so its delayed restore can't fire mid-talk
           - script.stop: led_flash
           # the wake-ack's own "HA never answered" fallback must not fire now that HA HAS
@@ -4823,6 +5030,13 @@ voice_assistant:
     - if:
         condition: { switch.is_off: sw_privacy }
         then: [ micro_wake_word.start ]
+  # ASSIST TIMERS — "set a timer for five minutes". Handling these triggers is also what
+  # advertises timer support to Home Assistant; without them the request was refused.
+  on_timer_started:
+    - script.execute: head_nod
+    - script.execute: { id: led_flash, r: 20, g: 100, b: 30 }
+  on_timer_finished:
+    - script.execute: timer_ring
   on_client_connected:
     # HA CAME BACK. `stop_after_detection` (the micro_wake_word default) stops the ear the
     # instant it hears the wake word — so a wake word spoken while HA was restarting left
