@@ -1,5 +1,35 @@
 # Changelog
 
+## 0.1.10
+
+**🔊 The robot has been unable to make a sound — found and fixed** *(firmware 46 — update both)*
+
+A boot log finally showed it. One line was repeating **every second, forever**:
+
+    [E][i2s_audio.speaker.std]: Parent bus is busy
+    [E][i2s_audio.speaker]: Driver failed to start; retrying in 1 second
+
+The robot's microphone and its speaker sit on **one shared audio bus**, and that bus can only
+be held by one of them at a time. The wake word listens around the clock — so it owns the
+microphone, and every chirp the robot tried to play was refused. Worse, the sound system then
+stayed stuck on the tune that never played, so *everything* after it was refused too, and the
+speaker retried once a second until the next reboot.
+
+That is why petting, greeting, the wake-word ding, the yawn, the timer ring — none of them
+have made a sound. It also explains part of the load: a failing driver restart every single
+second, all day.
+
+- **Every sound now goes through one gate** that stands the wake word down, waits for the
+  microphone to release the bus, plays, and arms the ear again. The robot can't hear
+  "Okay Nabu" for about a second while it chirps — that is the honest price of one shared bus.
+- **The same applies to dravix's own speech** (dashboard chat, notifications, timers), which
+  used the same bus and hit the same wall.
+- **Snoring and startle-at-noise now ship OFF.** A snore every twelve seconds would stand the
+  wake word down every twelve seconds all night; turn it on in Settings if you want it.
+
+Still open: the power-loss reboots (that's the charger/cable, not the code) and the crashes
+from 01.09, which nothing here explains.
+
 ## 0.1.9
 
 **📶 Wi-Fi power-saving off — for the right reason this time** *(firmware 45 — update both)*

@@ -36,7 +36,7 @@ substitutions:
   # publishes it to HA ("Firmware version" sensor); the dravix dashboard compares it
   # with the version bundled in the add-on and shows "firmware update available".
   # (Maintainers: bump this on every firmware change. Users: don't touch.)
-  fw_version: "45"
+  fw_version: "46"
   # The ESPHome node name (mDNS hostname + the default entity prefix on a fresh flash).
   # Change it only if you run MORE THAN ONE robot — each needs a unique name. NOTE:
   # changing it on an already-adopted robot registers a NEW device in HA.
@@ -428,6 +428,8 @@ globals:
   - { id: g_snd_base, type: float, restore_value: false, initial_value: "0" }   # the room's usual peak level (dB), learned slowly while calm
   - { id: g_snd_ms,   type: long,  restore_value: false, initial_value: "0" }   # last startle
   - { id: g_snd_own,  type: long,  restore_value: false, initial_value: "0" }   # last moment the robot itself was making sound
+  - { id: g_sfx_rearm, type: bool, restore_value: false, initial_value: "false" }  # the wake word was armed before a chirp borrowed the speaker
+  - { id: g_ext_hold,  type: bool, restore_value: false, initial_value: "false" }  # dravix TTS is playing — the ear is stood down for it
   - { id: g_grav,     type: float, restore_value: false, initial_value: "-1" }
   # battery engine (see battery_pct): smoothed open-circuit voltage + charging flag
   - { id: g_batt_v_filt, type: float, restore_value: false, initial_value: "-1" }
@@ -996,7 +998,7 @@ text:
             - script.execute: { id: led_flash, r: 100, g: 62, b: 0 }
             - if:
                 condition: { lambda: 'return id(sw_sfx).state && !id(g_quiet) && !id(g_night) && !id(g_sleep) && !id(g_saver);' }
-                then: [ { rtttl.play: "perm:d=8,o=6,b=150:c,e,g" } ]   # never chirp at a black sleeping screen
+                then: [ { script.execute: { id: play_sfx, tune: "perm:d=8,o=6,b=150:c,e,g" } } ]   # never chirp at a black sleeping screen
             - script.execute: { id: head_nudge, dx: 0, dy: 8 }
           else:
             - globals.set: { id: g_perm, value: "false" }
@@ -1149,9 +1151,11 @@ switch:
   # companion behaviours (fw43) — every one can be switched off from HA without a reflash
   - { platform: template, name: "Yawns when bored",     id: sw_yawn,      optimistic: true, restore_mode: RESTORE_DEFAULT_ON }
   - { platform: template, name: "Sleeps on the charger at night", id: sw_charger_sleep, optimistic: true, restore_mode: RESTORE_DEFAULT_ON }
-  - { platform: template, name: "Snores",               id: sw_snore,     optimistic: true, restore_mode: RESTORE_DEFAULT_ON }
+  # OFF by default: a snore every 12s stands the wake word down every 12s all night long.
+  - { platform: template, name: "Snores",               id: sw_snore,     optimistic: true, restore_mode: RESTORE_DEFAULT_OFF }
   - { platform: template, name: "Reacts to being picked up", id: sw_handled, optimistic: true, restore_mode: RESTORE_DEFAULT_ON }
-  - { platform: template, name: "Startles at loud noises", id: sw_startle, optimistic: true, restore_mode: RESTORE_DEFAULT_ON }
+  # OFF by default: it has no level meter to listen to since fw44, so it can never fire.
+  - { platform: template, name: "Startles at loud noises", id: sw_startle, optimistic: true, restore_mode: RESTORE_DEFAULT_OFF }
   # isLOCAL — the user's master "everything stays inside the home network" choice, made
   # HERE on the robot (the LOCAL button on the swipe-down status bar), in HA, or in the
   # dravix dashboard — dravix keeps all three in sync. The enforcement (blocking cloud AI,
@@ -2126,7 +2130,7 @@ script:
             - script.execute: render_face
             - if:
                 condition: { lambda: 'return id(sw_sfx).state && !id(g_quiet) && !id(g_night);' }
-                then: [ { rtttl.play: "yawn:d=4,o=4,b=85:c,e,d,c" } ]
+                then: [ { script.execute: { id: play_sfx, tune: "yawn:d=4,o=4,b=85:c,e,d,c" } } ]
             - if:   # one owner per body part: only droop if nothing else is moving the head
                 condition: { lambda: 'return id(sw_move).state && !id(head_nudge).is_running();' }
                 then: [ { script.execute: { id: head_nudge, dx: 0, dy: -8 } } ]
@@ -2144,7 +2148,7 @@ script:
             - delay: 450ms
             - if:
                 condition: { lambda: 'return id(sw_sfx).state && !id(g_quiet) && !id(g_night);' }
-                then: [ { rtttl.play: "achoo:d=16,o=6,b=210:c7,p,g,c" } ]
+                then: [ { script.execute: { id: play_sfx, tune: "achoo:d=16,o=6,b=210:c7,p,g,c" } } ]
             - script.execute: head_nod
             - script.execute: { id: led_flash, r: 60, g: 25, b: 100 }
             - delay: 900ms
@@ -2161,15 +2165,15 @@ script:
           then:
             - if:
                 condition: { lambda: 'return id(g_lift) == 2;' }
-                then: [ { rtttl.play: "help:d=16,o=6,b=220:e,c,e,c,e" } ]
-                else: [ { rtttl.play: "eep:d=32,o=6,b=220:e,e" } ]
+                then: [ { script.execute: { id: play_sfx, tune: "help:d=16,o=6,b=220:e,c,e,c,e" } } ]
+                else: [ { script.execute: { id: play_sfx, tune: "eep:d=32,o=6,b=220:e,e" } } ]
       - script.execute: { id: led_flash, r: 100, g: 100, b: 100 }
   - id: lift_relief         # set back down: a little "phew" and the resting face
     mode: single
     then:
       - if:
           condition: { lambda: 'return id(sw_sfx).state && !id(g_quiet) && !id(g_night);' }
-          then: [ { rtttl.play: "phew:d=8,o=5,b=140:e,c" } ]
+          then: [ { script.execute: { id: play_sfx, tune: "phew:d=8,o=5,b=140:e,c" } } ]
       - globals.set: { id: g_expr, value: !lambda 'return id(g_face_rest);' }
       - script.execute: render_face
       - script.execute: { id: led_flash, r: 20, g: 100, b: 30 }
@@ -2180,7 +2184,7 @@ script:
       - script.execute: render_face
       - if:
           condition: { lambda: 'return id(sw_sfx).state && !id(g_quiet) && !id(g_night);' }
-          then: [ { rtttl.play: "huff:d=16,o=5,b=180:g,e" } ]
+          then: [ { script.execute: { id: play_sfx, tune: "huff:d=16,o=5,b=180:g,e" } } ]
       - script.execute: { id: led_flash, r: 100, g: 10, b: 10 }
       - script.execute: head_shake
       - delay: 1200ms
@@ -2211,7 +2215,7 @@ script:
             - if:
                 condition: { lambda: 'return id(g_timer_on);' }
                 then:
-                  - rtttl.play: "ring:d=16,o=6,b=180:c,e,g,c7,g,e,c,e,g,c7"
+                  - script.execute: { id: play_sfx, tune: "ring:d=16,o=6,b=180:c,e,g,c7,g,e,c,e,g,c7" }
                   - script.execute: { id: led_flash, r: 20, g: 100, b: 30 }
                   - script.execute: head_nod
                   - delay: 1600ms
@@ -2333,6 +2337,43 @@ script:
           pill(id(clim_dry),  "dry", 0xFFB300);
           pill(id(clim_auto), "auto", 0x66BB6A);
           pill(id(clim_off),  "off", 0xEF5350);
+  # ── EVERY SOUND GOES THROUGH HERE. The board's microphone and speaker share ONE I2S bus,
+  #    and ESPHome's plain i2s_audio bus is a mutex: whoever holds it, holds it. The wake word
+  #    listens 24/7, so it owns the microphone — and every direct rtttl.play therefore failed
+  #    with "Parent bus is busy", after which the speaker retried once a second, forever, and
+  #    rtttl stayed wedged on the tune that never played ("Already playing: …" for everything
+  #    after it). No chirp has been audible since that started.
+  #    So: stand the ear down, wait for the microphone to actually release the bus, play, wait
+  #    for the tune to finish, and arm the ear again. The robot is deaf to "Okay Nabu" for about
+  #    a second per chirp — the price of one shared bus, and far better than silent + wedged.
+  #    (A voice turn already stops the wake word itself, so mid-conversation this stands aside
+  #    and lets the pipeline's own audio through.)
+  - id: play_sfx
+    parameters:
+      tune: string
+    mode: single            # a chirp that arrives mid-chirp is dropped, never queued
+    then:
+      - if:
+          condition:
+            lambda: 'return !id(g_voice) && !id(g_talk) && !id(g_ext_talk);'
+          then:
+            - globals.set: { id: g_sfx_rearm, value: !lambda 'return id(mww).is_running();' }
+            - micro_wake_word.stop
+            - wait_until:
+                condition: { lambda: 'return !id(i2s_mic).is_running();' }
+                timeout: 400ms
+            - rtttl.play: !lambda 'return tune;'
+            - wait_until:
+                condition:
+                  not: { rtttl.is_playing: }
+                timeout: 5s
+            - delay: 120ms      # let the speaker release the bus before the mic takes it back
+            - if:
+                condition:
+                  all:
+                    - switch.is_off: sw_privacy
+                    - lambda: 'return id(g_sfx_rearm) && !id(g_voice);'
+                then: [ micro_wake_word.start ]
   # ── SENSOR HANDLERS — one body per signal, shared by BOTH prefix imports (see the
   #    sensor/text_sensor sections). Keeping the logic here instead of inline means the
   #    fresh-flash entity and the renamed-device entity can never drift apart.
@@ -2794,10 +2835,10 @@ script:
             - script.execute: { id: led_flash, r: 100, g: 25, b: 45 }   # pink
             - if:
                 condition: { lambda: 'return id(sw_sfx).state && !id(g_quiet) && !id(g_night) && id(g_pets_n) < 3;' }
-                then: [ { rtttl.play: "pet:d=16,o=6,b=200:c,e,g" } ]   # a happy little giggle 😊
+                then: [ { script.execute: { id: play_sfx, tune: "pet:d=16,o=6,b=200:c,e,g" } } ]   # a happy little giggle 😊
             - if:
                 condition: { lambda: 'return id(sw_sfx).state && !id(g_quiet) && !id(g_night) && id(g_pets_n) >= 3;' }
-                then: [ { rtttl.play: "purr:d=16,o=5,b=140:c,e,c,e,g" } ]   # a longer, warmer purr
+                then: [ { script.execute: { id: play_sfx, tune: "purr:d=16,o=5,b=140:c,e,c,e,g" } } ]   # a longer, warmer purr
             - delay: 400ms
             - script.execute: { id: head_nudge, dx: 0, dy: 12 }         # nuzzle up into your hand
             - delay: 900ms
@@ -2875,7 +2916,7 @@ script:
             # nibble 1
             - if:
                 condition: { lambda: 'return id(sw_sfx).state && !id(g_quiet) && !id(g_night);' }
-                then: [ { rtttl.play: "nom:d=32,o=5,b=170:e" } ]
+                then: [ { script.execute: { id: play_sfx, tune: "nom:d=32,o=5,b=170:e" } } ]
             - lvgl.widget.hide: food_top
             - lvgl.widget.update: { id: food_item, width: 20, height: 20 }
             - lvgl.widget.update: { id: heart1, y: 18 }
@@ -2885,7 +2926,7 @@ script:
             # nibble 2
             - if:
                 condition: { lambda: 'return id(sw_sfx).state && !id(g_quiet) && !id(g_night);' }
-                then: [ { rtttl.play: "nom:d=32,o=5,b=170:c" } ]
+                then: [ { script.execute: { id: play_sfx, tune: "nom:d=32,o=5,b=170:c" } } ]
             - lvgl.widget.update: { id: food_item, width: 10, height: 10 }
             - lvgl.widget.update: { id: heart1, y: -12 }
             - lvgl.widget.update: { id: heart2, y: -4 }
@@ -2900,7 +2941,7 @@ script:
             - script.execute: render_face
             - if:
                 condition: { lambda: 'return id(sw_sfx).state && !id(g_quiet) && !id(g_night);' }
-                then: [ { rtttl.play: "yum:d=16,o=6,b=160:c,e,g" } ]
+                then: [ { script.execute: { id: play_sfx, tune: "yum:d=16,o=6,b=160:c,e,g" } } ]
             - script.execute: head_nod
             - delay: 220ms
             - lvgl.widget.hide: hand_l
@@ -2935,13 +2976,13 @@ script:
             # sip 1
             - if:
                 condition: { lambda: 'return id(sw_sfx).state && !id(g_quiet) && !id(g_night);' }
-                then: [ { rtttl.play: "sip:d=16,o=4,b=150:c" } ]
+                then: [ { script.execute: { id: play_sfx, tune: "sip:d=16,o=4,b=150:c" } } ]
             - lvgl.widget.update: { id: drink_water, y: 76, height: 8 }
             - delay: 360ms
             # sip 2
             - if:
                 condition: { lambda: 'return id(sw_sfx).state && !id(g_quiet) && !id(g_night);' }
-                then: [ { rtttl.play: "sip:d=16,o=4,b=150:c" } ]
+                then: [ { script.execute: { id: play_sfx, tune: "sip:d=16,o=4,b=150:c" } } ]
             - lvgl.widget.update: { id: drink_water, y: 80, height: 2 }
             - delay: 320ms
             # empty → ahh
@@ -2951,7 +2992,7 @@ script:
             - script.execute: render_face
             - if:
                 condition: { lambda: 'return id(sw_sfx).state && !id(g_quiet) && !id(g_night);' }
-                then: [ { rtttl.play: "ahh:d=8,o=5,b=140:e,c" } ]
+                then: [ { script.execute: { id: play_sfx, tune: "ahh:d=8,o=5,b=140:e,c" } } ]
             - script.execute: head_nod
             - delay: 220ms
             - lvgl.widget.hide: hand_l
@@ -3011,7 +3052,7 @@ script:
           then:
             - if:
                 condition: { lambda: 'return id(sw_sfx).state && !id(g_quiet) && !id(g_night);' }
-                then: [ { rtttl.play: "shy:d=16,o=6,b=200:e,c" } ]
+                then: [ { script.execute: { id: play_sfx, tune: "shy:d=16,o=6,b=200:e,c" } } ]
             - lvgl.widget.update: { id: hand_l, x: -54, y: 0 }
             - lvgl.widget.update: { id: hand_r, x: 54, y: 0 }
             - lvgl.widget.show: hand_l
@@ -3064,7 +3105,7 @@ script:
             - script.execute: { id: led_flash, r: 20, g: 100, b: 30 }
             - if:
                 condition: { lambda: 'return id(sw_sfx).state && !id(g_quiet) && !id(g_night);' }
-                then: [ { rtttl.play: "plug:d=16,o=5,b=200:c,g,c6" } ]   # "nom, electricity!" ⚡
+                then: [ { script.execute: { id: play_sfx, tune: "plug:d=16,o=5,b=200:c,g,c6" } } ]   # "nom, electricity!" ⚡
             - delay: 2500ms
             # settle to the mood's RESTING face, not forced-neutral — this reaction never
             # trig_activity's, so the on_idle settle may already have fired and a mood face
@@ -3153,7 +3194,7 @@ script:
             - script.execute: { id: led_flash, r: 55, g: 25, b: 100 }   # woozy violet
             - if:
                 condition: { lambda: 'return id(sw_sfx).state && !id(g_quiet) && !id(g_night) && !id(g_sleep);' }
-                then: [ { rtttl.play: "dizzy:d=16,o=5,b=170:g,e,c,e,g,e,c" } ]   # a wobbly whimper
+                then: [ { script.execute: { id: play_sfx, tune: "dizzy:d=16,o=5,b=170:g,e,c,e,g,e,c" } } ]   # a wobbly whimper
             # the face wobbles like its inner gyro needs a second to settle
             - lvgl.widget.update: { id: face_box, x: -14 }
             - delay: 180ms
@@ -3285,7 +3326,7 @@ script:
             - light.turn_on: { id: stackchan_light_bar, brightness: 100%, effect: "Rainbow Effect With Custom Values" }
             - if:
                 condition: { lambda: 'return id(sw_sfx).state && !id(g_quiet) && !id(g_night);' }
-                then: [ { rtttl.play: "dance:d=8,o=5,b=150:c,e,g,c6,g,e,c" } ]
+                then: [ { script.execute: { id: play_sfx, tune: "dance:d=8,o=5,b=150:c,e,g,c6,g,e,c" } } ]
             - lvgl.widget.update: { id: hand_l, x: -52, y: 20 }
             - lvgl.widget.update: { id: hand_r, x: 52, y: 20 }
             - lvgl.widget.show: hand_l
@@ -3329,7 +3370,7 @@ script:
             - lvgl.widget.show: sweat
             - if:
                 condition: { lambda: 'return id(sw_sfx).state && !id(g_quiet) && !id(g_night);' }
-                then: [ { rtttl.play: "hot:d=8,o=5,b=110:g,e,c" } ]
+                then: [ { script.execute: { id: play_sfx, tune: "hot:d=8,o=5,b=110:g,e,c" } } ]
             - script.execute: { id: head_nudge, dx: 0, dy: -8 }   # wipes its brow
             - delay: 3500ms
             - globals.set: { id: g_sweat, value: "false" }
@@ -3344,7 +3385,7 @@ script:
             - lvgl.page.show: page_face
             - if:
                 condition: { lambda: 'return id(sw_sfx).state && !id(g_quiet) && !id(g_night);' }
-                then: [ { rtttl.play: "brr:d=32,o=5,b=210:c,c,c,c,c" } ]
+                then: [ { script.execute: { id: play_sfx, tune: "brr:d=32,o=5,b=210:c,c,c,c,c" } } ]
             - script.execute: head_shake
             - delay: 200ms
             - script.execute: head_shake
@@ -3371,7 +3412,7 @@ script:
             - lvgl.widget.update: { id: acc_gv_rc, x: 30, y: 24 }
             - if:
                 condition: { lambda: 'return id(sw_sfx).state && !id(g_quiet) && !id(g_night);' }
-                then: [ { rtttl.play: "pow:d=16,o=4,b=210:c,g" } ]
+                then: [ { script.execute: { id: play_sfx, tune: "pow:d=16,o=4,b=210:c,g" } } ]
             - script.execute: { id: led_flash, r: 100, g: 15, b: 10 }
             - script.execute: { id: head_nudge, dx: 8, dy: 4 }
             - delay: 130ms
@@ -3706,7 +3747,7 @@ script:
             - script.execute: wave                                # 👋 a paw waves hello
             - if:
                 condition: { lambda: 'return id(sw_sfx).state && !id(g_quiet);' }
-                then: [ { rtttl.play: "hi:d=16,o=6,b=180:e,g,c7" } ]   # a friendly "hello!" 👋
+                then: [ { script.execute: { id: play_sfx, tune: "hi:d=16,o=6,b=180:e,g,c7" } } ]   # a friendly "hello!" 👋
             - delay: 400ms
             - script.execute: { id: head_nudge, dx: 0, dy: 8 }   # perks up at you
             - delay: 500ms
@@ -3770,7 +3811,7 @@ script:
             - lambda: 'lv_disp_trig_activity(NULL);'
             - if:
                 condition: { lambda: 'return id(sw_sfx).state && !id(g_night) && !id(g_quiet);' }
-                then: [ { rtttl.play: "err:d=8,o=5,b=140:e,c" } ]   # a short "nope" down-beep
+                then: [ { script.execute: { id: play_sfx, tune: "err:d=8,o=5,b=140:e,c" } } ]   # a short "nope" down-beep
             - script.execute: { id: led_flash, r: 100, g: 30, b: 0 }   # amber, self-reverting
             - globals.set: { id: g_expr, value: "5" }                  # the quizzical face
             - script.execute: render_face
@@ -3795,7 +3836,7 @@ script:
             - lambda: 'lv_disp_trig_activity(NULL); id(g_ia_ms) = (long) millis();'   # heard = activity → no screensaver
             - if:
                 condition: { lambda: 'return id(sw_sfx).state && !id(g_night) && !id(g_quiet);' }
-                then: [ { rtttl.play: "nabu:d=16,o=6,b=210:e,b" } ]   # a short "mm-hm?" ding
+                then: [ { script.execute: { id: play_sfx, tune: "nabu:d=16,o=6,b=210:e,b" } } ]   # a short "mm-hm?" ding
             # a quick WHITE blink. led_flash is used on purpose: it saves the TRUE original
             # colour and restores it by itself after 2.5s, so a wake word that Home Assistant
             # never answers can never leave the bar lit. (It obeys "Mood LEDs" and stays dark
@@ -4245,13 +4286,13 @@ select:
                   - script.execute: render_face
                   - if:
                       condition: { lambda: 'return id(sw_sfx).state && !id(g_quiet) && !id(g_night);' }
-                      then: [ { rtttl.play: "yawn:d=4,o=4,b=85:c,e,d,c" } ]   # a sleepy yaaawn
+                      then: [ { script.execute: { id: play_sfx, tune: "yawn:d=4,o=4,b=85:c,e,d,c" } } ]   # a sleepy yaaawn
                   - delay: 1400ms
                   - globals.set: { id: g_expr, value: "1" }      # …bright and happy!
                   - script.execute: render_face
                   - if:
                       condition: { lambda: 'return id(sw_sfx).state && !id(g_quiet) && !id(g_night);' }
-                      then: [ { rtttl.play: "wake:d=16,o=5,b=170:c,e,g,c6" } ]   # a cheery boot-up 🌅
+                      then: [ { script.execute: { id: play_sfx, tune: "wake:d=16,o=5,b=170:c,e,g,c6" } } ]   # a cheery boot-up 🌅
                   - script.execute: head_shake                    # shakes the sleep off
                   - delay: 1500ms
                   - globals.set: { id: g_expr, value: !lambda 'return id(g_face_rest);' }   # back to the mood's resting face
@@ -4458,7 +4499,7 @@ interval:
     then:
       - if:
           condition: { lambda: 'return id(sw_snore).state && id(sw_sfx).state && id(g_sleep) && !id(g_quiet) && !id(g_night) && !id(i2s_speaker).is_running() && random_float() < 0.7;' }
-          then: [ { rtttl.play: "zz:d=2,o=4,b=50:c,p,c#" } ]
+          then: [ { script.execute: { id: play_sfx, tune: "zz:d=2,o=4,b=50:c,p,c#" } } ]
   # Random blink (never while sleeping / listening / talking — nor on the dizzy x-eyes,
   # which aren't real eyes and used to flash full-width slits over the x-es every blink).
   - interval: 1s
@@ -4491,6 +4532,16 @@ interval:
             id(g_ext_talk) = playing;
             id(g_talk) = playing;
             id(render_face).execute();
+          }
+          // dravix's OWN speech (dashboard chat, notifications, timers) goes to the media
+          // player on that same shared bus. A voice turn stops the wake word by itself; this
+          // path never did, so external speech hit the identical "bus is busy" wall.
+          if (playing && !id(g_ext_hold)) {
+            id(g_ext_hold) = true;
+            id(mww).stop();
+          } else if (!playing && id(g_ext_hold)) {
+            id(g_ext_hold) = false;
+            if (!id(sw_privacy).state && !id(g_voice)) id(mww).start();
           }
   # Sleep "zzz" + talking mouth + screensaver breathing animation.
   - interval: 600ms
@@ -4641,7 +4692,7 @@ interval:
             - globals.set: { id: g_lowbatt, value: "true" }
             - if:
                 condition: { lambda: 'return id(sw_sfx).state && !id(g_quiet) && !id(g_night);' }
-                then: [ { rtttl.play: "low:d=8,o=4,b=120:c,g#" } ]
+                then: [ { script.execute: { id: play_sfx, tune: "low:d=8,o=4,b=120:c,g#" } } ]
             - script.execute: head_shake
       - if:
           condition: { lambda: 'return id(g_batt_chg) || (id(battery_pct).has_state() && id(battery_pct).state > 25);' }
