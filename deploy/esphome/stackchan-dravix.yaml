@@ -366,6 +366,11 @@ globals:
   - { id: g_anim,   type: int,  restore_value: false, initial_value: "0" }
   - { id: g_near,   type: bool, restore_value: false, initial_value: "false" }  # someone is close
   - { id: g_prox_ms, type: long, restore_value: false, initial_value: "0" }    # last proximity reading (ms) — presence goes stale without one
+  # the OPEN eye set_eyes last drew — the blink re-opens through a half-open frame of it
+  - { id: g_eye_w,  type: int,  restore_value: false, initial_value: "56" }
+  - { id: g_eye_h,  type: int,  restore_value: false, initial_value: "70" }
+  - { id: g_eye_r,  type: int,  restore_value: false, initial_value: "18" }
+  - { id: g_eye_dy, type: int,  restore_value: false, initial_value: "0" }
   - { id: g_pet,    type: bool, restore_value: false, initial_value: "false" }  # being touched
   # swipe tracking + which "home screen" (0 = face, 1..3 = cards)
   - { id: sw_x0,    type: int,  restore_value: false, initial_value: "0" }
@@ -1570,8 +1575,8 @@ lvgl:
               - obj: { id: heart2, align: CENTER, x: 2,   y: 52, width: 10, height: 10, radius: 5, bg_color: 0xff6f88, bg_opa: COVER, border_width: 0, hidden: true }
               - obj: { id: heart3, align: CENTER, x: 22,  y: 40, width: 16, height: 16, radius: 8, bg_color: 0xff4d6a, bg_opa: COVER, border_width: 0, hidden: true }
               # ── ACCESSORIES (dashboard/HA-toggled via the "Face accessory" select; default None) ──
-              - obj: { id: acc_lens_l, align: CENTER, x: -58, y: 0,  width: 54, height: 48, radius: 24, bg_color: 0x14181d, bg_opa: TRANSP, border_width: 5, border_color: 0x14181d, hidden: true }
-              - obj: { id: acc_lens_r, align: CENTER, x: 58,  y: 0,  width: 54, height: 48, radius: 24, bg_color: 0x14181d, bg_opa: TRANSP, border_width: 5, border_color: 0x14181d, hidden: true }
+              - obj: { id: acc_lens_l, align: CENTER, x: -54, y: 0,  width: 54, height: 48, radius: 24, bg_color: 0x14181d, bg_opa: TRANSP, border_width: 5, border_color: 0x14181d, hidden: true }
+              - obj: { id: acc_lens_r, align: CENTER, x: 54,  y: 0,  width: 54, height: 48, radius: 24, bg_color: 0x14181d, bg_opa: TRANSP, border_width: 5, border_color: 0x14181d, hidden: true }
               - obj: { id: acc_bridge, align: CENTER, x: 0,   y: -2, width: 30, height: 6,  radius: 0,  bg_color: 0x14181d, bg_opa: COVER, border_width: 0, hidden: true }
               - obj: { id: acc_hat_b,  align: CENTER, x: 0, y: -52, width: 158, height: 14, radius: 4, bg_color: 0x20222c, bg_opa: COVER, border_width: 0, hidden: true }   # top-hat brim
               - obj: { id: acc_hat_t,  align: CENTER, x: 0, y: -78, width: 92,  height: 40, radius: 3, bg_color: 0x20222c, bg_opa: COVER, border_width: 0, hidden: true }   # top-hat crown
@@ -1589,7 +1594,7 @@ lvgl:
               - obj: { id: acc_hp_l, align: CENTER, x: -96, y: -4, width: 18, height: 44, radius: 6, bg_color: 0x2a2a30, bg_opa: COVER, border_width: 0, hidden: true }
               - obj: { id: acc_hp_r, align: CENTER, x: 96,  y: -4, width: 18, height: 44, radius: 6, bg_color: 0x2a2a30, bg_opa: COVER, border_width: 0, hidden: true }
               - obj: { id: acc_halo, align: CENTER, x: 0, y: -66, width: 74, height: 22, radius: 11, bg_color: 0xf2d24e, bg_opa: TRANSP, border_width: 5, border_color: 0xf2d24e, hidden: true }   # halo
-              - obj: { id: acc_mono, align: CENTER, x: 58, y: 0, width: 52, height: 48, radius: 24, bg_color: 0xd0a838, bg_opa: TRANSP, border_width: 4, border_color: 0xd0a838, hidden: true }   # monocle
+              - obj: { id: acc_mono, align: CENTER, x: 54, y: 0, width: 52, height: 48, radius: 24, bg_color: 0xd0a838, bg_opa: TRANSP, border_width: 4, border_color: 0xd0a838, hidden: true }   # monocle
               - obj: { id: acc_mono_c, align: CENTER, x: 40, y: 34, width: 3, height: 30, radius: 1, bg_color: 0xd0a838, bg_opa: COVER, border_width: 0, hidden: true }   # chain
               - obj: { id: acc_fl_p, align: CENTER, x: -92, y: -44, width: 28, height: 28, radius: 14, bg_color: 0xff6f91, bg_opa: COVER, border_width: 0, hidden: true }   # flower petals
               - obj: { id: acc_fl_c, align: CENTER, x: -92, y: -44, width: 12, height: 12, radius: 6, bg_color: 0xffd54f, bg_opa: COVER, border_width: 0, hidden: true }   # flower centre
@@ -1609,7 +1614,7 @@ lvgl:
               - obj: { id: acc_ce_li, align: CENTER, x: -50, y: -56, width: 12, height: 16, radius: 4, bg_color: 0xff9eb5, bg_opa: COVER, border_width: 0, hidden: true }   # inner ear
               - obj: { id: acc_ce_ri, align: CENTER, x: 50,  y: -56, width: 12, height: 16, radius: 4, bg_color: 0xff9eb5, bg_opa: COVER, border_width: 0, hidden: true }
               - obj: { id: acc_beard, align: CENTER, x: 0, y: 84, width: 84, height: 36, radius: 18, bg_color: 0x4a3b2a, bg_opa: COVER, border_width: 0, hidden: true }   # beard
-              - obj: { id: acc_ep, align: CENTER, x: -58, y: 0, width: 54, height: 48, radius: 8, bg_color: 0x141414, bg_opa: COVER, border_width: 0, hidden: true }   # eye patch
+              - obj: { id: acc_ep, align: CENTER, x: -54, y: 0, width: 54, height: 48, radius: 8, bg_color: 0x141414, bg_opa: COVER, border_width: 0, hidden: true }   # eye patch
               - obj: { id: acc_ep_s, align: CENTER, x: 0, y: -16, width: 168, height: 5, radius: 0, bg_color: 0x141414, bg_opa: COVER, border_width: 0, hidden: true }   # patch strap
               - obj: { id: acc_mu, align: CENTER, x: 0, y: 50, width: 60, height: 14, radius: 7, bg_color: 0x2a1a10, bg_opa: COVER, border_width: 0, hidden: true }   # mustache
               # ── body / neck at the bottom of the face: shirt + collar / necklace / gold chain ──
@@ -2724,6 +2729,8 @@ script:
       r: int
       dy: int
     then:
+      # remember the open eye (not the blink slit) — the blink's half-open frame is cut from it
+      - lambda: 'if (!id(g_blink)) { id(g_eye_w) = w; id(g_eye_h) = h; id(g_eye_r) = r; id(g_eye_dy) = dy; }'
       - lvgl.widget.update:
           id: eye_l
           width: !lambda 'return w;'
@@ -4573,9 +4580,18 @@ interval:
             lambda: 'return id(sw_blink).state && !id(g_sleep) && !id(g_talk) && !id(g_listen) && !id(g_saver) && !id(g_yawn) && id(g_expr) != 7 && random_float() < 0.22;'
           then:
             - globals.set: { id: g_blink, value: "true" }
-            - script.execute: render_face
-            - delay: 90ms       # closed…
-            - delay: 60ms       # …held a beat, so it reads as a blink and not a flicker
+            - script.execute: render_face      # shut: a 6px slit
+            - delay: 110ms
+            # re-open in TWO steps, the way Vector eases its lids: a half-open frame of the
+            # eye that was showing (g_blink still set, so set_eyes doesn't record this one)…
+            - script.execute:
+                id: set_eyes
+                w: !lambda 'return id(g_eye_w);'
+                h: !lambda 'return std::max(8, id(g_eye_h) * 45 / 100);'
+                r: !lambda 'return std::min(id(g_eye_r), std::max(4, id(g_eye_h) * 45 / 200));'
+                dy: !lambda 'return id(g_eye_dy);'
+            - delay: 50ms
+            # …then the real face again (a render, not a restore — "doubt" squints one eye)
             - globals.set: { id: g_blink, value: "false" }
             - script.execute: render_face
   # EXTERNAL SPEECH → talking mouth. dravix TTS (chat replies, notifications, timers,

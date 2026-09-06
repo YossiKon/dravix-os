@@ -18,8 +18,9 @@ update only carries the notes)*
 - **Faces, Vector / Emo style:** two tall rounded eyes and nothing else at rest; the mouth
   appears only when it has something to say — talking, a yawn, the happy and in-love smiles,
   the dizzy "o". Sad, angry, sleepy and doubt are eyes-only; thinking lifts one eye; listening
-  is the big wide eyes. The blink closes to a slit and *holds* 150 ms, so it reads as a blink
-  instead of a flicker.
+  is the big wide eyes. The blink shuts to a slit and re-opens in two steps (a half-open
+  frame first), the way Vector eases its lids. The glasses / monocle / eye-patch follow
+  the eyes.
 - **New HA button "Face test":** every expression, then listening / thinking / talking / yawn /
   the screensaver face, 1.5 s each, restoring everything after — the only way to see all the
   faces without provoking each one.
