@@ -11,7 +11,8 @@
 #  REAL power metering (INA226): the status bar shows true W / mA / time-left; battery %
 #  falls back to the LiPo voltage curve when no battery sensor exists. Servo pitch is
 #  clamped to M5Stack's recommended 5-85° operating range.
-#  Switches: "Body language" = autonomous head moves · "Mood LEDs" = emotion colours.
+#  Switches: "Body language" = autonomous head moves · "Mood LEDs" = colour flashes on
+#  reactions (the bar is DARK at rest — every light is an event that ends by itself).
 #  States:  awake = WHITE bg + dark eyes  ·  listening = BIG eyes + CYAN LEDs (amber = thinking, green = talking)
 #           screensaver = dim, face+blink, NO drift  ·  sleep = closed eyes + zzz, black
 #  Wake word "Okay, Nabu" (on-device) · brightness control.
@@ -36,7 +37,7 @@ substitutions:
   # publishes it to HA ("Firmware version" sensor); the dravix dashboard compares it
   # with the version bundled in the add-on and shows "firmware update available".
   # (Maintainers: bump this on every firmware change. Users: don't touch.)
-  fw_version: "48"
+  fw_version: "49"
   # The ESPHome node name (mDNS hostname + the default entity prefix on a fresh flash).
   # Change it only if you run MORE THAN ONE robot — each needs a unique name. NOTE:
   # changing it on an already-adopted robot registers a NEW device in HA.
@@ -311,6 +312,14 @@ display:
     show_test_card: false
     # note: DON'T set invert_colors here — the BSP's `true` is what the CoreS3 panel needs.
 
+light:
+  # THE LED BAR IS DARK AT REST. Every light on this robot is an EVENT — a reaction, a voice
+  # stage, an alarm, a prompt — and every event turns the bar off again by itself. So the
+  # bar must never come back on by itself after a reboot either (the light default would
+  # restore whatever it showed when the power went).
+  - id: !extend stackchan_light_bar
+    restore_mode: ALWAYS_OFF
+
 font:
   - file: "gfonts://Roboto"
     id: title_font
@@ -409,7 +418,6 @@ globals:
   - { id: g_food,   type: int,   restore_value: false, initial_value: "0" }     # which treat is being eaten: 0 cookie·1 cake·2 apple·3 croissant
   - { id: g_lowbatt, type: bool, restore_value: false, initial_value: "false" }  # low-battery worried beep already fired
   # sleep-breathing LED bookkeeping (so the bar goes dark the moment it wakes)
-  - { id: g_breath, type: bool, restore_value: false, initial_value: "false" }
   # last glance time — the breathing y-write pauses briefly so glances aren't stomped
   - { id: g_glance_ms, type: long, restore_value: false, initial_value: "0" }
   # hand-WAVE detection (proximity oscillations): rising-edge count + window start
@@ -450,12 +458,8 @@ globals:
   # mood-flash bookkeeping + head pose memory
   - { id: g_flash, type: bool,  restore_value: false, initial_value: "false" }   # a mood LED flash is active
   - { id: g_pitch_saved, type: float, restore_value: false, initial_value: "-1" }  # pitch before sleep-droop
-  # saved LED state, so a voice interaction can restore it afterwards
-  - { id: led_on,  type: bool,  restore_value: false, initial_value: "false" }
-  - { id: led_bri, type: float, restore_value: false, initial_value: "0" }
-  - { id: led_r,   type: float, restore_value: false, initial_value: "0" }
-  - { id: led_g,   type: float, restore_value: false, initial_value: "0" }
-  - { id: led_b,   type: float, restore_value: false, initial_value: "0" }
+  # how bright every flash / voice colour is (the status bar's LED slider). 0 = no LEDs, ever.
+  - { id: g_led_level, type: int, restore_value: true, initial_value: "70" }
 
 # The robot itself tells HA when newer firmware exists (see "Latest firmware" above).
 binary_sensor:
@@ -1024,6 +1028,7 @@ text:
           else:
             - globals.set: { id: g_perm, value: "false" }
             - lvgl.widget.hide: perm_box
+            - script.execute: restore_leds     # the amber "needs you" hold ends with the prompt
   # ── WELLNESS TIP — dravix writes a short tip here; the robot pops it in the speech
   #    bubble, flashes cyan + wiggles so you notice, then auto-hides after ~12s.
   - platform: template
@@ -1317,12 +1322,10 @@ lvgl:
                 indicator: { bg_color: 0x5dffa0, bg_opa: COVER }
                 knob: { bg_color: 0xFFFFFF, radius: 8 }
                 on_release:
-                  - if:
-                      condition: { lambda: 'return x < 3;' }
-                      then:
-                        - light.turn_off: stackchan_light_bar
-                      else:
-                        - light.turn_on: { id: stackchan_light_bar, brightness: !lambda 'return x / 100.0f;' }
+                  # LED = how bright the reaction / voice colours flash (0 = none, ever). The bar
+                  # is dark at rest — this slider no longer switches a lamp on.
+                  - globals.set: { id: g_led_level, value: !lambda 'return x < 3 ? 0 : (int) x;' }
+                  - light.turn_off: stackchan_light_bar
             # row 2 — battery time-left / "charging" (raw W/mA live in HA, not here)
             - label: { id: sb_power, text: "", text_font: small_font, text_color: 0x8b96a4, align: TOP_LEFT, x: 12, y: 38 }
             # UPDATE icon — an amber up-arrow appears when newer firmware is available
@@ -1420,6 +1423,7 @@ lvgl:
                   - globals.set: { id: perm_dec, value: "1" }
                   - script.execute: perm_log
                   - lvgl.widget.hide: perm_box
+                  - script.execute: restore_leds
             - button:
                 id: perm_no
                 align: TOP_RIGHT
@@ -1437,6 +1441,7 @@ lvgl:
                   - globals.set: { id: perm_dec, value: "2" }
                   - script.execute: perm_log
                   - lvgl.widget.hide: perm_box
+                  - script.execute: restore_leds
   on_idle:
     # After ~6s of no interaction, settle the face back to the mood's resting expression, so a
     # pet / greet / tickle that set a happy "blush" face directly doesn't stick there forever
@@ -2695,6 +2700,7 @@ script:
       - delay: 180s
       - globals.set: { id: g_perm, value: "false" }
       - lvgl.widget.hide: perm_box
+      - script.execute: restore_leds
   # APPROVE via a head touch — fires the moment you touch (quick + reliable, no waiting for
   # release / no HA round-trip race). REJECT is screen-only (the red button on the prompt).
   # NOT while asleep/screensaver: petting a sleeping robot must never blind-approve an
@@ -2706,6 +2712,7 @@ script:
           then:
             - globals.set: { id: g_perm, value: "false" }
             - lvgl.widget.hide: perm_box
+            - script.execute: restore_leds
             - homeassistant.event: { event: esphome.dravix_permission, data: { decision: "approve" } }
             - globals.set: { id: perm_dec, value: "1" }
             - script.execute: perm_log
@@ -2844,7 +2851,9 @@ script:
             - number.set:
                 id: n_head_pitch
                 value: !lambda 'float v = id(n_head_pitch).state + 12; return v > 260 ? 260 : v;'
-  # ── MOOD LEDs — flash an emotion colour for ~2.5s, then put the LEDs back ──────
+  # ── REACTION LEDs — a colour for ~2.5s, then DARK. The bar is dark at rest: every light on
+  #    this robot is an event (a reaction, a voice stage, an alarm, a prompt) that ends by
+  #    itself. Brightness = the status bar's LED slider (g_led_level); 0 = never any LED.
   - id: led_flash
     mode: restart
     parameters:
@@ -2856,30 +2865,20 @@ script:
           # calm modes (night / focus / quiet) and SLEEP/SAVER = no light shows
           condition:
             lambda: |-
-              return id(sw_mood_led).state && !id(g_voice)
+              return id(sw_mood_led).state && id(g_led_level) > 0 && !id(g_voice)
                      && !id(g_night) && !id(g_focus) && !id(g_quiet)
                      && !id(g_sleep) && !id(g_saver);
           then:
-            - if:
-                condition: { lambda: 'return !id(g_flash);' }   # don't re-save our own colour
-                then:
-                  - lambda: |-
-                      auto v = id(stackchan_light_bar).current_values;
-                      id(led_on)  = v.is_on();
-                      id(led_bri) = v.get_brightness();
-                      id(led_r)   = v.get_red();
-                      id(led_g)   = v.get_green();
-                      id(led_b)   = v.get_blue();
             - globals.set: { id: g_flash, value: "true" }
             - light.turn_on:
                 id: stackchan_light_bar
-                brightness: 70%
+                brightness: !lambda 'return id(g_led_level) / 100.0f;'
                 red: !lambda 'return r / 100.0f;'
                 green: !lambda 'return g / 100.0f;'
                 blue: !lambda 'return b / 100.0f;'
             - delay: 2500ms
-            # if a voice conversation started meanwhile, DON'T stomp its yellow —
-            # the conversation's own on_end will restore the true original colour.
+            # if a voice conversation started meanwhile, DON'T stomp its colour — the
+            # conversation's own settle turns the bar off at the end.
             - if:
                 condition: { lambda: 'return !id(g_voice);' }
                 then:
@@ -3339,23 +3338,15 @@ script:
       - globals.set: { id: g_card, value: "0" }
       - lvgl.page.show: page_face
       - script.execute: render_face
-      # remember the LEDs — guard on g_flash too, so a mid-flash colour isn't saved as "resting"
-      - if:
-          condition: { lambda: 'return !id(g_voice) && !id(g_flash);' }
-          then:
-            - lambda: |-
-                auto v = id(stackchan_light_bar).current_values;
-                id(led_on)  = v.is_on();
-                id(led_bri) = v.get_brightness();
-                id(led_r)   = v.get_red();
-                id(led_g)   = v.get_green();
-                id(led_b)   = v.get_blue();
       # the light bar has REAL animated effects built in (BSP) — run the rainbow
       # while the head sways, instead of hand-rolled colour flips
-      - light.turn_on:
-          id: stackchan_light_bar
-          brightness: 100%
-          effect: "Rainbow Effect With Custom Values"
+      - if:
+          condition: { lambda: 'return id(g_led_level) > 0;' }
+          then:
+            - light.turn_on:
+                id: stackchan_light_bar
+                brightness: !lambda 'return id(g_led_level) / 100.0f;'
+                effect: "Rainbow Effect With Custom Values"
       - repeat:
           count: 12
           then:
@@ -3392,16 +3383,9 @@ script:
             - script.execute: render_face
             - lambda: 'lv_disp_trig_activity(NULL);'
             - if:
-                condition: { lambda: 'return !id(g_voice) && !id(g_flash);' }
+                condition: { lambda: 'return id(g_led_level) > 0;' }
                 then:
-                  - lambda: |-
-                      auto v = id(stackchan_light_bar).current_values;
-                      id(led_on)  = v.is_on();
-                      id(led_bri) = v.get_brightness();
-                      id(led_r)   = v.get_red();
-                      id(led_g)   = v.get_green();
-                      id(led_b)   = v.get_blue();
-            - light.turn_on: { id: stackchan_light_bar, brightness: 100%, effect: "Rainbow Effect With Custom Values" }
+                  - light.turn_on: { id: stackchan_light_bar, brightness: !lambda 'return id(g_led_level) / 100.0f;', effect: "Rainbow Effect With Custom Values" }
             - if:
                 condition: { lambda: 'return id(sw_sfx).state && !id(g_quiet) && !id(g_night);' }
                 then: [ { script.execute: { id: play_sfx, tune: "dance:d=8,o=5,b=150:c,e,g,c6,g,e,c" } } ]
@@ -3820,22 +3804,15 @@ script:
   # Identify: flash the LEDs cyan 3× + a happy face, so you can find/confirm the robot.
   - id: identify
     then:
-      - if:
-          condition: { lambda: 'return !id(g_voice) && !id(g_flash);' }
-          then:
-            - lambda: |-
-                auto v = id(stackchan_light_bar).current_values;
-                id(led_on)  = v.is_on();
-                id(led_bri) = v.get_brightness();
-                id(led_r)   = v.get_red();
-                id(led_g)   = v.get_green();
-                id(led_b)   = v.get_blue();
       - globals.set: { id: g_expr, value: "1" }
       - script.execute: render_face
       - repeat:
           count: 3
           then:
-            - light.turn_on: { id: stackchan_light_bar, brightness: 100%, red: 0%, green: 90%, blue: 100% }
+            - if:
+                condition: { lambda: 'return id(g_led_level) > 0;' }
+                then:
+                  - light.turn_on: { id: stackchan_light_bar, brightness: !lambda 'return id(g_led_level) / 100.0f;', red: 0%, green: 90%, blue: 100% }
             - delay: 250ms
             - light.turn_off: stackchan_light_bar
             - delay: 200ms
@@ -3855,11 +3832,11 @@ script:
       b: int
     then:
       - if:
-          condition: { lambda: 'return id(sw_speak_led).state;' }
+          condition: { lambda: 'return id(sw_speak_led).state && id(g_led_level) > 0;' }
           then:
             - light.turn_on:
                 id: stackchan_light_bar
-                brightness: 80%
+                brightness: !lambda 'return id(g_led_level) / 100.0f;'
                 red: !lambda 'return r / 100.0f;'
                 green: !lambda 'return g / 100.0f;'
                 blue: !lambda 'return b / 100.0f;'
@@ -3902,10 +3879,10 @@ script:
             # voice session is starting its microphone at this exact moment. A ding on the
             # speaker won that bus, the session's microphone lost it, and every "Okay Nabu"
             # died the instant it began. The acknowledgement is the white blink and the eyes.
-            # a quick WHITE blink. led_flash is used on purpose: it saves the TRUE original
-            # colour and restores it by itself after 2.5s, so a wake word that Home Assistant
-            # never answers can never leave the bar lit. (It obeys "Mood LEDs" and stays dark
-            # in night/focus/quiet/sleep — there the wide eyes alone are the acknowledgement.)
+            # a quick WHITE blink. led_flash is used on purpose: it turns the bar off again by
+            # itself after 2.5s, so a wake word that Home Assistant never answers can never
+            # leave the bar lit. (It obeys "Mood LEDs" and stays dark in night/focus/quiet/
+            # sleep — there the wide eyes alone are the acknowledgement.)
             - script.execute: { id: led_flash, r: 100, g: 100, b: 100 }
             # eyes wide, listening — the face reacts NOW instead of waiting for HA. No head
             # nudge here: on_listening owns the head for this turn (one owner per body part).
@@ -3968,22 +3945,23 @@ script:
       - globals.set: { id: g_talk,   value: "false" }
       - globals.set: { id: g_voice,  value: "false" }
       - script.execute: render_face      # back to the resting face it had before the turn
-      - script.execute: restore_leds     # …and the LEDs it had before the turn (or off)
+      - script.execute: restore_leds     # …and the bar goes dark again
       - if:
           condition: { switch.is_off: sw_privacy }
           then: [ micro_wake_word.start ]
-  # Put the LEDs back to whatever they were before the voice interaction (or off).
+  # BACK TO REST = OFF. The one exception: while an agent's Approve/Reject prompt is up the
+  # bar holds a dim amber — that is the "it needs you" light, and it is the only colour on
+  # this robot that is a STATE rather than a moment. Every path that hides the prompt calls
+  # this again, so the amber can never outlive the prompt.
   - id: restore_leds
     then:
       - if:
-          condition: { lambda: 'return id(led_on);' }
+          condition:
+            lambda: |-
+              return id(g_perm) && id(g_led_level) > 0 && id(sw_mood_led).state
+                     && !id(g_sleep) && !id(g_saver) && !id(g_night) && !id(g_focus) && !id(g_quiet);
           then:
-            - light.turn_on:
-                id: stackchan_light_bar
-                brightness: !lambda 'return id(led_bri);'
-                red: !lambda 'return id(led_r);'
-                green: !lambda 'return id(led_g);'
-                blue: !lambda 'return id(led_b);'
+            - light.turn_on: { id: stackchan_light_bar, brightness: !lambda 'return id(g_led_level) / 250.0f;', red: 100%, green: 62%, blue: 0% }
           else:
             - light.turn_off: stackchan_light_bar
 select:
@@ -4476,27 +4454,7 @@ interval:
           then:
             - script.execute: punch
   # (antennae wiggle interval removed with the dead antennae widgets)
-  # SLEEP BREATHING — while asleep ON THE CHARGER, the LED bar "breathes" very dimly
-  # (the EMO/Vector charger-snooze everyone loves). Gated on Mood LEDs; goes fully
-  # dark the moment it wakes or is unplugged.
-  - interval: 4s
-    then:
-      - if:
-          condition: { lambda: 'return id(g_sleep) && id(g_batt_chg) && id(sw_mood_led).state;' }
-          then:
-            - light.turn_on:
-                id: stackchan_light_bar
-                red: 0%
-                green: 90%
-                blue: 80%
-                brightness: !lambda 'return (id(g_anim) % 2) ? 0.07f : 0.03f;'
-            - globals.set: { id: g_breath, value: "true" }
-          else:
-            - if:
-                condition: { lambda: 'return id(g_breath);' }
-                then:
-                  - light.turn_off: stackchan_light_bar
-                  - globals.set: { id: g_breath, value: "false" }
+  # (the sleep-on-charger LED "breathing" is gone — the bar is dark at rest, nights included)
   # ── VOICE-STATE WATCHDOG — the single most important safety net in this file.
   #    A conversation that starts and then dies without ever reaching on_end/on_error (HA
   #    restarts, the network drops, the pipeline is removed mid-turn) used to leave g_voice
@@ -4861,7 +4819,7 @@ interval:
           then:
             - lvgl.slider.update:
                 id: sl_led
-                value: !lambda 'return (int)(id(stackchan_light_bar).remote_values.is_on() ? id(stackchan_light_bar).remote_values.get_brightness() * 100.0f : 0.0f);'
+                value: !lambda 'return id(g_led_level);'
       # UPDATE arrow — newer firmware is waiting (dravix keeps "Latest firmware" fresh)
       - if:
           condition:
@@ -5096,18 +5054,6 @@ voice_assistant:
           # answered — and a settle left over from the previous turn must not stomp this one
           - script.stop: wake_ack
           - script.stop: voice_settle
-          # remember the current LEDs — but only at the START of a conversation, and never
-          # while a mood flash is showing (the flash already saved the TRUE original colour).
-          - if:
-              condition: { lambda: 'return !id(g_voice) && !id(g_flash);' }
-              then:
-                - lambda: |-
-                    auto v = id(stackchan_light_bar).current_values;
-                    id(led_on)  = v.is_on();
-                    id(led_bri) = v.get_brightness();
-                    id(led_r)   = v.get_red();
-                    id(led_g)   = v.get_green();
-                    id(led_b)   = v.get_blue();
           - globals.set: { id: g_flash, value: "false" }   # flash cancelled; save is now ours
           # the wake word DOES wake a sleeping robot — but a question asked in night/focus/quiet
           # must not silently cancel that mode (it kept dropping focus/night to awake).
