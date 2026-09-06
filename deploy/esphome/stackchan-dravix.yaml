@@ -381,6 +381,12 @@ globals:
   - { id: g_eye_r,  type: int,  restore_value: false, initial_value: "18" }
   - { id: g_eye_dy, type: int,  restore_value: false, initial_value: "0" }
   - { id: g_pet,    type: bool, restore_value: false, initial_value: "false" }  # being touched
+  # the three touch pads, read on-device (see text_sensor) — two at once = a HUG
+  - { id: g_tp1,    type: bool, restore_value: false, initial_value: "false" }
+  - { id: g_tp2,    type: bool, restore_value: false, initial_value: "false" }
+  - { id: g_tp3,    type: bool, restore_value: false, initial_value: "false" }
+  - { id: g_hug,    type: bool, restore_value: false, initial_value: "false" }
+  - { id: g_gest_n, type: int,  restore_value: false, initial_value: "0" }      # "Last gesture" counter
   # swipe tracking + which "home screen" (0 = face, 1..3 = cards)
   - { id: sw_x0,    type: int,  restore_value: false, initial_value: "0" }
   - { id: sw_y0,    type: int,  restore_value: false, initial_value: "0" }
@@ -587,8 +593,12 @@ sensor:
               if (id(g_grav) <= 0.0f) id(g_grav) = mag;
               float dev = fabsf(mag - id(g_grav));
               id(g_grav) += 0.02f * (mag - id(g_grav));
-              if (dev > 0.55f * id(g_grav)) {          // a jolt: >±55% off gravity
-                long now = (long) millis();
+              // the CoreS3 IS the head: its own servo moves shake this sensor — nothing in the
+              // 1.5s after a commanded move counts (every head writer stamps g_move_ms)
+              long tnow = (long) millis();
+              bool moving = (tnow - id(g_move_ms)) < 1500;
+              if (dev > 0.45f * id(g_grav) && !moving) {   // a jolt: >±45% off gravity (was 55 — a hand shake is softer)
+                long now = tnow;
                 if (now - id(g_shake_ms) > 1500) id(g_shake_n) = 0;
                 id(g_shake_n) += 1;
                 id(g_shake_ms) = now;
@@ -601,14 +611,10 @@ sensor:
               }
               // ── HANDLED / UPSIDE-DOWN (Vector's "hey, put me down"). NOT a jolt: a sustained
               //    small acceleration = being carried about; the Z axis flipping sign = upside-down.
-              //    The CoreS3 IS the head, so every servo move shakes this sensor — ignore the 1.5s
-              //    after any commanded move (all head writers stamp g_move_ms).
-              long tnow = (long) millis();
-              bool moving = (tnow - id(g_move_ms)) < 1500;
               if (id(g_az_rest) == 0.0f) id(g_az_rest) = az;
               if (!moving && id(g_lift) == 0) id(g_az_rest) += 0.01f * (az - id(g_az_rest));
               bool upside  = (az * id(g_az_rest) < 0.0f) && fabsf(az) > 0.6f * id(g_grav);
-              bool handled = dev > ${handled_g} * id(g_grav) && dev <= 0.55f * id(g_grav)
+              bool handled = dev > ${handled_g} * id(g_grav) && dev <= 0.45f * id(g_grav)
                              && (tnow - id(g_shake_ms)) > 1500;   // between the jolts of a SHAKE, dev sits in this band — that is the shake, not handling
               // the first seconds after boot are the sensor settling (and the servos
               // homing) — that is not someone picking the robot up
@@ -724,43 +730,41 @@ text_sensor:
   # DIAGNOSTIC (temporary): the exact reason for the last reboot — see the debug block above.
   - platform: debug
     reset_reason: { name: "Reset Reason" }
-  # PETTING / TICKLING. The BSP publishes the three touch pads as TEXT sensors with no
-  # `id:` of their own, so the only way to read them is to import them back from Home
-  # Assistant by entity_id — which means their name depends on what HA called the device.
-  # A fresh flash registers as ${device_name}; the dravix convention is to rename the device
-  # to "Dravix", which re-registers everything under a new prefix. So EVERY pad is imported
-  # under BOTH prefixes and both feed the same script: whichever entity doesn't exist simply
-  # stays unavailable and never fires. Nothing to configure, works either way.
-  - platform: homeassistant
-    id: ha_touch1
-    entity_id: sensor.${ha_prefix}_touch_sensor_1
+  # PETTING / TICKLING / HUGGING — the three touch pads, read ON-DEVICE. The BSP polls the
+  # pads once a second and publishes them to Home Assistant; importing them back meant a
+  # full second (and a working HA) before a pet registered, and a quick pat was missed
+  # outright. These are our own readers of the same pads — each si12t text sensor is its own
+  # poller with its own last-state, so they coexist with the BSP's — every 100 ms, internal.
+  # (The BSP's "Touch Sensor 1-3" entities stay: dravix's mood engine listens to them.)
+  # Pads 1 + 2 = the head (a pet) · pad 3 = the back of the head (a tickle) · two pads at
+  # once = a HUG. The chip re-baselines a touch it has held for ~10 s, so a very long hold
+  # ends by itself — that is the sensor, not a bug.
+  - platform: si12t
+    id: tp1
+    channel: CH_1
+    update_interval: 100ms
+    internal: true
     on_value:
+      - lambda: 'id(g_tp1) = (x != "No touch");'
+      - script.execute: touch_eval
       - script.execute: { id: touch_pet, v: !lambda 'return x;' }
-  - platform: homeassistant
-    id: ha_touch1b
-    entity_id: sensor.${ha_prefix_alt}_touch_sensor_1
+  - platform: si12t
+    id: tp2
+    channel: CH_2
+    update_interval: 100ms
+    internal: true
     on_value:
+      - lambda: 'id(g_tp2) = (x != "No touch");'
+      - script.execute: touch_eval
       - script.execute: { id: touch_pet, v: !lambda 'return x;' }
-  - platform: homeassistant
-    id: ha_touch2
-    entity_id: sensor.${ha_prefix}_touch_sensor_2
+  - platform: si12t
+    id: tp3
+    channel: CH_3
+    update_interval: 100ms
+    internal: true
     on_value:
-      - script.execute: { id: touch_pet, v: !lambda 'return x;' }
-  - platform: homeassistant
-    id: ha_touch2b
-    entity_id: sensor.${ha_prefix_alt}_touch_sensor_2
-    on_value:
-      - script.execute: { id: touch_pet, v: !lambda 'return x;' }
-  # zone 3 (back of the head) is a TICKLE — a giggly wiggle, not a calm pet
-  - platform: homeassistant
-    id: ha_touch3
-    entity_id: sensor.${ha_prefix}_touch_sensor_3
-    on_value:
-      - script.execute: { id: touch_tickle, v: !lambda 'return x;' }
-  - platform: homeassistant
-    id: ha_touch3b
-    entity_id: sensor.${ha_prefix_alt}_touch_sensor_3
-    on_value:
+      - lambda: 'id(g_tp3) = (x != "No touch");'
+      - script.execute: touch_eval
       - script.execute: { id: touch_tickle, v: !lambda 'return x;' }
   - platform: wifi_info
     ip_address:
@@ -795,6 +799,14 @@ text_sensor:
   - platform: template
     name: "Last voice problem"
     id: st_va_err
+    entity_category: diagnostic
+  # WHAT DID THE HANDS DO? The last hand gesture the robot registered — pet / tickle / hug /
+  # boop / wave / head turned / shaken / picked up / upside-down / put down — numbered, so
+  # the same gesture twice shows up twice. THE way to check that the pads and the motion
+  # sensor actually work on your unit.
+  - platform: template
+    name: "Last gesture"
+    id: st_gesture
     entity_category: diagnostic
 
 # ── Dynamic card slots — dravix-os writes these (you choose the entities in the UI) ──
@@ -2193,6 +2205,7 @@ script:
     mode: restart
     then:
       - lambda: 'lv_disp_trig_activity(NULL);'
+      - script.execute: { id: gesture, g: !lambda 'return id(g_lift) == 2 ? std::string("upside-down") : std::string("picked up");' }
       - globals.set: { id: g_expr, value: !lambda 'return id(g_lift) == 2 ? 7 : 5;' }
       - script.execute: render_face
       - if:
@@ -2206,6 +2219,7 @@ script:
   - id: lift_relief         # set back down: a little "phew" and the resting face
     mode: single
     then:
+      - script.execute: { id: gesture, g: "put down" }
       - if:
           condition: { lambda: 'return id(sw_sfx).state && !id(g_quiet) && !id(g_night);' }
           then: [ { script.execute: { id: play_sfx, tune: "phew:d=8,o=5,b=140:e,c" } } ]
@@ -2215,6 +2229,7 @@ script:
   - id: grumpy_pet          # a pet while it is still cross about being shaken: a huff, then it softens a notch
     mode: single
     then:
+      - script.execute: { id: gesture, g: "pet (still cross)" }
       - globals.set: { id: g_expr, value: "3" }
       - script.execute: render_face
       - if:
@@ -2457,6 +2472,48 @@ script:
   # ── SENSOR HANDLERS — one body per signal, shared by BOTH prefix imports (see the
   #    sensor/text_sensor sections). Keeping the logic here instead of inline means the
   #    fresh-flash entity and the renamed-device entity can never drift apart.
+  - id: gesture             # "Last gesture" — numbered, so HA sees every one (see st_gesture)
+    parameters:
+      g: string
+    then:
+      - lambda: 'id(g_gest_n) += 1;'
+      - text_sensor.template.publish:
+          id: st_gesture
+          state: !lambda 'return g + " #" + std::to_string(id(g_gest_n));'
+  - id: touch_eval          # two pads at once = a HUG (both hands on its head); hands off = it ends
+    then:
+      - lambda: |-
+          int n = (id(g_tp1) ? 1 : 0) + (id(g_tp2) ? 1 : 0) + (id(g_tp3) ? 1 : 0);
+          bool hug = n >= 2;
+          if (hug && !id(g_hug)) { id(g_hug) = true; id(hug_react).execute(); }
+          else if (!hug && id(g_hug)) { id(g_hug) = false; id(hug_end).execute(); }
+  - id: hug_react           # both hands on its head: it MELTS — love eyes, a purr, leans into you
+    mode: restart
+    then:
+      - if:
+          condition: { lambda: 'return id(sw_touch).state && !id(g_sleep) && !id(g_saver) && !id(g_perm);' }
+          then:
+            - script.stop: pet_react        # the first pad already started a pet — the hug takes over
+            - lambda: 'lv_disp_trig_activity(NULL); id(g_ia_ms) = (long) millis();'
+            - script.execute: { id: gesture, g: "hug" }
+            - globals.set: { id: g_expr, value: "6" }     # love ♥
+            - globals.set: { id: g_card, value: "0" }
+            - lvgl.page.show: page_face
+            - script.execute: render_face
+            - script.execute: { id: led_flash, r: 100, g: 25, b: 45 }
+            - if:
+                condition: { lambda: 'return id(sw_sfx).state && !id(g_quiet) && !id(g_night);' }
+                then: [ { script.execute: { id: play_sfx, tune: "purr:d=16,o=5,b=140:c,e,c,e,g" } } ]
+            - if:   # one owner per body part: only lean in if nothing else is moving the head
+                condition: { lambda: 'return id(sw_move).state && !id(head_nudge).is_running();' }
+                then: [ { script.execute: { id: head_nudge, dx: 0, dy: 10 } } ]   # leans into your hands
+  - id: hug_end             # hands off: back to the resting face
+    then:
+      - if:
+          condition: { lambda: 'return !id(g_sleep) && !id(g_saver) && id(g_expr) == 6;' }
+          then:
+            - globals.set: { id: g_expr, value: !lambda 'return id(g_face_rest);' }
+            - script.execute: render_face
   - id: touch_pet           # a pad was touched (or released) — pet, or approve a prompt
     parameters:
       v: string
@@ -2717,6 +2774,7 @@ script:
             - globals.set: { id: perm_dec, value: "1" }
             - script.execute: perm_log
             - script.execute: head_nod            # a "yes" nod to confirm
+            - script.execute: { id: gesture, g: "approved by touch" }
   # APPROVE from a face TAP — waits 200 ms first, so a tap on the red Reject button wins the race
   # (Reject flips g_perm off, and this then no-ops). Head-touch still approves instantly.
   - id: perm_tap_approve
@@ -2892,6 +2950,7 @@ script:
           condition: { lambda: 'return !id(g_sleep) && !id(g_saver);' }   # DND: in sleep/screensaver ONLY a screen tap or "Ok Nabu" wakes it
           then:
             - lambda: 'lv_disp_trig_activity(NULL);'
+            - script.execute: { id: gesture, g: "pet" }
             # a pet must NOT cancel night/focus/quiet (it used to flip them to awake —
             # backlight to full, mood LEDs re-armed). It still blushes, gently.
             - if:
@@ -3199,6 +3258,7 @@ script:
           condition: { lambda: 'return !id(g_sleep) && !id(g_saver);' }   # DND: don't wake on a wave in sleep/screensaver
           then:
             - lambda: 'lv_disp_trig_activity(NULL);'
+            - script.execute: { id: gesture, g: "wave" }
             - if:  # waving = you want its attention — but it must not cancel night/focus/quiet
                 condition: { lambda: 'return !id(g_night) && !id(g_focus) && !id(g_quiet) && id(robot_mode).current_option() != std::string("awake");' }
                 then: [ { select.set: { id: robot_mode, option: awake } } ]
@@ -3219,6 +3279,7 @@ script:
     mode: single
     then:
       - lambda: 'lv_disp_trig_activity(NULL);'
+      - script.execute: { id: gesture, g: "boop" }
       - globals.set: { id: g_expr, value: "6" }      # love ♥
       - globals.set: { id: g_card, value: "0" }
       - lvgl.page.show: page_face
@@ -3239,6 +3300,7 @@ script:
           condition: { lambda: 'return !id(g_sleep) && !id(g_saver);' }   # DND: don't wake on a head-turn in sleep/screensaver
           then:
             - lambda: 'lv_disp_trig_activity(NULL);'
+            - script.execute: { id: gesture, g: "head turned" }
             - globals.set: { id: g_expr, value: "7" }      # dizzy x_x — whoa!
             - globals.set: { id: g_card, value: "0" }
             - lvgl.page.show: page_face
@@ -3261,6 +3323,7 @@ script:
           condition: { lambda: 'return id(g_booted) && !id(g_voice) && !id(g_perm);' }
           then:
             - lambda: 'lv_disp_trig_activity(NULL);'
+            - script.execute: { id: gesture, g: "shaken" }
             - if:
                 condition: { lambda: 'return (id(g_sleep) || id(g_saver)) && !id(g_night) && !id(g_focus) && !id(g_quiet);' }
                 then: [ { select.set: { id: robot_mode, option: awake } } ]
@@ -3315,6 +3378,7 @@ script:
           condition: { lambda: 'return !id(g_sleep) && !id(g_saver);' }   # DND: don't wake on a tickle in sleep/screensaver
           then:
             - lambda: 'lv_disp_trig_activity(NULL);'
+            - script.execute: { id: gesture, g: "tickle" }
             - if:  # a tickle must not cancel night/focus/quiet either
                 condition: { lambda: 'return !id(g_night) && !id(g_focus) && !id(g_quiet) && id(robot_mode).current_option() != std::string("awake");' }
                 then: [ { select.set: { id: robot_mode, option: awake } } ]
