@@ -37,7 +37,7 @@ substitutions:
   # publishes it to HA ("Firmware version" sensor); the dravix dashboard compares it
   # with the version bundled in the add-on and shows "firmware update available".
   # (Maintainers: bump this on every firmware change. Users: don't touch.)
-  fw_version: "51"
+  fw_version: "52"
   # The ESPHome node name (mDNS hostname + the default entity prefix on a fresh flash).
   # Change it only if you run MORE THAN ONE robot — each needs a unique name. NOTE:
   # changing it on an already-adopted robot registers a NEW device in HA.
@@ -359,6 +359,7 @@ globals:
   - { id: g_think,  type: bool, restore_value: false, initial_value: "false" }   # AI is processing — between your words and its reply
   - { id: g_conc,   type: bool, restore_value: false, initial_value: "false" }   # external "focused" face (a coding agent is working) — focus EYES only, no DND semantics
   - { id: g_vad,    type: bool, restore_value: false, initial_value: "false" }   # voice detected in the CURRENT listen window (VAD) — gates the no-voice auto-close
+  - { id: g_va_err, type: bool, restore_value: false, initial_value: "false" }   # this turn already reported a pipeline error (on_end must not overwrite it)
   - { id: g_ext_talk, type: bool, restore_value: false, initial_value: "false" } # external TTS (dravix chat/notify/timers) is playing → talking mouth
   - { id: g_tip,    type: bool, restore_value: false, initial_value: "false" }  # a wellness tip is showing
   - { id: g_agent,  type: bool, restore_value: false, initial_value: "false" }  # an AI-agent badge is set
@@ -512,6 +513,19 @@ debug:
   update_interval: 10s
 
 sensor:
+  # ── THE SERVO BUS BLOCKS THE MAIN LOOP — poll it 5x less ──────────────────────────────
+  #    The BSP reads both servos' positions every 200 ms over the serial bus, and that read is
+  #    a BLOCKING busy-wait of up to 500 ms per missing byte (scs9009 read_scs_) — inside the
+  #    one main loop that also streams the microphone to Home Assistant through a 512 ms ring
+  #    buffer. A servo that answers late = mic audio dropped = "Okay Nabu" that listens and
+  #    never understands (the pipeline runs showed audio arriving at 10-20% of real time).
+  #    Every angle write blocks too (move_angle: delay(distance/speed + 100 ms)); those are
+  #    kept out of the listening stage below. Once a second is plenty for the hand-turn
+  #    detector (a hand-turn is a >14° jump between two samples).
+  - id: !extend x_servo_sensor
+    update_interval: 1s
+  - id: !extend y_servo_sensor
+    update_interval: 1s
   - platform: debug
     free: { name: "Heap Free" }
     block: { name: "Heap Largest Block" }
@@ -2527,7 +2541,7 @@ script:
           condition:
             lambda: |-
               return id(sw_move).state && !std::isnan(id(n_head_pitch).state)
-                     && !id(g_night) && !id(g_focus) && !id(g_quiet) && !id(g_sleep) && !id(g_saver);
+                     && !id(g_night) && !id(g_focus) && !id(g_quiet) && !id(g_sleep) && !id(g_saver) && !id(g_listen);
           then:
             - lambda: 'if (id(g_pet_base) < 0.0f) id(g_pet_base) = id(n_head_pitch).state;'   # remember where it was (once per pet session)
             - number.set:
@@ -2877,7 +2891,7 @@ script:
             lambda: |-
               return id(sw_move).state && dx != 0 && !std::isnan(id(servo_x_angle).state)
                      && !id(g_night) && !id(g_focus) && !id(g_quiet)
-                     && !id(g_sleep) && !id(g_saver);
+                     && !id(g_sleep) && !id(g_saver) && !id(g_listen);   // never while the mic streams
           then:
             - number.set:
                 id: servo_x_angle
@@ -2890,7 +2904,7 @@ script:
             lambda: |-
               return id(sw_move).state && dy != 0 && !std::isnan(id(n_head_pitch).state)
                      && !id(g_night) && !id(g_focus) && !id(g_quiet)
-                     && !id(g_sleep) && !id(g_saver);
+                     && !id(g_sleep) && !id(g_saver) && !id(g_listen);
           then:
             - number.set:
                 id: n_head_pitch
@@ -2909,7 +2923,7 @@ script:
             lambda: |-
               return id(sw_move).state && !std::isnan(id(servo_x_angle).state)
                      && !id(g_night) && !id(g_focus) && !id(g_quiet)
-                     && !id(g_sleep) && !id(g_saver);
+                     && !id(g_sleep) && !id(g_saver) && !id(g_listen);   // never while the mic streams
           then:
             - number.set:
                 id: servo_x_angle
@@ -2933,7 +2947,7 @@ script:
             lambda: |-
               return id(sw_move).state && !std::isnan(id(n_head_pitch).state)
                      && !id(g_night) && !id(g_focus) && !id(g_quiet)
-                     && !id(g_sleep) && !id(g_saver);
+                     && !id(g_sleep) && !id(g_saver) && !id(g_listen);   // never while the mic streams
           then:
             - number.set:
                 id: n_head_pitch
@@ -5173,13 +5187,15 @@ voice_assistant:
           - globals.set: { id: g_listen, value: "true" }
           - globals.set: { id: g_voice, value: "true" }
           - globals.set: { id: g_vad, value: "false" }   # fresh listen window — no voice heard yet
+          - globals.set: { id: g_va_err, value: "false" }
           - script.execute: listen_timeout               # …auto-close if none arrives in ${listen_timeout_s}s
           - lvgl.page.show: page_face
           - globals.set: { id: g_card, value: "0" }
           # LISTENING = CYAN (see leds_voice — each stage of a turn has its own colour now)
           - script.execute: { id: leds_voice, r: 0, g: 80, b: 100 }
           - script.execute: render_face          # the LISTENING FACE (big curious eyes) — no label
-          - script.execute: { id: head_nudge, dx: 0, dy: 6 }   # perks up attentively, like it leans in
+          # (no head nudge here any more: a servo write BLOCKS the loop 100-500 ms, and this is the
+          #  exact moment the microphone starts streaming — the wide eyes + cyan are the perk-up)
   on_stt_vad_start:
     # a voice! — disarm the no-voice auto-close for this turn
     - globals.set: { id: g_vad, value: "true" }
@@ -5222,7 +5238,7 @@ voice_assistant:
     # agent, or one that returned nothing. Worth saying, since the robot looks identical
     # to a normal quiet finish otherwise.
     - if:
-        condition: { lambda: 'return !id(g_talk);' }
+        condition: { lambda: 'return !id(g_talk) && !id(g_va_err);' }   # (an error this turn already said why)
         then:
           - text_sensor.template.publish: { id: st_va_err, state: "no reply — check the pipeline's conversation agent" }
           - script.execute: va_error_show
@@ -5230,9 +5246,18 @@ voice_assistant:
   on_error:
     # Pipeline error → NEVER stay stuck on a lit bar / listening face; clean up NOW (no
     # waiting for audio that isn't coming), SAY SO, and re-arm the wake word.
+    - globals.set: { id: g_va_err, value: "true" }   # on_end must not overwrite this with its "no reply" guess
     - text_sensor.template.publish:
         id: st_va_err
-        state: !lambda 'return message.empty() ? code : (code + ": " + message);'
+        state: !lambda |-
+          // the pipeline's code, translated where it matters: "no text" is almost never the
+          // conversation agent — it is the microphone audio reaching HA broken or too short
+          if (code == "stt-no-text-recognized") return std::string("heard no words — the mic audio reached HA broken or too short (a starved main loop, or the mic bus taken); see the ESPHome log");
+          if (code == "mic-channel-stalled") return std::string("the microphone stopped mid-turn — the audio bus was taken (wake word / a sound)");
+          if (code == "stt-stream-failed") return std::string("speech-to-text failed: " + message);
+          if (code == "intent-failed") return std::string("the conversation agent failed: " + message);
+          if (code == "tts-failed") return std::string("text-to-speech failed: " + message);
+          return message.empty() ? code : (code + ": " + message);
     - script.stop: wake_ack
     - script.stop: voice_settle
     - globals.set: { id: g_listen, value: "false" }
