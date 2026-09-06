@@ -365,6 +365,7 @@ globals:
   - { id: g_vol_saved, type: float, restore_value: false, initial_value: "-1" }  # volume before quiet mode
   - { id: g_anim,   type: int,  restore_value: false, initial_value: "0" }
   - { id: g_near,   type: bool, restore_value: false, initial_value: "false" }  # someone is close
+  - { id: g_prox_ms, type: long, restore_value: false, initial_value: "0" }    # last proximity reading (ms) — presence goes stale without one
   - { id: g_pet,    type: bool, restore_value: false, initial_value: "false" }  # being touched
   # swipe tracking + which "home screen" (0 = face, 1..3 = cards)
   - { id: sw_x0,    type: int,  restore_value: false, initial_value: "0" }
@@ -520,6 +521,7 @@ sensor:
     battery_level:
       name: "Battery level"
       id: axp_batt
+      entity_category: diagnostic   # the raw PMU number; "Battery" (below) is THE gauge
     battery_voltage:
       name: "Battery voltage"
       id: axp_volt
@@ -2494,6 +2496,7 @@ script:
     parameters:
       v: float
     then:
+      - lambda: 'id(g_prox_ms) = (long) millis();'   # (the 20s tick clears a stale presence)
       # a finger right at the sensor = a BOOP — beloved ritual of every desk robot
       - if:
           condition: { lambda: 'return v > ${prox_boop} && !id(g_sleep) && !id(g_saver) && id(sw_touch).state;' }
@@ -4647,6 +4650,12 @@ interval:
   # fires with a low probability (calm at rest, not restless). Tune via sw_drift / these odds.
   - interval: 20s
     then:
+      # PRESENCE goes stale. The BSP's light/proximity chip stops reporting in a dark room
+      # ("Sensors blacked out"), and g_near used to freeze at whatever the last reading
+      # before dark said — "Presence nearby" stayed ON all night. Two minutes without a
+      # single proximity reading = nobody we can vouch for.
+      - lambda: |-
+          if (id(g_near) && ((long) millis() - id(g_prox_ms)) > 120000) id(g_near) = false;
       # BORED — nobody has touched, spoken to or come near it for a while: a yawn, now and
       # then a sneeze (Emo). Only awake, only with nobody there, never in the calm modes.
       - if:

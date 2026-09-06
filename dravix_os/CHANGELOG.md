@@ -1,5 +1,41 @@
 # Changelog
 
+## 0.1.12
+
+**😴 The screensaver is the sleeping face, sleep is black, the timers finally count, and
+Vector/Emo faces** *(firmware 48 — Install the firmware; the add-on itself is unchanged, this
+update only carries the notes)*
+
+- **Screensaver** = closed eyes + a drifting "z z z" on black, dimmed to a quarter of full (or
+  half of the day brightness, whichever is less — a 40% day setting used to get a *brighter*
+  screensaver). **Sleep** shows that face for two seconds, then the screen goes fully off.
+- **The screensaver / sleep minutes work now.** The robot's own eat, drink, startle and
+  error-toast reset the idle clock — a snack every few minutes meant a 15-minute sleep was
+  unreachable. Only *people* reset it now (pet, tickle, wave, boop, hand-turn, shake, greet,
+  wake word, listening, speaking) plus the alarm. Sleep can't be set earlier than the
+  screensaver (clamped to screensaver + 1 min). Both numbers are read live — change them in
+  Home Assistant, no reboot.
+- **Faces, Vector / Emo style:** two tall rounded eyes and nothing else at rest; the mouth
+  appears only when it has something to say — talking, a yawn, the happy and in-love smiles,
+  the dizzy "o". Sad, angry, sleepy and doubt are eyes-only; thinking lifts one eye; listening
+  is the big wide eyes. The blink closes to a slit and *holds* 150 ms, so it reads as a blink
+  instead of a flicker.
+- **New HA button "Face test":** every expression, then listening / thinking / talking / yawn /
+  the screensaver face, 1.5 s each, restoring everything after — the only way to see all the
+  faces without provoking each one.
+- **Snacks only when hungry** (the Life tab's food need below 40) — Emo and Vector don't eat
+  at random. A 3% chance otherwise.
+- **Sensors audited.** "Presence nearby" no longer sticks ON all night: the light/proximity
+  chip stops reporting in a dark room and presence froze at its last reading — two minutes
+  without a reading now clears it. "Battery" is the one gauge (the PMU fuel gauge, the
+  voltage model as fallback); the raw "Battery level" moved to Diagnostics next to the
+  voltage. Reset Reason / Heap / Loop Time / Uptime / Wake word active / WiFi are straight
+  from the chip, unchanged.
+- **Motion audited.** Nothing moves in screensaver or sleep (drift, glance, yawn, snack, sway
+  and the gloves all gate on it); every idle motion is a random draw (eye drift 40% each 6 s,
+  blink 22% each second, glance on the 20 s tick, a yawn only when bored *and* nobody is
+  near), and none runs in night / focus / quiet or while a voice session is up.
+
 ## 0.1.11
 
 **🎙️ "Okay Nabu" died the instant it began — fixed, plus four clean-ups** *(firmware 47 — update both)*
