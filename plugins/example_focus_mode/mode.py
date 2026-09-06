@@ -21,7 +21,8 @@ class FocusMode(Mode):
         if robot.supports(CAP_FACE):
             await robot.set_face(Expression.NEUTRAL)
         if robot.supports(CAP_LEDS):
-            await robot.set_leds(cfg.get("led_color", "blue"), cfg.get("led_brightness", 0.25))
+            # a pulse on entry — the bar is dark at rest (a held colour was the "LEDs are just on" complaint)
+            await robot.flash_leds(cfg.get("led_color", "blue"), cfg.get("led_brightness", 0.25), revert_s=5.0)
         greet = cfg.get("greet")
         if greet and robot.supports(CAP_SAY):
             await robot.say(greet, proactive=True)

@@ -1,5 +1,33 @@
 # Changelog
 
+## 0.1.13
+
+**💡 LEDs only for a reason, and hands that get an answer** *(firmware 49 — Install the firmware
+and update the add-on; the add-on part is small)*
+
+- **The light bar is dark at rest.** It used to show whatever it was last left at and every
+  flash "restored" that afterwards: the status-bar LED slider, the night-time charger glow,
+  a mode colour, the dashboard picker — all of them stayed on forever. Now every light is a
+  *moment* that ends by itself: a hand reaction, the voice stages (cyan / amber / green),
+  a mood change, an alarm or timer, a low battery, plugging in, a wellness tip, an agent's
+  Approve/Reject prompt (the one hold that stays: a dim amber while the prompt is up). The
+  night-time charger glow is gone. The status bar's LED slider is now the flash **intensity**
+  — 0 means no LED, ever.
+- **dravix modes pulse instead of holding a colour** (Do-not-disturb, Focus, Guard, Pomodoro).
+  The dashboard's LED picker still works, and lasts until the robot's next reaction.
+- **Hands, faster:** the three touch pads are now read on the robot every 100 ms instead of
+  once a second through Home Assistant — a pet answers at once, and a quick pat no longer
+  slips through. (The "Touch Sensor" entities stay for the mood engine.)
+- **New: a hug.** Two pads at once (both hands on its head) — love eyes, a purr, it leans into
+  your hands, and back to its face when you let go. *New — check it with "Last gesture".*
+- **Shake, a little easier,** and the robot's own head moves can no longer count as one.
+  *Retuned blind — check it with "Last gesture".*
+- **New diagnostic "Last gesture":** pet / tickle / hug / boop / wave / head turned / shaken /
+  picked up / upside-down / put down — numbered, so the same gesture twice shows twice. If a
+  gesture never appears there, the sensor never saw it.
+- Firmware note: the touch chip re-baselines a touch it has held for ~10 s, so a very long
+  hold ends by itself.
+
 ## 0.1.12
 
 **😴 The screensaver is the sleeping face, sleep is black, the timers finally count, and

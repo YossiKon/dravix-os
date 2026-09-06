@@ -173,6 +173,8 @@ Everything is done by touching the robot, talking to it, or from the dashboard:
 | 🔋 Real battery gauge | Level + charging straight from the **AXP2101** fuel gauge (hardware charging flag), time-left estimate, sleep-breathing LEDs on the charger; raw W/mA from the INA226 live in HA | Swipe ⬇ — % + bar + time-left on the status bar |
 | 📡 IR blaster + receiver | The robot controls your AC (a ready `Default AC` climate entity) and glances over, curious, when anyone uses a TV/AC remote | Pick `climate.*_default_ac` in the dashboard Climate tab |
 | 🧍 Presence nearby | A proximity-based "someone is at the desk" sensor for HA (gates wellness tips too) | Automatic — a `binary_sensor` in HA |
+| 🤲 Hands | Pet, tickle, hug (two pads at once), boop, wave, turn its head, shake it, pick it up — each answered with a face, a flash and a sound; a "Last gesture" sensor shows what registered | Automatic — the pads are read on-device |
+| 💡 LEDs only for a reason | The light bar is dark at rest; it flashes for a reaction, a voice stage, an alarm or a prompt and goes dark again by itself | Automatic — intensity on the robot's status bar |
 | 🖼 Alert images | Any camera/Frigate snapshot full-screen on the robot | Set the `Show image URL` text entity (automations) or dashboard camera actions |
 | 💡 LED effects | Rainbow / Twinkle / Random on the light bar (Party runs the rainbow) | Dashboard → Home → LED effect buttons, or HA |
 | 🧭 Behaviour toggles | Greet-on-approach, sleep-when-dark, blink, idle glances, mood LEDs, tap-to-talk… | Dashboard → Settings → **Robot behaviour** |

@@ -782,6 +782,12 @@ export function HomePage(props: { config: RobotConfig | null }) {
 
       {/* ── LEDs ── */}
       <Section title={tr("לדים", "LEDs")} delay={240}>
+        <p className="mb-2 text-xs text-mute">
+          {tr(
+            "הפס כבוי במנוחה — צבע שנבחר כאן נשאר עד התגובה הבאה של הרובוט.",
+            "The bar is dark at rest — a colour picked here lasts until the robot's next reaction.",
+          )}
+        </p>
         <div className="flex flex-wrap items-center gap-2.5">
           {LED_COLORS.map((c) => (
             <button

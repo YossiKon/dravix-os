@@ -46,7 +46,7 @@ class PomodoroMode(Mode):
             await robot.set_face(Expression.HAPPY if self._phase == "break" else Expression.NEUTRAL)
         if robot.supports(CAP_LEDS):
             color = cfg.get("break_color" if self._phase == "break" else "work_color", "blue")
-            await robot.set_leds(color, 0.5)
+            await robot.flash_leds(color, 0.5, revert_s=6.0)   # a pulse at each phase change; dark in between
         # the break reminder is the whole point — it SHOULD interrupt focus/quiet; only
         # skip it when the robot is truly off (asleep/screensaver → nobody's there)
         if robot.supports(CAP_SAY) and not await self.ctx.is_asleep():

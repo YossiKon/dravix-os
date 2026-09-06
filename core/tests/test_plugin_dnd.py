@@ -46,6 +46,9 @@ class _Robot:
     async def set_leds(self, color, brightness) -> None:
         self.leds.append((color, brightness))
 
+    async def flash_leds(self, color, brightness=1.0, revert_s=4.0) -> None:
+        self.leds.append((color, brightness))
+
     async def say(self, text, voice=None, *, proactive: bool = False) -> None:
         self.said.append(text)
 

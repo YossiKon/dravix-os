@@ -1,7 +1,7 @@
 """Guard / sentry mode.
 
 Reacts to motion/presence/door events from Home Assistant (delivered on the event bus by
-the HA event bridge) with an alert face, red LEDs, and a spoken warning. Alerts are
+the HA event bridge) with an alert face, a red LED pulse, and a spoken warning. Alerts are
 throttled so a flapping sensor can't machine-gun; in sleep / calm modes the spoken line is
 suppressed (face + LEDs still fire) unless you turn ``quiet_no_voice`` off.
 """
@@ -24,7 +24,7 @@ class GuardMode(Mode):
         if self.ctx.robot.supports(CAP_FACE):
             await self.ctx.robot.set_face(Expression.DOUBT)
         if self.ctx.robot.supports(CAP_LEDS):
-            await self.ctx.robot.set_leds("amber", 0.3)
+            await self.ctx.robot.flash_leds("amber", 0.3, revert_s=5.0)   # a pulse; the DOUBT face holds the mode
 
     async def on_exit(self) -> None:
         if self.ctx.robot.supports(CAP_LEDS):
@@ -47,7 +47,7 @@ class GuardMode(Mode):
         if robot.supports(CAP_FACE):
             await robot.set_face(Expression.ANGRY)
         if robot.supports(CAP_LEDS):
-            await robot.set_leds(cfg.get("alert_color", "red"), 1.0)
+            await robot.flash_leds(cfg.get("alert_color", "red"), 1.0, revert_s=6.0)   # the alert is a moment, then dark
         # a full-volume "I'm watching" at 3am is rarely wanted — face+LEDs alert, but
         # hold the spoken line in sleep/calm modes (unless the user opts out)
         speak = robot.supports(CAP_SAY)

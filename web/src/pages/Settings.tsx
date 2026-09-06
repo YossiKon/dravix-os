@@ -13,12 +13,12 @@ const BEHAVIORS: { suffix: string; he: string; en: string }[] = [
   { suffix: "greet_on_approach", he: "ברכה כשמישהו מתקרב", en: "Greet on approach" },
   { suffix: "sleep_when_dark", he: "שינה כשחשוך בחדר", en: "Sleep when the room is dark" },
   { suffix: "touch_reaction", he: "תגובה לליטוף", en: "React to petting" },
-  { suffix: "speaking_leds", he: "לדים צהובים בשיחה", en: "Amber LEDs while talking" },
+  { suffix: "speaking_leds", he: "לדים בזמן שיחה (תכלת / ענבר / ירוק)", en: "LEDs while talking (cyan / amber / green)" },
   { suffix: "random_blink", he: "מצמוץ טבעי", en: "Natural blinking" },
   { suffix: "idle_head_drift", he: "מבט/תנועה עצמאית", en: "Idle glances / motion" },
   { suffix: "tap_face_to_talk", he: "הקשה על הפרצוף = דיבור", en: "Tap face to talk" },
   { suffix: "body_language", he: "שפת גוף (תנועות ראש)", en: "Body language (head moves)" },
-  { suffix: "mood_leds", he: "לדים לפי רגש", en: "Mood LEDs" },
+  { suffix: "mood_leds", he: "לדים בתגובות (כבויים במנוחה)", en: "Reaction LEDs (dark at rest)" },
 ];
 
 // Labels for the entity roles (falls back to the server's English label).

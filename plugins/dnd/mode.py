@@ -18,7 +18,8 @@ class DndMode(Mode):
         if robot.supports(CAP_FACE):
             await robot.set_face(Expression.DOUBT)
         if robot.supports(CAP_LEDS):
-            await robot.set_leds(cfg.get("color", "red"), cfg.get("brightness", 0.2))
+            # a pulse, not a lamp: the bar is dark at rest, the DOUBT face carries the mode
+            await robot.flash_leds(cfg.get("color", "red"), cfg.get("brightness", 0.2), revert_s=5.0)
         greet = cfg.get("greet")
         if greet and robot.supports(CAP_SAY):
             await robot.say(greet, proactive=True)
