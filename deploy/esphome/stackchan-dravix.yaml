@@ -37,7 +37,7 @@ substitutions:
   # publishes it to HA ("Firmware version" sensor); the dravix dashboard compares it
   # with the version bundled in the add-on and shows "firmware update available".
   # (Maintainers: bump this on every firmware change. Users: don't touch.)
-  fw_version: "53"
+  fw_version: "54"
   # The ESPHome node name (mDNS hostname + the default entity prefix on a fresh flash).
   # Change it only if you run MORE THAN ONE robot — each needs a unique name. NOTE:
   # changing it on an already-adopted robot registers a NEW device in HA.
@@ -77,6 +77,12 @@ substitutions:
   # Battery — properties of the StackChan HARDWARE, not per-person settings (same kit,
   # same cell). Only change if you physically swapped the battery.
   battery_mah: "500"    # capacity, for the time-left estimate
+  # SPEAKER CEILING — how far up the amplifier "100%" goes, as a fraction of its range, to
+  # spare the little speaker. The AW88298's volume is linear in DECIBELS: 1.0 = 0 dB (full
+  # scale), 0.9 = -9.6 dB (about a third of full power), 0.97 = -3 dB (half power), 0.8 =
+  # -19 dB (the BSP's old cap — "really weak"). Every control (HA, the robot's VOL slider)
+  # spans 0..100% of THIS, so the person can always push it "all the way up" safely.
+  speaker_ceiling: "0.9"
   batt_r_int: "0.15"    # cell+wiring internal resistance (Ω) — used to undo load sag
   # INA226 sign convention: 1 = positive current while DISCHARGING (flip to -1 if your
   # board reports it inverted — the ⚡ charging flag will tell you immediately).
@@ -199,6 +205,10 @@ wifi:
   # disconnect/reconnect cycles in 48h on a -58dBm link — each one freezes the robot's HA-fed
   # screens and makes it look crashed. It also costs ~50mA, which is nothing on a charger.
   power_save_mode: none
+  # (the BSP's on_connect / on_disconnect only did `ble.disable` / `ble.enable` for improv —
+  #  BLE is compiled out, see the esp32_improv line — so both hooks go with it)
+  on_connect: !remove
+  on_disconnect: !remove
   ap:
     ssid: "${device_name} Fallback Hotspot"
 
@@ -269,13 +279,26 @@ rtttl:
 #    and the AW88298 amplifier maps volume linearly in DECIBELS: 1.0 = 0 dB (full scale),
 #    0.8 = -19.2 dB, 0.5 = -48 dB. So "100%" in Home Assistant, the robot's own VOL slider at
 #    the top — everything topped out a fifth of the way up the amplifier ("really weak, and I
-#    turned it all the way up"). Now 100% = 0 dB, the amplifier's full output (if a loud reply
-#    ever distorts, 90% is -3.8 dB); today's maximum is the new 50%; 0% = -38 dB, still
-#    audible — mute is its own button. "Quiet" mode's 25% lands at -29 dB.
+#    turned it all the way up"). Now 100% = the owner's SPEAKER CEILING (`speaker_ceiling` in
+#    the substitutions — default 0.9 = -9.6 dB, chosen to spare the speaker; 1.0 would be the
+#    amplifier's full output), and 0% = -38 dB, still audible — mute is its own button.
+#    "Quiet" mode's 25% lands around -31 dB.
 media_player:
   - id: !extend va_media_player
     volume_min: 0.6
-    volume_max: 1.0
+    volume_max: ${speaker_ceiling}
+
+# ── NO BLE. The BSP compiles in BLE provisioning (esp32_improv) and disables the radio 5 s
+#    after Wi-Fi connects — but a disabled controller keeps its ~50 KB of INTERNAL RAM, on a
+#    board whose largest free block was 15 KB. dravix ships its Wi-Fi in the stub; nothing
+#    here ever provisions over BLE. Compiling it out releases that memory at boot.
+esp32_improv: !remove
+
+# ── NO IDLE CAMERA FRAMES. The BSP's camera grabs a frame every 10 s even with nobody
+#    watching (idle_framerate 0.1 fps) — ~100 ms of dead main loop each time (the boot log:
+#    "esp32_camera took a long time"). Streams and snapshots still work on demand.
+esp32_camera:
+  idle_framerate: 0 fps
 
 packages:
   m5stack_stackchan:
@@ -2553,7 +2576,7 @@ script:
           condition:
             lambda: |-
               return id(sw_move).state && !std::isnan(id(n_head_pitch).state)
-                     && !id(g_night) && !id(g_focus) && !id(g_quiet) && !id(g_sleep) && !id(g_saver) && !id(g_listen);
+                     && !id(g_night) && !id(g_focus) && !id(g_quiet) && !id(g_sleep) && !id(g_saver) && !id(g_listen) && !id(g_voice);
           then:
             - lambda: 'if (id(g_pet_base) < 0.0f) id(g_pet_base) = id(n_head_pitch).state;'   # remember where it was (once per pet session)
             - number.set:
@@ -2629,7 +2652,7 @@ script:
       - lambda: 'id(g_prox_ms) = (long) millis();'   # (the 20s tick clears a stale presence)
       # a finger right at the sensor = a BOOP — beloved ritual of every desk robot
       - if:
-          condition: { lambda: 'return v > ${prox_boop} && !id(g_sleep) && !id(g_saver) && id(sw_touch).state;' }
+          condition: { lambda: 'return v > ${prox_boop} && millis() > 15000 && !id(g_sleep) && !id(g_saver) && id(sw_touch).state;' }
           then: [ { script.execute: boop_react } ]
       # (boop excludes greet/wave — a finger straight to the sensor is a boop, not both)
       # PRESENCE is tracked UNCONDITIONALLY — g_near feeds the "Presence nearby" sensor
@@ -2637,7 +2660,7 @@ script:
       # REACTIONS are gated by the "Greet on approach" toggle (turning greet off used
       # to silently kill presence detection entirely).
       - if:
-          condition: { lambda: 'return v > ${prox_near} && v <= ${prox_boop} && !id(g_near);' }
+          condition: { lambda: 'return v > ${prox_near} && v <= ${prox_boop} && millis() > 15000 && !id(g_near);' }
           then:
             - globals.set: { id: g_near, value: "true" }
             - lambda: 'id(g_ia_ms) = (long) millis();'
@@ -2905,7 +2928,7 @@ script:
             lambda: |-
               return id(sw_move).state && dx != 0 && !std::isnan(id(servo_x_angle).state)
                      && !id(g_night) && !id(g_focus) && !id(g_quiet)
-                     && !id(g_sleep) && !id(g_saver) && !id(g_listen);   // never while the mic streams
+                     && !id(g_sleep) && !id(g_saver) && !id(g_listen) && !id(g_voice);   // never during a voice turn (each write blocks the loop 100-500 ms)
           then:
             - number.set:
                 id: servo_x_angle
@@ -2918,7 +2941,7 @@ script:
             lambda: |-
               return id(sw_move).state && dy != 0 && !std::isnan(id(n_head_pitch).state)
                      && !id(g_night) && !id(g_focus) && !id(g_quiet)
-                     && !id(g_sleep) && !id(g_saver) && !id(g_listen);
+                     && !id(g_sleep) && !id(g_saver) && !id(g_listen) && !id(g_voice);
           then:
             - number.set:
                 id: n_head_pitch
@@ -2937,7 +2960,7 @@ script:
             lambda: |-
               return id(sw_move).state && !std::isnan(id(servo_x_angle).state)
                      && !id(g_night) && !id(g_focus) && !id(g_quiet)
-                     && !id(g_sleep) && !id(g_saver) && !id(g_listen);   // never while the mic streams
+                     && !id(g_sleep) && !id(g_saver) && !id(g_listen) && !id(g_voice);   // never during a voice turn (each write blocks the loop 100-500 ms)
           then:
             - number.set:
                 id: servo_x_angle
@@ -2961,7 +2984,7 @@ script:
             lambda: |-
               return id(sw_move).state && !std::isnan(id(n_head_pitch).state)
                      && !id(g_night) && !id(g_focus) && !id(g_quiet)
-                     && !id(g_sleep) && !id(g_saver) && !id(g_listen);   // never while the mic streams
+                     && !id(g_sleep) && !id(g_saver) && !id(g_listen) && !id(g_voice);   // never during a voice turn (each write blocks the loop 100-500 ms)
           then:
             - number.set:
                 id: n_head_pitch
@@ -4744,19 +4767,10 @@ interval:
             - lvgl.widget.update:
                 id: face_box
                 y: !lambda 'const int b[] = {0, -2, -3, -2, 0, 2, 3, 2}; return b[id(g_anim) % 8];'
-  # SPEAKING MOTION — tiny conversational head sways while it talks (the original's
-  # speaking modifier): small ABSOLUTE yaw targets so they can never wander off-centre.
-  - interval: 2300ms
-    then:
-      - if:
-          condition:
-            lambda: |-
-              return id(g_talk) && id(sw_move).state && !std::isnan(id(servo_x_angle).state)
-                     && !id(g_night) && !id(g_focus) && !id(g_quiet) && !id(g_sleep) && !id(g_saver);
-          then:
-            - number.set:
-                id: servo_x_angle
-                value: !lambda 'id(g_move_ms) = (long) millis(); return random_float() * 16.0f - 8.0f;'
+  # (the SPEAKING MOTION sway — a yaw write every 2.3 s while it talks — is retired: on this
+  #  servo driver every write blocks the main loop 100-500 ms, and the boot log showed the
+  #  speaker's ISR queue overflowing right after each head move = an audio glitch per sway.
+  #  The talking mouth carries the speech; it comes back with a non-blocking servo driver.)
   # "Alive" looking-around — TRULY random: it skips a beat sometimes (irregular
   # timing), varies how far it looks, and mixes yaw glances with pitch tilts and an
   # occasional look-up "stretch", so it never repeats the same move twice in a row.

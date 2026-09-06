@@ -3,16 +3,24 @@
 ## 0.1.15
 
 **🎤 Why "Okay Nabu" listens, answers faintly, or never answers**
-*(firmware 53 — Install the firmware and update the add-on)*
+*(firmware 54 — Install the firmware and update the add-on)*
 
 - **The robot was permanently 19 dB quiet.** The board package caps the media player at 0.8
   of the amplifier's range, and the amplifier's volume is linear in *decibels*: 0.8 is -19 dB
   below full scale. Every volume control topped out there — "really weak, and I turned it all
-  the way up". Now 100 % is the amplifier's full output; today's maximum is the new 50 %; 0 %
-  is -38 dB (still audible — mute is its own button). If a loud reply ever distorts, 90 %.
+  the way up". Now 100 % is a **speaker ceiling you choose** (`speaker_ceiling` in the
+  firmware substitutions — default 0.9, i.e. 90 % of the amplifier's range, -9.6 dB, to spare
+  the little speaker; 1.0 is its full output), and you can always push the slider all the way
+  up. 0 % is -38 dB (still audible — mute is its own button).
 - **The servo bus stays off the main loop for the whole voice turn** (wake word → reply
-  ended): its position polls are suspended and resumed afterwards — on top of the changes
-  below.
+  ended): its position polls are suspended and resumed afterwards, and **no head move at all
+  during a turn** — the boot log measured a nod at 1.2 s of blocked loop and the speaker's
+  buffer overflowing right after each move. The little head sway while talking is retired
+  for the same reason (it comes back with a non-blocking servo driver).
+- **Boot:** proximity reactions (boop / greet / wave) ignore the first 15 s — the log showed
+  three "boops" a second after boot. **BLE provisioning is compiled out** (dravix ships Wi-Fi
+  in the stub; the disabled BLE controller was still holding ~50 KB of the scarce internal
+  RAM). **No idle camera frames** (a 100 ms stall every 10 s for nobody).
 
 A pipeline debug trace settled it: the conversation agent, cloud speech-to-text, text-to-speech
 and the speaker all work (one turn went all the way through), but the microphone audio reaches
