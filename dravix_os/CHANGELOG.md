@@ -1,5 +1,35 @@
 # Changelog
 
+## 0.1.15
+
+**🎤 Why "Okay Nabu" listens and never answers — the servo bus was starving the microphone**
+*(firmware 52 — Install the firmware and update the add-on)*
+
+A pipeline debug trace settled it: the conversation agent, cloud speech-to-text, text-to-speech
+and the speaker all work (one turn went all the way through), but the microphone audio reaches
+Home Assistant at 10–20 % of real time, so speech-to-text sees fragments and returns "no text".
+The robot's own main loop is the bottleneck, and the biggest blocker in it is the servo bus:
+
+- The board support package reads both servos' positions every 200 ms, and that read
+  **busy-waits up to 500 ms** when a servo answers late — in the same loop that streams the
+  microphone through a half-second buffer. Firmware 52 polls once a second instead (the
+  hand-turn detector only needs a jump between two samples).
+- Every head move also blocks the loop for 100–500 ms (the driver sleeps for the travel
+  time). **No head move at all while the microphone streams** now — the wide eyes and the
+  cyan light are the "I'm listening"; the perk-up nudge at the start of listening is gone.
+- **"Last voice problem" tells the truth now:** "heard no words — the mic audio reached HA
+  broken or too short" for a speech-to-text failure, instead of the old guess "no reply —
+  check the conversation agent" (the end-of-run hook was overwriting the real error).
+- **No pushes at a disconnected robot.** dravix kept writing card titles, the tip and the
+  dashboard URL while the robot was off the API, and every write was a "referenced entities
+  are missing" warning in HA's log — 1,464 in one day. It now waits until the robot is back.
+
+Still to check on your side, in this order: install the firmware (you are on 46 — firmware
+47 already removed the wake-word ding that stole the microphone bus), clear the invalid
+Dashboard URL (Settings → 🌐 Dashboard page → clear; on firmware 46 the robot downloads and
+fails to decode it every ten minutes), then say "Okay Nabu" with the ESPHome log open and
+send the lines — the numbers to watch are "Loop Time" and the largest free heap block.
+
 ## 0.1.14
 
 **🐾 A pet lifts the head, and screensaver / sleep = dead still** *(firmware 51 — Install the

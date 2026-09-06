@@ -311,6 +311,18 @@ async def lifespan(app: FastAPI):
 
     fw_notify_task = asyncio.create_task(_fw_notifier(), name="dravix-fw-notify")
 
+    async def _robot_online(disc: dict) -> bool:
+        """False only when the robot's own state sensor reads "unavailable" — i.e. the ESPHome
+        API is disconnected. Unknown / unmapped / unreadable = True (never block on a guess)."""
+        eid = disc.get("state_sensor")
+        if not eid or ha is None:
+            return True
+        try:
+            st = str((await ha.get_state(eid)).get("state") or "")
+        except Exception:  # noqa: BLE001 — can't tell → keep pushing
+            return True
+        return st.strip().lower() != "unavailable"
+
     async def _climate_pusher() -> None:
         """Keep the robot's CLIMATE page fresh with the configured AC's live state, and
         re-assert the Dashboard URL (optimistic firmware slots reset on reboot)."""
@@ -321,6 +333,12 @@ async def lifespan(app: FastAPI):
         while True:
             if ha is not None:
                 disc = app.state.discovered_entities or {}
+                # a DISCONNECTED robot gets no pushes: every call only added a "referenced
+                # entities are missing or not currently available" warning to HA's log (1,400+
+                # a day were counted) — the slots are re-asserted the moment it is back
+                if not await _robot_online(disc):
+                    await asyncio.sleep(5)
+                    continue
                 # isolated so a climate hiccup can't skip the dashboard-URL re-assert (or vice-versa)
                 try:
                     await push_status(ha, store.climate_entity(), disc)
