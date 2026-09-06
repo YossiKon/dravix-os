@@ -37,7 +37,7 @@ substitutions:
   # publishes it to HA ("Firmware version" sensor); the dravix dashboard compares it
   # with the version bundled in the add-on and shows "firmware update available".
   # (Maintainers: bump this on every firmware change. Users: don't touch.)
-  fw_version: "50"
+  fw_version: "51"
   # The ESPHome node name (mDNS hostname + the default entity prefix on a fresh flash).
   # Change it only if you run MORE THAN ONE robot — each needs a unique name. NOTE:
   # changing it on an already-adopted robot registers a NEW device in HA.
@@ -619,7 +619,7 @@ sensor:
                              && (tnow - id(g_shake_ms)) > 1500;   // between the jolts of a SHAKE, dev sits in this band — that is the shake, not handling
               // the first seconds after boot are the sensor settling (and the servos
               // homing) — that is not someone picking the robot up
-              if (id(sw_handled).state && !moving && tnow > 15000 && !id(g_sleep) && !id(g_voice)) {
+              if (id(sw_handled).state && !moving && tnow > 15000 && !id(g_sleep) && !id(g_saver) && !id(g_voice)) {
                 if (upside || handled) {
                   id(g_calm_ms) = 0;
                   if (id(g_lift_ms) == 0) id(g_lift_ms) = tnow;
@@ -1118,11 +1118,11 @@ number:
     restore_value: true
     set_action:
       - lambda: 'id(g_move_ms) = (long) millis();'   # every pitch write is a commanded move
-      # ASLEEP = DEAD STILL: while sleeping, pitch commands from ANY source (HA
-      # automations, external tools) are ignored — the sleep-droop itself writes the
-      # servo directly, and waking clears g_sleep before the head rises.
+      # ASLEEP / SCREENSAVER = DEAD STILL: pitch commands from ANY source (HA automations,
+      # dravix, external tools) are ignored — the sleep-droop itself writes the servo
+      # directly, and every wake path clears g_sleep / g_saver before the head rises.
       - if:
-          condition: { lambda: 'return !id(g_sleep);' }
+          condition: { lambda: 'return !id(g_sleep) && !id(g_saver);' }
           then:
             - number.set:
                 id: servo_y_angle
@@ -3975,6 +3975,11 @@ script:
               - lambda: 'return !id(g_voice);'
           then:
             - lambda: 'lv_disp_trig_activity(NULL); id(g_ia_ms) = (long) millis();'   # heard = activity → no screensaver
+            - if:   # …and it ENDS a screensaver, the way a touch does (the sleeping face must not listen)
+                condition: { lambda: 'return id(g_saver) && !id(g_sleep);' }
+                then:
+                  - light.turn_on: { id: lcd_backlight, brightness: !lambda 'return id(n_brightness).state / 100.0;' }
+                  - globals.set: { id: g_saver, value: "false" }
             # NO SOUND HERE — on purpose. The microphone and the speaker share one bus, and the
             # voice session is starting its microphone at this exact moment. A ding on the
             # speaker won that bus, the session's microphone lost it, and every "Okay Nabu"
@@ -4711,7 +4716,7 @@ interval:
           condition:
             lambda: |-
               return id(g_talk) && id(sw_move).state && !std::isnan(id(servo_x_angle).state)
-                     && !id(g_night) && !id(g_focus) && !id(g_quiet);
+                     && !id(g_night) && !id(g_focus) && !id(g_quiet) && !id(g_sleep) && !id(g_saver);
           then:
             - number.set:
                 id: servo_x_angle
@@ -4836,7 +4841,7 @@ interval:
           then:
             - globals.set: { id: g_lowbatt, value: "true" }
             - if:
-                condition: { lambda: 'return id(sw_sfx).state && !id(g_quiet) && !id(g_night);' }
+                condition: { lambda: 'return id(sw_sfx).state && !id(g_quiet) && !id(g_night) && !id(g_sleep) && !id(g_saver);' }
                 then: [ { script.execute: { id: play_sfx, tune: "low:d=8,o=4,b=120:c,g#" } } ]
             - script.execute: head_shake
       - if:
@@ -5148,6 +5153,11 @@ voice_assistant:
           - voice_assistant.stop
         else:
           - lambda: 'lv_disp_trig_activity(NULL); id(g_ia_ms) = (long) millis();'   # a conversation is activity — no screensaver
+          - if:   # a turn that starts in the screensaver ends it (backlight + the awake face)
+              condition: { lambda: 'return id(g_saver) && !id(g_sleep);' }
+              then:
+                - light.turn_on: { id: lcd_backlight, brightness: !lambda 'return id(n_brightness).state / 100.0;' }
+                - globals.set: { id: g_saver, value: "false" }
           # a mood flash may be mid-run — stop it so its delayed restore can't fire mid-talk
           - script.stop: led_flash
           # the wake-ack's own "HA never answered" fallback must not fire now that HA HAS

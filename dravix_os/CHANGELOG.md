@@ -2,7 +2,17 @@
 
 ## 0.1.14
 
-**🐾 A pet lifts the head** *(firmware 50 — Install the firmware and update the add-on)*
+**🐾 A pet lifts the head, and screensaver / sleep = dead still** *(firmware 51 — Install the
+firmware and update the add-on)*
+
+- **Screensaver and sleep are dead still, from every direction.** Every idle move was already
+  gated; four gaps are closed: a head-pitch write from outside (an automation, the dashboard
+  slider) is dropped in the screensaver as in sleep; "picked up" detection stays quiet in the
+  screensaver; the talking sway can never run on a sleeping face; and a voice turn that starts
+  in the screensaver now *ends* it (screen on, awake face) instead of listening and swaying
+  on the dim sleeping face. No low-battery beep at a black screen either. What still wakes it,
+  on purpose: a touch, the wake word, an alarm, a real shake, the room getting bright
+  ("Sleep when dark"), the end of an auto-nap, and a mode change from Home Assistant.
 
 - **Pet it and the head comes up into your hand** — about a third of its travel, the moment a
   pad is touched — and it *stays* up for as long as you pet (the idle glance keeps its hands
