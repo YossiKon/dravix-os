@@ -12,6 +12,14 @@ Compose deployment is an alternative, but the HA add-on is the primary path.) Se
 - **Don't fork/patch M5Stack's upstream firmware.** Our firmware is a fresh ESPHome config that
   layers on the M5Stack ESPHome **BSP** (pinned under `packages:`); upstream `m5stack/StackChan`
   is reference-only under `vendor/`. Never edit the BSP in place — extend beside it.
+  **One recorded exception:** `components/ftservo` + `components/scs9009` are vendored copies of
+  the BSP's servo driver (MIT, pinned commit in their READMEs) with a minimal patch — the stock
+  driver slept in ESPHome's main loop for every head move (`delay(200)` + `delay(travel)`, and a
+  500 ms-per-byte serial busy-wait), a *measured* defect (1.2 s nods, speaker buffer overflows,
+  dropped microphone audio) with no config-level fix. Conditions for any such exception: a
+  measured defect, no config workaround, every changed line marked `// dravix:`, a README with
+  the upstream commit + re-sync procedure. To take a BSP update: copy upstream over the folder,
+  re-apply the marked lines, bump the tag the firmware's `external_components` entry points at.
 - **Discovery-first.** Don't hard-code HA entity ids. Auto-discovery (`core/dravix/discovery.py`,
   suffix-anchored) maps the robot's entities at startup; build against what's discovered.
 - **Everything is pluggable** behind interfaces: robot drivers (`core/dravix/dal/`), AI
