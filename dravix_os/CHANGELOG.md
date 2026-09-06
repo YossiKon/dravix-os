@@ -2,8 +2,17 @@
 
 ## 0.1.15
 
-**🎤 Why "Okay Nabu" listens and never answers — the servo bus was starving the microphone**
-*(firmware 52 — Install the firmware and update the add-on)*
+**🎤 Why "Okay Nabu" listens, answers faintly, or never answers**
+*(firmware 53 — Install the firmware and update the add-on)*
+
+- **The robot was permanently 19 dB quiet.** The board package caps the media player at 0.8
+  of the amplifier's range, and the amplifier's volume is linear in *decibels*: 0.8 is -19 dB
+  below full scale. Every volume control topped out there — "really weak, and I turned it all
+  the way up". Now 100 % is the amplifier's full output; today's maximum is the new 50 %; 0 %
+  is -38 dB (still audible — mute is its own button). If a loud reply ever distorts, 90 %.
+- **The servo bus stays off the main loop for the whole voice turn** (wake word → reply
+  ended): its position polls are suspended and resumed afterwards — on top of the changes
+  below.
 
 A pipeline debug trace settled it: the conversation agent, cloud speech-to-text, text-to-speech
 and the speaker all work (one turn went all the way through), but the microphone audio reaches

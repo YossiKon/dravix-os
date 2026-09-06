@@ -37,7 +37,7 @@ substitutions:
   # publishes it to HA ("Firmware version" sensor); the dravix dashboard compares it
   # with the version bundled in the add-on and shows "firmware update available".
   # (Maintainers: bump this on every firmware change. Users: don't touch.)
-  fw_version: "52"
+  fw_version: "53"
   # The ESPHome node name (mDNS hostname + the default entity prefix on a fresh flash).
   # Change it only if you run MORE THAN ONE robot — each needs a unique name. NOTE:
   # changing it on an already-adopted robot registers a NEW device in HA.
@@ -264,6 +264,18 @@ online_image:
 rtttl:
   id: game_sfx
   speaker: i2s_speaker
+
+# ── THE ROBOT WAS PERMANENTLY -19 dB QUIET. The BSP's media player clamps volume_max to 0.8,
+#    and the AW88298 amplifier maps volume linearly in DECIBELS: 1.0 = 0 dB (full scale),
+#    0.8 = -19.2 dB, 0.5 = -48 dB. So "100%" in Home Assistant, the robot's own VOL slider at
+#    the top — everything topped out a fifth of the way up the amplifier ("really weak, and I
+#    turned it all the way up"). Now 100% = 0 dB, the amplifier's full output (if a loud reply
+#    ever distorts, 90% is -3.8 dB); today's maximum is the new 50%; 0% = -38 dB, still
+#    audible — mute is its own button. "Quiet" mode's 25% lands at -29 dB.
+media_player:
+  - id: !extend va_media_player
+    volume_min: 0.6
+    volume_max: 1.0
 
 packages:
   m5stack_stackchan:
@@ -2698,6 +2710,8 @@ script:
       - script.stop: wake_ack
       - script.stop: voice_settle
       - script.stop: led_flash
+      - component.resume: { id: x_servo_sensor, update_interval: 1s }   # a STOP mid-turn must not leave the polls off
+      - component.resume: { id: y_servo_sensor, update_interval: 1s }
       - script.stop: party                      # stop the disco / dance
       - script.stop: identify
       # …and EVERY other animation — "stop everything" used to leave a dance bopping with
@@ -3989,6 +4003,10 @@ script:
               - lambda: 'return !id(g_voice);'
           then:
             - lambda: 'lv_disp_trig_activity(NULL); id(g_ia_ms) = (long) millis();'   # heard = activity → no screensaver
+            # the servo bus must not touch the main loop from here until the reply has ended —
+            # each position poll can block for up to 500 ms (see the sensor: section)
+            - component.suspend: x_servo_sensor
+            - component.suspend: y_servo_sensor
             - if:   # …and it ENDS a screensaver, the way a touch does (the sleeping face must not listen)
                 condition: { lambda: 'return id(g_saver) && !id(g_sleep);' }
                 then:
@@ -4063,6 +4081,8 @@ script:
       - globals.set: { id: g_think,  value: "false" }
       - globals.set: { id: g_talk,   value: "false" }
       - globals.set: { id: g_voice,  value: "false" }
+      - component.resume: { id: x_servo_sensor, update_interval: 1s }   # the servo bus is welcome again
+      - component.resume: { id: y_servo_sensor, update_interval: 1s }
       - script.execute: render_face      # back to the resting face it had before the turn
       - script.execute: restore_leds     # …and the bar goes dark again
       - if:
@@ -4605,6 +4625,8 @@ interval:
           condition: { lambda: 'return id(g_vstale) >= 2;' }
           then:
             - logger.log: "voice watchdog: a voice turn was abandoned — releasing the face, the LEDs and the wake word"
+            - component.resume: { id: x_servo_sensor, update_interval: 1s }
+            - component.resume: { id: y_servo_sensor, update_interval: 1s }
             - globals.set: { id: g_vstale, value: "0" }
             - globals.set: { id: g_voice, value: "false" }
             - globals.set: { id: g_talk,  value: "false" }
@@ -5188,6 +5210,10 @@ voice_assistant:
           - globals.set: { id: g_voice, value: "true" }
           - globals.set: { id: g_vad, value: "false" }   # fresh listen window — no voice heard yet
           - globals.set: { id: g_va_err, value: "false" }
+          # the servo bus must not touch the main loop while the microphone streams — each
+          # position poll can block for up to 500 ms (see the sensor: section); back at the end
+          - component.suspend: x_servo_sensor
+          - component.suspend: y_servo_sensor
           - script.execute: listen_timeout               # …auto-close if none arrives in ${listen_timeout_s}s
           - lvgl.page.show: page_face
           - globals.set: { id: g_card, value: "0" }
@@ -5264,6 +5290,8 @@ voice_assistant:
     - globals.set: { id: g_talk, value: "false" }
     - globals.set: { id: g_think, value: "false" }
     - globals.set: { id: g_voice, value: "false" }
+    - component.resume: { id: x_servo_sensor, update_interval: 1s }
+    - component.resume: { id: y_servo_sensor, update_interval: 1s }
     - script.execute: render_face
     - script.execute: restore_leds
     - script.execute: va_error_show
