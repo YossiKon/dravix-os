@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.1.14
+
+**🐾 A pet lifts the head** *(firmware 50 — Install the firmware and update the add-on)*
+
+- **Pet it and the head comes up into your hand** — about a third of its travel, the moment a
+  pad is touched — and it *stays* up for as long as you pet (the idle glance keeps its hands
+  off meanwhile). About two seconds after the last pad is released it settles back to where
+  it was. Sliding a hand from one pad to the next is one pet, not two.
+- dravix's own pet-head behaviour (raise via Home Assistant, return to "centre" ten seconds
+  later) is **off by default** — two owners were fighting over one head, and its "centre"
+  was the mid-range of the pitch entity, i.e. tilted up. `DRAVIX_PET_HEAD_RAISE` (degrees)
+  brings it back if you want it.
+- Needs "Body language (head moves)" on, and no calm mode (focus / quiet / night).
+
 ## 0.1.13
 
 **💡 LEDs only for a reason, and hands that get an answer** *(firmware 49 — Install the firmware

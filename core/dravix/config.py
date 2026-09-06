@@ -73,7 +73,11 @@ class Settings(BaseSettings):
     # Pet reaction: when petted, tilt the head up (pleased) then return after a hold.
     # Degrees up on a pet (0 disables the head-lift). Values ≤1 are taken as an already-
     # normalized fraction of travel; pethead converts degrees to the -1..1 head API.
-    pet_head_raise: float = 30.0
+    # 0 = OFF, the default since 0.1.14: the FIRMWARE lifts the head on a pet now — it reads
+    # the touch pads itself, holds the lift while you pet and settles when you let go.
+    # With both running, two owners fought over one head (this one's "return to centre"
+    # is the mid-range of the pitch entity = tilted UP). Set >0 (degrees) to bring it back.
+    pet_head_raise: float = 0.0
     pet_head_hold_s: float = 10.0  # seconds to hold up before returning to centre
 
     # The base URL the ROBOT can reach dravix at on the LAN (for push-to-talk audio and
