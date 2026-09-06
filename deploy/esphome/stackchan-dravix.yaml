@@ -36,7 +36,7 @@ substitutions:
   # publishes it to HA ("Firmware version" sensor); the dravix dashboard compares it
   # with the version bundled in the add-on and shows "firmware update available".
   # (Maintainers: bump this on every firmware change. Users: don't touch.)
-  fw_version: "47"
+  fw_version: "48"
   # The ESPHome node name (mDNS hostname + the default entity prefix on a fresh flash).
   # Change it only if you run MORE THAN ONE robot — each needs a unique name. NOTE:
   # changing it on an already-adopted robot registers a NEW device in HA.
@@ -1144,6 +1144,13 @@ button:
     id: btn_dance
     on_press:
       - script.execute: dance
+  # FACE TEST — walks through every expression and every conversation face, 1.5s each, then
+  # puts everything back. The only way to see all the faces without provoking each one.
+  - platform: template
+    name: "Face test"
+    id: btn_face_test
+    on_press:
+      - script.execute: face_test
   # PERMISSIONS LOG — open the recent AI-agent decisions.
   - platform: template
     name: "Permissions log"
@@ -1461,9 +1468,12 @@ lvgl:
             then:
               - globals.set: { id: g_saver, value: "true" }
               - script.execute: render_face
-              - light.turn_on: { id: lcd_backlight, brightness: 25% }
+              # a quarter of full — or half of whatever the day brightness is, if that is less
+              - light.turn_on: { id: lcd_backlight, brightness: !lambda 'return std::min(0.25f, id(n_brightness).state / 200.0f);' }
     # Sleep: freeze (no movement) and go black — via the mode select so HA stays in sync.
-    - timeout: !lambda 'return (uint32_t) id(n_sleep).state * 60000;'
+    # (never earlier than the screensaver + 1 min — a sleep set below the screensaver would
+    #  make the screensaver unreachable, and neither number is worth an error dialog)
+    - timeout: !lambda 'return (uint32_t) std::max(id(n_sleep).state, id(n_screensaver).state + 1.0f) * 60000;'
       then:
         - if:
             condition: { lambda: 'return !id(g_voice);' }
@@ -2125,7 +2135,6 @@ script:
   - id: startle             # a loud noise: wide eyes, a quick glance toward it, then back to business
     mode: single
     then:
-      - lambda: 'lv_disp_trig_activity(NULL);'
       - globals.set: { id: g_expr, value: "5" }          # wide, surprised
       - script.execute: render_face
       - if:
@@ -2394,6 +2403,45 @@ script:
                     - switch.is_off: sw_privacy
                     - lambda: 'return id(g_sfx_rearm) && !id(g_voice) && !id(va).is_running();'
                 then: [ micro_wake_word.start ]
+  # ── FACE TEST — every idle expression, then listening / thinking / talking / yawn / the
+  #    screensaver face, 1.5s each. Restores the resting face and every flag at the end.
+  - id: face_test
+    mode: single
+    then:
+      - if:
+          condition: { lambda: 'return !id(g_sleep) && !id(g_voice) && !id(g_saver);' }
+          then:
+            - globals.set: { id: g_card, value: "0" }
+            - lvgl.page.show: page_face
+            - repeat:
+                count: 8
+                then:
+                  - globals.set: { id: g_expr, value: !lambda 'return (int) iteration;' }
+                  - script.execute: render_face
+                  - delay: 1500ms
+            - globals.set: { id: g_expr, value: !lambda 'return id(g_face_rest);' }
+            - globals.set: { id: g_listen, value: "true" }
+            - script.execute: render_face
+            - delay: 1500ms
+            - globals.set: { id: g_listen, value: "false" }
+            - globals.set: { id: g_think, value: "true" }
+            - script.execute: render_face
+            - delay: 1500ms
+            - globals.set: { id: g_think, value: "false" }
+            - globals.set: { id: g_talk, value: "true" }
+            - script.execute: render_face
+            - delay: 2000ms      # the 600ms tick animates the mouth meanwhile
+            - globals.set: { id: g_talk, value: "false" }
+            - globals.set: { id: g_yawn, value: "true" }
+            - script.execute: render_face
+            - delay: 1500ms
+            - globals.set: { id: g_yawn, value: "false" }
+            - globals.set: { id: g_saver, value: "true" }
+            - script.execute: render_face
+            - delay: 2500ms
+            - globals.set: { id: g_saver, value: "false" }
+            - globals.set: { id: g_expr, value: !lambda 'return id(g_face_rest);' }
+            - script.execute: render_face
   # ── SENSOR HANDLERS — one body per signal, shared by BOTH prefix imports (see the
   #    sensor/text_sensor sections). Keeping the logic here instead of inline means the
   #    fresh-flash entity and the renamed-device entity can never drift apart.
@@ -2884,7 +2932,7 @@ script:
       - if:
           condition: { lambda: 'return id(g_booted) && !id(g_sleep) && !id(g_saver) && !id(g_voice) && !id(g_perm);' }
           then:
-            - lambda: 'lv_disp_trig_activity(NULL);'
+            # (no lv_disp_trig_activity: the robot's own snack is not a person interacting)
             - globals.set: { id: g_card, value: "0" }
             - lvgl.page.show: page_face
             - globals.set: { id: g_expr, value: "1" }
@@ -2973,7 +3021,7 @@ script:
       - if:
           condition: { lambda: 'return id(g_booted) && !id(g_sleep) && !id(g_saver) && !id(g_voice) && !id(g_perm);' }
           then:
-            - lambda: 'lv_disp_trig_activity(NULL);'
+            # (no lv_disp_trig_activity: the robot's own snack is not a person interacting)
             - globals.set: { id: g_card, value: "0" }
             - lvgl.page.show: page_face
             - globals.set: { id: g_expr, value: "1" }
@@ -3537,11 +3585,11 @@ script:
             - lvgl.widget.hide: speech_bubble
             - lvgl.widget.hide: bub_t1
             - lvgl.widget.hide: bub_t2
-      # zzz drifts while sleeping
+      # zzz drifts on the SCREENSAVER (and for the 2s fade before sleep goes black)
       - lvgl.label.update:
           id: lbl_zzz
           text: !lambda |-
-            if (!id(g_sleep)) return std::string("");
+            if (!id(g_saver) && !id(g_sleep)) return std::string("");
             const char* z[] = {"z", "z z", "z z z", ""};
             return std::string(z[id(g_anim) % 4]);
       # pink cheeks on a happy or in-love idle face (and greet). Blinks DON'T hide them —
@@ -3555,16 +3603,18 @@ script:
           then: [ { lvgl.widget.show: cheek_l }, { lvgl.widget.show: cheek_r } ]
           else: [ { lvgl.widget.hide: cheek_l }, { lvgl.widget.hide: cheek_r } ]
       - if:
-          condition: { lambda: 'return id(g_sleep);' }
+          condition: { lambda: 'return id(g_sleep) || id(g_saver);' }
           then: [ { lvgl.widget.hide: mouth } ]
           else: [ { lvgl.widget.show: mouth } ]
       # ── eye + mouth shapes per state ──────────────────────────────────────────
-      - if:  # sleeping → eyes closed
-          condition: { lambda: 'return id(g_sleep);' }
+      - if:  # sleeping / screensaver → eyes closed (the screensaver IS the sleeping face:
+             # closed eyes + drifting zzz on black, dimmed; SLEEP shows it for 2s, then the
+             # screen goes fully off)
+          condition: { lambda: 'return id(g_sleep) || id(g_saver);' }
           then:
             - script.execute: { id: set_eyes, w: 60, h: 10, r: 5, dy: 8 }
       - if:  # blink — always both eyes (winks were retired)
-          condition: { lambda: 'return !id(g_sleep) && id(g_blink);' }
+          condition: { lambda: 'return !id(g_sleep) && !id(g_saver) && id(g_blink);' }
           then:
             - script.execute: { id: set_eyes, w: 64, h: 10, r: 5, dy: 0 }
       - if:  # listening → big curious eyes
@@ -3587,22 +3637,6 @@ script:
                 radius: 12
                 height: !lambda 'return (id(g_anim) % 2) ? 26 : 10;'
                 y: 62
-      - if:  # SCREENSAVER → slow dozy "breathing" eyes (they half-close and open)
-          condition: { lambda: 'return !id(g_sleep) && !id(g_blink) && !id(g_listen) && !id(g_talk) && !id(g_think) && id(g_saver);' }
-          then:
-            - lvgl.widget.update:
-                id: eye_l
-                width: 60
-                radius: 18
-                y: 4
-                height: !lambda 'const int b[] = {46, 38, 30, 38}; return b[id(g_anim) % 4];'
-            - lvgl.widget.update:
-                id: eye_r
-                width: 60
-                radius: 18
-                y: 4
-                height: !lambda 'const int b[] = {46, 38, 30, 38}; return b[id(g_anim) % 4];'
-            - script.execute: { id: set_mouth, w: 30, h: 6, r: 3, dy: 66 }
       - if:  # FOCUS mode — or an external "focused" hint (a coding agent working) → steady, narrowed concentrating eyes
           condition: { lambda: 'return !id(g_sleep) && !id(g_blink) && !id(g_listen) && !id(g_talk) && !id(g_think) && !id(g_saver) && (id(g_focus) || id(g_conc));' }
           then:
@@ -3828,7 +3862,6 @@ script:
           condition:
             lambda: 'return !id(g_sleep) && !id(g_saver) && !id(g_voice);'
           then:
-            - lambda: 'lv_disp_trig_activity(NULL);'
             - if:
                 condition: { lambda: 'return id(sw_sfx).state && !id(g_night) && !id(g_quiet);' }
                 then: [ { script.execute: { id: play_sfx, tune: "err:d=8,o=5,b=140:e,c" } } ]   # a short "nope" down-beep
@@ -4374,7 +4407,13 @@ interval:
               - lvgl.page.is_showing: page_face
               # (night/focus/quiet included — no spontaneous snacking in do-not-disturb;
               #  nor while it's mid-speech or a bubble is up — paws over a talking mouth read wrong)
-              - lambda: 'return !id(g_sleep) && !id(g_saver) && !id(g_voice) && !id(g_busy) && !id(g_perm) && !id(g_night) && !id(g_focus) && !id(g_quiet) && !id(g_talk) && !id(g_tip) && random_float() < 0.25;'
+              # Emo and Vector don't eat at random — it snacks when it is HUNGRY (the Life tab's
+              # food need below 40, pushed by dravix), and only very rarely otherwise
+              - lambda: |-
+                  if (id(g_sleep) || id(g_saver) || id(g_voice) || id(g_busy) || id(g_perm)
+                      || id(g_night) || id(g_focus) || id(g_quiet) || id(g_talk) || id(g_tip)) return false;
+                  bool hungry = id(n_vital_food).has_state() && id(n_vital_food).state < 40.0f;
+                  return random_float() < (hungry ? 0.35f : 0.03f);
           then:
             - if:
                 condition: { lambda: 'return random_float() < 0.5;' }
