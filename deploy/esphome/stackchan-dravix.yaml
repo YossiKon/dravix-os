@@ -1515,16 +1515,16 @@ lvgl:
             border_width: 0
             scrollbar_mode: "OFF"
             widgets:
-              - obj: { id: eye_l,   align: CENTER, x: -58, y: 0,  width: 64, height: 64, radius: 22, bg_color: 0x33E6C8, bg_opa: COVER, border_width: 0 }
-              - obj: { id: eye_r,   align: CENTER, x: 58,  y: 0,  width: 64, height: 64, radius: 22, bg_color: 0x33E6C8, bg_opa: COVER, border_width: 0 }
-              - obj: { id: cheek_l, align: CENTER, x: -58, y: 42, width: 28, height: 10, radius: 5,  bg_color: 0xFF9EB5, bg_opa: COVER, border_width: 0, hidden: true }
-              - obj: { id: cheek_r, align: CENTER, x: 58,  y: 42, width: 28, height: 10, radius: 5,  bg_color: 0xFF9EB5, bg_opa: COVER, border_width: 0, hidden: true }
-              - obj: { id: mouth,   align: CENTER, x: 0,   y: 64, width: 40, height: 8,  radius: 4,  bg_color: 0x33E6C8, bg_opa: COVER, border_width: 0 }
+              - obj: { id: eye_l,   align: CENTER, x: -54, y: 0,  width: 56, height: 70, radius: 18, bg_color: 0x33E6C8, bg_opa: COVER, border_width: 0 }
+              - obj: { id: eye_r,   align: CENTER, x: 54,  y: 0,  width: 56, height: 70, radius: 18, bg_color: 0x33E6C8, bg_opa: COVER, border_width: 0 }
+              - obj: { id: cheek_l, align: CENTER, x: -54, y: 44, width: 28, height: 10, radius: 5,  bg_color: 0xFF9EB5, bg_opa: COVER, border_width: 0, hidden: true }
+              - obj: { id: cheek_r, align: CENTER, x: 54,  y: 44, width: 28, height: 10, radius: 5,  bg_color: 0xFF9EB5, bg_opa: COVER, border_width: 0, hidden: true }
+              - obj: { id: mouth,   align: CENTER, x: 0,   y: 64, width: 40, height: 8,  radius: 4,  bg_color: 0x33E6C8, bg_opa: COVER, border_width: 0, hidden: true }
               # ── decorators (ported from the original avatar): a SWEAT drop (react_hot)
               #    and X-eyes (dizzy). (Brows removed — they were permanently disabled.) ──
               - obj: { id: sweat, align: CENTER, x: 100, y: -60, width: 14, height: 20, radius: 7, bg_color: 0x57c8ff, bg_opa: COVER, border_width: 0, hidden: true }
-              - label: { id: dz_l, align: CENTER, x: -58, y: -6, text: "x", text_font: big_font, text_color: 0x33E6C8, hidden: true }
-              - label: { id: dz_r, align: CENTER, x: 58,  y: -6, text: "x", text_font: big_font, text_color: 0x33E6C8, hidden: true }
+              - label: { id: dz_l, align: CENTER, x: -54, y: -6, text: "x", text_font: big_font, text_color: 0x33E6C8, hidden: true }
+              - label: { id: dz_r, align: CENTER, x: 54,  y: -6, text: "x", text_font: big_font, text_color: 0x33E6C8, hidden: true }
               - label: { id: q_mark, align: CENTER, x: 74, y: -66, text: "?", text_font: big_font, text_color: 0xffd54a, hidden: true }   # confused "?" above the head
               # ── HANDS + FOOD (Ropet-style) — paws + a treat that rise to the mouth. Hidden until it eats.
               - obj:
@@ -3602,97 +3602,98 @@ script:
                      && (id(g_expr) == 1 || id(g_expr) == 6);
           then: [ { lvgl.widget.show: cheek_l }, { lvgl.widget.show: cheek_r } ]
           else: [ { lvgl.widget.hide: cheek_l }, { lvgl.widget.hide: cheek_r } ]
+      # EYES-ONLY at rest (Vector / Emo): the mouth appears only when it has something to
+      # say — talking, a yawn, a smile (happy / love), the dizzy little "o".
       - if:
-          condition: { lambda: 'return id(g_sleep) || id(g_saver);' }
-          then: [ { lvgl.widget.hide: mouth } ]
-          else: [ { lvgl.widget.show: mouth } ]
+          condition:
+            lambda: |-
+              if (id(g_sleep) || id(g_saver)) return false;
+              if (id(g_talk) || id(g_yawn)) return true;
+              bool idle = !id(g_listen) && !id(g_think) && !id(g_focus) && !id(g_conc);
+              return idle && (id(g_expr) == 1 || id(g_expr) == 6 || id(g_expr) == 7);
+          then: [ { lvgl.widget.show: mouth } ]
+          else: [ { lvgl.widget.hide: mouth } ]
       # ── eye + mouth shapes per state ──────────────────────────────────────────
       - if:  # sleeping / screensaver → eyes closed (the screensaver IS the sleeping face:
              # closed eyes + drifting zzz on black, dimmed; SLEEP shows it for 2s, then the
              # screen goes fully off)
           condition: { lambda: 'return id(g_sleep) || id(g_saver);' }
           then:
-            - script.execute: { id: set_eyes, w: 60, h: 10, r: 5, dy: 8 }
+            - script.execute: { id: set_eyes, w: 56, h: 8, r: 4, dy: 10 }
       - if:  # blink — always both eyes (winks were retired)
           condition: { lambda: 'return !id(g_sleep) && !id(g_saver) && id(g_blink);' }
           then:
-            - script.execute: { id: set_eyes, w: 64, h: 10, r: 5, dy: 0 }
+            - script.execute: { id: set_eyes, w: 56, h: 6, r: 3, dy: 2 }
       - if:  # listening → big curious eyes
           condition: { lambda: 'return !id(g_sleep) && !id(g_blink) && id(g_listen);' }
           then:
-            - script.execute: { id: set_eyes, w: 74, h: 86, r: 28, dy: -2 }
-            - script.execute: { id: set_mouth, w: 22, h: 8, r: 4, dy: 66 }
+            - script.execute: { id: set_eyes, w: 64, h: 88, r: 24, dy: -2 }
       - if:  # thinking → eyes drift up, pondering the reply (between your words and its answer)
           condition: { lambda: 'return !id(g_sleep) && !id(g_blink) && !id(g_listen) && id(g_think);' }
           then:
-            - script.execute: { id: set_eyes, w: 56, h: 52, r: 22, dy: -14 }
-            - script.execute: { id: set_mouth, w: 18, h: 6, r: 3, dy: 58 }
+            - script.execute: { id: set_eyes, w: 50, h: 56, r: 18, dy: -16 }
+            - lvgl.widget.update: { id: eye_r, y: -22 }   # one eye a little higher — "hmm"
+
       - if:  # speaking → mouth opens and closes
           condition: { lambda: 'return !id(g_sleep) && !id(g_blink) && !id(g_listen) && id(g_talk);' }
           then:
-            - script.execute: { id: set_eyes, w: 64, h: 58, r: 22, dy: 0 }
+            - script.execute: { id: set_eyes, w: 56, h: 64, r: 18, dy: 0 }
             - lvgl.widget.update:
                 id: mouth
-                width: 54
+                width: 48
                 radius: 12
-                height: !lambda 'return (id(g_anim) % 2) ? 26 : 10;'
-                y: 62
+                height: !lambda 'return (id(g_anim) % 2) ? 24 : 8;'
+                y: 64
       - if:  # FOCUS mode — or an external "focused" hint (a coding agent working) → steady, narrowed concentrating eyes
           condition: { lambda: 'return !id(g_sleep) && !id(g_blink) && !id(g_listen) && !id(g_talk) && !id(g_think) && !id(g_saver) && (id(g_focus) || id(g_conc));' }
           then:
-            - script.execute: { id: set_eyes, w: 58, h: 40, r: 16, dy: 0 }
-            - script.execute: { id: set_mouth, w: 28, h: 6, r: 3, dy: 64 }
+            - script.execute: { id: set_eyes, w: 56, h: 36, r: 14, dy: 2 }
       - if:  # YAWN — heavy lids and a big round mouth, for as long as g_yawn holds
           condition: { lambda: 'return !id(g_sleep) && id(g_yawn);' }
           then:
-            - script.execute: { id: set_eyes, w: 64, h: 12, r: 6, dy: 8 }
-            - script.execute: { id: set_mouth, w: 30, h: 30, r: 15, dy: 60 }
+            - script.execute: { id: set_eyes, w: 56, h: 10, r: 5, dy: 10 }
+            - script.execute: { id: set_mouth, w: 28, h: 30, r: 14, dy: 60 }
       - if:  # idle → the chosen expression
           condition: { lambda: 'return !id(g_sleep) && !id(g_blink) && !id(g_listen) && !id(g_talk) && !id(g_think) && !id(g_saver) && !id(g_focus) && !id(g_conc) && !id(g_yawn);' }
           then:
             - if:  # neutral
                 condition: { lambda: 'return id(g_expr) == 0;' }
                 then:
-                  - script.execute: { id: set_eyes, w: 64, h: 64, r: 22, dy: 0 }
-                  - script.execute: { id: set_mouth, w: 40, h: 8, r: 4, dy: 64 }
+                  - script.execute: { id: set_eyes, w: 56, h: 70, r: 18, dy: 0 }
             - if:  # happy — squinted "^^" eyes, wide smile, cheeks
                 condition: { lambda: 'return id(g_expr) == 1;' }
                 then:
-                  - script.execute: { id: set_eyes, w: 70, h: 26, r: 13, dy: -6 }
-                  - script.execute: { id: set_mouth, w: 86, h: 10, r: 5, dy: 58 }
+                  - script.execute: { id: set_eyes, w: 62, h: 24, r: 12, dy: -10 }   # squinted "^^"
+                  - script.execute: { id: set_mouth, w: 70, h: 8, r: 4, dy: 60 }
             - if:  # sad — droopy small eyes, tiny low mouth
                 condition: { lambda: 'return id(g_expr) == 2;' }
                 then:
-                  - script.execute: { id: set_eyes, w: 52, h: 38, r: 15, dy: 10 }
-                  - script.execute: { id: set_mouth, w: 26, h: 8, r: 4, dy: 70 }
+                  - script.execute: { id: set_eyes, w: 50, h: 44, r: 14, dy: 12 }   # small, low, no mouth
             - if:  # angry — narrowed sharp eyes
                 condition: { lambda: 'return id(g_expr) == 3;' }
                 then:
-                  - script.execute: { id: set_eyes, w: 70, h: 22, r: 7, dy: -2 }
-                  - script.execute: { id: set_mouth, w: 48, h: 8, r: 4, dy: 64 }
+                  - script.execute: { id: set_eyes, w: 62, h: 22, r: 6, dy: -4 }    # narrow, sharp, no mouth
             - if:  # sleepy — heavy lids
                 condition: { lambda: 'return id(g_expr) == 4;' }
                 then:
-                  - script.execute: { id: set_eyes, w: 64, h: 14, r: 7, dy: 8 }
-                  - script.execute: { id: set_mouth, w: 34, h: 8, r: 4, dy: 66 }
+                  - script.execute: { id: set_eyes, w: 58, h: 14, r: 7, dy: 8 }
             - if:  # doubt — one raised eye, one squinted (asymmetric!)
                 condition: { lambda: 'return id(g_expr) == 5;' }
                 then:
-                  - script.execute: { id: set_eyes, w: 64, h: 64, r: 22, dy: 0 }
-                  - lvgl.widget.update: { id: eye_r, height: 30, y: 6 }
-                  - script.execute: { id: set_mouth, w: 30, h: 8, r: 4, dy: 66 }
+                  - script.execute: { id: set_eyes, w: 56, h: 70, r: 18, dy: 0 }
+                  - lvgl.widget.update: { id: eye_r, height: 34, y: 8 }              # one eye squints
             - if:  # LOVE — big soft PINK eyes, blushing cheeks, wide smile
                 condition: { lambda: 'return id(g_expr) == 6;' }
                 then:
-                  - script.execute: { id: set_eyes, w: 72, h: 66, r: 30, dy: -2 }
+                  - script.execute: { id: set_eyes, w: 66, h: 72, r: 30, dy: -2 }
                   - lvgl.widget.update: { id: eye_l, bg_color: 0xFF5C8A }
                   - lvgl.widget.update: { id: eye_r, bg_color: 0xFF5C8A }
-                  - script.execute: { id: set_mouth, w: 80, h: 10, r: 5, dy: 58 }
+                  - script.execute: { id: set_mouth, w: 66, h: 8, r: 4, dy: 60 }
             - if:  # DIZZY — the eyes become little x-es (just been spun around)
                 condition: { lambda: 'return id(g_expr) == 7;' }
                 then:
                   - script.execute: { id: set_eyes, w: 8, h: 8, r: 4, dy: 0 }   # eyes shrink away
-                  - script.execute: { id: set_mouth, w: 22, h: 8, r: 4, dy: 68 }
+                  - script.execute: { id: set_mouth, w: 18, h: 18, r: 9, dy: 66 }   # a little "o"
       # ── decorators (original-avatar style): x-eyes on dizzy + react_hot's sweat drop.
       #    Shown only on an idle face; hidden in every other state so they never linger.
       - if:  # CONFUSED / dizzy — x-eyes + a "?" above the head (only on an idle face).
@@ -4570,7 +4571,8 @@ interval:
           then:
             - globals.set: { id: g_blink, value: "true" }
             - script.execute: render_face
-            - delay: 160ms
+            - delay: 90ms       # closed…
+            - delay: 60ms       # …held a beat, so it reads as a blink and not a flicker
             - globals.set: { id: g_blink, value: "false" }
             - script.execute: render_face
   # EXTERNAL SPEECH → talking mouth. dravix TTS (chat replies, notifications, timers,
