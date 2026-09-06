@@ -2,7 +2,7 @@
 
 ## 0.1.16
 
-**🔧 The servo driver no longer freezes the robot** *(firmware 55 — Install the firmware; the
+**🔧 The servo driver no longer freezes the robot** *(firmware 56 — Install the firmware; the
 add-on part is only these notes)*
 
 - **A non-blocking servo driver.** The board package's driver sleeps inside the robot's main
@@ -22,6 +22,8 @@ add-on part is only these notes)*
 - **Removed "Startles at loud noises"** — it has had nothing to listen to since firmware 44
   (the level meter went with the shared-microphone fix). Home Assistant will show the old
   switch as unavailable until you delete it.
+- Housekeeping: the deprecated `online_image:` block is now the `image:` platform form
+  (required before ESPHome 2027.1) — one warning fewer in every compile log; nothing changes for you.
 
 ## 0.1.15
 

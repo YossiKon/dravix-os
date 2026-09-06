@@ -37,7 +37,7 @@ substitutions:
   # publishes it to HA ("Firmware version" sensor); the dravix dashboard compares it
   # with the version bundled in the add-on and shows "firmware update available".
   # (Maintainers: bump this on every firmware change. Users: don't touch.)
-  fw_version: "55"
+  fw_version: "56"
   # The ESPHome node name (mDNS hostname + the default entity prefix on a fresh flash).
   # Change it only if you run MORE THAN ONE robot — each needs a unique name. NOTE:
   # changing it on an already-adopted robot registers a NEW device in HA.
@@ -234,8 +234,10 @@ remote_receiver:
 # The downloadable image for the ALERT page. Setting the "Show image URL" text entity
 # (from HA automations / the dravix add-on) fetches the URL and shows it full-screen for
 # ~25s, then returns to the face. Tip: append ?height=240 to Frigate snapshot URLs.
-online_image:
-  - id: oi_show
+# (`image: platform: online_image` — the old top-level `online_image:` form is removed in ESPHome 2027.1)
+image:
+  - platform: online_image
+    id: oi_show
     url: "http://127.0.0.1/placeholder.jpg"   # replaced at runtime via Show image URL
     format: JPEG
     type: RGB565
@@ -253,7 +255,8 @@ online_image:
   #    to see it. Unlike the ALERT image it does NOT auto-return to the face — it stays until
   #    you swipe away, and `dash_refresh` re-pulls it every 15s while it's on screen. PNG
   #    (Puppet's default output); needs the CoreS3's PSRAM, which it has.
-  - id: oi_dash
+  - platform: online_image
+    id: oi_dash
     url: "http://127.0.0.1/placeholder.png"   # replaced at runtime via the Dashboard URL slot
     format: PNG
     type: RGB565
