@@ -162,7 +162,6 @@ Everything is done by touching the robot, talking to it, or from the dashboard:
 | ⏲ Assist timers ring | "Set a timer for 5 minutes" — a nod at start, three rings + a happy face at the end, any touch stops it | Voice; automatic |
 | 🙌 Reacts to being picked up | Carried → startled eyes; upside-down → dizzy "help!"; set down → "phew" | *Reacts to being picked up* switch (IMU) |
 | 😤 Gets cross if shaken | Repeated shaking stacks up; pets while cross get a huff, then it softens | Automatic (part of shake → dizzy) |
-| 💥 Startles at loud noises | A clap or a bang → wide eyes and a glance toward it; never at its own voice | *Startles at loud noises* switch |
 | 🕺 Party | A desk disco — rainbow LEDs, a head bop, a little tune | Dashboard → Home, or the **Party** button in HA |
 | 💗 Vitals screen | The robot's live needs as bars (energy/food/fun/calm) | Swipe to **VITALS**; care actions on the dashboard **Life** tab |
 | 🌐 Dashboard page | A live screenshot of any Home Assistant dashboard (or any image URL) on its own swipe page — stays put, refreshes every 15s | Dashboard → **Settings → 🌐 Dashboard page**; render HA views with the **Puppet** add-on. See [docs/dashboard-page.md](docs/dashboard-page.md) |

@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.1.16
+
+**🔧 The servo driver no longer freezes the robot** *(firmware 55 — Install the firmware; the
+add-on part is only these notes)*
+
+- **A non-blocking servo driver.** The board package's driver sleeps inside the robot's main
+  loop for every head move — 200 ms per write plus the whole travel time before it lets go of
+  the motor, and up to half a second per byte when a servo answers late. Your boot log measured
+  it: a nod froze the robot for 1.2 s and the speaker's buffer overflowed right after every
+  move; that same freeze is what starved the microphone. dravix now ships its own copy of the
+  driver with a minimal patch (every changed line marked, upstream commit and licence in the
+  repo): the motor is released on a timer instead of a sleep, no 200 ms nap per move, and a
+  50 ms read timeout. **Acceptance test:** the next boot log must not contain
+  "head_nod took a long time" or "ISR event queue overflow". Head moves during a voice turn stay
+  off until that is confirmed. If the install fails on the new driver, paste the red lines —
+  the revert is one commit.
+- **Dashboard image backoff:** a URL that just failed is not fetched again for ten minutes
+  (each fetch + decode blocks the loop; an HTML page at that URL used to fail every 15 s).
+- **The eyes double-blink now and then** (about one blink in seven), the way real eyes do.
+- **Removed "Startles at loud noises"** — it has had nothing to listen to since firmware 44
+  (the level meter went with the shared-microphone fix). Home Assistant will show the old
+  switch as unavailable until you delete it.
+
 ## 0.1.15
 
 **🎤 Why "Okay Nabu" listens, answers faintly, or never answers**

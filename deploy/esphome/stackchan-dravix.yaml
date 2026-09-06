@@ -37,7 +37,7 @@ substitutions:
   # publishes it to HA ("Firmware version" sensor); the dravix dashboard compares it
   # with the version bundled in the add-on and shows "firmware update available".
   # (Maintainers: bump this on every firmware change. Users: don't touch.)
-  fw_version: "54"
+  fw_version: "55"
   # The ESPHome node name (mDNS hostname + the default entity prefix on a fresh flash).
   # Change it only if you run MORE THAN ONE robot — each needs a unique name. NOTE:
   # changing it on an already-adopted robot registers a NEW device in HA.
@@ -105,7 +105,6 @@ substitutions:
   charger_sleep_until: "7"    # …it puts itself to sleep (the light / a touch / the wake word wake it)
   charger_sleep_after_min: "20"
   handled_g: "0.18"           # being moved about: acceleration this far off gravity (fraction of g)
-  startle_db: "12"            # a sound this many dB above the room's usual level makes it look up
 
 esphome:
   name: ${device_name}
@@ -265,6 +264,9 @@ online_image:
       - lvgl.widget.hide: dash_hint
     on_error:
       - logger.log: "dash: download failed"
+      # a URL that just failed is not fetched again for 10 minutes (every fetch + decode is a
+      # blocking stretch of the main loop; an HTML page at that URL failed every 15 s before)
+      - globals.set: { id: g_dash_bad_ms, value: !lambda 'return (long) millis();' }
       - if:
           condition: { lvgl.page.is_showing: page_dash }
           then: [ { lvgl.widget.show: dash_hint } ]
@@ -326,20 +328,28 @@ external_components:
       type: git
       url: https://github.com/m5stack/esphome-yaml.git
       ref: 238ba9825e7874d5626709631dae6be92e861b17
-    components: [axp2101, aw88298, aw9523b, si12t, m5ioe1, ftservo, scs9009]
+    # (ftservo + scs9009 come from OUR vendored, non-blocking copies below — not from here)
+    components: [axp2101, aw88298, aw9523b, si12t, m5ioe1]
     refresh: 1d   # pinned ref = content can't change; the daily touch enables cache self-heal
   # The CoreS3's BMI270 IMU (accelerometer) — the BSP never exposes it. VENDORED into
   # dravix-os's own components/ (MIT, from DennisGaida's driver — the one M5Stack's
   # AtomS3R examples use) with a patch for the ESPHome 2026.6 i2c API, which upstream
   # predates and no longer compiles against. Powers the SHAKE → dizzy reaction.
-  # ref is a BRANCH (not a sha) on purpose: GitHub only serves fetches of ADVERTISED
-  # refs (branch/tag tips) — a pinned sha breaks the moment it stops being the tip.
-  # This is our own repo — the same main the firmware itself ships from.
+  # ALSO THE SERVO DRIVER — `ftservo` + `scs9009`, vendored from the pinned BSP commit with a
+  # minimal `// dravix:` patch: the stock driver slept in the main loop for every head move
+  # (delay(200) + delay(travel) + a 500 ms-per-byte serial busy-wait) — measured on the robot
+  # as 1.2 s nods, speaker buffer overflows and dropped microphone audio. See CLAUDE.md ("one
+  # recorded exception") and components/ftservo|scs9009/README.md.
+  # ref is a TAG on purpose: GitHub only serves fetches of ADVERTISED refs (branch/tag tips) —
+  # a pinned sha breaks the moment it stops being the tip — and a NEW tag per component
+  # change defeats the add-on's 1-day source cache (a branch name is served stale for a day).
+  # This is our own repo. To change a component: commit, tag components-vN, push both, point
+  # this ref at the new tag.
   - source:
       type: git
       url: https://github.com/YossiKon/dravix-os.git
-      ref: main
-    components: [bmi270_bmm150]
+      ref: components-v2
+    components: [bmi270_bmm150, ftservo, scs9009]
     refresh: 1d
 
 display:
@@ -424,6 +434,7 @@ globals:
   - { id: g_hug,    type: bool, restore_value: false, initial_value: "false" }
   - { id: g_gest_n, type: int,  restore_value: false, initial_value: "0" }      # "Last gesture" counter
   - { id: g_pet_base, type: float, restore_value: false, initial_value: "-1" }  # head pitch before a pet lifted it (-1 = not lifted)
+  - { id: g_dash_bad_ms, type: long, restore_value: false, initial_value: "-1000000" }  # when the dashboard URL last failed (10-min backoff)
   # swipe tracking + which "home screen" (0 = face, 1..3 = cards)
   - { id: sw_x0,    type: int,  restore_value: false, initial_value: "0" }
   - { id: sw_y0,    type: int,  restore_value: false, initial_value: "0" }
@@ -488,8 +499,6 @@ globals:
   - { id: g_calm_ms,  type: long,  restore_value: false, initial_value: "0" }
   - { id: g_az_rest,  type: float, restore_value: false, initial_value: "0" }   # slow-filtered resting Z accel — its SIGN says which way is up
   - { id: g_timer_on, type: bool,  restore_value: false, initial_value: "false" }  # an Assist timer is ringing (any touch silences it)
-  - { id: g_snd_base, type: float, restore_value: false, initial_value: "0" }   # the room's usual peak level (dB), learned slowly while calm
-  - { id: g_snd_ms,   type: long,  restore_value: false, initial_value: "0" }   # last startle
   - { id: g_snd_own,  type: long,  restore_value: false, initial_value: "0" }   # last moment the robot itself was making sound
   - { id: g_sfx_rearm, type: bool, restore_value: false, initial_value: "false" }  # the wake word was armed before a chirp borrowed the speaker
   - { id: g_ext_hold,  type: bool, restore_value: false, initial_value: "false" }  # dravix TTS is playing — the ear is stood down for it
@@ -942,6 +951,7 @@ text:
           condition: { lambda: 'return !x.empty() && x != id(g_dash_last);' }
           then:
             - globals.set: { id: g_dash_last, value: !lambda 'return x;' }
+            - globals.set: { id: g_dash_bad_ms, value: "-1000000" }   # a new URL gets a fresh try
             - online_image.set_url: { id: oi_dash, url: !lambda 'return x;' }
           else:
             # cleared while viewing the dashboard → fall back to the face (it just left the cycle)
@@ -1249,8 +1259,6 @@ switch:
   # OFF by default: a snore every 12s stands the wake word down every 12s all night long.
   - { platform: template, name: "Snores",               id: sw_snore,     optimistic: true, restore_mode: RESTORE_DEFAULT_OFF }
   - { platform: template, name: "Reacts to being picked up", id: sw_handled, optimistic: true, restore_mode: RESTORE_DEFAULT_ON }
-  # OFF by default: it has no level meter to listen to since fw44, so it can never fire.
-  - { platform: template, name: "Startles at loud noises", id: sw_startle, optimistic: true, restore_mode: RESTORE_DEFAULT_OFF }
   # isLOCAL — the user's master "everything stays inside the home network" choice, made
   # HERE on the robot (the LOCAL button on the swipe-down status bar), in HA, or in the
   # dravix dashboard — dravix keeps all three in sync. The enforcement (blocking cloud AI,
@@ -2206,17 +2214,6 @@ lvgl:
 
 script:
   # ── COMPANION BEHAVIOURS (fw43) — the little things Emo / Eilik / Vector do ──
-  - id: startle             # a loud noise: wide eyes, a quick glance toward it, then back to business
-    mode: single
-    then:
-      - globals.set: { id: g_expr, value: "5" }          # wide, surprised
-      - script.execute: render_face
-      - if:
-          condition: { lambda: 'return id(sw_move).state && !id(head_nudge).is_running();' }
-          then: [ { script.execute: { id: head_nudge, dx: !lambda 'return random_float() < 0.5f ? -14 : 14;', dy: 4 } } ]
-      - delay: 1300ms
-      - globals.set: { id: g_expr, value: !lambda 'return id(g_face_rest);' }
-      - script.execute: render_face
   - id: yawn                # bored: heavy lids, a big round mouth, a slow droop and a sleepy sound
     mode: single
     then:
@@ -2760,7 +2757,6 @@ script:
       - script.stop: lift_relief
       - script.stop: grumpy_pet
       - script.stop: timer_ring
-      - script.stop: startle
       - globals.set: { id: g_yawn, value: "false" }
       - globals.set: { id: g_timer_on, value: "false" }
       - lambda: 'id(g_lift) = 0; id(g_lift_ms) = 0; id(g_calm_ms) = 0;'   # a STOP mid-carry must not leave a "phew" armed
@@ -3901,7 +3897,7 @@ script:
   - id: dash_enter
     then:
       - if:
-          condition: { lambda: 'return !id(t_dash_url).state.empty();' }
+          condition: { lambda: 'return !id(t_dash_url).state.empty() && ((long) millis() - id(g_dash_bad_ms)) > 600000;' }
           then:
             - online_image.set_url: { id: oi_dash, url: !lambda 'return id(t_dash_url).state;' }
       - script.execute: dash_refresh
@@ -3926,7 +3922,7 @@ script:
                     # idle→sleep with the 🌐 page still up (on_idle doesn't return it to the face),
                     # and re-downloading all night defeats the "dead-still asleep" contract. The
                     # loop stays alive (cheap 15s ticks) so it resumes the moment you wake it here.
-                    - lambda: 'return !id(g_saver) && !id(g_sleep) && !id(t_dash_url).state.empty();'
+                    - lambda: 'return !id(g_saver) && !id(g_sleep) && !id(t_dash_url).state.empty() && ((long) millis() - id(g_dash_bad_ms)) > 600000;'
                 then:
                   - online_image.set_url: { id: oi_dash, url: !lambda 'return id(t_dash_url).state;' }
   # Greet: someone approached → wake up + a happy face + perk the head up.
@@ -4716,6 +4712,17 @@ interval:
             # …then the real face again (a render, not a restore — "doubt" squints one eye)
             - globals.set: { id: g_blink, value: "false" }
             - script.execute: render_face
+            # …and now and then a quick SECOND blink — real eyes do that (Emo, Vector). Re-checked
+            # here, not above: a voice turn can have started during the first blink.
+            - if:
+                condition: { lambda: 'return random_float() < 0.15f && !id(g_talk) && !id(g_listen) && !id(g_saver) && !id(g_sleep) && !id(g_yawn) && id(g_expr) != 7;' }
+                then:
+                  - delay: 220ms
+                  - globals.set: { id: g_blink, value: "true" }
+                  - script.execute: render_face
+                  - delay: 90ms
+                  - globals.set: { id: g_blink, value: "false" }
+                  - script.execute: render_face
   # EXTERNAL SPEECH → talking mouth. dravix TTS (chat replies, notifications, timers,
   # birthday lines) plays on va_media_player WITHOUT the voice pipeline, so g_talk never
   # fired and the mouth sat still while the robot was clearly speaking. Watch playback
