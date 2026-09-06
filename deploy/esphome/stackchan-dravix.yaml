@@ -36,7 +36,7 @@ substitutions:
   # publishes it to HA ("Firmware version" sensor); the dravix dashboard compares it
   # with the version bundled in the add-on and shows "firmware update available".
   # (Maintainers: bump this on every firmware change. Users: don't touch.)
-  fw_version: "46"
+  fw_version: "47"
   # The ESPHome node name (mDNS hostname + the default entity prefix on a fresh flash).
   # Change it only if you run MORE THAN ONE robot — each needs a unique name. NOTE:
   # changing it on an already-adopted robot registers a NEW device in HA.
@@ -178,6 +178,12 @@ esp32:
 # loop; quieter logging = measurably lighter loop. Flip to DEBUG when hunting a bug.
 logger:
   level: INFO
+  logs:
+    # The BSP's ambient-light/proximity chip cannot get a reading in a dark room and says
+    # so several times a minute, all night ("Sensors blacked out", "Data available but not
+    # valid"). It recovers by itself and it drowns every other line in the log, so only its
+    # real errors are worth printing.
+    ltr_als_ps: ERROR
 
 api:
 
@@ -430,6 +436,7 @@ globals:
   - { id: g_snd_own,  type: long,  restore_value: false, initial_value: "0" }   # last moment the robot itself was making sound
   - { id: g_sfx_rearm, type: bool, restore_value: false, initial_value: "false" }  # the wake word was armed before a chirp borrowed the speaker
   - { id: g_ext_hold,  type: bool, restore_value: false, initial_value: "false" }  # dravix TTS is playing — the ear is stood down for it
+  - { id: g_dash_last, type: std::string, restore_value: false }   # last Dashboard URL actually fetched (re-asserts must not re-download)
   - { id: g_grav,     type: float, restore_value: false, initial_value: "-1" }
   # battery engine (see battery_pct): smoothed open-circuit voltage + charging flag
   - { id: g_batt_v_filt, type: float, restore_value: false, initial_value: "-1" }
@@ -592,7 +599,9 @@ sensor:
               bool upside  = (az * id(g_az_rest) < 0.0f) && fabsf(az) > 0.6f * id(g_grav);
               bool handled = dev > ${handled_g} * id(g_grav) && dev <= 0.55f * id(g_grav)
                              && (tnow - id(g_shake_ms)) > 1500;   // between the jolts of a SHAKE, dev sits in this band — that is the shake, not handling
-              if (id(sw_handled).state && !moving && !id(g_sleep) && !id(g_voice)) {
+              // the first seconds after boot are the sensor settling (and the servos
+              // homing) — that is not someone picking the robot up
+              if (id(sw_handled).state && !moving && tnow > 15000 && !id(g_sleep) && !id(g_voice)) {
                 if (upside || handled) {
                   id(g_calm_ms) = 0;
                   if (id(g_lift_ms) == 0) id(g_lift_ms) = tnow;
@@ -853,8 +862,13 @@ text:
     initial_value: ""
     set_action:
       - if:
-          condition: { lambda: 'return !x.empty();' }
+          # Only on a CHANGE. dravix re-asserts the stored URL every 10 minutes (it has to —
+          # an optimistic slot forgets it on reboot), and re-setting the url re-downloaded the
+          # image every time, forever, even with the page nowhere in sight. Entering the page
+          # fetches it anyway (dash_enter), so a repeat of the same URL is pure waste.
+          condition: { lambda: 'return !x.empty() && x != id(g_dash_last);' }
           then:
+            - globals.set: { id: g_dash_last, value: !lambda 'return x;' }
             - online_image.set_url: { id: oi_dash, url: !lambda 'return x;' }
           else:
             # cleared while viewing the dashboard → fall back to the face (it just left the cycle)
@@ -2355,24 +2369,30 @@ script:
     then:
       - if:
           condition:
-            lambda: 'return !id(g_voice) && !id(g_talk) && !id(g_ext_talk);'
+            lambda: 'return !id(g_voice) && !id(g_talk) && !id(g_ext_talk) && !id(va).is_running();'
           then:
             - globals.set: { id: g_sfx_rearm, value: !lambda 'return id(mww).is_running();' }
             - micro_wake_word.stop
             - wait_until:
                 condition: { lambda: 'return !id(i2s_mic).is_running();' }
                 timeout: 400ms
+            # rtttl can be left believing it is still playing a tune that never reached the
+            # speaker (a bus collision, or the speaker task restarting under it). It then
+            # refuses every later tune with "Already playing: …" until the next reboot — which
+            # is exactly what happened to "phew" on the last build. Clear it first, always.
+            - rtttl.stop
             - rtttl.play: !lambda 'return tune;'
             - wait_until:
                 condition:
                   not: { rtttl.is_playing: }
                 timeout: 5s
+            - rtttl.stop        # overran the timeout → never leave it wedged for the next chirp
             - delay: 120ms      # let the speaker release the bus before the mic takes it back
             - if:
                 condition:
                   all:
                     - switch.is_off: sw_privacy
-                    - lambda: 'return id(g_sfx_rearm) && !id(g_voice);'
+                    - lambda: 'return id(g_sfx_rearm) && !id(g_voice) && !id(va).is_running();'
                 then: [ micro_wake_word.start ]
   # ── SENSOR HANDLERS — one body per signal, shared by BOTH prefix imports (see the
   #    sensor/text_sensor sections). Keeping the logic here instead of inline means the
@@ -3834,13 +3854,14 @@ script:
               - lambda: 'return !id(g_voice);'
           then:
             - lambda: 'lv_disp_trig_activity(NULL); id(g_ia_ms) = (long) millis();'   # heard = activity → no screensaver
-            - if:
-                condition: { lambda: 'return id(sw_sfx).state && !id(g_night) && !id(g_quiet);' }
-                then: [ { script.execute: { id: play_sfx, tune: "nabu:d=16,o=6,b=210:e,b" } } ]   # a short "mm-hm?" ding
+            # NO SOUND HERE — on purpose. The microphone and the speaker share one bus, and the
+            # voice session is starting its microphone at this exact moment. A ding on the
+            # speaker won that bus, the session's microphone lost it, and every "Okay Nabu"
+            # died the instant it began. The acknowledgement is the white blink and the eyes.
             # a quick WHITE blink. led_flash is used on purpose: it saves the TRUE original
             # colour and restores it by itself after 2.5s, so a wake word that Home Assistant
             # never answers can never leave the bar lit. (It obeys "Mood LEDs" and stays dark
-            # in night/focus/quiet/sleep — in those the ding alone is the acknowledgement.)
+            # in night/focus/quiet/sleep — there the wide eyes alone are the acknowledgement.)
             - script.execute: { id: led_flash, r: 100, g: 100, b: 100 }
             # eyes wide, listening — the face reacts NOW instead of waiting for HA. No head
             # nudge here: on_listening owns the head for this turn (one owner per body part).
@@ -3851,7 +3872,7 @@ script:
             # back on, because micro_wake_word stops itself the moment it detects.
             - delay: 4s
             - if:
-                condition: { lambda: 'return !id(g_voice);' }
+                condition: { lambda: 'return !id(g_voice) && !id(va).is_running();' }
                 then:
                   - globals.set: { id: g_listen, value: "false" }
                   - script.execute: render_face

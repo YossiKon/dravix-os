@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.1.11
+
+**🎙️ "Okay Nabu" died the instant it began — fixed, plus four clean-ups** *(firmware 47 — update both)*
+
+Firmware 46 gave the robot its voice back and ran ten hours without a reboot — and broke the
+wake word in a new way: the little "heard you" ding now *won* the shared audio bus at the
+exact moment the voice session needed it for the microphone, so every "Okay Nabu" ended
+before it started.
+
+- **No sound on wake any more** — the acknowledgement is the white blink and the wide eyes.
+  On a bus that only one of microphone/speaker can hold, a ding and an immediate listen
+  cannot both happen; listening wins.
+- **Sounds now stand aside whenever a voice session is running or starting**, and never
+  re-arm the wake word underneath one.
+- **A chirp can no longer jam the sound system.** One collision at boot left it convinced it
+  was still playing "phew", and it refused every later tune all night. It is now cleared
+  before every play and after any overrun.
+- **The robot no longer re-downloads the dashboard image every ten minutes** when dravix
+  re-asserts the same URL (an optimistic slot forgets it on reboot, so the re-assert stays).
+- **"Being picked up" ignores the first fifteen seconds after boot** — that is the motion
+  sensor settling and the servos homing, not a person.
+- **The light sensor's night-time complaints** ("Sensors blacked out", hundreds of lines a
+  night) no longer flood the log.
+
 ## 0.1.10
 
 **🔊 The robot has been unable to make a sound — found and fixed** *(firmware 46 — update both)*
