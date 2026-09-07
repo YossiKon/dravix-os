@@ -37,7 +37,7 @@ substitutions:
   # publishes it to HA ("Firmware version" sensor); the dravix dashboard compares it
   # with the version bundled in the add-on and shows "firmware update available".
   # (Maintainers: bump this on every firmware change. Users: don't touch.)
-  fw_version: "57"
+  fw_version: "58"
   # The ESPHome node name (mDNS hostname + the default entity prefix on a fresh flash).
   # Change it only if you run MORE THAN ONE robot — each needs a unique name. NOTE:
   # changing it on an already-adopted robot registers a NEW device in HA.
@@ -3759,11 +3759,13 @@ script:
             - lvgl.widget.hide: speech_bubble
             - lvgl.widget.hide: bub_t1
             - lvgl.widget.hide: bub_t2
-      # zzz drifts on the SCREENSAVER (and for the 2s fade before sleep goes black)
+      # zzz only during the 2s fade before sleep goes black — NOT on the screensaver: a label
+      # that changes every 600 ms on an otherwise still face "runs in the eye" (the owner).
+      # The screensaver is the calm closed-eye face and the soft clock, nothing moving.
       - lvgl.label.update:
           id: lbl_zzz
           text: !lambda |-
-            if (!id(g_saver) && !id(g_sleep)) return std::string("");
+            if (!id(g_sleep)) return std::string("");
             const char* z[] = {"z", "z z", "z z z", ""};
             return std::string(z[id(g_anim) % 4]);
       # pink cheeks on a happy or in-love idle face (and greet). Blinks DON'T hide them —
@@ -4800,14 +4802,15 @@ interval:
             id(g_ext_hold) = false;
             if (!id(sw_privacy).state && !id(g_voice)) id(mww).start();
           }
-  # Sleep "zzz" + talking mouth + screensaver breathing animation.
+  # Sleep "zzz" (the 2s fade) + the talking mouth. NOT the screensaver: its face is still,
+  # so a redraw every 600 ms there was pure SPI/CPU churn (and the drifting zzz it drew).
   - interval: 600ms
     then:
       - globals.set: { id: g_anim, value: !lambda 'return id(g_anim) + 1;' }
       - if:
           # in sleep, keep animating only while the backlight is still on (it goes fully off
           # ~2s in) — re-rendering an invisible zzz all night is pure SPI/CPU churn.
-          condition: { lambda: 'return id(g_talk) || id(g_saver) || (id(g_sleep) && id(lcd_backlight).current_values.is_on());' }
+          condition: { lambda: 'return id(g_talk) || (id(g_sleep) && id(lcd_backlight).current_values.is_on());' }
           then: [ { script.execute: render_face } ]
       # BREATHING — the whole face rises/settles on a slow ~5s sine (the original's
       # breath modifier). Idle awake only; pauses for 5s after any glance so the

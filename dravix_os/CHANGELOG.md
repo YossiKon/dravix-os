@@ -2,7 +2,7 @@
 
 ## 0.1.16
 
-**🔧 The servo driver no longer freezes the robot** *(firmware 57 — Install the firmware; the
+**🔧 The servo driver no longer freezes the robot** *(firmware 58 — Install the firmware; the
 add-on part is only these notes)*
 
 - **A non-blocking servo driver.** The board package's driver sleeps inside the robot's main
@@ -21,6 +21,10 @@ add-on part is only these notes)*
   pink when in love, a frown when sad, a lopsided smirk in doubt, a tiny relaxed mouth when
   sleepy). The rectangle stays only for what an arc can't do: talking, the yawn, the angry
   flat line, the dizzy "o". Nothing in sleep or the screensaver.
+- **A still screensaver.** No drifting "z z z" on the screensaver any more — a label changing
+  every 600 ms on a still face "runs in the eye". The screensaver is the calm closed-eye face
+  and the soft clock; the face is no longer redrawn every 600 ms there either. The zzz stays
+  only for the two-second fade before sleep goes black.
 - **Dashboard image backoff:** a URL that just failed is not fetched again for ten minutes
   (each fetch + decode blocks the loop; an HTML page at that URL used to fail every 15 s).
 - **The eyes double-blink now and then** (about one blink in seven), the way real eyes do.
