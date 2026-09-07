@@ -2,7 +2,7 @@
 
 ## 0.1.16
 
-**🔧 The servo driver no longer freezes the robot** *(firmware 59 — Install the firmware; the
+**🔧 The servo driver no longer freezes the robot** *(firmware 60 — Install the firmware; the
 add-on part is only these notes)*
 
 - **A non-blocking servo driver.** The board package's driver sleeps inside the robot's main
@@ -16,11 +16,12 @@ add-on part is only these notes)*
   "head_nod took a long time" or "ISR event queue overflow". Head moves during a voice turn stay
   off until that is confirmed. If the install fails on the new driver, paste the red lines —
   the revert is one commit.
-- **A mouth, always** — not the old flat bar: a small arc smile under the eyes that follows
-  the mood (a gentle curve at rest and while listening or thinking, a wide smile when happy,
-  pink when in love, a frown when sad, a lopsided smirk in doubt, a tiny relaxed mouth when
-  sleepy). The rectangle stays only for what an arc can't do: talking, the yawn, the angry
-  flat line, the dizzy "o". Nothing in sleep or the screensaver.
+- **A mouth, always — and a cute one.** Not a line: a soft, thick crescent under the eyes at
+  rest (and while listening or thinking), a **filled grin** — a half-disc, flat on top, round
+  below — when happy or in love (pink), an upside-down crescent when sad, a tilted one in doubt,
+  a small one when sleepy. **Talking** opens and closes between the crescent and the grin. The
+  rectangle stays only for the yawn, the angry flat line and the dizzy "o". Nothing in sleep or
+  the screensaver.
 - **The voice turn, as the owner described it.** "Okay Nabu" → a short **wake chime** (your
   own file: set `wake_sound_file` in the stub's substitutions to a URL or a file next to it —
   half a second, .flac/.mp3/.wav; the default is Home Assistant Voice PE's chime; "Robot

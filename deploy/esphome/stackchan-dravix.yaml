@@ -37,7 +37,7 @@ substitutions:
   # publishes it to HA ("Firmware version" sensor); the dravix dashboard compares it
   # with the version bundled in the add-on and shows "firmware update available".
   # (Maintainers: bump this on every firmware change. Users: don't touch.)
-  fw_version: "59"
+  fw_version: "60"
   # The ESPHome node name (mDNS hostname + the default entity prefix on a fresh flash).
   # Change it only if you run MORE THAN ONE robot — each needs a unique name. NOTE:
   # changing it on an already-adopted robot registers a NEW device in HA.
@@ -1630,22 +1630,22 @@ lvgl:
               - obj: { id: cheek_l, align: CENTER, x: -54, y: 44, width: 28, height: 10, radius: 5,  bg_color: 0xFF9EB5, bg_opa: COVER, border_width: 0, hidden: true }
               - obj: { id: cheek_r, align: CENTER, x: 54,  y: 44, width: 28, height: 10, radius: 5,  bg_color: 0xFF9EB5, bg_opa: COVER, border_width: 0, hidden: true }
               - obj: { id: mouth,   align: CENTER, x: 0,   y: 64, width: 40, height: 8,  radius: 4,  bg_color: 0x33E6C8, bg_opa: COVER, border_width: 0, hidden: true }
-              # THE MOUTH THAT IS ALWAYS THERE — a small arc smile (a gentle curve at rest, wide when
-              # happy, a frown when sad, a lopsided smirk in doubt). Angles: 0° = 3 o'clock, clockwise;
-              # 55→125 is the bottom of the circle = a "u". Only the background arc is drawn (the
-              # indicator and the knob are transparent).
+              # THE MOUTH THAT IS ALWAYS THERE — a soft, thick CRESCENT (8 px, round ends), not a
+              # thin line: a gentle "◡" at rest, an upside-down one when sad, tilted in doubt, small
+              # when sleepy. Angles: 0° = 3 o'clock, clockwise; 40→140 is the bottom of the circle.
+              # Only the background arc is drawn (the indicator and the knob are transparent).
               - arc:
                   id: mouth_arc
                   align: CENTER
                   x: 0
-                  y: 46
-                  width: 40
-                  height: 40
-                  start_angle: 55
-                  end_angle: 125
+                  y: 44
+                  width: 44
+                  height: 44
+                  start_angle: 40
+                  end_angle: 140
                   rotation: 0
                   adjustable: false
-                  arc_width: 4
+                  arc_width: 8
                   arc_rounded: true
                   arc_color: 0x33E6C8
                   arc_opa: COVER
@@ -1653,6 +1653,29 @@ lvgl:
                   border_width: 0
                   indicator: { arc_opa: TRANSP }
                   knob: { bg_opa: TRANSP }
+              # THE GRIN — a FILLED half-disc (an arc as wide as its radius = a filled sector, flat
+              # top, round bottom): the big open smile when happy / in love, and the "open" frames of
+              # the talking mouth. Shown instead of the crescent, never with it.
+              - arc:
+                  id: mouth_grin
+                  align: CENTER
+                  x: 0
+                  y: 44
+                  width: 44
+                  height: 44
+                  start_angle: 0
+                  end_angle: 180
+                  rotation: 0
+                  adjustable: false
+                  arc_width: 22
+                  arc_rounded: false
+                  arc_color: 0x33E6C8
+                  arc_opa: COVER
+                  bg_opa: TRANSP
+                  border_width: 0
+                  indicator: { arc_opa: TRANSP }
+                  knob: { bg_opa: TRANSP }
+                  hidden: true
               # ── decorators (ported from the original avatar): a SWEAT drop (react_hot)
               #    and X-eyes (dizzy). (Brows removed — they were permanently disabled.) ──
               - obj: { id: sweat, align: CENTER, x: 100, y: -60, width: 14, height: 20, radius: 7, bg_color: 0x57c8ff, bg_opa: COVER, border_width: 0, hidden: true }
@@ -3756,6 +3779,13 @@ script:
             if (id(g_night)) return lv_color_hex(0x1f9e88);
             if (id(sel_background).current_option() != "None") return lv_color_hex(0xF2F5F7);
             return lv_color_hex(0x14181d);
+      - lvgl.arc.update:
+          id: mouth_grin
+          arc_color: !lambda |-
+            if (id(g_sleep) || id(g_saver)) return lv_color_hex(0x33E6C8);
+            if (id(g_night)) return lv_color_hex(0x1f9e88);
+            if (id(sel_background).current_option() != "None") return lv_color_hex(0xF2F5F7);
+            return lv_color_hex(0x14181d);
       # privacy + local badges (pills — show/hide the widget, an empty pill still draws)
       - if:
           condition: { lambda: 'return id(sw_privacy).state && !id(g_sleep);' }
@@ -3804,23 +3834,37 @@ script:
                      && (id(g_expr) == 1 || id(g_expr) == 6);
           then: [ { lvgl.widget.show: cheek_l }, { lvgl.widget.show: cheek_r } ]
           else: [ { lvgl.widget.hide: cheek_l }, { lvgl.widget.hide: cheek_r } ]
-      # A MOUTH, ALWAYS (the owner's ask) — the arc smile `mouth_arc`, shaped per state below.
-      # The rectangle `mouth` only does what an arc can't: the talking mouth, the yawn, the
-      # angry flat line, the dizzy "o". Nothing at all in sleep / screensaver.
+      # A MOUTH, ALWAYS (the owner's ask), three shapes, one at a time:
+      #   · the RECTANGLE `mouth` only for what an arc can't draw — the yawn, the angry flat
+      #     line, the dizzy "o";
+      #   · the filled GRIN `mouth_grin` when happy / in love (and the open frames of talking —
+      #     the talking branch below alternates it with the crescent);
+      #   · the soft CRESCENT `mouth_arc` everywhere else (shaped per state below).
+      # Nothing at all in sleep / screensaver.
       - if:
           condition:
             lambda: |-
               if (id(g_sleep) || id(g_saver)) return false;
-              if (id(g_talk) || id(g_yawn)) return true;
+              if (id(g_yawn)) return true;
+              if (id(g_talk)) return false;
               bool idle = !id(g_listen) && !id(g_think) && !id(g_focus) && !id(g_conc);
               return idle && (id(g_expr) == 3 || id(g_expr) == 7);
-          then: [ { lvgl.widget.show: mouth }, { lvgl.widget.hide: mouth_arc } ]
+          then: [ { lvgl.widget.show: mouth }, { lvgl.widget.hide: mouth_arc }, { lvgl.widget.hide: mouth_grin } ]
           else:
             - lvgl.widget.hide: mouth
             - if:
-                condition: { lambda: 'return !id(g_sleep) && !id(g_saver);' }
-                then: [ { lvgl.widget.show: mouth_arc } ]
-                else: [ { lvgl.widget.hide: mouth_arc } ]
+                condition:
+                  lambda: |-
+                    if (id(g_sleep) || id(g_saver) || id(g_talk) || id(g_yawn)) return false;
+                    bool idle = !id(g_listen) && !id(g_think) && !id(g_focus) && !id(g_conc);
+                    return idle && (id(g_expr) == 1 || id(g_expr) == 6);
+                then: [ { lvgl.widget.show: mouth_grin }, { lvgl.widget.hide: mouth_arc } ]
+                else:
+                  - lvgl.widget.hide: mouth_grin
+                  - if:
+                      condition: { lambda: 'return !id(g_sleep) && !id(g_saver);' }
+                      then: [ { lvgl.widget.show: mouth_arc } ]
+                      else: [ { lvgl.widget.hide: mouth_arc } ]
       # ── eye + mouth shapes per state ──────────────────────────────────────────
       - if:  # sleeping / screensaver → eyes closed (the screensaver IS the sleeping face:
              # closed eyes + drifting zzz on black, dimmed; SLEEP shows it for 2s, then the
@@ -3836,29 +3880,29 @@ script:
           condition: { lambda: 'return !id(g_sleep) && !id(g_blink) && id(g_listen);' }
           then:
             - script.execute: { id: set_eyes, w: 60, h: 40, r: 14, dy: 0 }
-            - lvgl.arc.update: { id: mouth_arc, x: 0, y: 46, start_angle: 55, end_angle: 125, rotation: 0, arc_width: 4 }
+            - lvgl.arc.update: { id: mouth_arc, x: 0, y: 44, width: 44, height: 44, start_angle: 40, end_angle: 140, rotation: 0, arc_width: 8 }
       - if:  # thinking → eyes drift up, pondering the reply (between your words and its answer)
           condition: { lambda: 'return !id(g_sleep) && !id(g_blink) && !id(g_listen) && id(g_think);' }
           then:
             - script.execute: { id: set_eyes, w: 50, h: 56, r: 18, dy: -16 }
             - lvgl.widget.update: { id: eye_r, y: -22 }   # one eye a little higher — "hmm"
-            - lvgl.arc.update: { id: mouth_arc, x: 6, y: 46, start_angle: 55, end_angle: 125, rotation: 0, arc_width: 4 }   # a little off-centre — pondering
+            - lvgl.arc.update: { id: mouth_arc, x: 6, y: 44, width: 44, height: 44, start_angle: 40, end_angle: 140, rotation: 0, arc_width: 8 }   # a little off-centre — pondering
 
       - if:  # speaking → mouth opens and closes
           condition: { lambda: 'return !id(g_sleep) && !id(g_blink) && !id(g_listen) && id(g_talk);' }
           then:
             - script.execute: { id: set_eyes, w: 56, h: 64, r: 18, dy: 0 }
-            - lvgl.widget.update:
-                id: mouth
-                width: 48
-                radius: 12
-                height: !lambda 'return (id(g_anim) % 2) ? 24 : 8;'
-                y: 64
+            # the talking mouth: crescent (closed) ↔ filled grin (open), every animation tick
+            - lvgl.arc.update: { id: mouth_arc, x: 0, y: 44, width: 44, height: 44, start_angle: 40, end_angle: 140, rotation: 0, arc_width: 8 }
+            - if:
+                condition: { lambda: 'return (id(g_anim) % 2) == 1;' }
+                then: [ { lvgl.widget.show: mouth_grin }, { lvgl.widget.hide: mouth_arc } ]
+                else: [ { lvgl.widget.hide: mouth_grin }, { lvgl.widget.show: mouth_arc } ]
       - if:  # FOCUS mode — or an external "focused" hint (a coding agent working) → steady, narrowed concentrating eyes
           condition: { lambda: 'return !id(g_sleep) && !id(g_blink) && !id(g_listen) && !id(g_talk) && !id(g_think) && !id(g_saver) && (id(g_focus) || id(g_conc));' }
           then:
             - script.execute: { id: set_eyes, w: 56, h: 36, r: 14, dy: 2 }
-            - lvgl.arc.update: { id: mouth_arc, x: 0, y: 46, start_angle: 55, end_angle: 125, rotation: 0, arc_width: 4 }
+            - lvgl.arc.update: { id: mouth_arc, x: 0, y: 44, width: 44, height: 44, start_angle: 40, end_angle: 140, rotation: 0, arc_width: 8 }
       - if:  # YAWN — heavy lids and a big round mouth, for as long as g_yawn holds
           condition: { lambda: 'return !id(g_sleep) && id(g_yawn);' }
           then:
@@ -3871,17 +3915,17 @@ script:
                 condition: { lambda: 'return id(g_expr) == 0;' }
                 then:
                   - script.execute: { id: set_eyes, w: 56, h: 70, r: 18, dy: 0 }
-                  - lvgl.arc.update: { id: mouth_arc, x: 0, y: 46, start_angle: 55, end_angle: 125, rotation: 0, arc_width: 4 }
+                  - lvgl.arc.update: { id: mouth_arc, x: 0, y: 44, width: 44, height: 44, start_angle: 40, end_angle: 140, rotation: 0, arc_width: 8 }
             - if:  # happy — squinted "^^" eyes, wide smile, cheeks
                 condition: { lambda: 'return id(g_expr) == 1;' }
                 then:
                   - script.execute: { id: set_eyes, w: 62, h: 24, r: 12, dy: -10 }   # squinted "^^"
-                  - lvgl.arc.update: { id: mouth_arc, x: 0, y: 46, start_angle: 20, end_angle: 160, rotation: 0, arc_width: 5 }   # a wide smile
+                  # (the mouth is the filled GRIN here — see the visibility rule above)
             - if:  # sad — droopy small eyes, tiny low mouth
                 condition: { lambda: 'return id(g_expr) == 2;' }
                 then:
                   - script.execute: { id: set_eyes, w: 50, h: 44, r: 14, dy: 12 }   # small, low
-                  - lvgl.arc.update: { id: mouth_arc, x: 0, y: 74, start_angle: 230, end_angle: 310, rotation: 0, arc_width: 4 }   # a frown (the top of the circle)
+                  - lvgl.arc.update: { id: mouth_arc, x: 0, y: 72, width: 40, height: 40, start_angle: 220, end_angle: 320, rotation: 0, arc_width: 8 }   # a frown (the top of the circle)
             - if:  # angry — narrowed sharp eyes
                 condition: { lambda: 'return id(g_expr) == 3;' }
                 then:
@@ -3891,20 +3935,20 @@ script:
                 condition: { lambda: 'return id(g_expr) == 4;' }
                 then:
                   - script.execute: { id: set_eyes, w: 58, h: 14, r: 7, dy: 8 }
-                  - lvgl.arc.update: { id: mouth_arc, x: 0, y: 48, start_angle: 65, end_angle: 115, rotation: 0, arc_width: 4 }   # a tiny relaxed mouth
+                  - lvgl.arc.update: { id: mouth_arc, x: 0, y: 46, width: 36, height: 36, start_angle: 50, end_angle: 130, rotation: 0, arc_width: 7 }   # a small relaxed mouth
             - if:  # doubt — one raised eye, one squinted (asymmetric!)
                 condition: { lambda: 'return id(g_expr) == 5;' }
                 then:
                   - script.execute: { id: set_eyes, w: 56, h: 70, r: 18, dy: 0 }
                   - lvgl.widget.update: { id: eye_r, height: 34, y: 8 }              # one eye squints
-                  - lvgl.arc.update: { id: mouth_arc, x: 8, y: 46, start_angle: 50, end_angle: 130, rotation: 12, arc_width: 4 }   # a lopsided smirk
+                  - lvgl.arc.update: { id: mouth_arc, x: 8, y: 44, width: 44, height: 44, start_angle: 35, end_angle: 130, rotation: 12, arc_width: 8 }   # a lopsided smirk
             - if:  # LOVE — big soft PINK eyes, blushing cheeks, wide smile
                 condition: { lambda: 'return id(g_expr) == 6;' }
                 then:
                   - script.execute: { id: set_eyes, w: 66, h: 72, r: 30, dy: -2 }
                   - lvgl.widget.update: { id: eye_l, bg_color: 0xFF5C8A }
                   - lvgl.widget.update: { id: eye_r, bg_color: 0xFF5C8A }
-                  - lvgl.arc.update: { id: mouth_arc, x: 0, y: 46, start_angle: 20, end_angle: 160, rotation: 0, arc_width: 5, arc_color: 0xFF5C8A }   # a wide pink smile
+                  - lvgl.arc.update: { id: mouth_grin, arc_color: 0xFF5C8A }   # the grin, in pink
             - if:  # DIZZY — the eyes become little x-es (just been spun around)
                 condition: { lambda: 'return id(g_expr) == 7;' }
                 then:
