@@ -2,7 +2,7 @@
 
 ## 0.1.16
 
-**🔧 The servo driver no longer freezes the robot** *(firmware 56 — Install the firmware; the
+**🔧 The servo driver no longer freezes the robot** *(firmware 57 — Install the firmware; the
 add-on part is only these notes)*
 
 - **A non-blocking servo driver.** The board package's driver sleeps inside the robot's main
@@ -16,6 +16,11 @@ add-on part is only these notes)*
   "head_nod took a long time" or "ISR event queue overflow". Head moves during a voice turn stay
   off until that is confirmed. If the install fails on the new driver, paste the red lines —
   the revert is one commit.
+- **A mouth, always** — not the old flat bar: a small arc smile under the eyes that follows
+  the mood (a gentle curve at rest and while listening or thinking, a wide smile when happy,
+  pink when in love, a frown when sad, a lopsided smirk in doubt, a tiny relaxed mouth when
+  sleepy). The rectangle stays only for what an arc can't do: talking, the yawn, the angry
+  flat line, the dizzy "o". Nothing in sleep or the screensaver.
 - **Dashboard image backoff:** a URL that just failed is not fetched again for ten minutes
   (each fetch + decode blocks the loop; an HTML page at that URL used to fail every 15 s).
 - **The eyes double-blink now and then** (about one blink in seven), the way real eyes do.
