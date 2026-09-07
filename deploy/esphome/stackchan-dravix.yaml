@@ -37,7 +37,7 @@ substitutions:
   # publishes it to HA ("Firmware version" sensor); the dravix dashboard compares it
   # with the version bundled in the add-on and shows "firmware update available".
   # (Maintainers: bump this on every firmware change. Users: don't touch.)
-  fw_version: "58"
+  fw_version: "59"
   # The ESPHome node name (mDNS hostname + the default entity prefix on a fresh flash).
   # Change it only if you run MORE THAN ONE robot — each needs a unique name. NOTE:
   # changing it on an already-adopted robot registers a NEW device in HA.
@@ -82,7 +82,13 @@ substitutions:
   # scale), 0.9 = -9.6 dB (about a third of full power), 0.97 = -3 dB (half power), 0.8 =
   # -19 dB (the BSP's old cap — "really weak"). Every control (HA, the robot's VOL slider)
   # spans 0..100% of THIS, so the person can always push it "all the way up" safely.
-  speaker_ceiling: "0.9"
+  speaker_ceiling: "1.0"   # the owner wants it all the way up (0.9 = -9.6 dB would spare the speaker)
+  # WAKE SOUND — played the moment "Okay Nabu" is heard, BEFORE the session starts listening
+  # (the microphone and the speaker share one bus on this board — see on_wake_word_detected).
+  # A URL, or a file next to your stub in /config/esphome. Keep it SHORT (half a second):
+  # .flac / .mp3 / .wav. Default: Home Assistant Voice PE's wake chime. The "Robot sounds"
+  # switch silences it.
+  wake_sound_file: "https://github.com/esphome/home-assistant-voice-pe/raw/dev/sounds/wake_word_triggered.flac"
   batt_r_int: "0.15"    # cell+wiring internal resistance (Ω) — used to undo load sag
   # INA226 sign convention: 1 = positive current while DISCHARGING (flip to -1 if your
   # board reports it inverted — the ⚡ charging flag will tell you immediately).
@@ -292,6 +298,10 @@ media_player:
   - id: !extend va_media_player
     volume_min: 0.6
     volume_max: ${speaker_ceiling}
+    # the wake chime (see `wake_sound_file`), compiled into the firmware
+    files:
+      - id: wake_sound
+        file: ${wake_sound_file}
 
 # ── NO BLE. The BSP compiles in BLE provisioning (esp32_improv) and disables the radio 5 s
 #    after Wi-Fi connects — but a disabled controller keeps its ~50 KB of INTERNAL RAM, on a
@@ -367,6 +377,21 @@ light:
   # restore whatever it showed when the power went).
   - id: !extend stackchan_light_bar
     restore_mode: ALWAYS_OFF
+    # THINKING — an amber wave rolling along the bar while it works out the answer (the owner
+    # asked for "a gradient with animation"). Lists under !extend are APPENDED, so the BSP's
+    # own effects (Rainbow / Twinkle / Random) stay.
+    effects:
+      - addressable_lambda:
+          name: "Thinking wave"
+          update_interval: 40ms
+          lambda: |-
+            static uint16_t t = 0;
+            t += 7;
+            for (int i = 0; i < it.size(); i++) {
+              float ph = (float) i / (float) it.size() * 6.2832f + (float) t / 60.0f;
+              float v = 0.30f + 0.70f * (0.5f + 0.5f * sinf(ph));
+              it[i] = Color((uint8_t) (255 * v), (uint8_t) (140 * v), 0);
+            }
 
 font:
   - file: "gfonts://Roboto"
@@ -3040,6 +3065,7 @@ script:
             - globals.set: { id: g_flash, value: "true" }
             - light.turn_on:
                 id: stackchan_light_bar
+                effect: "None"   # a steady colour always ends a running effect (the thinking wave)
                 brightness: !lambda 'return id(g_led_level) / 100.0f;'
                 red: !lambda 'return r / 100.0f;'
                 green: !lambda 'return g / 100.0f;'
@@ -3806,10 +3832,10 @@ script:
           condition: { lambda: 'return !id(g_sleep) && !id(g_saver) && id(g_blink);' }
           then:
             - script.execute: { id: set_eyes, w: 56, h: 6, r: 3, dy: 2 }
-      - if:  # listening → big curious eyes
+      - if:  # listening → the CONCENTRATED face: narrowed, steady, all attention (the owner's ask)
           condition: { lambda: 'return !id(g_sleep) && !id(g_blink) && id(g_listen);' }
           then:
-            - script.execute: { id: set_eyes, w: 64, h: 88, r: 24, dy: -2 }
+            - script.execute: { id: set_eyes, w: 60, h: 40, r: 14, dy: 0 }
             - lvgl.arc.update: { id: mouth_arc, x: 0, y: 46, start_angle: 55, end_angle: 125, rotation: 0, arc_width: 4 }
       - if:  # thinking → eyes drift up, pondering the reply (between your words and its answer)
           condition: { lambda: 'return !id(g_sleep) && !id(g_blink) && !id(g_listen) && id(g_think);' }
@@ -4032,6 +4058,7 @@ script:
           then:
             - light.turn_on:
                 id: stackchan_light_bar
+                effect: "None"   # a steady colour always ends a running effect (the thinking wave)
                 brightness: !lambda 'return id(g_led_level) / 100.0f;'
                 red: !lambda 'return r / 100.0f;'
                 green: !lambda 'return g / 100.0f;'
@@ -5235,9 +5262,33 @@ micro_wake_word:
     # ACKNOWLEDGE ON THE DEVICE FIRST. Everything else in a voice turn is driven by events
     # that come back from Home Assistant — so if HA is busy, restarting, or has no pipeline
     # assigned, the old firmware showed NOTHING at all and the wake word read as broken.
-    # This ding+blink says "I heard you" using only the robot, and doubles as the
-    # diagnostic: ding but no cyan listening face ⇒ the problem is on the HA side.
+    # This chime+blink says "I heard you" using only the robot, and doubles as the
+    # diagnostic: chime but no cyan listening face ⇒ the problem is on the HA side.
     - script.execute: wake_ack
+    # THE WAKE SOUND — the owner's file (`wake_sound_file`), played BEFORE the session starts
+    # and never during it: the microphone and the speaker share one bus on this board, and a
+    # sound overlapping the session's microphone start killed every turn (fw46). By now the
+    # wake word has stopped its microphone (stop_after_detection); the speaker takes the bus
+    # for the short chime, releases it, and only then does the session start. g_voice is
+    # raised first so nothing (the speech watcher, a chirp) re-arms the wake word meanwhile.
+    - if:
+        condition:
+          all:
+            - switch.is_off: sw_privacy
+            - lambda: 'return id(sw_sfx).state && !id(g_night) && !id(g_quiet) && !id(g_voice);'
+        then:
+          - globals.set: { id: g_voice, value: "true" }
+          - media_player.speaker.play_on_device_media_file:
+              id: va_media_player
+              media_file: wake_sound
+              announcement: true
+          - wait_until:
+              condition: { media_player.is_announcing: va_media_player }
+              timeout: 300ms
+          - wait_until:
+              condition: { not: { media_player.is_announcing: va_media_player } }
+              timeout: 1500ms
+          - delay: 80ms   # let the speaker release the bus before the microphone takes it
     - voice_assistant.start:
         wake_word: !lambda 'return wake_word;'
 
@@ -5307,7 +5358,11 @@ voice_assistant:
           - text_sensor.template.publish: { id: st_va_err, state: "heard nothing — check the pipeline's speech-to-text" }
     - globals.set: { id: g_listen, value: "false" }
     - globals.set: { id: g_think,  value: "true" }
-    - script.execute: { id: leds_voice, r: 100, g: 70, b: 0 }
+    # THINKING = the amber WAVE rolling along the bar (an animated gradient, per the owner)
+    - if:
+        condition: { lambda: 'return id(sw_speak_led).state && id(g_led_level) > 0;' }
+        then:
+          - light.turn_on: { id: stackchan_light_bar, brightness: !lambda 'return id(g_led_level) / 100.0f;', effect: "Thinking wave" }
     - script.execute: render_face
     - script.execute: { id: head_nudge, dx: 12, dy: -6 }   # tilts up, pondering
   on_tts_start:

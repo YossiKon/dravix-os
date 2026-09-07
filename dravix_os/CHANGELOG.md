@@ -2,7 +2,7 @@
 
 ## 0.1.16
 
-**🔧 The servo driver no longer freezes the robot** *(firmware 58 — Install the firmware; the
+**🔧 The servo driver no longer freezes the robot** *(firmware 59 — Install the firmware; the
 add-on part is only these notes)*
 
 - **A non-blocking servo driver.** The board package's driver sleeps inside the robot's main
@@ -21,6 +21,16 @@ add-on part is only these notes)*
   pink when in love, a frown when sad, a lopsided smirk in doubt, a tiny relaxed mouth when
   sleepy). The rectangle stays only for what an arc can't do: talking, the yawn, the angry
   flat line, the dizzy "o". Nothing in sleep or the screensaver.
+- **The voice turn, as the owner described it.** "Okay Nabu" → a short **wake chime** (your
+  own file: set `wake_sound_file` in the stub's substitutions to a URL or a file next to it —
+  half a second, .flac/.mp3/.wav; the default is Home Assistant Voice PE's chime; "Robot
+  sounds" off silences it). It plays *before* the session starts listening, never during it —
+  the microphone and the speaker share one bus on this board. Then: **listening** = the
+  concentrated face (narrowed, steady eyes) + a steady cyan light; **thinking** = an amber
+  **wave rolling along the bar** (an animated gradient) with the eyes-up face; **speaking** =
+  a steady green light with the talking mouth. There is a light for the whole session.
+- **Volume: all the way up.** `speaker_ceiling` now defaults to 1.0 — 100 % is the amplifier's
+  full output. Set it to 0.9 if you would rather spare the speaker.
 - **A still screensaver.** No drifting "z z z" on the screensaver any more — a label changing
   every 600 ms on a still face "runs in the eye". The screensaver is the calm closed-eye face
   and the soft clock; the face is no longer redrawn every 600 ms there either. The zzz stays
