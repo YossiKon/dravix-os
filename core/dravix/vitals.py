@@ -237,6 +237,16 @@ class VitalsEngine:
         except Exception:  # noqa: BLE001
             return None
 
+    async def _offline(self) -> bool:
+        """The robot's ESPHome API is disconnected (its State sensor is unavailable)."""
+        probe = getattr(self._robot.driver, "is_offline", None)
+        if probe is None:
+            return False
+        try:
+            return bool(await probe())
+        except Exception:  # noqa: BLE001
+            return False
+
     async def _set_mode(self, mode: str) -> None:
         setter = getattr(self._robot.driver, "set_mode", None)
         if setter is None:
@@ -282,6 +292,12 @@ class VitalsEngine:
                 self._last = now
                 mode = await self._mode()
                 asleep = (mode or "").strip().lower() == "sleep"
+                # OFFLINE (the robot's ESPHome API is down) is not "awake": its mode reads as
+                # unknown, which every do-not-disturb check treats as active — so with low
+                # energy this tick yawned + sent set_mode("sleep") every 20 s forever (the
+                # nap could never take effect, so _auto_slept was cleared and it yawned
+                # again). Offline = decay silently; no bars, no emotes, no mode writes.
+                offline = await self._offline()
                 # decay always happens (silent) — energy refills while asleep
                 if asleep:
                     self.energy = _clamp(self.energy + _SLEEP_ENERGY_GAIN_PER_H * dt_h)
@@ -290,11 +306,15 @@ class VitalsEngine:
                 else:
                     for k in ("energy", "food", "fun", "calm"):
                         setattr(self, k, _clamp(getattr(self, k) - _DECAY_PER_H[k] * dt_h))
-                    if self._auto_slept:
+                    if self._auto_slept and not offline:
                         # Woken mid-nap (mode select / a tap) — re-arm auto-napping. The flag
                         # used to stay latched (it's persisted!), so energy pinned at 0 and
                         # the robot never napped again until a manual "rest".
                         self._auto_slept = False
+                if offline:
+                    self._persist()
+                    await self._bus.publish("vitals.changed", **self.snapshot())
+                    continue
                 await self._push_bars()
                 # auto-wake from an AUTO nap once rested (a manual sleep is left alone)
                 if asleep and self._auto_slept and self.energy >= 95.0:
@@ -384,6 +404,11 @@ class VitalsEngine:
             if eid.startswith("text.") and eid.split(".", 1)[1] == tip_object:
                 self._tip_entity = eid
                 break
+        # every tip write is a COMMAND (bubble + flash), even the same text twice in a row —
+        # the HA write gate must never drop it as "unchanged"
+        gate = getattr(self._ha, "writes", None)
+        if gate is not None and self._tip_entity:
+            gate.set_always_write([self._tip_entity])
 
     def _reset_entity_cache(self) -> None:
         """Forget the resolved entities (they vanished) — the next tick re-resolves."""
@@ -432,6 +457,8 @@ class VitalsEngine:
             try:
                 if self._store is not None and not self._store.nudges_enabled():
                     continue
+                if await self._offline():
+                    continue          # the robot is disconnected — a tip would go nowhere
                 mode = await self._mode()
                 if mode is not None and mode.strip().lower() in _NUDGE_QUIET_MODES:
                     continue          # user isn't at the robot — no reminders

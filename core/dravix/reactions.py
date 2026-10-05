@@ -37,6 +37,8 @@ if TYPE_CHECKING:
 
 log = get_logger("reactions")
 
+_MIN_REFIRE_S = 1.0  # no rule fires more than once a second, whatever its throttle_s
+
 
 class _SafeDict(dict):
     def __missing__(self, key: str) -> str:
@@ -91,21 +93,24 @@ class ReactionEngine:
 
     # ── matching ───────────────────────────────────────────────────────────────
     async def handle(self, event: Event) -> None:
-        for rule in self._rules():
+        for i, rule in enumerate(self._rules()):
             if not rule.get("enabled", True) or rule.get("on") != event.type:
                 continue
             match = rule.get("match") or {}
             if any(event.data.get(k) != v for k, v in match.items()):
                 continue
-            if self._throttled(rule):
+            if self._throttled(rule, i):
                 continue
             await self._run(rule, event)
 
-    def _throttled(self, rule: dict[str, Any]) -> bool:
-        window = float(rule.get("throttle_s", 0) or 0)
-        if window <= 0:
-            return False
-        name = rule.get("name") or rule.get("on") or "?"
+    def _throttled(self, rule: dict[str, Any], index: int = 0) -> bool:
+        # a 1 s floor for every rule: a rule fed by its own output (on: robot.face → set a
+        # face → robot.face …) must not spin — robot writes no longer block for an HA round
+        # trip (the write gate can hold them), so nothing else would slow such a loop down.
+        # Keyed per RULE (an unnamed rule by its position), so two unnamed rules on the same
+        # event never throttle each other.
+        window = max(float(rule.get("throttle_s", 0) or 0), _MIN_REFIRE_S)
+        name = rule.get("name") or f"{rule.get('on') or '?'}#{index}"
         now = time.monotonic()
         last = self._last_fired.get(name)
         if last is not None and now - last < window:

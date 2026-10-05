@@ -67,3 +67,43 @@ async def test_reaction_throttle():
     await eng.handle(Event(type="tick", data={"n": "2"}))
     assert c.state.last_said == "1"  # second within window is throttled
     await c.close()
+
+
+async def test_reaction_floor_is_per_rule_and_stops_self_feeding_loops():
+    """Every rule gets a 1 s floor (robot writes no longer block on HA, so a rule fed by its
+    own output would spin) — but two UNNAMED rules on one event never throttle each other."""
+    c = await _controller()
+    rules = [
+        {"on": "ha.motion", "match": {"entity_id": "hall"}, "say": "hall"},
+        {"on": "ha.motion", "match": {"entity_id": "door"}, "say": "door"},
+        {"name": "loop", "on": "robot.say", "face": "happy"},
+    ]
+    eng = ReactionEngine(c, c._bus, store=_StoreStub(rules))
+    fired: list[str] = []
+    run = eng._run
+
+    async def counting(rule, event):
+        fired.append(rule.get("name") or rule.get("say"))
+        await run(rule, event)
+
+    eng._run = counting
+    await eng.handle(Event(type="ha.motion", data={"entity_id": "hall"}))
+    await eng.handle(Event(type="ha.motion", data={"entity_id": "door"}))
+    for _ in range(5):                            # a burst of echoes fires the rule ONCE
+        await eng.handle(Event(type="robot.say", data={}))
+    assert fired == ["hall", "door", "loop"]      # the door rule wasn't swallowed by the hall rule
+    await c.close()
+
+
+def test_warning_console_still_feeds_the_diagnostics_ring():
+    import logging
+
+    from dravix.logging import get_logger, recent_logs, setup_logging
+
+    setup_logging("WARNING")
+    try:
+        assert logging.getLogger().handlers[0].level == logging.WARNING
+        get_logger("test").info("robot connected (ring check)")
+        assert any(r["msg"] == "robot connected (ring check)" for r in recent_logs())
+    finally:
+        setup_logging("WARNING")

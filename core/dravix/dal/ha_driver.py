@@ -58,11 +58,54 @@ class HARobotDriver(RobotDriver):
         # dropped (HA 500) — so every number write is serialized behind a lock and spaced out.
         self._bus_lock = asyncio.Lock()
         self._last_bus_write = 0.0
+        self._register_servo_lane()
+
+    def _gate(self):
+        """The HA client's write gate, when there is one (the add-on; never a test fake)."""
+        return getattr(self._ha, "writes", None)
+
+    # Roles whose every write is a COMMAND to the firmware, so the write gate must never drop
+    # a repeat of the same value: every head_pitch write stamps the firmware's "commanded
+    # move" marker (without it a yaw move reads as a HAND turning the head); the face
+    # select's set_action plays its flash + nudge each time; the show-image URL re-shows the
+    # picture; bubble / agent / prompt / AI-state slots re-trigger their on-screen cue.
+    _COMMAND_ROLES = ("head_yaw", "head_pitch", "face_select", "image_url_text", "bubble_text",
+                      "agent_text", "permission_text", "ai_state_text")
+
+    def _register_servo_lane(self) -> None:
+        """Hand the servo-bus rules to the write gate, so they also hold for writes it
+        delivers LATER (a coalesced value flushed from its own task — outside our lock),
+        and mark the command-like slots as never-deduplicated."""
+        gate = self._gate()
+        if gate is not None:
+            gate.set_lane(
+                [self._entities.get("head_yaw", ""), self._entities.get("head_pitch", "")],
+                spacing=self._MIN_BUS_SPACING, retries=self._SET_ATTEMPTS,
+                retry_delay=self._SET_RETRY_DELAY,
+            )
+            gate.set_always_write(self._entities.get(r, "") for r in self._COMMAND_ROLES)
 
     def set_entities(self, entities: dict[str, str]) -> None:
         """Live-swap the HA entity map (from the dashboard). Clears cached number ranges."""
         self._entities = entities or {}
         self._num_meta.clear()
+        self._register_servo_lane()
+
+    def has_role(self, role: str) -> bool:
+        """Is an entity mapped for this role (discovered or configured)?"""
+        return bool(self._entities.get(role))
+
+    async def is_offline(self) -> bool:
+        """True only when the robot's own State sensor reads ``unavailable`` — its ESPHome
+        API is disconnected. Unmapped / unreadable / unknown = False (never block on a
+        guess). Distinct from ``get_text`` → None, which callers treat as "no sensor"."""
+        ent = self._entities.get("state_sensor")
+        if not ent:
+            return False
+        try:
+            return str((await self._ha.get_state(ent)).get("state") or "") == "unavailable"
+        except Exception:  # noqa: BLE001
+            return False
 
     def set_calibration(self, calibration: dict[str, Any]) -> None:
         self._calib = calibration or {}
@@ -228,6 +271,10 @@ class HARobotDriver(RobotDriver):
     _MIN_BUS_SPACING = 0.3
 
     async def _set_number_value(self, entity_id: str, value: float) -> None:
+        if self._gate() is not None:
+            # the gate's servo lane spaces, serialises and retries (see _register_servo_lane)
+            await self._ha.call_service("number", "set_value", {"entity_id": entity_id, "value": value})
+            return
         async with self._bus_lock:
             loop = asyncio.get_running_loop()
             gap = self._MIN_BUS_SPACING - (loop.time() - self._last_bus_write)

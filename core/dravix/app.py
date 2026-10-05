@@ -70,6 +70,23 @@ def build_robot_driver(
     return build_driver(merged, ha)
 
 
+def scope_write_gate(ha: HomeAssistant | None, discovered: dict[str, str]) -> None:
+    """Tell the HA write gate which entities are the ROBOT's (its prefixes + the discovered
+    roles) — only those get the offline-skip / dedupe / rate-limit treatment; a write to
+    anything else in the house passes straight through."""
+    gate = getattr(ha, "writes", None) if ha is not None else None
+    link = getattr(ha, "link", None) if ha is not None else None
+    if gate is None:
+        return
+    from .discovery import robot_prefixes_from_states
+    from .voice_setup import robot_prefixes
+
+    prefixes = set(robot_prefixes(discovered))
+    if link is not None and link.mirror.synced:
+        prefixes.update(robot_prefixes_from_states(link.mirror.all()))
+    gate.set_scope(prefixes, (eid for role, eid in discovered.items() if role != "tts_engine"))
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     settings = get_settings()
@@ -87,6 +104,18 @@ async def lifespan(app: FastAPI):
         ha = HomeAssistant(settings.ha_url, settings.ha_token)
     frigate = Frigate(ha, settings.frigate_url)
 
+    # The ONE websocket to HA: state mirror (every states()/get_state() becomes a memory
+    # read), the robot's events, and the writes. Started BEFORE discovery, which reads the
+    # mirror. Event publishing still honours DRAVIX_HA_EVENTS_ENABLED; the mirror always runs.
+    ha_bridge: HAEventBridge | None = None
+    if ha is not None:
+        ha_bridge = HAEventBridge(
+            ha_ws_url(ha.base_url), settings.ha_token, bus, settings.ha_event_map,
+            publish_events=settings.ha_events_enabled,
+        )
+        ha.attach_link(ha_bridge)
+        ha_bridge.start()
+
     # AUTO-DISCOVER the robot's entities (suffix-anchored, prefix-agnostic) — the user
     # never hand-maps entities; explicit env/store values still override the discovery.
     discovered: dict[str, str] = {}
@@ -94,6 +123,7 @@ async def lifespan(app: FastAPI):
         from .discovery import discover_robot_entities
 
         discovered = await discover_robot_entities(ha)
+        scope_write_gate(ha, discovered)
 
     # Robot driver + controller (dashboard picks in the store win over env defaults).
     # A driver that can't even be *built* (bad config, missing HA, ...) must not stop the
@@ -171,14 +201,6 @@ async def lifespan(app: FastAPI):
     screen_pusher = ScreenPusher(ha, store)
     if ha is not None:
         await screen_pusher.start()
-
-    # Home Assistant event bridge (motion/presence/door -> bus -> modes like guard).
-    ha_bridge: HAEventBridge | None = None
-    if ha is not None and settings.ha_events_enabled:
-        ha_bridge = HAEventBridge(
-            ha_ws_url(settings.ha_url), settings.ha_token, bus, settings.ha_event_map
-        )
-        ha_bridge.start()
 
     app.state.settings = settings
     app.state.bus = bus
@@ -289,7 +311,11 @@ async def lifespan(app: FastAPI):
         from .privacy import apply_camera_privacy
 
         priv_reader = getattr(driver, "is_private", None)
-        if ha is not None and priv_reader is not None:
+        has_role = getattr(driver, "has_role", None)
+        # only when the privacy switch is actually KNOWN — "no switch discovered yet" (HA
+        # still starting) must not read as "privacy off" and re-attach a detached camera;
+        # _rediscover runs this sync once the switch turns up
+        if ha is not None and priv_reader is not None and (has_role is None or has_role("privacy_switch")):
             await apply_camera_privacy(app.state, bool(await priv_reader()))
     except Exception:  # noqa: BLE001 — best-effort; the toggle path re-applies
         log.exception("privacy startup sync failed")
@@ -364,6 +390,87 @@ async def lifespan(app: FastAPI):
     app.state.health = RobotHealth(ha, store, bus)   # reboot log + live loop/heap picture
     climate_task = asyncio.create_task(_climate_pusher(), name="dravix-climate")
 
+    app.state.unavailable_roles = []
+
+    async def _rediscover() -> None:
+        """Keep the robot's role map honest as it comes and goes: re-run discovery from the
+        state mirror (free — no HA call) right away, after every websocket resync and once a
+        minute, and rebuild the driver when the map changed (a device rename, a re-flash, or
+        a role first discovered while the robot was offline).
+
+        Guard-rails: a role may APPEAR or CHANGE here but never vanish on one look (an HA
+        that is still starting serves a snapshot without the ESPHome entities); a changed
+        map must be seen twice before the driver is rebuilt; a failed rebuild is recorded
+        and retried instead of leaving a capability-less driver behind. Also flags
+        MIS-PICKS: a role whose entity stays unavailable while the robot itself is online
+        (writes to it are dropped by the write gate, so it would otherwise fail silently)."""
+        if ha is None or ha_bridge is None:
+            return
+        from .discovery import discover_from_states
+        from .privacy import apply_camera_privacy
+
+        mirror = ha_bridge.mirror
+        resynced = asyncio.Event()
+        mirror.add_resync_listener(resynced.set)
+        warned: set[str] = set()
+        candidate: dict | None = None
+        failed = False
+        wait = 0.0  # first look at once — a snapshot may have landed after discovery gave up
+        while True:
+            if wait:
+                try:
+                    await asyncio.wait_for(resynced.wait(), wait)
+                except asyncio.TimeoutError:
+                    pass
+            resynced.clear()
+            wait = 60.0
+            if not mirror.synced:
+                continue
+            try:
+                old = dict(app.state.discovered_entities or {})
+                merged = {**old, **discover_from_states(mirror.all())}
+                if merged != old:
+                    if old and not failed and merged != candidate:
+                        candidate, wait = merged, 15.0   # confirm on a second look
+                        continue
+                    candidate = None
+                    try:
+                        await controller.reconnect_with(
+                            build_robot_driver(settings, store, ha, discovered=merged)
+                        )
+                    except Exception as exc:  # noqa: BLE001 — record it, retry on the next look
+                        controller.state.last_error = f"robot rebuild failed: {exc}"
+                        if not failed:
+                            log.warning("re-applying discovered robot entities failed (%s) — retrying", exc)
+                        failed, wait = True, 15.0
+                        continue
+                    failed = False
+                    app.state.discovered_entities = merged
+                    scope_write_gate(ha, merged)
+                    log.info("robot entities re-applied from discovery: %s", merged)
+                    if merged.get("privacy_switch") and not old.get("privacy_switch"):
+                        reader = getattr(controller.driver, "is_private", None)
+                        if reader is not None:
+                            await apply_camera_privacy(app.state, bool(await reader()))
+                else:
+                    candidate = None
+                disc = app.state.discovered_entities or {}
+                robot_up = mirror.state_of(disc.get("state_sensor", "")) not in (None, "unavailable")
+                stale = sorted(
+                    role for role, eid in disc.items()
+                    if role != "tts_engine" and mirror.state_of(eid) == "unavailable"
+                ) if robot_up else []
+                app.state.unavailable_roles = stale
+                for role in set(stale) - warned:
+                    log.warning("robot role %s → %s stays unavailable while the robot is online — "
+                                "writes to it are skipped; set it in Settings → Robot if it is wrong",
+                                role, disc.get(role))
+                warned |= set(stale)
+            except Exception:  # noqa: BLE001 — never die
+                log.debug("rediscovery failed", exc_info=True)
+
+    rediscover_task = asyncio.create_task(_rediscover(), name="dravix-rediscover")
+
     async def _personality_drift() -> None:
         """Slowly fold the robot's mood into its long-horizon temperament (once/day drift)."""
         while True:
@@ -384,7 +491,7 @@ async def lifespan(app: FastAPI):
         yield
     finally:
         log.info("shutting down dravix-os")
-        for t in (islocal_task, fw_notify_task, climate_task, personality_task):
+        for t in (islocal_task, fw_notify_task, climate_task, rediscover_task, personality_task):
             t.cancel()
             try:
                 await t

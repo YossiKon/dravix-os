@@ -1,5 +1,5 @@
 name: dravix-os
-version: "0.1.17"
+version: "0.1.18"
 slug: dravix_os
 description: Companion OS for the M5Stack StackChan robot (local-first)
 url: https://github.com/YossiKon/dravix-os
@@ -55,7 +55,8 @@ options:
   local_only: true
   frigate_url: ""
   frigate_camera: ""
-  log_level: INFO
+  # WARNING keeps the add-on log quiet; INFO/DEBUG show the HA link + every skipped write.
+  log_level: WARNING
 schema:
   robot_driver: "list(ha)"
   robot_entity_face: "str?"
@@ -75,3 +76,8 @@ schema:
   frigate_url: "str?"
   frigate_camera: "str?"
   log_level: "list(DEBUG|INFO|WARNING|ERROR)"
+  # Legacy MCP-bridge options (dravix has not read these since 0.0.99). Kept in the schema
+  # only so the Supervisor stops stripping them from saved options.
+  xiaozhi_mcp_url: "str?"
+  robot_mcp_url: "str?"
+  robot_mcp_transport: "str?"

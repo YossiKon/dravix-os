@@ -38,10 +38,24 @@ def recent_logs(level: str | None = None) -> list[dict]:
     return items
 
 
+def _apply_levels(level: str) -> None:
+    """``level`` governs the CONSOLE (the add-on log); the dravix loggers still let INFO
+    through so the dashboard's Diagnostics ring keeps "robot connected", "auto-discovered"
+    and friends even when the add-on log is set to WARNING."""
+    lvl = logging.getLevelName(level.upper())
+    if not isinstance(lvl, int):
+        lvl = logging.INFO
+    root = logging.getLogger()
+    root.setLevel(lvl)
+    for h in root.handlers:
+        h.setLevel(lvl)
+    logging.getLogger("dravix").setLevel(min(lvl, logging.INFO))
+
+
 def setup_logging(level: str = "INFO") -> None:
     global _CONFIGURED
     if _CONFIGURED:
-        logging.getLogger().setLevel(level.upper())
+        _apply_levels(level)
         return
     logging.basicConfig(
         level=level.upper(),
@@ -52,6 +66,7 @@ def setup_logging(level: str = "INFO") -> None:
     ring = _RingHandler()
     ring.setLevel(logging.INFO)
     logging.getLogger("dravix").addHandler(ring)
+    _apply_levels(level)
     _CONFIGURED = True
 
 

@@ -158,6 +158,7 @@ class ScreenPusher:
         smap = {st.get("entity_id", ""): st for st in states}
         slots = self._resolve_slots(states)
         cards = self._store.screens()
+        writes: list[tuple[str, str, dict[str, Any]]] = []
         for i in range(CARD_COUNT):
             n = i + 1
             title_ent = slots.get(f"card{n}_title")
@@ -172,10 +173,32 @@ class ScreenPusher:
                     for_robot(fit_bytes(str(card.get("title", "")), TITLE_BYTES)) if card else ""
                 )
                 body = fit_bytes(self._render_body(card, smap), BODY_BYTES) if card else ""
-                await self._sync_text(title_ent, title, smap)
-                await self._sync_text(body_ent, body, smap)
             except Exception as exc:  # noqa: BLE001 — one bad card must not stop the rest
-                log.debug("screen card %d push failed: %s", n, exc)
+                log.debug("screen card %d render failed: %s", n, exc)
+                continue
+            for ent, value in ((title_ent, title), (body_ent, body)):
+                if self._differs(ent, value, smap):
+                    writes.append(("text", "set_value", {"entity_id": ent, "value": value}))
+        if not writes:
+            return
+        # A DISCONNECTED robot shows every slot "unavailable" — writing then only earned a
+        # "referenced entities … not currently available" warning in HA's log per slot,
+        # every 5 s. Skip the batch; the first cycle after it reconnects re-pushes.
+        if all((smap.get(w[2]["entity_id"]) or {}).get("state") == "unavailable" for w in writes):
+            return
+        # ONE batch per cycle (the write gate sends it pipelined on the HA websocket);
+        # a plain client just gets the writes one after another.
+        many = getattr(self._ha, "call_service_many", None)
+        if many is not None:
+            for (_, _, data), res in zip(writes, await many(writes)):
+                if isinstance(res, Exception):
+                    log.debug("screen slot %s push failed: %s", data["entity_id"], res)
+            return
+        for domain, service, data in writes:
+            try:
+                await self._ha.call_service(domain, service, data)
+            except Exception as exc:  # noqa: BLE001 — one bad slot must not stop the rest
+                log.debug("screen slot %s push failed: %s", data["entity_id"], exc)
 
     def _render_body(self, card: dict[str, Any], smap: dict[str, dict]) -> str:
         """One line per entity: ``[x,y|]K|name|state`` — K is the Mushroom colour key,
@@ -276,13 +299,10 @@ class ScreenPusher:
         except Exception as exc:  # noqa: BLE001 — a failed tap must not crash anything
             log.warning("card tap on %s failed: %s", entity, exc)
 
-    async def _sync_text(self, entity_id: str, value: str, smap: dict[str, dict]) -> None:
-        """Write only when the robot's ACTUAL slot text differs (self-heals after reboots)."""
+    @staticmethod
+    def _differs(entity_id: str, value: str, smap: dict[str, dict]) -> bool:
+        """Does the robot's ACTUAL slot text differ (self-heals after reboots)?"""
         actual = str((smap.get(entity_id) or {}).get("state") or "")
         if actual in ("unknown", "unavailable"):
             actual = ""
-        if actual == value:
-            return
-        await self._ha.call_service(  # type: ignore[union-attr]
-            "text", "set_value", {"entity_id": entity_id, "value": value}
-        )
+        return actual != value

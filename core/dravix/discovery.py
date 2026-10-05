@@ -86,11 +86,20 @@ def _prefix_for(object_id: str, suffix: str) -> str | None:
     return None
 
 
-def discover_from_states(states: list[dict]) -> dict[str, str]:
-    """Map robot roles -> entity ids from a full HA state dump (pure, testable)."""
-    ids = [s.get("entity_id", "") for s in states if s.get("entity_id")]
+def _liveness(st: dict) -> int:
+    """0 = live, 1 = unavailable right now, 2 = a RESTORED registry orphan (HA keeps a
+    removed entity as an ``unavailable`` placeholder with ``restored: true`` — e.g. the old
+    id left behind by a device rename). Writes to anything but a live entity are dropped
+    by the write gate, so picking an orphan would silently freeze that role."""
+    if (st.get("attributes") or {}).get("restored"):
+        return 2
+    return 1 if st.get("state") == "unavailable" else 0
 
-    # 1 · the distinctive suffixes vote for the robot's entity prefix(es)
+
+def _vote_prefixes(ids: list[str]) -> set[str]:
+    """The distinctive suffixes vote for the robot's entity prefix(es). Every prefix with a
+    meaningful share of the votes is "the robot" (a renamed device can legitimately have
+    entities under two prefixes — see the firmware's ha_prefix_alt)."""
     votes: Counter[str] = Counter()
     for eid in ids:
         _, object_id = _split(eid)
@@ -98,14 +107,29 @@ def discover_from_states(states: list[dict]) -> dict[str, str]:
             p = _prefix_for(object_id, suffix)
             if p is not None:
                 votes[p] += 1
-    # every prefix with a meaningful share of the votes is "the robot" (a renamed device
-    # can legitimately have entities under two prefixes — see the firmware's ha_prefix_alt)
-    prefixes = {p for p, n in votes.items() if n >= 2} or set(dict(votes.most_common(1)))
+    return {p for p, n in votes.items() if n >= 2} or set(dict(votes.most_common(1)))
+
+
+def robot_prefixes_from_states(states: list[dict]) -> list[str]:
+    """The robot's entity-id prefixes ("dravix", "mmd_room_dravix", …) — non-empty ones only."""
+    return sorted(p for p in _vote_prefixes([s.get("entity_id", "") for s in states]) if p)
+
+
+def discover_from_states(states: list[dict]) -> dict[str, str]:
+    """Map robot roles -> entity ids from a full HA state dump (pure, testable)."""
+    ids = [s.get("entity_id", "") for s in states if s.get("entity_id")]
+    live = {s.get("entity_id", ""): _liveness(s) for s in states if s.get("entity_id")}
+
+    # 1 · the distinctive suffixes vote for the robot's entity prefix(es)
+    prefixes = _vote_prefixes(ids)
 
     # 2 · fill each role
     found: dict[str, str] = {}
     for role, (domain, suffixes, needs_anchor) in _ROLES.items():
-        candidates: list[tuple[bool, int, str]] = []  # (not-anchored, length, entity_id)
+        # (orphan, not-anchored, liveness, length, entity_id): a restored orphan never wins;
+        # then the robot's own prefix (so a live house light can't beat the robot's bar
+        # while the robot is offline); then live before unavailable; then the shortest id
+        candidates: list[tuple[bool, bool, int, int, str]] = []
         for eid in ids:
             d, object_id = _split(eid)
             if d != domain:
@@ -117,11 +141,12 @@ def discover_from_states(states: list[dict]) -> dict[str, str]:
                 anchored = p in prefixes
                 if needs_anchor and not anchored:
                     continue
-                candidates.append((not anchored, len(object_id), eid))
+                liveness = live.get(eid, 0)
+                candidates.append((liveness == 2, not anchored, liveness, len(object_id), eid))
                 break
         if candidates:
             candidates.sort()
-            found[role] = candidates[0][2]
+            found[role] = candidates[0][4]
 
     # 3 · the TTS engine is an HA-level service, not a robot entity — pick the one there is
     tts = sorted(eid for eid in ids if eid.startswith("tts."))

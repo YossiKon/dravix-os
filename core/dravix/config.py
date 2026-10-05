@@ -34,7 +34,7 @@ class Settings(BaseSettings):
     # Service
     host: str = "0.0.0.0"
     port: int = 8800
-    log_level: str = "INFO"
+    log_level: str = "WARNING"
     data_dir: str = ""  # runtime state dir (store.json); blank = repo data/
     # Optional API auth: when non-empty, every /api/* and /camera/* request (except
     # /api/health) must carry this token (Authorization: Bearer, X-API-Token, or ?token=).

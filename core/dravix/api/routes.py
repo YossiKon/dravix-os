@@ -18,7 +18,7 @@ import datetime
 from .. import __version__
 from ..aifun import PROMPTS as AI_FUN_PROMPTS
 from ..aifun import kinds as ai_fun_kinds
-from ..app import build_ai, build_robot_driver
+from ..app import build_ai, build_robot_driver, scope_write_gate
 from ..dal.base import CAP_FACE, CAP_PHOTO, CAP_SAY, CapabilityError
 from ..emotes import emote_names, play_emote
 from ..fun import GAMES, game_names
@@ -137,6 +137,15 @@ async def status(request: Request):
     personality = getattr(request.app.state, "personality", None)
     if personality is not None:
         data["personality"] = personality.snapshot()
+    # the HA link: is the state mirror live, and what the write gate held back
+    bridge = getattr(request.app.state, "ha_bridge", None)
+    if bridge is not None:
+        link = bridge.status()
+        gate = getattr(request.app.state.ha, "writes", None)
+        if gate is not None:
+            link["writes"] = gate.stats()
+        link["unavailable_roles"] = list(getattr(request.app.state, "unavailable_roles", []) or [])
+        data["ha_link"] = link
     return data
 
 
@@ -541,6 +550,7 @@ async def _apply_robot_config(request: Request) -> str | None:
             from ..discovery import discover_robot_entities
 
             s.discovered_entities = await discover_robot_entities(s.ha)
+            scope_write_gate(s.ha, s.discovered_entities)
         driver = build_robot_driver(
             s.settings, s.store, s.ha,
             discovered=getattr(s, "discovered_entities", None),

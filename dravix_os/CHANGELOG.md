@@ -1,5 +1,41 @@
 # Changelog
 
+## 0.1.18
+
+**🔌 dravix stops loading Home Assistant** *(add-on only — no firmware change)*
+
+- **One websocket instead of polling.** dravix used to fetch *every* entity in your house
+  (`GET /api/states`) every few seconds — 12 times a minute for the robot's cards alone, plus
+  once every 10 s per open dashboard — just to read the robot's thirty-odd entities. It now
+  keeps one connection open with `subscribe_entities` (the same stream every open HA dashboard
+  tab uses): the states arrive once, then only what changed. Every read inside dravix is a
+  memory lookup; the head-servo reads every ~15 s are gone with it. If the connection drops,
+  dravix reads single entities (`GET /api/states/<entity_id>`, cached) until it is back — never
+  the full dump.
+- **No more writes into the void.** Writes to the robot now skip anything Home Assistant shows
+  as unavailable (no more "Referenced entities … are missing or not currently available" — over
+  1,000 an hour were counted) and back off after a failure; a value held while the robot was
+  briefly away is delivered the moment it reconnects. A repeat of a value that is already on
+  the robot is dropped, and each entity gets at most one write a second (a burst collapses to
+  its last value). Writes that are *commands* — a head move, the face, the speech bubble, a tip,
+  "show this image" — are never treated as repeats, and head moves keep the servo bus's own
+  pace (one every 0.3 s, in order) so a nod is still a nod. The six card title/body slots go out
+  together as one batch. Only the robot's entities are touched by any of this — dravix's calls
+  to the rest of your house behave exactly as before. The write flood is also what kept knocking
+  the robot's ESPHome connection over ("Timeout waiting for HelloResponse", "connection reset by
+  peer").
+- **The yawn loop.** With the robot disconnected and its energy low, dravix yawned and sent it
+  to sleep every 20 seconds forever (an offline robot never reports "asleep", so the nap never
+  counted). An offline robot now just ages quietly — no bars, no emotes, no tips.
+- **Safer entity discovery.** A renamed robot leaves its old ids behind as dead placeholders;
+  discovery never picks those, re-runs when the robot comes back, and the add-on log names any
+  role that stays unavailable while the robot is online.
+- `/api/status` gained an `ha_link` block (connection, mirror size, writes sent / skipped /
+  deferred). The add-on's default `log_level` is now **WARNING** (an existing install keeps the
+  level you saved); the dashboard's Diagnostics log still shows the INFO lines. A reaction rule
+  fires at most once a second (so a rule triggered by its own output can't spin). The old `xiaozhi_mcp_url` / `robot_mcp_url` / `robot_mcp_transport` options
+  are back in the schema so saving options no longer strips them (dravix doesn't use them).
+
 ## 0.1.17
 
 **⬆️ "UPDATE" no longer sticks on the robot's face** *(firmware 61 — Update the add-on, then

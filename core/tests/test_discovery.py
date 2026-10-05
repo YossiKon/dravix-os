@@ -70,3 +70,24 @@ def test_discovery_renamed_prefix():
 
 def test_discovery_empty_house():
     assert discover_from_states(_states("light.kitchen", "sensor.outdoor_temp")) == {}
+
+
+def test_discovery_never_picks_a_restored_orphan_and_keeps_the_robot_prefix_offline():
+    """A device rename leaves the old id behind as an `unavailable` placeholder with
+    `restored: true`. The write gate drops writes to anything unavailable, so picking that
+    orphan (the shorter id used to win) would freeze the face silently. And with the robot
+    OFFLINE a live house light must still not beat the robot's own (unavailable) bar."""
+    orphan = {"state": "unavailable", "attributes": {"restored": True}}
+    offline = {"state": "unavailable", "attributes": {}}
+    states = [
+        {"entity_id": "select.dravix_face", **orphan},
+        {"entity_id": "select.mmd_room_dravix_face", "state": "neutral", "attributes": {}},
+        {"entity_id": "number.dravix_servo_x_angle", **offline},
+        {"entity_id": "light.dravix_stackchan_light_bar", **offline},
+        {"entity_id": "light.kitchen_light_bar", "state": "on", "attributes": {}},
+        {"entity_id": "number.mmd_room_dravix_head_pitch", **offline},
+        {"entity_id": "text.mmd_room_dravix_show_image_url", **offline},
+    ]
+    found = discover_from_states(states)
+    assert found["face_select"] == "select.mmd_room_dravix_face"
+    assert found["led_light"] == "light.dravix_stackchan_light_bar"
