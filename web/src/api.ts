@@ -192,6 +192,7 @@ export interface Updates {
   fw_bundled: string | null;
   fw_robot: string | null;
   fw_update: boolean;
+  addon_fw_stale?: boolean; // the robot runs newer firmware than this add-on ships
   checked_online: boolean;
 }
 

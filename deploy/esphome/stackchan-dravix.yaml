@@ -37,7 +37,7 @@ substitutions:
   # publishes it to HA ("Firmware version" sensor); the dravix dashboard compares it
   # with the version bundled in the add-on and shows "firmware update available".
   # (Maintainers: bump this on every firmware change. Users: don't touch.)
-  fw_version: "60"
+  fw_version: "61"
   # The ESPHome node name (mDNS hostname + the default entity prefix on a fresh flash).
   # Change it only if you run MORE THAN ONE robot — each needs a unique name. NOTE:
   # changing it on an already-adopted robot registers a NEW device in HA.
@@ -547,9 +547,10 @@ binary_sensor:
     name: "Firmware update available"
     device_class: update
     lambda: |-
+      // NEWER only, never just "different": an add-on that ships an OLDER copy of this file
+      // must not nag a robot that is already ahead (that was the never-ending UPDATE badge).
       if (!id(t_latest_fw).has_state()) return false;
-      std::string l = id(t_latest_fw).state;
-      return !l.empty() && l != "${fw_version}";
+      return atoi(id(t_latest_fw).state.c_str()) > atoi("${fw_version}");
   # PRESENCE — "someone is at the desk right now" (from the proximity sensor). dravix
   # uses it to send wellness tips only when you're actually there; great for HA
   # automations too ("turn on the desk lamp when I sit down").
@@ -1065,7 +1066,7 @@ text:
             - script.execute: render_face
   # ── LATEST FIRMWARE — dravix writes the newest available fw_version here (every few
   #    hours + whenever the Updates card is opened). The robot compares it to its own
-  #    ${fw_version}: mismatch → the "Firmware update available" binary sensor turns ON
+  #    ${fw_version}: NEWER → the "Firmware update available" binary sensor turns ON
   #    in HA (automations/notifications!) and an amber FW+ badge appears on the status
   #    bar. Updating = press Install in ESPHome.
   - platform: template
@@ -5103,12 +5104,13 @@ interval:
             - lvgl.slider.update:
                 id: sl_led
                 value: !lambda 'return id(g_led_level);'
-      # UPDATE arrow — newer firmware is waiting (dravix keeps "Latest firmware" fresh)
+      # UPDATE arrow — newer firmware is waiting (dravix keeps "Latest firmware" fresh).
+      # Same NEWER-only test as the "Firmware update available" sensor; "" / junk → atoi 0.
       - if:
           condition:
             lambda: |-
-              return id(t_latest_fw).has_state() && !id(t_latest_fw).state.empty()
-                     && id(t_latest_fw).state != "${fw_version}";
+              return id(t_latest_fw).has_state()
+                     && atoi(id(t_latest_fw).state.c_str()) > atoi("${fw_version}");
           then:
             - lvgl.widget.show: upd_badge
             # the status-bar arrow only fits the FULL panel — keep it hidden in the compact strip

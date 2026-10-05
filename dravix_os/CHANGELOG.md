@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.1.17
+
+**⬆️ "UPDATE" no longer sticks on the robot's face** *(firmware 61 — Update the add-on, then
+Install the firmware)*
+
+- **Only a NEWER firmware counts as an update.** The robot compared the version the add-on
+  offers with its own and showed "UPDATE" whenever they were merely *different*. The add-on
+  takes that version from the copy of the firmware it was built with, and firmware 56–60 shipped
+  without a new add-on version — so the add-on kept offering an older number and a robot that
+  was already ahead showed "UPDATE" forever. Now the robot, the "Firmware update available"
+  sensor and the dashboard all ask "is it newer?".
+- **The Updates card says when the add-on is the stale side**: "the robot runs newer firmware
+  than this add-on knows — update the add-on".
+- After this update the badge appears **once more, correctly**, until you Install firmware 61.
+
 ## 0.1.16
 
 **🔧 The servo driver no longer freezes the robot** *(firmware 60 — Install the firmware; the

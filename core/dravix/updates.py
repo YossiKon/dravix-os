@@ -93,8 +93,9 @@ async def robot_fw_version(ha) -> str | None:
 async def push_latest_fw(ha, entity_id: str) -> None:
     """Tell the ROBOT which firmware version is available (its "Latest firmware" slot).
 
-    The robot compares it to its own version: a mismatch turns on its "Firmware update
-    available" binary sensor in HA and shows the FW+ badge on its status bar. Purely
+    The robot compares it to its own version: a NEWER one (fw61+; older firmware tested
+    "different") turns on its "Firmware update available" binary sensor in HA and shows
+    the UPDATE badge on its face. Purely
     local — the version comes from the firmware YAML bundled in this add-on release,
     so this works with isLocal on too. Best-effort."""
     version = bundled_fw_version()
@@ -117,6 +118,10 @@ async def update_report(ha, *, allow_network: bool) -> dict[str, Any]:
         "addon_update": bool(latest and __version__ != "dev" and _newer(latest, __version__)),
         "fw_bundled": fw_bundled,
         "fw_robot": fw_robot,  # None = robot offline or running pre-versioning firmware
-        "fw_update": bool(fw_bundled and fw_robot and fw_robot != fw_bundled),
+        # NEWER only — a robot already ahead of this release's copy isn't "out of date"
+        "fw_update": bool(fw_bundled and fw_robot and _newer(fw_bundled, fw_robot)),
+        # the other direction: the robot runs newer firmware than this add-on knows about,
+        # so THIS add-on is the stale one (update it, or its fw check lags behind)
+        "addon_fw_stale": bool(fw_bundled and fw_robot and _newer(fw_robot, fw_bundled)),
         "checked_online": allow_network,
     }

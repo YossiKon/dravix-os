@@ -963,6 +963,14 @@ export function SettingsPage(props: {
                 )}
               </p>
             )}
+            {updates.addon_fw_stale && (
+              <p className="text-xs text-amber">
+                {tr(
+                  `הרובוט מריץ קושחה חדשה יותר (${updates.fw_robot}) ממה שהתוסף מכיר (${updates.fw_bundled}) — עדכן את התוסף ב-Home Assistant.`,
+                  `The robot runs newer firmware (${updates.fw_robot}) than this add-on knows (${updates.fw_bundled}) — update the add-on in Home Assistant.`,
+                )}
+              </p>
+            )}
             {!updates.fw_robot && (
               <p className="text-xs text-mute">
                 {tr(
