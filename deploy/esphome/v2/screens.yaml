@@ -1,0 +1,6 @@
+# ════════════════════════════════════════════════════════════════════════════════
+#  Dravix v2 · screens — Screen 1 and Screen 2 (4 tiles each) and the air conditioner.
+#  SLICE 1 PLACEHOLDER: the screens land in slice 3.
+# ════════════════════════════════════════════════════════════════════════════════
+substitutions:
+  screens_module: "placeholder"

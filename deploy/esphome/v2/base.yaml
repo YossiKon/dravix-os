@@ -1,0 +1,363 @@
+# ════════════════════════════════════════════════════════════════════════════════
+#  Dravix v2 · base — hardware, audio, wake word, Assist, diagnostics
+#  The M5Stack BSP (pinned) brings the hardware; this adds our vendored servo driver, the
+#  proven v1 voice plumbing and the green privacy dot's inputs. The face lives in face.yaml.
+#  See docs/v2/README.md.
+# ════════════════════════════════════════════════════════════════════════════════
+substitutions:
+  fw_version: "2.0.0"
+  device_name: "stackchan"        # keep the node name of the robot you already have (OTA Install)
+  friendly_name: "stackchan"
+  wake_word_model: "okay_nabu"
+  wake_word_gain: "4"             # the wake-word model hears the raw mic; 4 = ESPHome's documented value
+  wake_word_sensitivity: "0.9"    # 0..1, lower = easier to trigger
+  speaker_ceiling: "1.0"          # 1.0 = 0 dB (full); 0.9 = -9.6 dB spares the speaker
+  wake_sound_file: "https://github.com/esphome/home-assistant-voice-pe/raw/dev/sounds/wake_word_triggered.flac"
+  brownout_detector: "n"          # "n": servo start + Wi-Fi TX false-fires it on this board
+  img_base: "https://raw.githubusercontent.com/YossiKon/dravix-os/v2/deploy/esphome/v2/img"
+
+esphome:
+  name: ${device_name}
+  friendly_name: ${friendly_name}
+  min_version: 2026.6.0
+  # LIST form so the BSP's own on_boot entries (RTC read, servo calibration restore) are kept
+  on_boot:
+    - priority: -100
+      then:
+        - lambda: 'id(g_booted) = true;'
+        - delay: 8s
+        - text_sensor.template.publish:
+            id: st_touch
+            state: !lambda 'return id(touch).is_failed() ? std::string("not working (failed at boot)") : std::string("working");'
+
+esp32:
+  framework:
+    sdkconfig_options:
+      CONFIG_ESP_BROWNOUT_DET: ${brownout_detector}
+
+logger:
+  level: DEBUG
+  logs:
+    ltr_als_ps: ERROR          # "Sensors blacked out" hundreds of times a night in the dark
+    lvgl: INFO
+
+api:
+  homeassistant_states: true      # the tiles and the AC follow HA entities chosen at runtime
+  homeassistant_services: true    # a tile tap calls homeassistant.toggle / climate.*
+
+packages:
+  m5stack_stackchan:
+    url: https://github.com/m5stack/esphome-yaml
+    files: [examples/kit/stackchan-bsp.factory.yaml]
+    ref: 238ba9825e7874d5626709631dae6be92e861b17   # full sha: still fetchable after upstream pushes
+    refresh: 1d
+
+external_components:
+  - source:
+      type: git
+      url: https://github.com/m5stack/esphome-yaml.git
+      ref: 238ba9825e7874d5626709631dae6be92e861b17
+    components: [axp2101, aw88298, aw9523b, si12t, m5ioe1]
+    refresh: 1d
+  # our vendored, non-blocking servo driver + the IMU driver (see components/*/README.md)
+  - source:
+      type: git
+      url: https://github.com/YossiKon/dravix-os.git
+      ref: components-v2
+    components: [bmi270_bmm150, ftservo, scs9009]
+    refresh: 1d
+
+# no BLE provisioning: it keeps ~50 KB of internal RAM; Wi-Fi comes from the stub
+esp32_improv: !remove
+wifi:
+  power_save_mode: none        # LIGHT power save = wake-word and API lag on this board
+  on_connect: !remove          # the BSP's ble.disable hook (BLE is compiled out)
+  on_disconnect: !remove       # …and its ble.enable hook
+
+display:
+  - id: !extend m5cores3_lcd
+    show_test_card: false
+
+# ── the camera: no idle frames (each one stalls the loop ~100 ms); the green dot shows while
+#    Home Assistant streams it, and for 2 s after a snapshot
+esp32_camera:
+  idle_framerate: 0 fps
+  on_stream_start:
+    - globals.set: { id: g_cam_stream, value: "true" }
+  on_stream_stop:
+    - globals.set: { id: g_cam_stream, value: "false" }
+  on_image:
+    - lambda: 'id(g_cam_snap_ms) = millis();'
+
+# ── audio: the BSP's one shared bus (mic + speaker). Every sound goes through play_sfx.
+media_player:
+  - id: !extend va_media_player
+    volume_min: 0.6            # the AW88298 is dB-linear: 0.6 = -38 dB … 1.0 = 0 dB
+    volume_max: ${speaker_ceiling}
+    files:
+      - id: wake_sound
+        file: ${wake_sound_file}
+
+rtttl:
+  id: chirp
+  speaker: i2s_speaker
+
+globals:
+  - { id: g_booted,      type: bool,     restore_value: no, initial_value: "false" }
+  - { id: g_voice,       type: bool,     restore_value: no, initial_value: "false" }   # a voice turn owns the robot
+  - { id: g_mic_open,    type: bool,     restore_value: no, initial_value: "false" }   # audio is streaming to HA
+  - { id: g_vstale,      type: int,      restore_value: no, initial_value: "0" }
+  - { id: g_sfx_rearm,   type: bool,     restore_value: no, initial_value: "false" }
+  - { id: g_cam_stream,  type: bool,     restore_value: no, initial_value: "false" }
+  - { id: g_cam_snap_ms, type: uint32_t, restore_value: no, initial_value: "0" }
+  - { id: g_saw_speech,  type: bool,     restore_value: no, initial_value: "false" }
+
+switch:
+  - platform: template
+    id: sw_mic_mute
+    name: "Microphone mute"
+    icon: mdi:microphone-off
+    optimistic: true
+    restore_mode: RESTORE_DEFAULT_OFF
+    on_turn_on:
+      - voice_assistant.stop
+      - micro_wake_word.stop
+    on_turn_off:
+      - micro_wake_word.start
+  - platform: template
+    id: sw_wake_sound
+    name: "Wake sound"
+    icon: mdi:bell-ring-outline
+    optimistic: true
+    restore_mode: RESTORE_DEFAULT_ON
+    entity_category: config
+
+debug:
+  update_interval: 30s
+
+sensor:
+  # the BSP polls both servos' positions every 200 ms with a 500 ms busy-wait per missing byte
+  - id: !extend x_servo_sensor
+    update_interval: 1s
+  - id: !extend y_servo_sensor
+    update_interval: 1s
+  - platform: debug
+    free: { name: "Heap free" }
+    block: { name: "Heap largest block" }
+    loop_time: { name: "Loop time" }
+  - platform: wifi_signal
+    name: "WiFi signal"
+    update_interval: 60s
+    entity_category: diagnostic
+
+text_sensor:
+  - platform: version
+    name: "ESPHome version"
+    hide_timestamp: true
+  - platform: template
+    name: "Firmware"
+    entity_category: diagnostic
+    lambda: 'return std::string("Dravix ${fw_version}");'
+    update_interval: 1h
+    id: st_fw
+  - platform: template
+    id: st_touch
+    name: "Touchscreen"
+    icon: mdi:gesture-tap
+    entity_category: diagnostic
+  - platform: template
+    id: st_heard
+    name: "Last heard"
+    icon: mdi:ear-hearing
+  - platform: template
+    id: st_reply
+    name: "Last reply"
+    icon: mdi:chat-processing-outline
+  - platform: template
+    id: st_va_err
+    name: "Last voice problem"
+    icon: mdi:alert-circle-outline
+    entity_category: diagnostic
+
+script:
+  # ── THE ONLY WAY A SOUND PLAYS. Mic and speaker share one bus and the wake word holds the mic
+  #    around the clock, so a direct rtttl.play fails ("Parent bus is busy") and wedges rtttl.
+  - id: play_sfx
+    parameters:
+      tune: string
+    mode: single
+    then:
+      - if:
+          condition:
+            lambda: 'return !id(g_voice) && !id(va).is_running();'
+          then:
+            - globals.set: { id: g_sfx_rearm, value: !lambda 'return id(mww).is_running();' }
+            - micro_wake_word.stop
+            - wait_until:
+                condition: { lambda: 'return !id(i2s_mic).is_running();' }
+                timeout: 400ms
+            - rtttl.stop
+            - rtttl.play: !lambda 'return tune;'
+            - wait_until:
+                condition:
+                  not: { rtttl.is_playing: }
+                timeout: 5s
+            - rtttl.stop
+            - delay: 120ms
+            - if:
+                condition:
+                  all:
+                    - switch.is_off: sw_mic_mute
+                    - lambda: 'return id(g_sfx_rearm) && !id(g_voice) && !id(va).is_running();'
+                then: [ micro_wake_word.start ]
+
+  # ── THE END OF A VOICE TURN, FOR REAL. on_end fires when HA hands over the reply's URL —
+  #    seconds before the robot says it. Wait for the speaker to start, then to stop.
+  - id: voice_settle
+    mode: restart
+    then:
+      - wait_until:
+          condition: { lambda: 'return id(i2s_speaker).is_running();' }
+          timeout: 5s
+      - if:
+          condition: { lambda: 'return id(i2s_speaker).is_running();' }
+          then:
+            - wait_until:
+                condition: { lambda: 'return !id(i2s_speaker).is_running() || !id(va).is_running();' }
+                timeout: 60s
+            - delay: 300ms        # a short gap inside the reply is not its end
+            - wait_until:
+                condition: { lambda: 'return !id(i2s_speaker).is_running() || !id(va).is_running();' }
+                timeout: 30s
+          else:
+            - wait_until:
+                condition: { lambda: 'return !id(va).is_running();' }
+                timeout: 60s
+      - script.execute: voice_done
+
+  - id: voice_done
+    mode: restart
+    then:
+      - globals.set: { id: g_voice, value: "false" }
+      - globals.set: { id: g_mic_open, value: "false" }
+      - component.resume: { id: x_servo_sensor, update_interval: 1s }
+      - component.resume: { id: y_servo_sensor, update_interval: 1s }
+      - script.execute: face_voice_end
+      - if:
+          condition: { switch.is_off: sw_mic_mute }
+          then: [ micro_wake_word.start ]
+
+micro_wake_word:
+  id: mww
+  microphone:
+    microphone: i2s_mic
+    gain_factor: ${wake_word_gain}
+  models:
+    - model: ${wake_word_model}
+      probability_cutoff: ${wake_word_sensitivity}
+  on_wake_word_detected:
+    # react on the robot first (HA may be slow or gone), then the chime, then the session.
+    # g_voice goes up FIRST so nothing re-arms the wake word in the gap.
+    - if:
+        condition:
+          all:
+            - switch.is_off: sw_mic_mute
+            - lambda: 'return !id(g_voice);'
+        then:
+          - globals.set: { id: g_voice, value: "true" }
+          - globals.set: { id: g_saw_speech, value: "false" }
+          - component.suspend: x_servo_sensor
+          - component.suspend: y_servo_sensor
+          - script.execute: { id: face_set, s: 11 }          # wake (option 3)
+          - if:
+              condition: { switch.is_on: sw_wake_sound }
+              then:
+                - media_player.speaker.play_on_device_media_file:
+                    id: va_media_player
+                    media_file: wake_sound
+                    announcement: true
+                - wait_until:
+                    condition: { media_player.is_announcing: va_media_player }
+                    timeout: 300ms
+                - wait_until:
+                    condition: { not: { media_player.is_announcing: va_media_player } }
+                    timeout: 1500ms
+                - delay: 80ms     # the speaker releases the bus before the mic takes it
+          - voice_assistant.start:
+              wake_word: !lambda 'return wake_word;'
+          # safety net: HA never opened a session (no pipeline, HA down) → give the face back
+          - delay: 5s
+          - if:
+              condition: { lambda: 'return !id(va).is_running() && !id(voice_settle).is_running();' }
+              then: [ { script.execute: voice_done } ]
+
+voice_assistant:
+  id: va
+  microphone: i2s_mic
+  media_player: va_media_player
+  noise_suppression_level: 2
+  auto_gain: 31dBFS
+  volume_multiplier: 2.0
+  on_listening:
+    - if:
+        condition: { switch.is_on: sw_mic_mute }
+        then: [ voice_assistant.stop ]
+        else:
+          - globals.set: { id: g_voice, value: "true" }
+          - globals.set: { id: g_mic_open, value: "true" }
+          - component.suspend: x_servo_sensor
+          - component.suspend: y_servo_sensor
+          - script.execute: { id: face_set, s: 12 }          # listening (option 3)
+  on_stt_vad_start:
+    - globals.set: { id: g_saw_speech, value: "true" }
+  on_stt_end:
+    - globals.set: { id: g_mic_open, value: "false" }
+    - text_sensor.template.publish: { id: st_heard, state: !lambda 'return x;' }
+    - script.execute: { id: face_set, s: 13 }              # thinking (option 3)
+  on_tts_start:
+    - text_sensor.template.publish: { id: st_reply, state: !lambda 'return x;' }
+    - text_sensor.template.publish: { id: st_va_err, state: "" }
+    - script.execute: face_speaking                         # bulb, then speaking (option 2)
+  on_end:
+    - globals.set: { id: g_mic_open, value: "false" }
+    - script.execute: voice_settle
+  on_error:
+    - text_sensor.template.publish:
+        id: st_va_err
+        state: !lambda |-
+          if (code == "stt-no-text-recognized") return std::string("heard no words");
+          if (code == "intent-failed") return std::string("the conversation agent failed: " + message);
+          if (code == "tts-failed") return std::string("text-to-speech failed: " + message);
+          return message.empty() ? code : (code + ": " + message);
+    - script.stop: voice_settle
+    - globals.set: { id: g_mic_open, value: "false" }
+    - script.execute: { id: face_voice_error, nothing_heard: !lambda 'return code == "stt-no-text-recognized";' }
+    - script.execute: voice_done
+  on_timer_started:
+    - script.execute: { id: face_set, s: 10 }              # done: the timer is set
+  on_timer_finished:
+    - script.execute: { id: face_set, s: 16 }              # timer ringing
+  on_client_connected:
+    # HA came back: re-arm the ear (a wake word spoken while HA restarted leaves it off)
+    - if:
+        condition:
+          all:
+            - switch.is_off: sw_mic_mute
+            - not: { voice_assistant.is_running: }
+        then: [ micro_wake_word.start ]
+  on_client_disconnected:
+    - script.execute: { id: face_set, s: 17 }              # error: lost Home Assistant
+
+interval:
+  # ── VOICE WATCHDOG: a turn that died without on_end/on_error must never freeze the robot
+  - interval: 5s
+    then:
+      - lambda: |-
+          bool busy = id(va).is_running() || id(voice_settle).is_running() || id(i2s_speaker).is_running();
+          id(g_vstale) = (!busy && id(g_voice)) ? id(g_vstale) + 1 : 0;
+      - if:
+          condition: { lambda: 'return id(g_vstale) >= 2;' }
+          then:
+            - logger.log: "voice watchdog: an abandoned turn released the face and the wake word"
+            - globals.set: { id: g_vstale, value: "0" }
+            - script.execute: voice_done

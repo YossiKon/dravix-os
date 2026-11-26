@@ -1,0 +1,9 @@
+# ════════════════════════════════════════════════════════════════════════════════
+#  Dravix v2 · behavior — touch pads, IMU, proximity, light, screensaver and sleep.
+#  SLICE 1 PLACEHOLDER: only the hooks face.yaml calls. The behaviours land in slice 2.
+# ════════════════════════════════════════════════════════════════════════════════
+script:
+  # head moves for the face that just started (gated: never during a voice turn or a sound)
+  - id: head_for_face
+    then:
+      - lambda: 'return;'

@@ -1,0 +1,466 @@
+# ════════════════════════════════════════════════════════════════════════════════
+#  Dravix v2 · face_tick — the renderer (30 fps) and the LED patterns.
+#  Each face below is the owner's pick from the Face Lab, ported 1:1 (same timings, same
+#  geometry, 320×240 screen coordinates). Only changed values are written to LVGL.
+# ════════════════════════════════════════════════════════════════════════════════
+interval:
+  - interval: 33ms
+    then:
+      - lambda: |-
+          // ── time and the state machine's own transitions ─────────────────────────────
+          const uint32_t now = millis();
+          int st = id(g_face);
+          float t = (now - id(g_face_t0)) / 1000.0f;
+          static const float DUR[22] = {6, 3, 4, 5, 3, 3, 6, 4, 4, 3, 2.6f, 3, 3, 3, 2.4f, 4, 2, 3, 6, 4, 5, 4};
+          static const bool LOOP[22] = {1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 1, 0, 1, 0, 1, 1, 0, 0};
+          if (id(g_face_hold)) {
+            float h0 = st == 15 ? 0.4f : 0.7f, h1 = st == 15 ? 3.4f : 1.85f;
+            if (t > h1) t = h0 + fmodf(t - h0, h1 - h0);
+          } else if (LOOP[st]) {
+            t = fmodf(t, DUR[st]);
+          } else if (st == 20) {
+            if (t > DUR[20]) t = DUR[20];
+          } else if (t >= DUR[st]) {
+            int nx = id(g_face_next);
+            if (nx < 0) nx = id(g_sleep) ? 20 : id(g_saver) ? 19 : id(g_night) ? 6 : id(g_bored) ? 18 : 0;
+            id(g_face) = nx; id(g_face_t0) = now; id(g_face_next) = -1; id(g_face_hold) = (nx == 13 || nx == 15);
+            id(face_enter).execute();
+            st = nx; t = 0;
+          }
+          // the privacy dot follows the real signals, on every page
+          {
+            static int dot_last = -1;
+            bool dot = id(g_mic_open) || id(g_cam_stream) || (id(g_cam_snap_ms) != 0 && now - id(g_cam_snap_ms) < 2000);
+            if ((int) dot != dot_last) {
+              if (dot) lv_obj_remove_flag(id(priv_dot), LV_OBJ_FLAG_HIDDEN); else lv_obj_add_flag(id(priv_dot), LV_OBJ_FLAG_HIDDEN);
+              dot_last = dot;
+            }
+          }
+          if (!id(g_on_face)) return;
+
+          // ── helpers (the Face Lab's maths) ───────────────────────────────────────────
+          const float TAUF = 6.2831853f, PIF = 3.14159265f;
+          auto clampf = [](float v, float a, float b) { return v < a ? a : (v > b ? b : v); };
+          auto lerpf = [](float a, float b, float k) { return a + (b - a) * k; };
+          auto ease = [](float k) { return k < .5f ? 2 * k * k : 1 - (-2 * k + 2) * (-2 * k + 2) / 2; };
+          auto easeOut = [](float k) { float u = 1 - k; return 1 - u * u * u; };
+          auto backOut = [](float k) { const float c1 = 1.70158f, c3 = c1 + 1; float u = k - 1; return 1 + c3 * u * u * u + c1 * u * u; };
+          auto win = [&](float x, float a, float b) { return clampf((x - a) / (b - a), 0, 1); };
+          auto bump = [&](float x, float a, float b) { float p = win(x, a, b); return (p <= 0 || p >= 1) ? 0.0f : sinf(p * PIF); };
+          auto seq = [&](float x, std::initializer_list<std::pair<float, float>> keys) {
+            auto it = keys.begin(); float t0 = it->first, v0 = it->second;
+            if (x <= t0) return v0;
+            for (++it; it != keys.end(); ++it) {
+              float t1 = it->first, v1 = it->second;
+              if (x <= t1) return lerpf(v0, v1, ease((x - t0) / ((t1 - t0) > 0 ? (t1 - t0) : 1)));
+              t0 = t1; v0 = v1;
+            }
+            return v0;
+          };
+          auto blinkAt = [&](float x, std::initializer_list<float> times, float d) { float m = 0; for (float b : times) m = std::max(m, bump(x, b, b + d)); return m; };
+          auto voice = [&](float x) { return clampf(.5f + .5f * sinf(x * 17) * sinf(x * 5.3f + 1) + .25f * sinf(x * 29), 0, 1); };
+          auto popY = [&](float x, float a, float b, float y) -> float {
+            if (x < a || x > b + .35f) return NAN;
+            if (x < a + .35f) return lerpf(300, y, backOut(win(x, a, a + .35f)));
+            if (x > b) return lerpf(y, 300, ease(win(x, b, b + .35f)));
+            return y;
+          };
+
+          // ── the pose ─────────────────────────────────────────────────────────────────
+          enum { M_NONE, M_SMILE, M_GRIN, M_FROWN, M_FLAT, M_SIDE, M_WAVY, M_W, M_O, M_TALK, M_YAWN };
+          enum { X_NONE, X_BIG, X_Z, X_HEART, X_SPARK, X_DROP, X_BELL, X_BULB, X_WAVE, X_CLOCK };
+          enum { H_OPEN, H_FIST, H_THUMB, H_POINT };
+          struct Hand { bool on = false; float x = 0, y = 0, rot = 0, s = 1; int side = 1, pose = H_OPEN; };
+          struct Ex { int k = X_NONE; float x = 0, y = 0, s = 1, o = 1, r = 0; const char *txt = ""; };
+          struct Pose {
+            float cx[2] = {98, 222}, cy[2] = {116, 116}, w[2] = {66, 66}, h[2] = {86, 86}, r[2] = {24, 24};
+            float lidD[2] = {0, 0}, lidA[2] = {0, 0}, cut[2] = {0, 0};
+            float blink = 0, lookX = 0, lookY = 0, rot = 0, dim = 1;
+            int mode = 0;                          // 0 eyes, 1 spiral, 2 closed
+            int mk = M_NONE; float mx = 0, my = 188, ms = 1, mo = .5f;
+            Hand hd[2];
+            Ex ex[8]; int nex = 0;
+            void add(const Ex &e) { if (nex < 8) ex[nex++] = e; }
+          } P;
+          auto hand = [](float x, float y, float rot, int side, int pose, float s) { Hand h; h.on = true; h.x = x; h.y = y; h.rot = rot; h.side = side; h.pose = pose; h.s = s; return h; };
+          auto ex = [](int k, float x, float y, float s, float o) { Ex e; e.k = k; e.x = x; e.y = y; e.s = s; e.o = o; return e; };
+          auto mouth = [&](int k, float y, float s) { P.mk = k; P.my = y; P.ms = s; };
+
+          switch (st) {
+            case 0: {   // neutral
+              P.blink = blinkAt(t, {1.1f, 3.9f, 4.25f}, .2f);
+              P.lookX = seq(t, {{0, 0}, {1.8f, 0}, {2.2f, -18}, {3, -18}, {3.4f, 0}, {4.8f, 0}, {5.2f, 15}, {5.6f, 15}, {6, 0}});
+              P.lookY = sinf(t * TAUF / 3) * 1.5f;
+            } break;
+            case 1: {   // happy: ∩ eyes hop, a grin, both gloves cheer
+              float k = seq(t, {{0, 0}, {.35f, .56f}, {2.6f, .56f}, {3, 0}}); P.cut[0] = P.cut[1] = k;
+              float hop = (t > .4f && t < 1.6f) ? fabsf(sinf((t - .4f) / .6f * PIF)) : 0;
+              for (int i = 0; i < 2; i++) { P.cy[i] -= hop * 12; P.h[i] *= 1 + hop * .05f; P.w[i] *= 1 - hop * .03f; }
+              P.add(ex(X_SPARK, 44, 52, 10 * bump(t, .5f, 1.6f), 1)); P.add(ex(X_SPARK, 276, 64, 8 * bump(t, .8f, 2), 1));
+              bool on = t > .35f && t < 2.6f; mouth(on ? M_GRIN : M_SMILE, 186, on ? 1 : .8f);
+              float y = popY(t, .3f, 2.4f, 198);
+              if (!std::isnan(y)) { float w = sinf(t * 14) * 4; P.hd[0] = hand(44, y + w, -14 + w, -1, H_OPEN, 1); P.hd[1] = hand(276, y - w, 14 - w, 1, H_OPEN, 1); }
+            } break;
+            case 2: {   // love: squint, a small "w", gloves hold a beating heart
+              float k = seq(t, {{0, 0}, {.4f, .5f}, {3.5f, .5f}, {4, 0}}); P.cut[0] = P.cut[1] = k;
+              P.cx[0] = 104; P.cx[1] = 216;
+              float x = fmodf(t, 1), beat = bump(x, 0, .16f) * .6f + bump(x, .22f, .4f) * .4f;
+              for (int i = 0; i < 2; i++) { P.w[i] *= 1 + beat * .05f; P.h[i] *= 1 + beat * .05f; }
+              mouth(M_W, 166, .9f);
+              float y = popY(t, .4f, 3.3f, 206);
+              if (!std::isnan(y)) {
+                float b2 = 1 + bump(x, 0, .16f) * .14f + bump(x, .22f, .4f) * .08f;
+                P.hd[0] = hand(124, y, 30, -1, H_OPEN, 1); P.hd[1] = hand(196, y, -30, 1, H_OPEN, 1);
+                P.add(ex(X_HEART, 160, y - 10, 34 * b2, 1));
+              }
+            } break;
+            case 3: {   // sad: tilted lids, a frown, a glove wipes the tear
+              float k = seq(t, {{0, 0}, {.6f, 1}, {4.4f, 1}, {5, 0}});
+              for (int i = 0; i < 2; i++) { P.lidD[i] = .16f * k; P.lidA[i] = -20 * k; P.h[i] *= 1 - .12f * k; P.cy[i] += 8 * k; }
+              P.lookY = 5 * k; P.blink = blinkAt(t, {2.6f}, .45f);
+              float q = win(t, 1.4f, 3.4f); if (q > 0 && q < 1) P.add(ex(X_DROP, 80, 152 + q * 60, 9, 1 - q * q));
+              if (t > .6f && t < 4.4f) mouth(M_FROWN, 192, .9f);
+              float y = popY(t, 2, 3.4f, 178);
+              if (!std::isnan(y)) { float wipe = (t > 2.3f && t < 3.3f) ? sinf((t - 2.3f) * TAUF * 2) * 10 : 0; P.hd[0] = hand(92 + wipe, y, 20, -1, H_OPEN, .9f); }
+            } break;
+            case 4: {   // grumpy: V lids, a tight line, two fists shaking
+              float k = seq(t, {{0, 0}, {.3f, 1}, {2.5f, 1}, {3, 0}});
+              for (int i = 0; i < 2; i++) { P.lidD[i] = .2f * k; P.lidA[i] = 26 * k; P.h[i] *= 1 - .14f * k; P.w[i] *= 1 + .04f * k; }
+              P.lookX = (t > .4f && t < 1.6f) ? sinf(t * 70) * 1.6f : 0;
+              if (t > .3f && t < 2.5f) mouth(M_FLAT, 190, .8f);
+              float y = popY(t, .35f, 2.3f, 210);
+              if (!std::isnan(y)) { float sh = sinf(t * 30) * 5; P.hd[0] = hand(58, y + sh, 0, -1, H_FIST, 1); P.hd[1] = hand(262, y - sh, 0, 1, H_FIST, 1); }
+            } break;
+            case 5: {   // surprised: eyes pop round, an "o", gloves up by the cheeks
+              float pop = t < .2f ? 0 : (t < .38f ? backOut(win(t, .2f, .38f)) : 1), k = pop * (1 - win(t, 2.3f, 2.8f));
+              for (int i = 0; i < 2; i++) { P.w[i] = lerpf(66, 84, k); P.h[i] = lerpf(86, 96, k); P.r[i] = lerpf(24, 42, k); P.cy[i] -= 6 * k; }
+              P.blink = blinkAt(t, {1.9f}, .18f);
+              Ex b = ex(X_BIG, 160, 34, 1, std::min(1.0f, bump(t, .25f, 1.8f) * 2)); b.txt = "!"; P.add(b);
+              if (t > .22f && t < 2.3f) mouth(M_O, 194, 1.1f);
+              float y = popY(t, .25f, 2.1f, 176);
+              if (!std::isnan(y)) { P.hd[0] = hand(30, y, -18, -1, H_OPEN, 1); P.hd[1] = hand(290, y, 18, 1, H_OPEN, 1); }
+            } break;
+            case 6: {   // sleepy: heavy lids, nods off, a yawn behind a glove
+              float heavy = .46f + sinf(t * TAUF / 3) * .05f;
+              float nod = seq(t, {{0, 0}, {2.6f, 0}, {3.4f, 1}, {3.55f, 0}, {6, 0}});
+              float close = std::max(blinkAt(t, {1.4f}, .9f), nod * .8f), d = lerpf(heavy, 1, close);
+              for (int i = 0; i < 2; i++) { P.lidD[i] = d; P.cy[i] += nod * 10; }
+              P.add(ex(X_Z, 258, 58 - win(t, 0, 6) * 20, 1, .8f * bump(t, .5f, 3)));
+              P.add(ex(X_Z, 282, 40 - win(t, 1.5f, 6) * 16, 1, .7f * bump(t, 2, 5)));
+              float yw = bump(t, 1.6f, 3); if (yw > .05f) { mouth(M_YAWN, 192, 1); P.mo = yw; }
+              float y = popY(t, 1.8f, 2.7f, 194); if (!std::isnan(y)) P.hd[1] = hand(168, y, -8, 1, H_OPEN, .95f);
+            } break;
+            case 7: {   // confused: one squint, "?", a crooked line, a finger scratches its head
+              float k = seq(t, {{0, 0}, {.4f, 1}, {3.5f, 1}, {4, 0}});
+              P.lidD[0] = .34f * k; P.lidA[0] = -6 * k; P.h[0] *= 1 - .1f * k; P.w[1] *= 1 + .08f * k; P.h[1] *= 1 + .08f * k;
+              P.lookX = -8 * k; P.lookY = -4 * k;
+              Ex q = ex(X_BIG, 46, 46 + sinf(t * 4) * 4, 1, k); q.txt = "?"; P.add(q);
+              if (k > .5f) mouth(M_SIDE, 190, .9f);
+              float y = popY(t, .5f, 3.3f, 66);
+              if (!std::isnan(y)) { float sc = (t > .9f && t < 3.1f) ? sinf(t * 22) * 4 : 0; P.hd[1] = hand(284, y + sc, -24, 1, H_POINT, .9f); }
+            } break;
+            case 8: {   // dizzy: spinning spirals, a wavy mouth
+              P.mode = 1; P.rot = t * 5;
+              for (int i = 0; i < 2; i++) { P.cx[i] += cosf(t * 4 + i) * 6; P.cy[i] += sinf(t * 4 + i) * 6; }
+              mouth(M_WAVY, 196, .9f);
+            } break;
+            case 9: {   // hello: soft happy eyes, a smile, a glove waves, "Hi!"
+              float k = seq(t, {{0, 0}, {.3f, .42f}, {2.6f, .42f}, {3, 0}}); P.cut[0] = P.cut[1] = k;
+              P.lookX = seq(t, {{0, 0}, {.3f, 6}, {2.6f, 6}, {3, 0}});
+              mouth(M_SMILE, 186, .9f);
+              float y = popY(t, .3f, 2.5f, 172); if (!std::isnan(y)) P.hd[1] = hand(274, y, sinf(t * 10) * 24, 1, H_OPEN, 1);
+              Ex hi = ex(X_BIG, 62, 42, 1, std::min(1.0f, bump(t, .5f, 2.4f) * 2)); hi.txt = "Hi!"; P.add(hi);
+            } break;
+            case 10: {  // done: a wink, a grin, a thumbs up
+              float k = seq(t, {{0, 0}, {.25f, 1}, {2.2f, 1}, {2.6f, 0}});
+              P.cut[0] = .7f * k; P.cut[1] = .12f * k; P.h[0] *= 1 - .3f * k;
+              if (k > .3f) mouth(M_GRIN, 186, .9f);
+              float y = popY(t, .25f, 2.1f, 196);
+              if (!std::isnan(y)) { float b = bump(fmodf(t - .25f, .6f), 0, .3f) * 4; P.hd[1] = hand(266, y - b, -6, 1, H_THUMB, 1); }
+              P.add(ex(X_SPARK, 48, 60, 9 * bump(t, .4f, 1.4f), 1));
+            } break;
+            case 11: {  // heard "Okay Nabu": two quick blinks, wide eyes, a glove to its ear
+              P.blink = blinkAt(t, {.3f, .52f}, .16f);
+              float w = win(t, .75f, 1) * (1 - win(t, 2.6f, 3));
+              for (int i = 0; i < 2; i++) { P.w[i] = lerpf(66, 72, w); P.h[i] = lerpf(86, 94, w); P.r[i] = lerpf(24, 30, w); }
+              float y = popY(t, .9f, 2.5f, 124); if (!std::isnan(y)) P.hd[1] = hand(293, y, -16, 1, H_OPEN, .9f);
+            } break;
+            case 12: {  // listening: looks up, concentrating; sound waves at its side
+              for (int i = 0; i < 2; i++) { P.w[i] = 62; P.h[i] = 92; P.r[i] = 26; }
+              P.lookX = 8; P.lookY = -6; P.lidD[0] = .1f; P.lidD[1] = .06f;
+              for (int i = 0; i < 3; i++) { float ph = fmodf(fmodf(t * 1.4f - i * .25f, 1) + 1, 1); Ex wv = ex(X_WAVE, 284, 116, (float) i, .25f + .75f * (1 - ph)); P.add(wv); }
+              P.blink = blinkAt(t, {2.2f}, .16f);
+            } break;
+            case 13: {  // thinking: "hmm", a fist at its chin, then a light bulb
+              float k = seq(t, {{0, 0}, {.3f, 1}, {2.7f, 1}, {3, 0}});
+              P.lookX = -14 * k + (id(g_face_hold) ? sinf(t * 1.6f) * 3 : 0); P.lookY = -12 * k;
+              P.lidD[0] = .04f * k; P.lidD[1] = .18f * k;
+              if (k > .3f) mouth(M_SIDE, 190, .7f);
+              float y = popY(t, .3f, 1.9f, 214); if (!std::isnan(y)) P.hd[1] = hand(196, y, 0, 1, H_FIST, .9f);
+              float bq = win(t, 2, 2.2f) * (1 - win(t, 2.7f, 3)); if (bq > 0) P.add(ex(X_BULB, 160, 36, backOut(std::min(1.0f, bq)), bq));
+            } break;
+            case 14: {  // speaking: happy eyes, a talking line mouth
+              for (int i = 0; i < 2; i++) P.cut[i] = .22f;
+              mouth(M_TALK, 190, 1); P.mo = voice(t * 1.1f);
+              P.blink = blinkAt(t, {1.6f}, .16f);
+            } break;
+            case 15: {  // petted: eyes close happily, leans up, little hearts, a content "w"
+              float k = seq(t, {{0, 0}, {.4f, 1}, {3.4f, 1}, {4, 0}});
+              P.cut[0] = P.cut[1] = .6f * k; P.lookY = -10 * k;
+              for (int i = 0; i < 2; i++) P.cx[i] += sinf(t * 38) * .8f * k;
+              for (int i = 0; i < 2; i++) { float q = win(t, .8f + i * 1.1f, 2.4f + i * 1.1f); if (q > 0 && q < 1) P.add(ex(X_HEART, i ? 236 : 84, 70 - q * 50, 12 + q * 6, 1 - q * q)); }
+              if (k > .3f) mouth(M_W, 184, .9f);
+            } break;
+            case 16: {  // timer ringing: a swinging bell, an "o", both gloves wave
+              for (int i = 0; i < 2; i++) { P.r[i] = 34; P.w[i] = 72; P.h[i] = 90; }
+              P.lookY = -6;
+              Ex bl = ex(X_BELL, 160, 40, 1, 1); bl.r = sinf(t * 22) * .35f; P.add(bl);
+              mouth(M_O, 194, 1);
+              float w = sinf(t * 16); P.hd[0] = hand(40, 190 + w * 4, -10 + w * 20, -1, H_OPEN, 1); P.hd[1] = hand(280, 190 - w * 4, 10 - w * 20, 1, H_OPEN, 1);
+            } break;
+            case 17: {  // something went wrong: small eyes, a bead of sweat, a shrug
+              float k = seq(t, {{0, 0}, {.3f, 1}, {2.5f, 1}, {3, 0}});
+              for (int i = 0; i < 2; i++) { P.w[i] = lerpf(66, 48, k); P.h[i] = lerpf(86, 48, k); P.cy[i] += 8 * k; }
+              P.lookX = k * ((t > 1.2f && t < 2) ? sinf((t - 1.2f) / .8f * TAUF * 2) * 10 : -6); P.lookY = 6 * k;
+              float q = win(t, .4f, 2.4f); P.add(ex(X_DROP, 262, 70 + q * 26, 11, k * (1 - q * .6f)));
+              if (k > .3f) mouth(M_WAVY, 194, .8f);
+              float y = popY(t, .45f, 2.3f, 206);
+              if (!std::isnan(y)) { float up = bump(t, 1, 1.5f) * 8; P.hd[0] = hand(52, y - up, -62, -1, H_OPEN, 1); P.hd[1] = hand(268, y - up, 62, 1, H_OPEN, 1); }
+            } break;
+            case 18: {  // bored: looks around, chin on a fist, then yawns behind a glove
+              P.lookX = seq(t, {{0, 0}, {.8f, -20}, {1.8f, -20}, {2.4f, 20}, {3, 20}, {3.3f, 0}, {6, 0}});
+              float yw = bump(t, 3.4f, 5.2f), d = .28f + .6f * yw;
+              for (int i = 0; i < 2; i++) { P.lidD[i] = d; P.h[i] *= 1 - .25f * yw; P.w[i] *= 1 + .08f * yw; }
+              if (yw > .05f) { mouth(M_YAWN, 194, 1); P.mo = yw; }
+              float chin = popY(t, .3f, 3.1f, 224); if (!std::isnan(chin)) P.hd[1] = hand(200, chin, 0, 1, H_FIST, 1);
+              float cov = popY(t, 3.7f, 4.9f, 196); if (!std::isnan(cov)) P.hd[1] = hand(170, cov, -6, 1, H_OPEN, .95f);
+            } break;
+            case 19: {  // screensaver: closed eyes and a small clock, completely still
+              P.mode = 2; P.cy[0] = P.cy[1] = 128; P.dim = .38f;
+              P.add(ex(X_CLOCK, 160, 200, 1, .7f));
+            } break;
+            case 20: {  // falling asleep: a yawn, the eyes close, z-z-z, then black
+              float yw = bump(t, .1f, 1.2f); if (yw > .05f) { mouth(M_YAWN, 192, 1); P.mo = yw; }
+              float c1 = ease(win(t, 1, 2));
+              for (int i = 0; i < 2; i++) { P.lidD[i] = .9f * c1; P.cy[i] += 8 * c1; }
+              for (int i = 0; i < 3; i++) { float q = win(t, 1.8f + i * .35f, 3.2f + i * .35f); if (q > 0 && q < 1) P.add(ex(X_Z, 236 + q * 36 + i * 8, 90 - q * 60, 1, 1 - q)); }
+              P.dim = t >= 4 ? 0 : 1 - win(t, 3.2f, 4);
+            } break;
+            case 21: {  // waking up: two lines open into eyes, a stretch, a double blink
+              if (t < .6f) { P.dim = 0; break; }
+              float o = win(t, .6f, 1), op = win(t, 1.1f, 1.6f);
+              for (int i = 0; i < 2; i++) { P.h[i] = t < 1.1f ? lerpf(2, 8, o) : lerpf(8, 86, backOut(op)); P.w[i] = t < 1.1f ? lerpf(10, 66, o) : 66; }
+              P.dim = t < 1.1f ? .6f + .4f * o : 1;
+              P.blink = blinkAt(t, {2, 2.35f}, .18f);
+              P.lookX = seq(t, {{0, 0}, {2.7f, 0}, {2.95f, -14}, {3.25f, 14}, {3.5f, 0}});
+              if (t > 1.15f && t < 1.8f) mouth(M_O, 194, .7f); else if (t >= 2) mouth(M_SMILE, 188, .8f);
+              float y = popY(t, 1.6f, 2.3f, 150);
+              if (!std::isnan(y)) { float r = sinf((t - 1.6f) * 8) * 6; P.hd[0] = hand(28, y, -22 + r, -1, H_OPEN, 1); P.hd[1] = hand(292, y, 22 - r, 1, H_OPEN, 1); }
+            } break;
+          }
+
+          // ── write it to the screen (only what changed) ───────────────────────────────
+          struct G { int x = -9999, y = -9999, w = -1, h = -1, r = -1, rot = 99999, sc = -1, op = -1; bool vis = false; const void *src = nullptr; };
+          static G cache[48];
+          auto vis = [&](int i, lv_obj_t *o, bool on) { if (cache[i].vis != on) { if (on) lv_obj_remove_flag(o, LV_OBJ_FLAG_HIDDEN); else lv_obj_add_flag(o, LV_OBJ_FLAG_HIDDEN); cache[i].vis = on; } };
+          auto box = [&](int i, lv_obj_t *o, float x, float y, float w, float h) {
+            int X = lroundf(x), Y = lroundf(y), Wd = std::max(1L, lroundf(w)), Ht = std::max(1L, lroundf(h));
+            if (cache[i].x != X || cache[i].y != Y) { lv_obj_set_pos(o, X, Y); cache[i].x = X; cache[i].y = Y; }
+            if (cache[i].w != Wd || cache[i].h != Ht) { lv_obj_set_size(o, Wd, Ht); cache[i].w = Wd; cache[i].h = Ht; }
+          };
+          auto rad = [&](int i, lv_obj_t *o, float r) { int R = lroundf(r); if (cache[i].r != R) { lv_obj_set_style_radius(o, R, 0); cache[i].r = R; } };
+          auto rotObj = [&](int i, lv_obj_t *o, float deg, float px, float py) {
+            int A = lroundf(deg * 10);
+            if (cache[i].rot != A) { lv_obj_set_style_transform_pivot_x(o, lroundf(px), 0); lv_obj_set_style_transform_pivot_y(o, lroundf(py), 0); lv_obj_set_style_transform_rotation(o, A, 0); cache[i].rot = A; }
+          };
+          auto opa = [&](int i, lv_obj_t *o, float a, bool border) {
+            int A = lroundf(clampf(a, 0, 1) * 255);
+            if (cache[i].op != A) { if (border) lv_obj_set_style_border_opa(o, A, 0); else lv_obj_set_style_opa(o, A, 0); cache[i].op = A; }
+          };
+          auto img = [&](int i, lv_obj_t *o, const void *src, float cx, float cy, float half, float deg, float sc, float a) {
+            if (cache[i].src != src) { lv_image_set_src(o, src); cache[i].src = src; }
+            box(i, o, cx - half, cy - half, 2 * half, 2 * half);
+            int A = lroundf(deg * 10); if (cache[i].rot != A) { lv_image_set_rotation(o, A); cache[i].rot = A; }
+            int S = lroundf(sc * 256); if (cache[i].sc != S) { lv_image_set_scale(o, S); cache[i].sc = S; }
+            opa(i, o, a, false);
+          };
+
+          // eyes, with a 150 ms blend from the last drawn pose whenever the face changes
+          static int last_st = -1; static uint32_t blend_t0 = 0; static float prevE[2][5], curE[2][5]; static bool have = false;
+          if (st != last_st) { memcpy(prevE, curE, sizeof(curE)); blend_t0 = now; last_st = st; }
+          float bk = have ? ease(clampf((now - blend_t0) / 150.0f, 0, 1)) : 1;
+          lv_obj_t *EYE[2] = {id(eye_l), id(eye_r)}, *LID[2] = {id(lid_l), id(lid_r)}, *CUT[2] = {id(cut_l), id(cut_r)}, *CLS[2] = {id(cls_l), id(cls_r)}, *SPR[2] = {id(spr_l), id(spr_r)};
+          for (int i = 0; i < 2; i++) {
+            float side = i ? 1 : -1, persp = 1 + side * P.lookX / 420;
+            float cx = P.cx[i] + P.lookX, cy = P.cy[i] + P.lookY, w = P.w[i] * persp, h = P.h[i] * persp;
+            float hh = std::max(1.0f, lerpf(h, 7, P.blink)), r = std::min(P.r[i], hh / 2);
+            float T[5] = {cx, cy, w, hh, r};
+            for (int j = 0; j < 5; j++) curE[i][j] = lerpf(prevE[i][j], T[j], bk);
+            cx = curE[i][0]; cy = curE[i][1]; w = curE[i][2]; hh = curE[i][3]; r = curE[i][4];
+            bool eyes = P.mode == 0;
+            vis(0 + i, EYE[i], eyes);
+            vis(10 + i, SPR[i], P.mode == 1);
+            vis(12 + i, CLS[i], P.mode == 2);
+            if (eyes) { box(0 + i, EYE[i], cx - w / 2, cy - hh / 2, w, hh); rad(0 + i, EYE[i], r); }
+            if (P.mode == 1) img(10 + i, SPR[i], id(img_spiral)->get_lv_image_dsc(), cx, cy, 39, P.rot * side * 57.2958f, 1, 1);
+            if (P.mode == 2) box(12 + i, CLS[i], cx - 28, cy - 20 - 28, 56, 56);
+            bool lid = eyes && (P.lidD[i] > .001f || fabsf(P.lidA[i]) > .01f);
+            vis(2 + i, LID[i], lid);
+            if (lid) {
+              float LW = 2 * w, LH = hh * 2 + 24, line = cy - hh / 2 + P.lidD[i] * hh;
+              box(2 + i, LID[i], cx - LW / 2, line - LH, LW, LH);
+              rotObj(2 + i, LID[i], -side * P.lidA[i], LW / 2, LH);
+            }
+            bool cut = eyes && P.cut[i] > .001f;
+            vis(4 + i, CUT[i], cut);
+            if (cut) { float R = w * .95f, ccy = cy + hh / 2 + R - P.cut[i] * hh; box(4 + i, CUT[i], cx - R, ccy - R, 2 * R, 2 * R); rad(4 + i, CUT[i], R); }
+          }
+          have = true;
+
+          // the mouth (line style)
+          {
+            lv_obj_t *ARC = id(m_arc), *BAR = id(m_bar), *RING = id(m_ring), *W1 = id(m_w1), *W2 = id(m_w2), *V1 = id(m_wv1), *V2 = id(m_wv2);
+            float s = P.ms, x = 160 + P.mx, y = P.my;
+            bool a = false, b = false, rg = false, w = false, v = false;
+            static int arc_mode = -1;
+            switch (P.mk) {
+              case M_SMILE: case M_GRIN: case M_FROWN: {
+                a = true;
+                float r = P.mk == M_SMILE ? 16 * s : P.mk == M_GRIN ? 22 * s : 14 * s;
+                float ccy = P.mk == M_SMILE ? y - 14 * s : P.mk == M_GRIN ? y - 18 * s : y + 14 * s;
+                box(20, ARC, x - r, ccy - r, 2 * r, 2 * r);
+                int md = P.mk;
+                if (arc_mode != md) {
+                  lv_obj_set_style_border_side(ARC, P.mk == M_FROWN ? LV_BORDER_SIDE_TOP : LV_BORDER_SIDE_BOTTOM, 0);
+                  lv_obj_set_style_border_width(ARC, P.mk == M_GRIN ? 7 : 6, 0);
+                  arc_mode = md;
+                }
+              } break;
+              case M_FLAT: case M_SIDE: { b = true; float L = (P.mk == M_FLAT ? 28 : 26) * s + 6; box(21, BAR, x - L / 2, y - 3, L, 6); rad(21, BAR, 3); rotObj(21, BAR, P.mk == M_SIDE ? -15 : 0, L / 2, 3); } break;
+              case M_TALK: case M_YAWN: {
+                b = true; float o = clampf(P.mo, 0, 1);
+                float hh = (P.mk == M_YAWN ? 8 + o * 30 : 5 + o * 18) * s, ww = (P.mk == M_YAWN ? 20 + o * 10 : 24 + o * 6) * s;
+                box(21, BAR, x - ww / 2, y - hh / 2, ww, hh); rad(21, BAR, std::min(ww, hh) / 2); rotObj(21, BAR, 0, ww / 2, hh / 2);
+              } break;
+              case M_O: { rg = true; float ww = 16 * s + 5, hh = 20 * s + 5; box(22, RING, x - ww / 2, y - hh / 2, ww, hh); } break;
+              case M_W: { w = true; float r = 8 * s; box(23, W1, x - 8 * s - r, y - 6 - r, 2 * r, 2 * r); box(24, W2, x + 8 * s - r, y - 6 - r, 2 * r, 2 * r); } break;
+              case M_WAVY: { v = true; float r = 10 * s; box(25, V1, x - 10 * s - r, y + 4 * s - r, 2 * r, 2 * r); box(26, V2, x + 10 * s - r, y + 4 * s - r, 2 * r, 2 * r); } break;
+            }
+            vis(20, ARC, a); vis(21, BAR, b); vis(22, RING, rg); vis(23, W1, w); vis(24, W2, w); vis(25, V1, v); vis(26, V2, v);
+          }
+
+          // the gloves (each image is 92×92 with the palm centre in the middle)
+          {
+            lv_obj_t *HO[2] = {id(hand_l), id(hand_r)};
+            for (int i = 0; i < 2; i++) {
+              const Hand &h = P.hd[i];
+              vis(30 + i, HO[i], h.on);
+              if (!h.on) continue;
+              image::Image *im = nullptr;
+              bool L = h.side < 0;
+              switch (h.pose) {
+                case H_FIST:  im = L ? id(img_gl_fist_l) : id(img_gl_fist_r); break;
+                case H_THUMB: im = L ? id(img_gl_thumb_l) : id(img_gl_thumb_r); break;
+                case H_POINT: im = L ? id(img_gl_point_l) : id(img_gl_point_r); break;
+                default:      im = L ? id(img_gl_open_l) : id(img_gl_open_r); break;
+              }
+              img(30 + i, HO[i], im->get_lv_image_dsc(), h.x, h.y, 46, h.rot, h.s, 1);
+            }
+          }
+
+          // the extras, each kind from its own little pool
+          {
+            lv_obj_t *HEART[2] = {id(ex_heart1), id(ex_heart2)}, *SPARK[2] = {id(ex_spark1), id(ex_spark2)}, *Z[3] = {id(ex_z1), id(ex_z2), id(ex_z3)};
+            lv_obj_t *WAVE[3] = {id(ex_wave1), id(ex_wave2), id(ex_wave3)};
+            int nh = 0, ns = 0, nz = 0; bool big = false, drop = false, bell = false, bulb = false, clock = false, wave[3] = {false, false, false};
+            static std::string big_txt;
+            for (int k = 0; k < P.nex; k++) {
+              const Ex &e = P.ex[k];
+              if (e.o <= .01f) continue;
+              switch (e.k) {
+                case X_HEART: if (nh < 2) { img(34 + nh, HEART[nh], id(img_heart)->get_lv_image_dsc(), e.x, e.y, 20, 0, e.s / 30.8f, e.o); nh++; } break;
+                case X_SPARK: if (ns < 2 && e.s > .3f) { img(36 + ns, SPARK[ns], id(img_spark)->get_lv_image_dsc(), e.x, e.y, 13, 0, e.s / 11, e.o); ns++; } break;
+                case X_DROP: drop = true; img(38, id(ex_drop), id(img_drop)->get_lv_image_dsc(), e.x, e.y - 1, 12, 0, e.s / 10, e.o); break;
+                case X_BELL: {
+                  bell = true;
+                  lv_obj_t *o = id(ex_bell);
+                  if (cache[39].src == nullptr) lv_image_set_pivot(o, 26, 11);
+                  img(39, o, id(img_bell)->get_lv_image_dsc(), e.x, e.y + 2, 26, e.r * 57.2958f, 1, e.o);
+                } break;
+                case X_BULB: bulb = true; img(40, id(ex_bulb), id(img_bulb)->get_lv_image_dsc(), e.x, e.y + 4, 46, 0, e.s, e.o); break;
+                case X_WAVE: { int i = (int) e.s; if (i >= 0 && i < 3) { float R = 10 + i * 10; wave[i] = true; box(41 + i, WAVE[i], e.x - R, e.y - R, 2 * R, 2 * R); opa(41 + i, WAVE[i], e.o, true); } } break;
+                case X_Z: if (nz < 3) { box(44 + nz, Z[nz], e.x - 7, e.y - 12, 14, 24); opa(44 + nz, Z[nz], e.o, false); nz++; } break;
+                case X_BIG: {
+                  big = true; lv_obj_t *o = id(ex_big);
+                  if (big_txt != e.txt) { lv_label_set_text(o, e.txt); big_txt = e.txt; }
+                  lv_obj_set_pos(o, lroundf(e.x) - lv_obj_get_width(o) / 2, lroundf(e.y) - 20);
+                  opa(47, o, e.o, false);
+                } break;
+                case X_CLOCK: {
+                  clock = true; lv_obj_t *o = id(ex_clock);
+                  static int last_min = -1;
+                  auto tm = id(ha_time).now();
+                  int m = tm.is_valid() ? tm.hour * 60 + tm.minute : -2;
+                  if (m != last_min) { char b[8]; if (m >= 0) snprintf(b, sizeof b, "%02d:%02d", tm.hour, tm.minute); else snprintf(b, sizeof b, "--:--"); lv_label_set_text(o, b); last_min = m; }
+                  lv_obj_set_pos(o, lroundf(e.x) - lv_obj_get_width(o) / 2, lroundf(e.y) - 12);
+                } break;
+              }
+            }
+            vis(34, HEART[0], nh > 0); vis(35, HEART[1], nh > 1); vis(36, SPARK[0], ns > 0); vis(37, SPARK[1], ns > 1);
+            vis(38, id(ex_drop), drop); vis(39, id(ex_bell), bell); vis(40, id(ex_bulb), bulb);
+            for (int i = 0; i < 3; i++) vis(41 + i, WAVE[i], wave[i]);
+            vis(44, Z[0], nz > 0); vis(45, Z[1], nz > 1); vis(46, Z[2], nz > 2);
+            vis(47, id(ex_big), big); vis(29, id(ex_clock), clock);
+          }
+
+          // the backlight carries the dimming (screensaver, falling asleep, waking up)
+          {
+            static float last_b = -1;
+            float b = id(n_brightness).state / 100.0f * P.dim;
+            if (fabsf(b - last_b) > .02f || (b < .01f) != (last_b < .01f)) {
+              if (b < .01f) { auto c = id(lcd_backlight).turn_off(); c.set_transition_length(0); c.perform(); }
+              else { auto c = id(lcd_backlight).turn_on(); c.set_brightness(b); c.set_transition_length(0); c.perform(); }
+              last_b = b;
+            }
+          }
+
+# ── the LED bar follows the face, from the same clock (one writer: the face state)
+light:
+  - id: !extend stackchan_light_bar
+    effects:
+      - addressable_lambda:
+          name: "Dravix"
+          update_interval: 33ms
+          lambda: |-
+            const float TAUF = 6.2831853f, PIF = 3.14159265f;
+            int st = id(g_face);
+            float t = (millis() - id(g_face_t0)) / 1000.0f;
+            auto bump = [&](float x, float a, float b) { float p = (x - a) / (b - a); return (p <= 0 || p >= 1) ? 0.0f : sinf(p * PIF); };
+            auto flash = [&](std::initializer_list<float> times, float d) { float m = 0; for (float b : times) m = std::max(m, bump(t, b, b + d)); return m; };
+            auto breathe = [&](float P) { return .2f + .8f * (.5f - .5f * cosf(t * TAUF / P)); };
+            const int n = it.size();
+            for (int i = 0; i < n; i++) {
+              uint32_t c = 0; float a = 0;
+              switch (st) {
+                case 1: c = 0xFFD23F; a = flash({.35f, .75f}, .22f); break;                       // happy
+                case 2: c = 0xFF4FA6; a = breathe(2); break;                                        // love
+                case 3: c = 0x3D7BFF; a = (t > .4f && t < 4.6f) ? .55f * breathe(3) : 0; break;     // sad
+                case 4: c = 0xFF3B3B; a = flash({.35f, .7f, 1.05f}, .2f); break;                   // grumpy
+                case 5: c = 0xFFFFFF; a = flash({.2f}, .3f); break;                                 // surprised
+                case 7: c = 0xA66BFF; a = flash({.4f}, .5f); break;                                 // confused
+                case 8: { auto hsv = ESPHSVColor((uint8_t) (fmodf(i / 12.0f + t * .6f, 1) * 255), 240, 255).to_rgb(); it[i] = hsv; continue; }   // dizzy
+                case 9: c = 0x2FE6FF; a = flash({.3f, .6f}, .2f); break;                           // hello
+                case 10: c = 0x35F57A; a = flash({.25f}, .4f); break;                               // done
+                case 11: if (t < .7f) { c = 0xFFFFFF; a = bump(t, .3f, .65f); } else if (t < 2.7f) { c = 0x2FE6FF; a = 1; } break;   // wake
+                case 12: c = 0x2FE6FF; a = 1; break;                                                // listening
+                case 13: c = 0xFFA81F; a = .12f + .88f * std::max(0.0f, sinf(i / 12.0f * TAUF - t * .9f * TAUF)); break;   // thinking wave
+                case 14: { float v = .5f + .5f * sinf(t * 18.7f) * sinf(t * 5.83f + 1) + .25f * sinf(t * 31.9f); c = 0x35F57A; a = .35f + .65f * std::min(1.0f, std::max(0.0f, v)); } break;   // speaking
+                case 15: c = 0xFF4FA6; a = breathe(2.2f); break;                                   // petted
+                case 16: { float x = fmodf(t, 2); c = 0xFF8A1F; a = std::max(std::max(bump(x, 0, .25f), bump(x, .5f, .75f)), std::max(bump(x, 1, 1.25f), bump(x, 1.5f, 1.75f))); } break;   // timer
+                case 17: c = 0xFF3B3B; a = flash({.3f}, .4f); break;                               // error
+                case 21: { if (t >= .6f && t <= 1.55f) { float pos = (t - .6f) / .8f * 13 - 1, dd = fabsf(i - pos); if (dd < 2) { c = 0x2FE6FF; a = 1 - dd / 2; } } } break;   // boot sweep
+                default: break;
+              }
+              a = std::max(0.0f, std::min(1.0f, a));
+              it[i] = Color((uint8_t) (((c >> 16) & 0xFF) * a), (uint8_t) (((c >> 8) & 0xFF) * a), (uint8_t) ((c & 0xFF) * a));
+            }

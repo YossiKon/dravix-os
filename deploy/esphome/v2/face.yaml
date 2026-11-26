@@ -1,0 +1,284 @@
+# ════════════════════════════════════════════════════════════════════════════════
+#  Dravix v2 · face — "Pebble": aqua eyes on black, a line mouth when it helps, gloves for
+#  gestures. ONE state variable (g_face), ONE writer (face_set / face_force), ONE renderer
+#  (face_tick.yaml). Nothing else touches these widgets. States: docs/v2/README.md.
+#   0 neutral  1 happy  2 love  3 sad  4 angry  5 surprised  6 sleepy  7 doubt  8 dizzy
+#   9 greet   10 done  11 wake  12 listening  13 thinking  14 speaking  15 petted  16 timer
+#  17 error   18 bored  19 screensaver  20 sleep  21 boot
+# ════════════════════════════════════════════════════════════════════════════════
+esphome:
+  on_boot:
+    - priority: -100
+      then:
+        - lambda: 'id(g_face) = 21; id(g_face_t0) = millis();'
+        - script.execute: face_enter
+
+globals:
+  - { id: g_face,         type: int,      restore_value: no, initial_value: "21" }
+  - { id: g_face_t0,      type: uint32_t, restore_value: no, initial_value: "0" }
+  - { id: g_face_hold,    type: bool,     restore_value: no, initial_value: "false" }   # petted / thinking loop their middle
+  - { id: g_face_next,    type: int,      restore_value: no, initial_value: "-1" }      # after a one-shot (-1 = rest)
+  - { id: g_face_pending, type: int,      restore_value: no, initial_value: "-1" }      # "done" asked for during a voice turn
+  - { id: g_on_face,      type: bool,     restore_value: no, initial_value: "true" }    # the face page is the one showing
+  # rest modes, owned by behavior.yaml
+  - { id: g_sleep,        type: bool,     restore_value: no, initial_value: "false" }
+  - { id: g_saver,        type: bool,     restore_value: no, initial_value: "false" }
+  - { id: g_night,        type: bool,     restore_value: no, initial_value: "false" }
+  - { id: g_bored,        type: bool,     restore_value: no, initial_value: "false" }
+
+number:
+  - platform: template
+    id: n_brightness
+    name: "Screen brightness"
+    icon: mdi:brightness-6
+    min_value: 10
+    max_value: 100
+    step: 5
+    unit_of_measurement: "%"
+    optimistic: true
+    restore_value: true
+    initial_value: 80
+    entity_category: config
+  - platform: template
+    id: n_led
+    name: "LED brightness"
+    icon: mdi:led-strip-variant
+    min_value: 0
+    max_value: 100
+    step: 5
+    unit_of_measurement: "%"
+    optimistic: true
+    restore_value: true
+    initial_value: 60
+    entity_category: config
+
+switch:
+  - platform: template
+    id: sw_leds
+    name: "Reaction LEDs"
+    icon: mdi:led-on
+    optimistic: true
+    restore_mode: RESTORE_DEFAULT_ON
+    entity_category: config
+    on_turn_off:
+      - light.turn_off: { id: stackchan_light_bar, transition_length: 0s }
+
+select:
+  # for trying faces from Home Assistant; it shows the face's name and follows the robot
+  - platform: template
+    id: sel_face
+    name: "Face"
+    icon: mdi:emoticon-outline
+    optimistic: false
+    options: [neutral, happy, love, sad, angry, surprised, sleepy, doubt, dizzy, greet, done,
+              wake, listening, thinking, speaking, petted, timer, error, bored, screensaver, sleep, boot]
+    lambda: |-
+      static const char *const N[22] = {"neutral","happy","love","sad","angry","surprised","sleepy","doubt","dizzy","greet","done",
+        "wake","listening","thinking","speaking","petted","timer","error","bored","screensaver","sleep","boot"};
+      int s = id(g_face); return std::string(N[(s >= 0 && s < 22) ? s : 0]);
+    update_interval: 1s
+    set_action:
+      - lambda: |-
+          static const char *const N[22] = {"neutral","happy","love","sad","angry","surprised","sleepy","doubt","dizzy","greet","done",
+            "wake","listening","thinking","speaking","petted","timer","error","bored","screensaver","sleep","boot"};
+          for (int i = 0; i < 22; i++) if (x == N[i]) { id(face_force).execute(i); break; }
+
+api:
+  actions:
+    # Home Assistant automations can make the robot react: action esphome.<name>_show_face
+    # with face: happy | sad | love | done | greet | surprised | angry | doubt | dizzy | error
+    - action: show_face
+      variables:
+        face: string
+      then:
+        - lambda: |-
+            static const char *const N[11] = {"neutral","happy","love","sad","angry","surprised","sleepy","doubt","dizzy","greet","done"};
+            for (int i = 1; i < 11; i++) if (face == N[i]) { id(face_set).execute(i); return; }
+            if (face == "error") id(face_set).execute(17);
+
+time:
+  - platform: homeassistant
+    id: ha_time
+
+font:
+  - file: "gfonts://Rubik@700"
+    id: f_face
+    size: 34
+    glyphs: "!?Hi"
+  - file: "gfonts://Rubik@600"
+    id: f_small
+    size: 22
+    glyphs: "z0123456789:"
+
+image:
+  - { file: "${img_base}/glove_open_r.png",  id: img_gl_open_r,  type: RGB565, transparency: alpha_channel }
+  - { file: "${img_base}/glove_open_l.png",  id: img_gl_open_l,  type: RGB565, transparency: alpha_channel }
+  - { file: "${img_base}/glove_fist_r.png",  id: img_gl_fist_r,  type: RGB565, transparency: alpha_channel }
+  - { file: "${img_base}/glove_fist_l.png",  id: img_gl_fist_l,  type: RGB565, transparency: alpha_channel }
+  - { file: "${img_base}/glove_thumb_r.png", id: img_gl_thumb_r, type: RGB565, transparency: alpha_channel }
+  - { file: "${img_base}/glove_thumb_l.png", id: img_gl_thumb_l, type: RGB565, transparency: alpha_channel }
+  - { file: "${img_base}/glove_point_r.png", id: img_gl_point_r, type: RGB565, transparency: alpha_channel }
+  - { file: "${img_base}/glove_point_l.png", id: img_gl_point_l, type: RGB565, transparency: alpha_channel }
+  - { file: "${img_base}/heart.png",  id: img_heart,  type: RGB565, transparency: alpha_channel }
+  - { file: "${img_base}/spark.png",  id: img_spark,  type: RGB565, transparency: alpha_channel }
+  - { file: "${img_base}/drop.png",   id: img_drop,   type: RGB565, transparency: alpha_channel }
+  - { file: "${img_base}/bell.png",   id: img_bell,   type: RGB565, transparency: alpha_channel }
+  - { file: "${img_base}/bulb.png",   id: img_bulb,   type: RGB565, transparency: alpha_channel }
+  - { file: "${img_base}/spiral.png", id: img_spiral, type: RGB565, transparency: alpha_channel }
+
+light:
+  - id: !extend stackchan_light_bar
+    restore_mode: ALWAYS_OFF        # the bar is dark at rest; every light is an event that ends
+    default_transition_length: 0s   # a flash must start on its beat (effects and transitions exclude each other)
+
+lvgl:
+  displays: [m5cores3_lcd]
+  buffer_size: 25%
+  log_level: WARN
+  style_definitions:
+    - id: st_shape                  # a plain shape: no theme padding, border or shadow
+      bg_opa: COVER
+      border_width: 0
+      pad_all: 0
+      shadow_width: 0
+      outline_width: 0
+      radius: 0
+    - id: st_stroke                 # an outline-only shape (mouth arcs, closed eyes, sound waves)
+      bg_opa: TRANSP
+      border_color: 0x5EF0E2
+      border_width: 6
+      pad_all: 0
+      shadow_width: 0
+      outline_width: 0
+      radius: 1000
+  top_layer:
+    widgets:
+      # the privacy dot: microphone or camera sending to Home Assistant
+      - obj: { id: priv_dot, styles: st_shape, x: 296, y: 12, width: 12, height: 12, radius: 6, bg_color: 0x30D158, hidden: true }
+  pages:
+    - id: page_face
+      bg_color: 0x000000
+      bg_opa: COVER
+      scrollable: false
+      scrollbar_mode: "OFF"
+      widgets:
+        - obj: { id: eye_l, styles: st_shape, x: 65, y: 73, width: 66, height: 86, radius: 24, bg_color: 0x5EF0E2 }
+        - obj: { id: eye_r, styles: st_shape, x: 189, y: 73, width: 66, height: 86, radius: 24, bg_color: 0x5EF0E2 }
+        - obj: { id: lid_l, styles: st_shape, width: 132, height: 196, bg_color: 0x000000, hidden: true }
+        - obj: { id: lid_r, styles: st_shape, width: 132, height: 196, bg_color: 0x000000, hidden: true }
+        - obj: { id: cut_l, styles: st_shape, width: 126, height: 126, radius: 63, bg_color: 0x000000, hidden: true }
+        - obj: { id: cut_r, styles: st_shape, width: 126, height: 126, radius: 63, bg_color: 0x000000, hidden: true }
+        - obj: { id: cls_l, styles: st_stroke, width: 56, height: 56, border_width: 9, border_side: BOTTOM, hidden: true }
+        - obj: { id: cls_r, styles: st_stroke, width: 56, height: 56, border_width: 9, border_side: BOTTOM, hidden: true }
+        - image: { id: spr_l, src: img_spiral, hidden: true }
+        - image: { id: spr_r, src: img_spiral, hidden: true }
+        # the mouth (line style): one of these at a time
+        - obj: { id: m_arc,  styles: st_stroke, width: 32, height: 32, border_side: BOTTOM, hidden: true }
+        - obj: { id: m_bar,  styles: st_shape, width: 34, height: 6, radius: 3, bg_color: 0x5EF0E2, hidden: true }
+        - obj: { id: m_ring, styles: st_stroke, width: 21, height: 25, border_width: 5, hidden: true }
+        - obj: { id: m_w1,   styles: st_stroke, width: 16, height: 16, border_width: 5, border_side: BOTTOM, hidden: true }
+        - obj: { id: m_w2,   styles: st_stroke, width: 16, height: 16, border_width: 5, border_side: BOTTOM, hidden: true }
+        - obj: { id: m_wv1,  styles: st_stroke, width: 20, height: 20, border_width: 5, border_side: TOP, hidden: true }
+        - obj: { id: m_wv2,  styles: st_stroke, width: 20, height: 20, border_width: 5, border_side: TOP, hidden: true }
+        # the gloves
+        - image: { id: hand_l, src: img_gl_open_l, hidden: true }
+        - image: { id: hand_r, src: img_gl_open_r, hidden: true }
+        # little extras
+        - image: { id: ex_heart1, src: img_heart, hidden: true }
+        - image: { id: ex_heart2, src: img_heart, hidden: true }
+        - image: { id: ex_spark1, src: img_spark, hidden: true }
+        - image: { id: ex_spark2, src: img_spark, hidden: true }
+        - image: { id: ex_drop,   src: img_drop,  hidden: true }
+        - image: { id: ex_bell,   src: img_bell,  hidden: true }
+        - image: { id: ex_bulb,   src: img_bulb,  hidden: true }
+        - obj: { id: ex_wave1, styles: st_stroke, width: 20, height: 20, border_width: 5, border_side: RIGHT, hidden: true }
+        - obj: { id: ex_wave2, styles: st_stroke, width: 40, height: 40, border_width: 5, border_side: RIGHT, hidden: true }
+        - obj: { id: ex_wave3, styles: st_stroke, width: 60, height: 60, border_width: 5, border_side: RIGHT, hidden: true }
+        - label: { id: ex_big,  text: "!", text_font: f_face,  text_color: 0xF2FFFD, hidden: true }
+        - label: { id: ex_z1,   text: "z", text_font: f_small, text_color: 0xF2FFFD, hidden: true }
+        - label: { id: ex_z2,   text: "z", text_font: f_small, text_color: 0xF2FFFD, hidden: true }
+        - label: { id: ex_z3,   text: "z", text_font: f_small, text_color: 0xF2FFFD, hidden: true }
+        - label: { id: ex_clock, text: "00:00", text_font: f_small, text_color: 0xF2FFFD, hidden: true }
+
+script:
+  # ── the ONLY way into a face. Lower priority than what is showing = dropped, except "done"
+  #    asked for during a voice turn, which plays when the turn ends.
+  - id: face_set
+    parameters: { s: int }
+    mode: queued
+    then:
+      - lambda: |-
+          auto prio = [](int st) -> int {
+            switch (st) {
+              case 0: case 6: case 18: return 0;                       // rest
+              case 19: case 20: return 1;                              // screensaver, sleep
+              case 21: return 3;                                       // boot
+              case 16: return 4;                                       // timer ringing
+              case 11: case 12: case 13: case 14: return 5;            // a voice turn
+              case 17: return 6;                                       // error
+              default: return 2;                                       // reactions
+            }
+          };
+          int cur = id(g_face);
+          if (s == 10 && cur >= 11 && cur <= 14) { id(g_face_pending) = 10; return; }
+          bool voice_beats_boot = (cur == 21 && s >= 11 && s <= 14);
+          if (prio(s) < prio(cur) && !voice_beats_boot) return;
+          id(face_force).execute(s);
+  # sets a face with no questions asked (the state machine's own transitions, HA's Face select)
+  - id: face_force
+    parameters: { s: int }
+    mode: queued
+    then:
+      - lambda: |-
+          id(g_face) = s; id(g_face_t0) = millis(); id(g_face_next) = -1;
+          id(g_face_hold) = (s == 13 || s == 15);
+      - script.execute: face_enter
+  # the rest face for right now
+  - id: face_rest
+    then:
+      - lambda: |-
+          int s = id(g_sleep) ? 20 : id(g_saver) ? 19 : id(g_night) ? 6 : id(g_bored) ? 18 : 0;
+          id(face_force).execute(s);
+  # a held face lets go: play its outro, then rest
+  - id: face_release
+    then:
+      - lambda: |-
+          if (id(g_face) == 15 && id(g_face_hold)) { id(g_face_hold) = false; id(g_face_t0) = millis() - 3400; }
+  # the reply starts: thinking plays its light bulb, then speaking
+  - id: face_speaking
+    then:
+      - lambda: |-
+          if (id(g_face) == 13) { id(g_face_hold) = false; id(g_face_t0) = millis() - 1850; id(g_face_next) = 14; }
+          else id(face_force).execute(14);
+  # the voice turn is over (reply finished, or abandoned)
+  - id: face_voice_end
+    then:
+      - lambda: |-
+          int cur = id(g_face);
+          if (cur == 13) { id(g_face_hold) = false; }
+          if (cur >= 11 && cur <= 14) {
+            int p = id(g_face_pending); id(g_face_pending) = -1;
+            if (p >= 0) id(face_force).execute(p); else id(face_rest).execute();
+          }
+  - id: face_voice_error
+    parameters: { nothing_heard: bool }
+    then:
+      - lambda: 'id(g_face_pending) = -1; id(face_force).execute(nothing_heard ? 7 : 17);'
+  # LEDs + head at every face change. The bar is dark for the rest faces.
+  - id: face_enter
+    mode: queued
+    then:
+      - if:
+          condition:
+            lambda: |-
+              int s = id(g_face);
+              bool lit = !(s == 0 || s == 6 || s == 18 || s == 19 || s == 20);
+              return lit && id(sw_leds).state && id(n_led).state > 0;
+          then:
+            - light.turn_on:
+                id: stackchan_light_bar
+                brightness: !lambda 'return id(n_led).state / 100.0f;'
+                effect: "Dravix"
+          else:
+            - light.turn_off: { id: stackchan_light_bar, transition_length: 0s }
+      - script.execute: head_for_face

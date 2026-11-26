@@ -1,0 +1,63 @@
+# Compiles the v2 firmware (deploy/esphome/v2) on GitHub's runners, so a broken lambda is caught
+# here instead of after a 15-minute Install on the robot owner's Home Assistant box.
+# Runs only for the v2 branch (and by hand); it never builds or publishes the add-on.
+name: firmware-v2
+
+on:
+  push:
+    branches: [v2]
+    paths:
+      - "deploy/esphome/v2/**"
+      - "components/**"
+      - ".github/workflows/firmware-v2.yml"
+  workflow_dispatch:
+
+jobs:
+  compile:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        # 2026.8.2 = the owner's last known ESPHome; "latest" = whatever the add-on auto-updates to.
+        esphome: ["2026.8.2", "latest"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Cache toolchains
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.platformio
+            ~/.esphome
+          key: esphome-${{ matrix.esphome }}-${{ runner.os }}-v1
+
+      - name: Install ESPHome ${{ matrix.esphome }}
+        run: |
+          if [ "${{ matrix.esphome }}" = "latest" ]; then pip install esphome; else pip install "esphome==${{ matrix.esphome }}"; fi
+          esphome version
+
+      - name: Write a CI stub that uses this checkout's modules
+        run: |
+          mkdir -p ci
+          cat > ci/dravix-ci.yaml <<'EOF'
+          wifi:
+            ssid: "ci-network"
+            password: "ci-password"
+          packages:
+            base: !include ../deploy/esphome/v2/base.yaml
+            face: !include ../deploy/esphome/v2/face.yaml
+            face_tick: !include ../deploy/esphome/v2/face_tick.yaml
+            behavior: !include ../deploy/esphome/v2/behavior.yaml
+            screens: !include ../deploy/esphome/v2/screens.yaml
+          EOF
+
+      - name: Validate
+        run: esphome config ci/dravix-ci.yaml > /dev/null
+
+      - name: Compile
+        run: esphome compile ci/dravix-ci.yaml

@@ -1,0 +1,28 @@
+# ════════════════════════════════════════════════════════════════════════════════
+#  Dravix v2 · the file you keep in the ESPHome add-on
+#
+#  It pulls the firmware from GitHub at build time: updating = press Install.
+#  Moving an existing robot to v2: keep your own wifi and device_name, and replace only
+#  the `packages:` block. Going back to v1 = put your old `packages:` block back.
+# ════════════════════════════════════════════════════════════════════════════════
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+
+substitutions:
+  device_name: "stackchan"          # keep the name your robot already has
+  # wake_sound_file: "https://…"    # your own wake chime (a URL or a file next to this stub)
+  # speaker_ceiling: "0.9"          # 1.0 = full volume; 0.9 spares the small speaker
+
+packages:
+  dravix:
+    url: https://github.com/YossiKon/dravix-os
+    ref: v2
+    refresh: 0s
+    files:
+      - deploy/esphome/v2/base.yaml
+      - deploy/esphome/v2/face.yaml
+      - deploy/esphome/v2/face_tick.yaml
+      - deploy/esphome/v2/behavior.yaml
+      - deploy/esphome/v2/screens.yaml
