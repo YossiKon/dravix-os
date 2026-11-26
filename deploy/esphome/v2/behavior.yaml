@@ -156,6 +156,7 @@ script:
             if (pads && !was) id(game_input).execute((pads & 1) ? 0 : (pads & 2) ? 1 : 2, true);
             return;
           }
+          if (id(g_guard) && pads && !was) { id(guard_disarm).execute(true); return; }   // a touch turns the desk guard off
           if (id(g_face) == 22) {                                // hands up: a tap counts as the shot (no BOOM needed)
             if (pads && !was) id(face_force).execute(23);
             return;
@@ -301,6 +302,7 @@ esphome:
                 else id(g_far_ms) = 0;
                 if (!id(g_near) && v > ${prox_near}) {
                   id(g_near) = true; id(g_ia_ms) = now;
+                  if (id(g_guard) && now > id(g_guard_ms)) id(guard_alert).execute();   // desk guard: someone came close
                   if (id(g_saver)) id(saver_off).execute();
                   if (!id(g_sleep) && id(g_game) == 0 && id(g_away_ms) != 0 && now - id(g_away_ms) > 300000) id(face_set).execute(9);   // hello
                 } else if (id(g_near) && v < ${prox_far}) { id(g_near) = false; id(g_away_ms) = now; }

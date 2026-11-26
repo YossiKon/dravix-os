@@ -11,7 +11,15 @@ esphome:
 globals:
   - { id: g_eye_rgb,     type: uint32_t, restore_value: no,  initial_value: "0x5EF0E2" }   # Chameleon: the eye colour…
   - { id: g_eye_until,   type: uint32_t, restore_value: no,  initial_value: "0" }          # …until
-  - { id: g_cam_purpose, type: int,      restore_value: no,  initial_value: "0" }          # a frame asked for: 1 chameleon
+  - { id: g_cam_purpose, type: int,      restore_value: no,  initial_value: "0" }          # a frame asked for: 1 chameleon 2 photo 3 guard 4 mirror 5 follow
+  - { id: g_cam_last,    type: int,      restore_value: no,  initial_value: "0" }          # the purpose of the frame just processed
+  - { id: g_cam_live_until, type: uint32_t, restore_value: no, initial_value: "0" }        # mirror: live until
+  - { id: g_cam_view_until, type: uint32_t, restore_value: no, initial_value: "0" }        # a photo on screen until
+  - { id: g_guard,       type: bool,     restore_value: no,  initial_value: "false" }
+  - { id: g_guard_ms,    type: uint32_t, restore_value: no,  initial_value: "0" }          # armed from (a grace period to leave)
+  - { id: g_follow_x,    type: float,    restore_value: no,  initial_value: "0" }
+  - { id: g_follow_y,    type: float,    restore_value: no,  initial_value: "0" }
+  - { id: g_follow_ms,   type: uint32_t, restore_value: no,  initial_value: "0" }          # last movement seen
   - { id: g_cam_jpg,     type: "std::vector<uint8_t>", restore_value: no }
   - { id: g_game,        type: int,      restore_value: no,  initial_value: "0" }
   - { id: g_gph,         type: int,      restore_value: no,  initial_value: "0" }      # phase
@@ -44,6 +52,21 @@ image:
   - { platform: file, file: "${img_base}/glove_scissors_r.png", id: img_gl_sc_r, type: RGB565, transparency: alpha_channel }
   - { platform: file, file: "${img_base}/glove_scissors_l.png", id: img_gl_sc_l, type: RGB565, transparency: alpha_channel }
 
+switch:
+  - platform: template
+    id: sw_follow
+    name: "Follow me"
+    icon: mdi:eye-outline
+    optimistic: true
+    restore_mode: ALWAYS_OFF        # the camera runs while this is on (the green dot stays lit)
+  - platform: template
+    id: sw_guard
+    name: "Desk guard"
+    icon: mdi:shield-account-outline
+    lambda: 'return id(g_guard);'
+    turn_on_action: [ { script.execute: guard_arm } ]
+    turn_off_action: [ { script.execute: { id: guard_disarm, welcome: false } } ]
+
 api:
   actions:
     # start a game from Home Assistant: game = rps | coin | dice | 8ball | reaction
@@ -56,6 +79,11 @@ api:
             if (g) id(game_start).execute(g);
 
 lvgl:
+  top_layer:
+    widgets:
+      # what the camera saw (photo, guard, mirror): 160x120, shown at x2 over everything
+      - image: { id: cam_view, src: img_spark, align: CENTER, hidden: true, clickable: true, on_click: [ { script.execute: { id: game_start, g: 8 } } ] }
+      - obj: { id: flash_rect, x: 0, y: 0, width: 320, height: 240, bg_color: 0xFFFFFF, bg_opa: COVER, border_width: 0, radius: 0, hidden: true }
   pages:
     - id: page_games
       bg_color: 0x000000
@@ -63,16 +91,19 @@ lvgl:
       on_swipe_left: [ { script.execute: { id: show_screen, n: 0 } } ]
       on_swipe_right: [ { script.execute: { id: show_screen, n: 3 } } ]
       widgets:
-        - label: { id: gms_title, x: 12, y: 6, text: "Games", text_font: f_tile, text_color: 0x7FA9A4 }
-        - obj: { styles: st_tile, x: 8,   y: 30,  width: 98, height: 64, on_click: [ { script.execute: { id: game_start, g: 1 } } ], widgets: [ { label: { align: CENTER, text_align: CENTER, text: "Rock paper\nscissors", text_font: f_tile, text_color: 0xDDF7F4 } } ] }
-        - obj: { styles: st_tile, x: 111, y: 30,  width: 98, height: 64, on_click: [ { script.execute: { id: game_start, g: 6 } } ], widgets: [ { label: { align: CENTER, text_align: CENTER, text: "Bang!", text_font: f_tile, text_color: 0xDDF7F4 } } ] }
-        - obj: { styles: st_tile, x: 214, y: 30,  width: 98, height: 64, on_click: [ { script.execute: { id: game_start, g: 5 } } ], widgets: [ { label: { align: CENTER, text_align: CENTER, text: "Reaction", text_font: f_tile, text_color: 0xDDF7F4 } } ] }
-        - obj: { styles: st_tile, x: 8,   y: 99,  width: 98, height: 64, on_click: [ { script.execute: { id: game_start, g: 2 } } ], widgets: [ { label: { align: CENTER, text_align: CENTER, text: "Coin", text_font: f_tile, text_color: 0xDDF7F4 } } ] }
-        - obj: { styles: st_tile, x: 111, y: 99,  width: 98, height: 64, on_click: [ { script.execute: { id: game_start, g: 3 } } ], widgets: [ { label: { align: CENTER, text_align: CENTER, text: "Dice", text_font: f_tile, text_color: 0xDDF7F4 } } ] }
-        - obj: { styles: st_tile, x: 214, y: 99,  width: 98, height: 64, on_click: [ { script.execute: { id: game_start, g: 4 } } ], widgets: [ { label: { align: CENTER, text_align: CENTER, text: "Magic\n8-ball", text_font: f_tile, text_color: 0xDDF7F4 } } ] }
-        - obj: { styles: st_tile, x: 8,   y: 168, width: 98, height: 64, on_click: [ { script.execute: { id: game_start, g: 7 } } ], widgets: [ { label: { align: CENTER, text_align: CENTER, text: "Chameleon", text_font: f_tile, text_color: 0xDDF7F4 } } ] }
-        - obj: { styles: st_tile, x: 111, y: 168, width: 98, height: 64, on_click: [ { script.execute: { id: game_start, g: 8 } } ], widgets: [ { label: { align: CENTER, text_align: CENTER, text: "Photo", text_font: f_tile, text_color: 0xDDF7F4 } } ] }
-        - obj: { styles: st_tile, x: 214, y: 168, width: 98, height: 64, on_click: [ { script.execute: { id: game_start, g: 9 } } ], widgets: [ { label: { align: CENTER, text_align: CENTER, text: "Mirror", text_font: f_tile, text_color: 0xDDF7F4 } } ] }
+        - label: { id: gms_title, x: 12, y: 5, text: "Games", text_font: f_tile, text_color: 0x7FA9A4 }
+        - obj: { styles: st_tile, x: 8, y: 28, width: 98, height: 48, on_click: [ { script.execute: { id: game_start, g: 1 } } ], widgets: [ { label: { align: CENTER, text_align: CENTER, text: "Rock paper\nscissors", text_font: f_tile, text_color: 0xDDF7F4 } } ] }
+        - obj: { styles: st_tile, x: 111, y: 28, width: 98, height: 48, on_click: [ { script.execute: { id: game_start, g: 6 } } ], widgets: [ { label: { align: CENTER, text_align: CENTER, text: "Bang!", text_font: f_tile, text_color: 0xDDF7F4 } } ] }
+        - obj: { styles: st_tile, x: 214, y: 28, width: 98, height: 48, on_click: [ { script.execute: { id: game_start, g: 5 } } ], widgets: [ { label: { align: CENTER, text_align: CENTER, text: "Reaction", text_font: f_tile, text_color: 0xDDF7F4 } } ] }
+        - obj: { styles: st_tile, x: 8, y: 80, width: 98, height: 48, on_click: [ { script.execute: { id: game_start, g: 2 } } ], widgets: [ { label: { align: CENTER, text_align: CENTER, text: "Coin", text_font: f_tile, text_color: 0xDDF7F4 } } ] }
+        - obj: { styles: st_tile, x: 111, y: 80, width: 98, height: 48, on_click: [ { script.execute: { id: game_start, g: 3 } } ], widgets: [ { label: { align: CENTER, text_align: CENTER, text: "Dice", text_font: f_tile, text_color: 0xDDF7F4 } } ] }
+        - obj: { styles: st_tile, x: 214, y: 80, width: 98, height: 48, on_click: [ { script.execute: { id: game_start, g: 4 } } ], widgets: [ { label: { align: CENTER, text_align: CENTER, text: "Magic\n8-ball", text_font: f_tile, text_color: 0xDDF7F4 } } ] }
+        - obj: { styles: st_tile, x: 8, y: 132, width: 98, height: 48, on_click: [ { script.execute: { id: game_start, g: 7 } } ], widgets: [ { label: { align: CENTER, text_align: CENTER, text: "Chameleon", text_font: f_tile, text_color: 0xDDF7F4 } } ] }
+        - obj: { styles: st_tile, x: 111, y: 132, width: 98, height: 48, on_click: [ { script.execute: { id: game_start, g: 8 } } ], widgets: [ { label: { align: CENTER, text_align: CENTER, text: "Photo", text_font: f_tile, text_color: 0xDDF7F4 } } ] }
+        - obj: { styles: st_tile, x: 214, y: 132, width: 98, height: 48, on_click: [ { script.execute: { id: game_start, g: 9 } } ], widgets: [ { label: { align: CENTER, text_align: CENTER, text: "Mirror", text_font: f_tile, text_color: 0xDDF7F4 } } ] }
+        - obj: { styles: st_tile, x: 8, y: 184, width: 98, height: 48, on_click: [ { script.execute: { id: game_start, g: 10 } } ], widgets: [ { label: { align: CENTER, text_align: CENTER, text: "Desk guard", text_font: f_tile, text_color: 0xDDF7F4 } } ] }
+        - obj: { styles: st_tile, x: 111, y: 184, width: 98, height: 48, on_click: [ { script.execute: { id: game_start, g: 11 } } ], widgets: [ { label: { align: CENTER, text_align: CENTER, text: "Follow me", text_font: f_tile, text_color: 0xDDF7F4 } } ] }
+        - obj: { styles: st_tile, x: 214, y: 184, width: 98, height: 48, on_click: [ { script.execute: { id: show_screen, n: 0 } } ], widgets: [ { label: { align: CENTER, text_align: CENTER, text: "Face", text_font: f_tile, text_color: 0xDDF7F4 } } ] }
     - id: page_game
       bg_color: 0x000000
       scrollable: false
@@ -108,7 +139,25 @@ script:
           condition: { lambda: 'return g == 7;' }     # Chameleon: played on the face
           then: [ { script.execute: chameleon_start } ]
       - if:
-          condition: { lambda: 'return g >= 8;' }     # not built yet
+          condition: { lambda: 'return g == 8;' }
+          then: [ { script.execute: photo_start } ]
+      - if:
+          condition: { lambda: 'return g == 9;' }
+          then: [ { script.execute: mirror_start } ]
+      - if:
+          condition: { lambda: 'return g == 10;' }
+          then: [ { script.execute: guard_arm } ]
+      - if:
+          condition: { lambda: 'return g == 11;' }
+          then:
+            - switch.toggle: sw_follow
+            - script.execute: { id: show_screen, n: 0 }
+            - lvgl.label.update: { id: face_hint, text: !lambda 'return id(sw_follow).state ? std::string("Follow me: on. Move in front of me!") : std::string("Follow me: off");' }
+            - lvgl.widget.show: face_hint
+            - delay: 4s
+            - lvgl.widget.hide: face_hint
+      - if:
+          condition: { lambda: 'return g >= 12;' }     # not built yet
           then:
             - lvgl.label.update: { id: gms_title, text: "Games · coming soon" }
             - delay: 2s
@@ -148,17 +197,117 @@ script:
             - delay: 3s
       - lvgl.widget.hide: face_hint
 
-  # a frame the robot asked for: decoded at 1/8 (40x30) - plenty for a colour, cheap to do
+  # PHOTO: 3-2-1, a white flash, the picture on screen; Home Assistant can save and send it
+  - id: photo_start
+    mode: single
+    then:
+      - lambda: 'id(g_cam_live_until) = 0; id(g_cam_view_until) = 0;'
+      - lvgl.widget.hide: cam_view
+      - script.execute: { id: show_screen, n: 0 }
+      - script.execute: { id: face_set, s: 1 }
+      - lvgl.widget.show: face_hint
+      - lvgl.label.update: { id: face_hint, text: "Smile! 3" }
+      - delay: 800ms
+      - lvgl.label.update: { id: face_hint, text: "Smile! 2" }
+      - delay: 800ms
+      - lvgl.label.update: { id: face_hint, text: "Smile! 1" }
+      - delay: 800ms
+      - lvgl.widget.hide: face_hint
+      - lambda: 'id(g_cam_purpose) = 2; id(cam).request_image(esphome::camera::IDLE);'
+      - lvgl.widget.show: flash_rect
+      - delay: 150ms
+      - lvgl.widget.hide: flash_rect
+
+  # MIRROR: what the camera sees, live, for 20 s; a tap takes a photo
+  - id: mirror_start
+    then:
+      - script.execute: { id: show_screen, n: 0 }
+      - lambda: 'id(g_on_face) = false; id(g_cam_live_until) = millis() + 20000; id(g_cam_purpose) = 4; id(cam).request_image(esphome::camera::IDLE);'
+
+  # DESK GUARD: armed after 10 s; someone coming close gets a "Who are you?!" and a photo
+  - id: guard_arm
+    then:
+      - lambda: 'id(g_guard) = true; id(g_guard_ms) = millis() + 10000;'
+      - script.execute: { id: show_screen, n: 0 }
+      - lvgl.label.update: { id: face_hint, text: "Guarding your desk in 10 s. Touch my head to stop." }
+      - lvgl.widget.show: face_hint
+      - delay: 6s
+      - lvgl.widget.hide: face_hint
+  - id: guard_disarm
+    parameters: { welcome: bool }
+    then:
+      - lambda: 'id(g_guard) = false;'
+      - if:
+          condition: { lambda: 'return welcome;' }
+          then:
+            - script.execute: { id: face_set, s: 9 }
+            - lvgl.label.update: { id: face_hint, text: "Welcome back! Guard is off." }
+            - lvgl.widget.show: face_hint
+            - delay: 4s
+            - lvgl.widget.hide: face_hint
+  - id: guard_alert
+    mode: single
+    then:
+      - script.execute: { id: show_screen, n: 0 }
+      - script.execute: { id: face_set, s: 5 }
+      - lvgl.label.update: { id: face_hint, text: "Who are you?!" }
+      - lvgl.widget.show: face_hint
+      - lambda: 'id(g_cam_purpose) = 3; id(cam).request_image(esphome::camera::IDLE);'
+      - delay: 5s
+      - lvgl.widget.hide: face_hint
+      - delay: 25s           # one alert per half minute
+
+  # a frame the robot asked for. 1/8 (40x30) is plenty for a colour or for movement; a photo or
+  # the mirror is decoded at 1/2 (160x120, shown x2) into one PSRAM buffer
   - id: cam_process
     then:
       - lambda: |-
-          int purpose = id(g_cam_purpose); id(g_cam_purpose) = 0;
+          int purpose = id(g_cam_purpose); id(g_cam_purpose) = 0; id(g_cam_last) = purpose;
           auto &jpg = id(g_cam_jpg);
           if (jpg.empty()) return;
           static uint16_t small[40 * 30];
-          bool ok = jpg2rgb565(jpg.data(), jpg.size(), (uint8_t *) small, JPG_SCALE_8X);
+          static uint8_t *view = nullptr;
+          static lv_image_dsc_t dsc;
+          bool big = purpose == 2 || purpose == 3 || purpose == 4;
+          if (big && view == nullptr) {
+            view = (uint8_t *) heap_caps_malloc(160 * 120 * 2, MALLOC_CAP_SPIRAM);
+            memset(&dsc, 0, sizeof dsc);
+            dsc.header.magic = LV_IMAGE_HEADER_MAGIC; dsc.header.cf = LV_COLOR_FORMAT_RGB565;
+            dsc.header.w = 160; dsc.header.h = 120; dsc.header.stride = 160 * 2;
+            dsc.data_size = 160 * 120 * 2; dsc.data = view;
+          }
+          bool ok = big ? (view != nullptr && jpg2rgb565(jpg.data(), jpg.size(), view, JPG_SCALE_2X))
+                        : jpg2rgb565(jpg.data(), jpg.size(), (uint8_t *) small, JPG_SCALE_8X);
           jpg.clear(); jpg.shrink_to_fit();
           if (!ok) { ESP_LOGW("dravix", "camera: could not decode the frame"); return; }
+          if (big) {
+            lv_obj_t *o = id(cam_view);
+            lv_image_cache_drop(&dsc);
+            lv_image_set_src(o, &dsc); lv_image_set_scale(o, 512);
+            lv_obj_remove_flag(o, LV_OBJ_FLAG_HIDDEN); lv_obj_invalidate(o);
+            lv_obj_move_foreground(id(priv_dot));               // the green dot stays on top
+            if (purpose == 4 && millis() < id(g_cam_live_until)) { id(g_cam_purpose) = 4; id(cam).request_image(esphome::camera::IDLE); }
+            else if (purpose != 4) id(g_cam_view_until) = millis() + (purpose == 2 ? 4000 : 3000);
+            return;
+          }
+          if (purpose == 5) {                                    // FOLLOW ME: where did the picture change?
+            static uint8_t prev[40 * 30]; static bool have = false;
+            float sx = 0, sy = 0, sw = 0;
+            for (int i = 0; i < 40 * 30; i++) {
+              uint16_t p = small[i];
+              uint8_t l = (uint8_t) ((((p >> 11) & 0x1F) * 8 + ((p >> 5) & 0x3F) * 4 * 2 + (p & 0x1F) * 8) / 4);
+              int d = have ? abs((int) l - (int) prev[i]) : 0;
+              prev[i] = l;
+              if (d > 18) { sx += (i % 40) * d; sy += (i / 40) * d; sw += d; }
+            }
+            have = true;
+            if (sw > 600) {
+              // the camera looks at you: your left is its right, so the eyes mirror the picture
+              id(g_follow_x) = -((sx / sw) - 19.5f) / 19.5f * 22; id(g_follow_y) = ((sy / sw) - 14.5f) / 14.5f * 12;
+              id(g_follow_ms) = millis();
+            }
+            return;
+          }
           if (purpose == 1) {
             float R = 0, G = 0, B = 0; int n = 0;
             for (int y = 8; y < 22; y++) for (int x = 10; x < 30; x++) {
@@ -178,6 +327,17 @@ script:
             lv_label_set_text(id(face_hint), "Ta-da!");
           }
 
+  # photo and guard frames tell Home Assistant (an automation there can save and send them)
+  - id: cam_tell_ha
+    then:
+      - if:
+          condition: { lambda: 'return id(g_cam_last) == 2 || id(g_cam_last) == 3;' }
+          then:
+            - homeassistant.event:
+                event: esphome.dravix_photo
+                data:
+                  reason: !lambda 'return id(g_cam_last) == 2 ? std::string("photo") : std::string("guard");'
+
   - id: game_end
     then:
       - lambda: 'id(g_game) = 0; id(g_game_led) = 0;'
@@ -192,6 +352,24 @@ script:
           id(g_gin) = k; id(g_gin_pad) = pad; id(g_gin_ms) = millis(); id(g_page_ms) = millis();
 
 interval:
+  - interval: 250ms
+    then:
+      - lambda: |-
+          const uint32_t now = millis();
+          bool live = id(g_cam_live_until) != 0 && now < id(g_cam_live_until);
+          bool photo = id(g_cam_view_until) != 0 && now < id(g_cam_view_until);
+          if (!live && id(g_cam_live_until) != 0) { id(g_cam_live_until) = 0; id(g_on_face) = id(g_page) == 0; }
+          if (!photo && id(g_cam_view_until) != 0) id(g_cam_view_until) = 0;
+          if (!live && !photo && !lv_obj_has_flag(id(cam_view), LV_OBJ_FLAG_HIDDEN)) lv_obj_add_flag(id(cam_view), LV_OBJ_FLAG_HIDDEN);
+          // the wake word or a voice turn ends the mirror at once
+          if (live && id(g_voice)) { id(g_cam_live_until) = 0; }
+  - interval: 700ms
+    then:
+      - lambda: |-
+          // FOLLOW ME: a frame every 0.7 s, only with someone near, on the resting face, no voice turn
+          if (!id(sw_follow).state || !id(g_near) || !id(g_on_face) || id(g_voice) || id(g_sleep) || id(g_saver) || id(g_cam_purpose) != 0) return;
+          int f = id(g_face); if (f != 0 && f != 18) return;
+          id(g_cam_purpose) = 5; id(cam).request_image(esphome::camera::IDLE);
   - interval: 50ms
     then:
       - lambda: |-

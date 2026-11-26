@@ -66,7 +66,7 @@ esp32_camera:
     - lambda: |-
         id(g_cam_snap_ms) = millis();
         // a frame the robot asked for itself (games.yaml): keep a copy and work on it in the main loop
-        if (id(g_cam_purpose) != 0 && image.length > 0) { id(g_cam_jpg).assign(image.data, image.data + image.length); id(cam_process).execute(); }
+        if (id(g_cam_purpose) != 0 && image.length > 0) { id(g_cam_jpg).assign(image.data, image.data + image.length); id(cam_process).execute(); id(cam_tell_ha).execute(); }
 
 # ── audio: the BSP's one shared bus (mic + speaker). Every sound goes through play_sfx.
 media_player:

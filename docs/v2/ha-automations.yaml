@@ -1,0 +1,27 @@
+# Dravix v2 - optional Home Assistant automations for the camera games.
+# The robot shows every photo on its own screen; these SAVE them and SEND them to your phone.
+# Paste each one in Home Assistant: Settings -> Automations -> Create -> (three dots) Edit in YAML.
+# Change camera.stackchan_camera to your robot's camera entity, and notify.notify to your phone
+# (for example notify.mobile_app_<your_phone>).
+# The robot needs "Allow the device to perform Home Assistant actions" (device page -> Configure).
+
+alias: Dravix - save and send photos
+description: Photo booth and desk guard pictures from the robot
+triggers:
+  - trigger: event
+    event_type: esphome.dravix_photo
+actions:
+  - variables:
+      file: "dravix/{{ trigger.event.data.reason }}_{{ now().strftime('%Y%m%d_%H%M%S') }}.jpg"
+  - action: camera.snapshot
+    target:
+      entity_id: camera.stackchan_camera
+    data:
+      filename: "/media/{{ file }}"
+  - action: notify.notify
+    data:
+      message: >-
+        {{ 'Someone came to your desk' if trigger.event.data.reason == 'guard' else 'A new photo from Dravix' }}
+      data:
+        image: "/media/local/{{ file }}"
+mode: queued
