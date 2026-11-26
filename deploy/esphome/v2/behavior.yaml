@@ -90,7 +90,7 @@ sensor:
             float ax = id(imu_ax).state, ay = id(imu_ay).state, az = x;
             if (std::isnan(ax) || std::isnan(ay) || std::isnan(az)) return;
             const uint32_t now = millis();
-            if (now < 15000 || now - id(g_move_ms) < 1500) { id(g_lift_ms) = 0; return; }   // boot settling / our own head move
+            if (now < 15000 || now - id(g_move_ms) < 1500 || id(g_game) != 0) { id(g_lift_ms) = 0; return; }   // boot settling / our own head move / a game
             // the driver reports g (its scale is 8/32768 per bit), whatever its log line says; a slow
             // baseline of "gravity" makes this independent of the unit, exactly as v1 did
             float mag = sqrtf(ax * ax + ay * ay + az * az);
@@ -129,6 +129,10 @@ script:
           int was = id(g_pads); id(g_pads) = pads;
           const uint32_t now = millis();
           if (pads) id(g_ia_ms) = now;
+          if (id(g_game) != 0) {                                 // a game: the pads are its buttons (front, middle, back)
+            if (pads && !was) id(game_input).execute((pads & 1) ? 0 : (pads & 2) ? 1 : 2, true);
+            return;
+          }
           if (pads && !was) {                                    // a hand arrives
             if (id(g_sleep)) { id(wake_up).execute(1); return; }
             if (id(g_saver)) { id(saver_off).execute(); }
@@ -256,7 +260,7 @@ esphome:
                 if (!id(g_near) && v > ${prox_near}) {
                   id(g_near) = true; id(g_ia_ms) = now;
                   if (id(g_saver)) id(saver_off).execute();
-                  if (!id(g_sleep) && id(g_away_ms) != 0 && now - id(g_away_ms) > 300000) id(face_set).execute(9);   // hello
+                  if (!id(g_sleep) && id(g_game) == 0 && id(g_away_ms) != 0 && now - id(g_away_ms) > 300000) id(face_set).execute(9);   // hello
                 } else if (id(g_near) && v < ${prox_far}) { id(g_near) = false; id(g_away_ms) = now; }
               });
               if (n == "Ambient light") s->add_on_state_callback([](float v) {

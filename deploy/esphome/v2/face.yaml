@@ -162,7 +162,7 @@ lvgl:
       scrollable: false
       scrollbar_mode: "OFF"
       on_swipe_left: [ { script.execute: { id: show_screen, n: 1 } } ]
-      on_swipe_right: [ { script.execute: { id: show_screen, n: 3 } } ]
+      on_swipe_right: [ { script.execute: { id: show_screen, n: 4 } } ]
       widgets:
         - obj: { id: eye_l, styles: st_shape, x: 65, y: 73, width: 66, height: 86, radius: 24, bg_color: 0x5EF0E2 }
         - obj: { id: eye_r, styles: st_shape, x: 189, y: 73, width: 66, height: 86, radius: 24, bg_color: 0x5EF0E2 }

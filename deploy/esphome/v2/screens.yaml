@@ -41,15 +41,15 @@ select:
     id: sel_screen
     name: "Screen"
     icon: mdi:view-carousel-outline
-    options: ["Face", "Screen 1", "Screen 2", "Air conditioner"]
+    options: ["Face", "Screen 1", "Screen 2", "Air conditioner", "Games"]
     lambda: |-
-      static const char *const N[4] = {"Face", "Screen 1", "Screen 2", "Air conditioner"};
-      int p = id(g_page); return std::string(N[(p >= 0 && p < 4) ? p : 0]);
+      static const char *const N[5] = {"Face", "Screen 1", "Screen 2", "Air conditioner", "Games"};
+      int p = id(g_page); return std::string(N[(p >= 0 && p < 5) ? p : (p == 5 ? 4 : 0)]);
     update_interval: 2s
     set_action:
       - lambda: |-
-          static const char *const N[4] = {"Face", "Screen 1", "Screen 2", "Air conditioner"};
-          for (int i = 0; i < 4; i++) if (x == N[i]) { id(show_screen).execute(i); break; }
+          static const char *const N[5] = {"Face", "Screen 1", "Screen 2", "Air conditioner", "Games"};
+          for (int i = 0; i < 5; i++) if (x == N[i]) { id(show_screen).execute(i); break; }
 
 esphome:
   on_boot:
@@ -129,7 +129,7 @@ lvgl:
     - id: page_ac
       bg_color: 0x000000
       scrollable: false
-      on_swipe_left: [ { script.execute: { id: show_screen, n: 0 } } ]
+      on_swipe_left: [ { script.execute: { id: show_screen, n: 4 } } ]
       on_swipe_right: [ { script.execute: { id: show_screen, n: 2 } } ]
       widgets:
         - label: { id: ac_title, x: 12, y: 6, width: 240, long_mode: DOT, text: "Air conditioner", text_font: f_tile, text_color: 0x7FA9A4 }
@@ -176,6 +176,12 @@ script:
       - if:
           condition: { lambda: 'return n == 0;' }
           then: [ { lvgl.page.show: page_face } ]
+      - if:
+          condition: { lambda: 'return n == 4;' }
+          then: [ { lvgl.page.show: page_games } ]
+      - if:
+          condition: { lambda: 'return n == 5;' }
+          then: [ { lvgl.page.show: page_game } ]
 
   - id: tile_tap
     parameters: { i: int }

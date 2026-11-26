@@ -29,3 +29,4 @@ packages:
       - deploy/esphome/v2/face_tick.yaml
       - deploy/esphome/v2/behavior.yaml
       - deploy/esphome/v2/screens.yaml
+      - deploy/esphome/v2/games.yaml

@@ -439,6 +439,27 @@ light:
             auto flash = [&](std::initializer_list<float> times, float d) { float m = 0; for (float b : times) m = std::max(m, bump(t, b, b + d)); return m; };
             auto breathe = [&](float P) { return .2f + .8f * (.5f - .5f * cosf(t * TAUF / P)); };
             const int n = it.size();
+            if (id(g_game) != 0) {                               // a game owns the bar while it runs
+              int gm = id(g_game_led); float gt = (millis() - id(g_game_led_t0)) / 1000.0f;
+              for (int i = 0; i < n; i++) {
+                uint32_t c = 0; float a = 0;
+                switch (gm) {
+                  case 1: c = 0xFFFFFF; a = .15f + .85f * std::max(0.0f, sinf(fmodf(gt, .8f) / .8f * PIF)); break;   // countdown beats
+                  case 2: c = 0x2FE6FF; a = 1; break;                                                               // your pick
+                  case 3: c = 0x35F57A; a = bump(gt, 0, .4f) + bump(gt, .5f, .9f); break;                           // a win for you
+                  case 4: c = 0xFF8A1F; a = bump(gt, 0, .4f) + bump(gt, .5f, .9f); break;                           // a win for me
+                  case 5: c = 0xA66BFF; a = bump(gt, 0, .6f); break;                                                // a tie
+                  case 6: { it[i] = ESPHSVColor((uint8_t) (fmodf(i / 12.0f + gt * 1.2f, 1) * 255), 240, 255).to_rgb(); continue; }   // spinning
+                  case 7: c = 0xA66BFF; a = .12f + .88f * std::max(0.0f, sinf(i / 12.0f * TAUF - gt * TAUF)); break; // thinking
+                  case 8: c = 0xFFA81F; a = .25f; break;                                                            // wait...
+                  case 9: c = 0x35F57A; a = 1; break;                                                               // NOW
+                  default: break;
+                }
+                a = std::max(0.0f, std::min(1.0f, a));
+                it[i] = Color((uint8_t) (((c >> 16) & 0xFF) * a), (uint8_t) (((c >> 8) & 0xFF) * a), (uint8_t) ((c & 0xFF) * a));
+              }
+              return;
+            }
             for (int i = 0; i < n; i++) {
               uint32_t c = 0; float a = 0;
               switch (st) {

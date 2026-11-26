@@ -5,7 +5,7 @@ name: firmware-v2
 
 on:
   push:
-    branches: [v2]
+    branches: [v2, v2-games]
     paths:
       - "deploy/esphome/v2/**"
       - "components/**"
@@ -56,6 +56,7 @@ jobs:
             face_tick: !include ../deploy/esphome/v2/face_tick.yaml
             behavior: !include ../deploy/esphome/v2/behavior.yaml
             screens: !include ../deploy/esphome/v2/screens.yaml
+            games: !include ../deploy/esphome/v2/games.yaml
           EOF
 
       - name: Validate

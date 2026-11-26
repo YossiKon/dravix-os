@@ -1,0 +1,272 @@
+# ════════════════════════════════════════════════════════════════════════════════
+#  Dravix v2 · games — played on the robot itself: the screen, or the three head pads.
+#  Swipe to the "Games" screen (or HA: Screen → Games, or the play_game action).
+#  1 rock paper scissors · 2 coin · 3 dice · 4 magic 8-ball · 5 reaction
+#  While a game runs, the pads are game buttons (pad 1/2/3), and petting, shaking and
+#  "hello" reactions stay quiet. The wake word and a ringing timer end a game.
+# ════════════════════════════════════════════════════════════════════════════════
+globals:
+  - { id: g_game,        type: int,      restore_value: no,  initial_value: "0" }
+  - { id: g_gph,         type: int,      restore_value: no,  initial_value: "0" }      # phase
+  - { id: g_gt0,         type: uint32_t, restore_value: no,  initial_value: "0" }      # phase start
+  - { id: g_gin,         type: int,      restore_value: no,  initial_value: "-1" }     # input this phase: 0..2 a pick, 9 a tap
+  - { id: g_gin_pad,     type: bool,     restore_value: no,  initial_value: "false" }  # …from a head pad (100 ms resolution)
+  - { id: g_gin_ms,      type: uint32_t, restore_value: no,  initial_value: "0" }
+  - { id: g_gflag,       type: bool,     restore_value: no,  initial_value: "false" }  # once-per-phase work done
+  - { id: g_gval,        type: int,      restore_value: no,  initial_value: "0" }      # your pick / the coin / the die / the answer
+  - { id: g_rps_me,      type: int,      restore_value: no,  initial_value: "0" }
+  - { id: g_rps_sy,      type: int,      restore_value: no,  initial_value: "0" }
+  - { id: g_rps_sm,      type: int,      restore_value: no,  initial_value: "0" }
+  - { id: g_gwait,       type: uint32_t, restore_value: no,  initial_value: "0" }      # reaction: how long to wait
+  - { id: g_rx_ms,       type: int,      restore_value: no,  initial_value: "0" }
+  - { id: g_rx_best,     type: int,      restore_value: yes, initial_value: "0" }      # best reaction, ms (screen taps)
+  - { id: g_game_led,    type: int,      restore_value: no,  initial_value: "0" }
+  - { id: g_game_led_t0, type: uint32_t, restore_value: no,  initial_value: "0" }
+
+font:
+  - file: "gfonts://Rubik@600"
+    id: f_game
+    size: 17
+    glyphsets: [GF_Latin_Core]
+  - file: "gfonts://Rubik@700"
+    id: f_big
+    size: 44
+    glyphs: " !'.?·0123456789:~ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
+
+image:
+  - { platform: file, file: "${img_base}/glove_scissors_r.png", id: img_gl_sc_r, type: RGB565, transparency: alpha_channel }
+  - { platform: file, file: "${img_base}/glove_scissors_l.png", id: img_gl_sc_l, type: RGB565, transparency: alpha_channel }
+
+api:
+  actions:
+    # start a game from Home Assistant: game = rps | coin | dice | 8ball | reaction
+    - action: play_game
+      variables:
+        game: string
+      then:
+        - lambda: |-
+            int g = game == "rps" ? 1 : game == "coin" ? 2 : game == "dice" ? 3 : game == "8ball" ? 4 : game == "reaction" ? 5 : 0;
+            if (g) id(game_start).execute(g);
+
+lvgl:
+  pages:
+    - id: page_games
+      bg_color: 0x000000
+      scrollable: false
+      on_swipe_left: [ { script.execute: { id: show_screen, n: 0 } } ]
+      on_swipe_right: [ { script.execute: { id: show_screen, n: 3 } } ]
+      widgets:
+        - label: { id: gms_title, x: 12, y: 6, text: "Games", text_font: f_tile, text_color: 0x7FA9A4 }
+        - obj: { styles: st_tile, x: 8,   y: 30,  width: 98, height: 64, on_click: [ { script.execute: { id: game_start, g: 1 } } ], widgets: [ { label: { align: CENTER, text_align: CENTER, text: "Rock paper\nscissors", text_font: f_tile, text_color: 0xDDF7F4 } } ] }
+        - obj: { styles: st_tile, x: 111, y: 30,  width: 98, height: 64, on_click: [ { script.execute: { id: game_start, g: 6 } } ], widgets: [ { label: { align: CENTER, text_align: CENTER, text: "Bang!", text_font: f_tile, text_color: 0xDDF7F4 } } ] }
+        - obj: { styles: st_tile, x: 214, y: 30,  width: 98, height: 64, on_click: [ { script.execute: { id: game_start, g: 5 } } ], widgets: [ { label: { align: CENTER, text_align: CENTER, text: "Reaction", text_font: f_tile, text_color: 0xDDF7F4 } } ] }
+        - obj: { styles: st_tile, x: 8,   y: 99,  width: 98, height: 64, on_click: [ { script.execute: { id: game_start, g: 2 } } ], widgets: [ { label: { align: CENTER, text_align: CENTER, text: "Coin", text_font: f_tile, text_color: 0xDDF7F4 } } ] }
+        - obj: { styles: st_tile, x: 111, y: 99,  width: 98, height: 64, on_click: [ { script.execute: { id: game_start, g: 3 } } ], widgets: [ { label: { align: CENTER, text_align: CENTER, text: "Dice", text_font: f_tile, text_color: 0xDDF7F4 } } ] }
+        - obj: { styles: st_tile, x: 214, y: 99,  width: 98, height: 64, on_click: [ { script.execute: { id: game_start, g: 4 } } ], widgets: [ { label: { align: CENTER, text_align: CENTER, text: "Magic\n8-ball", text_font: f_tile, text_color: 0xDDF7F4 } } ] }
+        - obj: { styles: st_tile, x: 8,   y: 168, width: 98, height: 64, on_click: [ { script.execute: { id: game_start, g: 7 } } ], widgets: [ { label: { align: CENTER, text_align: CENTER, text: "Chameleon", text_font: f_tile, text_color: 0xDDF7F4 } } ] }
+        - obj: { styles: st_tile, x: 111, y: 168, width: 98, height: 64, on_click: [ { script.execute: { id: game_start, g: 8 } } ], widgets: [ { label: { align: CENTER, text_align: CENTER, text: "Photo", text_font: f_tile, text_color: 0xDDF7F4 } } ] }
+        - obj: { styles: st_tile, x: 214, y: 168, width: 98, height: 64, on_click: [ { script.execute: { id: game_start, g: 9 } } ], widgets: [ { label: { align: CENTER, text_align: CENTER, text: "Mirror", text_font: f_tile, text_color: 0xDDF7F4 } } ] }
+    - id: page_game
+      bg_color: 0x000000
+      scrollable: false
+      widgets:
+        - obj: { id: gm_e1, styles: st_shape, x: 128, y: 10, width: 24, height: 30, radius: 10, bg_color: 0x5EF0E2 }
+        - obj: { id: gm_e2, styles: st_shape, x: 168, y: 10, width: 24, height: 30, radius: 10, bg_color: 0x5EF0E2 }
+        - label: { id: gm_score, x: 10, y: 14, text: "", text_font: f_game, text_color: 0x7FA9A4 }
+        - image: { id: gm_you, src: img_gl_fist_l, x: 42, y: 58, hidden: true }
+        - image: { id: gm_me,  src: img_gl_fist_r, x: 186, y: 58, hidden: true }
+        - label: { id: gm_big, align: TOP_MID, y: 56, text: "", text_font: f_big, text_color: 0xF2FFFD }
+        - label: { id: gm_sub, align: TOP_MID, y: 112, width: 300, text_align: CENTER, long_mode: WRAP, text: "", text_font: f_game, text_color: 0x9CC7C1 }
+        # the whole stage is a tap target (coin, dice, 8-ball, reaction)…
+        - obj: { id: gm_tap, x: 0, y: 44, width: 320, height: 196, bg_opa: TRANSP, border_width: 0, pad_all: 0, hidden: true, on_click: [ { script.execute: { id: game_input, k: 9, pad: false } } ] }
+        # …except in rock paper scissors, where these three are
+        - obj: { id: gm_b0, styles: st_tile, x: 8,   y: 166, width: 98, height: 68, hidden: true, on_click: [ { script.execute: { id: game_input, k: 0, pad: false } } ], widgets: [ { image: { id: gm_i0, src: img_gl_fist_r,  align: CENTER } } ] }
+        - obj: { id: gm_b1, styles: st_tile, x: 111, y: 166, width: 98, height: 68, hidden: true, on_click: [ { script.execute: { id: game_input, k: 1, pad: false } } ], widgets: [ { image: { id: gm_i1, src: img_gl_open_r,  align: CENTER } } ] }
+        - obj: { id: gm_b2, styles: st_tile, x: 214, y: 166, width: 98, height: 68, hidden: true, on_click: [ { script.execute: { id: game_input, k: 2, pad: false } } ], widgets: [ { image: { id: gm_i2, src: img_gl_sc_r,    align: CENTER } } ] }
+        - obj: { id: gm_x, styles: st_tile, x: 272, y: 6, width: 42, height: 30, on_click: [ { script.execute: game_end } ], widgets: [ { label: { text: "X", align: CENTER, text_font: f_game, text_color: 0x7FA9A4 } } ] }
+
+script:
+  - id: game_start
+    parameters: { g: int }
+    then:
+      - if:
+          condition: { lambda: 'return g >= 6;' }     # not built yet
+          then:
+            - lvgl.label.update: { id: gms_title, text: "Games · coming soon" }
+            - delay: 2s
+            - lvgl.label.update: { id: gms_title, text: "Games" }
+          else:
+            - lambda: |-
+                id(g_game) = g; id(g_gph) = 0; id(g_gt0) = millis(); id(g_gin) = -1; id(g_gflag) = false;
+                id(g_rps_sy) = 0; id(g_rps_sm) = 0; id(g_game_led) = 0;
+                lv_obj_t *I[3] = {id(gm_i0), id(gm_i1), id(gm_i2)};
+                for (auto *o : I) lv_image_set_scale(o, 150);           // the gloves at 0.6 in the buttons
+                lv_image_set_scale(id(gm_you), 300); lv_image_set_scale(id(gm_me), 300);
+            - script.execute: { id: show_screen, n: 5 }
+            - if:
+                condition: { lambda: 'return id(sw_leds).state && id(n_led).state > 0;' }
+                then:
+                  - light.turn_on: { id: stackchan_light_bar, brightness: !lambda 'return id(n_led).state / 100.0f;', effect: "Dravix" }
+
+  - id: game_end
+    then:
+      - lambda: 'id(g_game) = 0; id(g_game_led) = 0;'
+      - light.turn_off: { id: stackchan_light_bar }
+      - script.execute: { id: show_screen, n: 4 }
+
+  - id: game_input
+    parameters: { k: int, pad: bool }
+    then:
+      - lambda: |-
+          if (id(g_game) == 0) return;
+          id(g_gin) = k; id(g_gin_pad) = pad; id(g_gin_ms) = millis(); id(g_page_ms) = millis();
+
+interval:
+  - interval: 50ms
+    then:
+      - lambda: |-
+          int g = id(g_game);
+          if (g == 0) return;
+          const uint32_t now = millis();
+          id(g_page_ms) = now;                                   // a game in progress never times out
+          int ph = id(g_gph), in = id(g_gin);
+          float t = (now - id(g_gt0)) / 1000.0f;
+          auto setp = [&](int p) { id(g_gph) = p; id(g_gt0) = now; id(g_gin) = -1; id(g_gflag) = false; ph = p; t = 0; in = -1; };
+          auto txt = [](lv_obj_t *o, const char *s) { if (strcmp(lv_label_get_text(o), s) != 0) lv_label_set_text(o, s); };
+          auto vis = [](lv_obj_t *o, bool on) { bool hidden = lv_obj_has_flag(o, LV_OBJ_FLAG_HIDDEN); if (on && hidden) lv_obj_remove_flag(o, LV_OBJ_FLAG_HIDDEN); else if (!on && !hidden) lv_obj_add_flag(o, LV_OBJ_FLAG_HIDDEN); };
+          auto led = [&](int m) { if (id(g_game_led) != m) { id(g_game_led) = m; id(g_game_led_t0) = now; } };
+          // the little eyes: 0 calm, 1 happy, 2 sad, 3 wide, 4 green "now", 5 amber "wait", 6 looking up
+          static int mood_last = -1;
+          auto eyes = [&](int m) {
+            if (m == mood_last) return;
+            mood_last = m;
+            int w = 24, h = 30, y = 10, r = 10, dy2 = 0; uint32_t c = 0x5EF0E2;
+            if (m == 1) { h = 12; y = 18; r = 6; }
+            if (m == 2) { h = 20; y = 18; r = 8; dy2 = 0; }
+            if (m == 3) { w = 28; h = 34; y = 8; r = 14; }
+            if (m == 4) { c = 0x35F57A; w = 28; h = 34; y = 8; r = 14; }
+            if (m == 5) { c = 0xFFA81F; h = 16; y = 16; r = 8; }
+            if (m == 6) { h = 24; y = 4; }
+            lv_obj_t *E[2] = {id(gm_e1), id(gm_e2)};
+            for (int i = 0; i < 2; i++) {
+              lv_obj_set_size(E[i], w, h); lv_obj_set_pos(E[i], (i ? 168 : 128) - (w - 24) / 2, y + dy2);
+              lv_obj_set_style_radius(E[i], r, 0); lv_obj_set_style_bg_color(E[i], lv_color_hex(c), 0);
+            }
+          };
+          lv_obj_t *BIG = id(gm_big), *SUB = id(gm_sub), *SC = id(gm_score), *YOU = id(gm_you), *ME = id(gm_me), *TAP = id(gm_tap);
+          lv_obj_t *B[3] = {id(gm_b0), id(gm_b1), id(gm_b2)};
+          auto glove = [&](lv_obj_t *o, int pick, bool left) {
+            image::Image *im = pick == 0 ? (left ? id(img_gl_fist_l) : id(img_gl_fist_r)) : pick == 1 ? (left ? id(img_gl_open_l) : id(img_gl_open_r)) : (left ? id(img_gl_sc_l) : id(img_gl_sc_r));
+            lv_image_set_src(o, im->get_lv_image_dsc());
+          };
+          static const char *const PICK[3] = {"Rock", "Paper", "Scissors"};
+          bool tap = in >= 0;
+          char b[64];
+
+          if (g == 1) {                                          // ── ROCK PAPER SCISSORS: first to 2
+            vis(TAP, false);
+            snprintf(b, sizeof b, "You %d  ·  %d Me", id(g_rps_sy), id(g_rps_sm)); txt(SC, b);
+            switch (ph) {
+              case 0:
+                eyes(3); led(0); txt(BIG, "Ready?"); txt(SUB, "First to 2 wins. Pick on the screen, or touch my head: front, middle, back.");
+                vis(YOU, false); vis(ME, false); for (auto *o : B) vis(o, false);
+                if (t > 3) setp(1);
+                break;
+              case 1: {                                          // "Rock... Paper... Scissors..." with both fists pumping
+                static const char *const W[3] = {"Rock", "Paper", "Scissors"};
+                int w = std::min(2, (int) (t / .8f));
+                float bob = fabsf(sinf(t / .8f * 3.14159f));
+                txt(BIG, ""); txt(SUB, W[w]); eyes(0); led(1);
+                for (auto *o : B) vis(o, false);
+                vis(YOU, true); vis(ME, true); glove(YOU, 0, true); glove(ME, 0, false);
+                lv_obj_set_y(YOU, 50 + (int) (bob * 22)); lv_obj_set_y(ME, 50 + (int) (bob * 22));
+                if (t > 2.4f) { id(g_rps_me) = random_uint32() % 3; setp(2); }
+              } break;
+              case 2:                                            // "Shoot!" — your pick
+                txt(BIG, "Shoot!"); txt(SUB, ""); eyes(3); led(2);
+                vis(YOU, false); vis(ME, false); for (auto *o : B) vis(o, true);
+                if (in >= 0 && in <= 2) { id(g_gval) = in; setp(3); }
+                else if (t > 6) { txt(SUB, "Too slow!"); setp(1); }
+                break;
+              case 3: {                                          // reveal
+                int you = id(g_gval), me = id(g_rps_me), r = (you - me + 3) % 3;   // 0 tie, 1 you win, 2 I win
+                if (!id(g_gflag)) { id(g_gflag) = true; if (r == 1) id(g_rps_sy)++; else if (r == 2) id(g_rps_sm)++; }
+                for (auto *o : B) vis(o, false);
+                vis(YOU, true); vis(ME, true); glove(YOU, you, true); glove(ME, me, false);
+                lv_obj_set_y(YOU, 50); lv_obj_set_y(ME, 50);
+                txt(BIG, ""); snprintf(b, sizeof b, "%s! %s vs %s", r == 0 ? "Tie" : r == 1 ? "You win" : "I win", PICK[you], PICK[me]); txt(SUB, b);
+                eyes(r == 2 ? 1 : r == 1 ? 2 : 6); led(r == 1 ? 3 : r == 2 ? 4 : 5);
+                if (t > 2.8f) { if (id(g_rps_sy) >= 2 || id(g_rps_sm) >= 2) setp(4); else setp(1); }
+              } break;
+              case 4: {                                          // the match
+                bool youwon = id(g_rps_sy) > id(g_rps_sm);
+                vis(YOU, false); vis(ME, false);
+                txt(BIG, youwon ? "You won!" : "I won!"); txt(SUB, youwon ? "Well played. Tap X, or play again from Games." : "Hehe. Rematch?");
+                eyes(youwon ? 2 : 1); led(youwon ? 3 : 4);
+                if (t > 5) id(game_end).execute();
+              } break;
+            }
+            return;
+          }
+
+          // the tap games share the stage: tap anywhere, or touch any head pad
+          for (auto *o : B) vis(o, false);
+          vis(YOU, false); vis(ME, false); vis(TAP, true); txt(SC, "");
+          if (g == 2 || g == 3) {                                // ── COIN / DICE
+            bool coin = g == 2;
+            if (ph == 0) {                                       // spinning, slowing down
+              if (!id(g_gflag)) { id(g_gflag) = true; id(g_gval) = coin ? (int) (random_uint32() % 2) : 1 + (int) (random_uint32() % 6); }
+              int k = (int) (sqrtf(t) * 9);
+              if (coin) txt(BIG, k % 2 ? "Tails" : "Heads"); else { snprintf(b, sizeof b, "%d", 1 + k % 6); txt(BIG, b); }
+              txt(SUB, coin ? "Flipping..." : "Rolling..."); eyes(6); led(6);
+              if (t > 2) setp(1);
+            } else {                                             // the result
+              if (coin) txt(BIG, id(g_gval) ? "Tails" : "Heads"); else { snprintf(b, sizeof b, "%d", id(g_gval)); txt(BIG, b); }
+              txt(SUB, "Tap for another go"); eyes(1); led(3);
+              if (tap && t > .4f) setp(0);
+              else if (t > 15) id(game_end).execute();
+            }
+            return;
+          }
+          if (g == 4) {                                          // ── MAGIC 8-BALL
+            static const char *const A[8] = {"Yes!", "No.", "Maybe", "Ask again", "Definitely!", "Not now", "Of course!", "I doubt it"};
+            if (ph == 0) {
+              txt(BIG, "8-ball"); txt(SUB, "Ask a yes or no question, then touch my head or the screen."); eyes(0); led(0);
+              if (tap) setp(1); else if (t > 30) id(game_end).execute();
+            } else if (ph == 1) {
+              int d = 1 + ((int) (t * 3)) % 3; txt(BIG, d == 1 ? "." : d == 2 ? ".." : "..."); txt(SUB, "Thinking"); eyes(6); led(7);
+              if (t > 1.8f) { id(g_gval) = random_uint32() % 8; setp(2); }
+            } else {
+              txt(BIG, A[id(g_gval) % 8]); txt(SUB, "Tap to ask again"); eyes(id(g_gval) % 2 ? 2 : 1); led(id(g_gval) % 2 ? 4 : 3);
+              if (tap && t > .4f) setp(1); else if (t > 20) id(game_end).execute();
+            }
+            return;
+          }
+          if (g == 5) {                                          // ── REACTION
+            if (ph == 0) {
+              txt(BIG, "Reaction"); txt(SUB, "When my eyes turn green, touch my head or the screen as fast as you can."); eyes(0); led(0);
+              if (t > 3.5f || tap) setp(1);
+            } else if (ph == 1) {                                // wait a random 1.5..4 s
+              if (!id(g_gflag)) { id(g_gflag) = true; id(g_gwait) = 1500 + random_uint32() % 2500; }
+              txt(BIG, "Wait..."); txt(SUB, ""); eyes(5); led(8);
+              if (tap) { id(g_rx_ms) = -1; setp(3); }            // too soon
+              else if ((now - id(g_gt0)) > id(g_gwait)) setp(2);
+            } else if (ph == 2) {                                // GO
+              txt(BIG, "NOW!"); eyes(4); led(9);
+              if (tap) { id(g_rx_ms) = (int) (id(g_gin_ms) - id(g_gt0)); if (!id(g_gin_pad) && (id(g_rx_best) == 0 || id(g_rx_ms) < id(g_rx_best))) id(g_rx_best) = id(g_rx_ms); setp(3); }
+              else if (t > 4) { id(g_rx_ms) = -2; setp(3); }
+            } else {                                             // the result
+              int ms = id(g_rx_ms);
+              if (ms == -1) { txt(BIG, "Too soon!"); eyes(2); led(4); }
+              else if (ms == -2) { txt(BIG, "Asleep?"); eyes(6); led(5); }
+              else {
+                // pads are read every 100 ms: their times are shown to a tenth only
+                if (id(g_gin_pad)) snprintf(b, sizeof b, "~%.1f s", ms / 1000.0f); else snprintf(b, sizeof b, "%.2f s", ms / 1000.0f);
+                txt(BIG, b); eyes(1); led(3);
+              }
+              if (id(g_rx_best) > 0) snprintf(b, sizeof b, "Best %.2f s · tap to go again", id(g_rx_best) / 1000.0f); else snprintf(b, sizeof b, "Tap to go again");
+              txt(SUB, b);
+              if (tap && t > .6f) setp(1); else if (t > 15) id(game_end).execute();
+            }
+            return;
+          }

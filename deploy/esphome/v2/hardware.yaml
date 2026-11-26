@@ -341,6 +341,7 @@ sensor:
     address: 0x23
     i2c_id: bsp_bus
     type: ALS_PS
+    update_interval: 300ms   # dravix: the default (60 s) published "Proximity counts" once a minute
     ambient_light:
       name: "Ambient light"
     glass_attenuation_factor: 2.5

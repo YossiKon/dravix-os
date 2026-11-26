@@ -14,7 +14,7 @@ substitutions:
   speaker_ceiling: "1.0"          # 1.0 = 0 dB (full); 0.9 = -9.6 dB spares the speaker
   wake_sound_file: "https://github.com/esphome/home-assistant-voice-pe/raw/dev/sounds/wake_word_triggered.flac"
   brownout_detector: "n"          # "n": servo start + Wi-Fi TX false-fires it on this board
-  img_base: "https://raw.githubusercontent.com/YossiKon/dravix-os/v2/deploy/esphome/v2/img"
+  img_base: "https://raw.githubusercontent.com/YossiKon/dravix-os/v2-games/deploy/esphome/v2/img"   # MERGE NOTE: back to /v2/ when merging
 
 esphome:
   name: ${device_name}
@@ -242,7 +242,7 @@ micro_wake_word:
         then:
           - globals.set: { id: g_voice, value: "true" }
           - globals.set: { id: g_saw_speech, value: "false" }
-          - lambda: 'id(g_sleep) = false; id(g_saver) = false; id(g_ia_ms) = millis();'   # the wake word wakes it up
+          - lambda: 'id(g_sleep) = false; id(g_saver) = false; id(g_ia_ms) = millis(); id(g_game) = 0; id(g_game_led) = 0;'   # the wake word wakes it up (and ends a game)
           - script.execute: { id: show_screen, n: 0 }
           - component.suspend: x_servo_sensor
           - component.suspend: y_servo_sensor
@@ -318,6 +318,8 @@ voice_assistant:
   on_timer_started:
     - script.execute: { id: face_set, s: 10 }              # done: the timer is set
   on_timer_finished:
+    - lambda: 'id(g_game) = 0; id(g_game_led) = 0;'          # a ringing timer ends a game
+    - script.execute: { id: show_screen, n: 0 }
     - script.execute: { id: face_set, s: 16 }              # timer ringing
   on_client_connected:
     # HA came back: re-arm the ear (a wake word spoken while HA restarted leaves it off)

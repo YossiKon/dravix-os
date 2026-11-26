@@ -70,6 +70,14 @@ def pill(x, y, w, h, rot=0):
 def glove(pose):
     """The Face Lab's `handShapes('gloves', pose)`, palm centre at (0, 0), fingers up."""
     S = []
+    if pose == "scissors":                     # a V: index + middle up, the rest folded, thumb across
+        for x in (4.5, 13.5):
+            S.append(("c", x, -8, 5.5))
+        S.append(pill(-13, -16, 9, 30, -12))
+        S.append(pill(-2, -18, 9, 32, 10))
+        S.append(("rr", 0, 8, 38, 32, 12, 0))
+        S.append(pill(-6, 8, 22, 9))
+        return S
     if pose in ("fist", "thumb", "point"):
         for x in ([-4.5, 4.5, 13.5] if pose == "point" else [-13.5, -4.5, 4.5, 13.5]):
             S.append(("c", x, -8, 5.5))
@@ -89,7 +97,7 @@ def glove(pose):
 
 
 def make_gloves():
-    for pose in ("open", "fist", "thumb", "point"):
+    for pose in ("open", "fist", "thumb", "point", "scissors"):
         img = canvas(92, 92)
         for s in glove(pose):
             shape(img, s, 46, 46)
