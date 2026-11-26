@@ -5,7 +5,14 @@
 #  While a game runs, the pads are game buttons (pad 1/2/3), and petting, shaking and
 #  "hello" reactions stay quiet. The wake word and a ringing timer end a game.
 # ════════════════════════════════════════════════════════════════════════════════
+esphome:
+  includes: ["<img_converters.h>"]     # the camera library's JPEG decoder (jpg2rgb565)
+
 globals:
+  - { id: g_eye_rgb,     type: uint32_t, restore_value: no,  initial_value: "0x5EF0E2" }   # Chameleon: the eye colour…
+  - { id: g_eye_until,   type: uint32_t, restore_value: no,  initial_value: "0" }          # …until
+  - { id: g_cam_purpose, type: int,      restore_value: no,  initial_value: "0" }          # a frame asked for: 1 chameleon
+  - { id: g_cam_jpg,     type: "std::vector<uint8_t>", restore_value: no }
   - { id: g_game,        type: int,      restore_value: no,  initial_value: "0" }
   - { id: g_gph,         type: int,      restore_value: no,  initial_value: "0" }      # phase
   - { id: g_gt0,         type: uint32_t, restore_value: no,  initial_value: "0" }      # phase start
@@ -98,7 +105,10 @@ script:
             - delay: 6s
             - lvgl.widget.hide: face_hint
       - if:
-          condition: { lambda: 'return g >= 7;' }     # not built yet
+          condition: { lambda: 'return g == 7;' }     # Chameleon: played on the face
+          then: [ { script.execute: chameleon_start } ]
+      - if:
+          condition: { lambda: 'return g >= 8;' }     # not built yet
           then:
             - lvgl.label.update: { id: gms_title, text: "Games · coming soon" }
             - delay: 2s
@@ -117,6 +127,56 @@ script:
                 condition: { lambda: 'return id(sw_leds).state && id(n_led).state > 0;' }
                 then:
                   - light.turn_on: { id: stackchan_light_bar, brightness: !lambda 'return id(n_led).state / 100.0f;', effect: "Dravix" }
+
+  # CHAMELEON: hold something colourful in front of it; its eyes take that colour for a minute
+  - id: chameleon_start
+    mode: restart
+    then:
+      - script.execute: { id: show_screen, n: 0 }
+      - lvgl.label.update: { id: face_hint, text: "Hold something colourful in front of me..." }
+      - lvgl.widget.show: face_hint
+      - script.execute: { id: face_set, s: 5 }
+      - delay: 3s
+      - lvgl.label.update: { id: face_hint, text: "Looking..." }
+      - lambda: 'id(g_cam_purpose) = 1; id(cam).request_image(esphome::camera::IDLE);'
+      - delay: 4s
+      - if:
+          condition: { lambda: 'return id(g_cam_purpose) == 1;' }   # no frame came back
+          then:
+            - lambda: 'id(g_cam_purpose) = 0;'
+            - lvgl.label.update: { id: face_hint, text: "My camera didn't answer." }
+            - delay: 3s
+      - lvgl.widget.hide: face_hint
+
+  # a frame the robot asked for: decoded at 1/8 (40x30) - plenty for a colour, cheap to do
+  - id: cam_process
+    then:
+      - lambda: |-
+          int purpose = id(g_cam_purpose); id(g_cam_purpose) = 0;
+          auto &jpg = id(g_cam_jpg);
+          if (jpg.empty()) return;
+          static uint16_t small[40 * 30];
+          bool ok = jpg2rgb565(jpg.data(), jpg.size(), (uint8_t *) small, JPG_SCALE_8X);
+          jpg.clear(); jpg.shrink_to_fit();
+          if (!ok) { ESP_LOGW("dravix", "camera: could not decode the frame"); return; }
+          if (purpose == 1) {
+            float R = 0, G = 0, B = 0; int n = 0;
+            for (int y = 8; y < 22; y++) for (int x = 10; x < 30; x++) {
+              uint16_t p = small[y * 40 + x];
+              R += ((p >> 11) & 0x1F) * 255.0f / 31; G += ((p >> 5) & 0x3F) * 255.0f / 63; B += (p & 0x1F) * 255.0f / 31; n++;
+            }
+            R /= n; G /= n; B /= n;
+            float mx = std::max(R, std::max(G, B)), mn = std::min(R, std::min(G, B));
+            float sat = mx > 1 ? (mx - mn) / mx : 0;
+            ESP_LOGI("dravix", "chameleon: saw r%.0f g%.0f b%.0f (saturation %.2f)", R, G, B, sat);
+            if (sat < .15f || mx < 25) { id(face_set).execute(7); lv_label_set_text(id(face_hint), "Hmm, I can't see a colour."); return; }
+            // make it vivid: the strongest channel to full, the weakest towards zero
+            auto vivid = [&](float c) { float v = (c - mn * .7f) / (mx - mn * .7f) * 255; return (uint32_t) std::max(0.0f, std::min(255.0f, v)); };
+            id(g_eye_rgb) = (vivid(R) << 16) | (vivid(G) << 8) | vivid(B);
+            id(g_eye_until) = millis() + 60000;
+            id(face_set).execute(1);
+            lv_label_set_text(id(face_hint), "Ta-da!");
+          }
 
   - id: game_end
     then:

@@ -570,6 +570,7 @@ text_sensor:
     update_interval: 1s
    
 esp32_camera:
+  id: cam   # dravix: an id, so the robot can ask for its own frames (games)
   name: "Camera"
   i2c_id: bsp_bus
   setup_priority: -200  

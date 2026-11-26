@@ -327,6 +327,17 @@ interval:
             opa(i, o, a, false);
           };
 
+          // the eye colour: aqua, or what Chameleon saw (for a minute)
+          {
+            static uint32_t col_last = 0;
+            uint32_t col = (id(g_eye_until) != 0 && now < id(g_eye_until)) ? id(g_eye_rgb) : 0x5EF0E2;
+            if (col != col_last) {
+              lv_color_t c = lv_color_hex(col);
+              lv_obj_set_style_bg_color(id(eye_l), c, 0); lv_obj_set_style_bg_color(id(eye_r), c, 0); lv_obj_set_style_bg_color(id(m_bar), c, 0);
+              for (lv_obj_t *o : {id(m_arc), id(m_ring), id(m_w1), id(m_w2), id(m_wv1), id(m_wv2), id(cls_l), id(cls_r)}) lv_obj_set_style_border_color(o, c, 0);
+              col_last = col;
+            }
+          }
           // eyes, with a 150 ms blend from the last drawn pose whenever the face changes
           static int last_st = -1; static uint32_t blend_t0 = 0; static float prevE[2][5], curE[2][5]; static bool have = false;
           if (st != last_st) { memcpy(prevE, curE, sizeof(curE)); blend_t0 = now; last_st = st; }
@@ -497,7 +508,7 @@ light:
             for (int i = 0; i < n; i++) {
               uint32_t c = 0; float a = 0;
               switch (st) {
-                case 1: c = 0xFFD23F; a = flash({.35f, .75f}, .22f); break;                       // happy
+                case 1: c = (id(g_eye_until) > millis()) ? id(g_eye_rgb) : 0xFFD23F; a = flash({.35f, .75f}, .22f); break;   // happy (Chameleon: its new colour)
                 case 2: c = 0xFF4FA6; a = breathe(2); break;                                        // love
                 case 3: c = 0x3D7BFF; a = (t > .4f && t < 4.6f) ? .55f * breathe(3) : 0; break;     // sad
                 case 4: c = 0xFF3B3B; a = flash({.35f, .7f, 1.05f}, .2f); break;                   // grumpy
