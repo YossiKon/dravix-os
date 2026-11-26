@@ -160,6 +160,8 @@ script:
     parameters: { n: int }
     then:
       - lambda: |-
+          if (n != 5 && id(g_game) != 0) { id(g_game) = 0; id(g_game_led) = 0; }   // leaving the stage ends the game
+          id(g_cam_live_until) = 0;                                                 // …and any page change ends the mirror
           id(g_page) = n; id(g_page_ms) = millis(); id(g_on_face) = (n == 0); id(g_scr_dirty) = true;
           id(g_ia_ms) = millis(); id(g_swipe_ms) = millis();
           if (id(g_sleep) && n != 0) { id(g_sleep) = false; id(face_rest).execute(); }

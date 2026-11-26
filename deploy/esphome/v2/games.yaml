@@ -32,6 +32,7 @@ globals:
   - { id: g_rps_me,      type: int,      restore_value: no,  initial_value: "0" }
   - { id: g_rps_sy,      type: int,      restore_value: no,  initial_value: "0" }
   - { id: g_rps_sm,      type: int,      restore_value: no,  initial_value: "0" }
+  - { id: g_rps_miss,    type: int,      restore_value: no,  initial_value: "0" }      # picks missed in a row
   - { id: g_gwait,       type: uint32_t, restore_value: no,  initial_value: "0" }      # reaction: how long to wait
   - { id: g_rx_ms,       type: int,      restore_value: no,  initial_value: "0" }
   - { id: g_rx_best,     type: int,      restore_value: yes, initial_value: "0" }      # best reaction, ms (screen taps)
@@ -92,17 +93,17 @@ lvgl:
       on_swipe_right: [ { script.execute: { id: show_screen, n: 3 } } ]
       widgets:
         - label: { id: gms_title, x: 12, y: 5, text: "Games", text_font: f_tile, text_color: 0x7FA9A4 }
-        - obj: { styles: st_tile, x: 8, y: 28, width: 98, height: 48, on_click: [ { script.execute: { id: game_start, g: 1 } } ], widgets: [ { label: { align: CENTER, text_align: CENTER, text: "Rock paper\nscissors", text_font: f_tile, text_color: 0xDDF7F4 } } ] }
-        - obj: { styles: st_tile, x: 111, y: 28, width: 98, height: 48, on_click: [ { script.execute: { id: game_start, g: 6 } } ], widgets: [ { label: { align: CENTER, text_align: CENTER, text: "Bang!", text_font: f_tile, text_color: 0xDDF7F4 } } ] }
-        - obj: { styles: st_tile, x: 214, y: 28, width: 98, height: 48, on_click: [ { script.execute: { id: game_start, g: 5 } } ], widgets: [ { label: { align: CENTER, text_align: CENTER, text: "Reaction", text_font: f_tile, text_color: 0xDDF7F4 } } ] }
-        - obj: { styles: st_tile, x: 8, y: 80, width: 98, height: 48, on_click: [ { script.execute: { id: game_start, g: 2 } } ], widgets: [ { label: { align: CENTER, text_align: CENTER, text: "Coin", text_font: f_tile, text_color: 0xDDF7F4 } } ] }
-        - obj: { styles: st_tile, x: 111, y: 80, width: 98, height: 48, on_click: [ { script.execute: { id: game_start, g: 3 } } ], widgets: [ { label: { align: CENTER, text_align: CENTER, text: "Dice", text_font: f_tile, text_color: 0xDDF7F4 } } ] }
-        - obj: { styles: st_tile, x: 214, y: 80, width: 98, height: 48, on_click: [ { script.execute: { id: game_start, g: 4 } } ], widgets: [ { label: { align: CENTER, text_align: CENTER, text: "Magic\n8-ball", text_font: f_tile, text_color: 0xDDF7F4 } } ] }
-        - obj: { styles: st_tile, x: 8, y: 132, width: 98, height: 48, on_click: [ { script.execute: { id: game_start, g: 7 } } ], widgets: [ { label: { align: CENTER, text_align: CENTER, text: "Chameleon", text_font: f_tile, text_color: 0xDDF7F4 } } ] }
-        - obj: { styles: st_tile, x: 111, y: 132, width: 98, height: 48, on_click: [ { script.execute: { id: game_start, g: 8 } } ], widgets: [ { label: { align: CENTER, text_align: CENTER, text: "Photo", text_font: f_tile, text_color: 0xDDF7F4 } } ] }
-        - obj: { styles: st_tile, x: 214, y: 132, width: 98, height: 48, on_click: [ { script.execute: { id: game_start, g: 9 } } ], widgets: [ { label: { align: CENTER, text_align: CENTER, text: "Mirror", text_font: f_tile, text_color: 0xDDF7F4 } } ] }
-        - obj: { styles: st_tile, x: 8, y: 184, width: 98, height: 48, on_click: [ { script.execute: { id: game_start, g: 10 } } ], widgets: [ { label: { align: CENTER, text_align: CENTER, text: "Desk guard", text_font: f_tile, text_color: 0xDDF7F4 } } ] }
-        - obj: { styles: st_tile, x: 111, y: 184, width: 98, height: 48, on_click: [ { script.execute: { id: game_start, g: 11 } } ], widgets: [ { label: { align: CENTER, text_align: CENTER, text: "Follow me", text_font: f_tile, text_color: 0xDDF7F4 } } ] }
+        - obj: { styles: st_tile, x: 8, y: 28, width: 98, height: 48, on_click: [ { script.execute: { id: game_tap, g: 1 } } ], widgets: [ { label: { align: CENTER, text_align: CENTER, text: "Rock paper\nscissors", text_font: f_tile, text_color: 0xDDF7F4 } } ] }
+        - obj: { styles: st_tile, x: 111, y: 28, width: 98, height: 48, on_click: [ { script.execute: { id: game_tap, g: 6 } } ], widgets: [ { label: { align: CENTER, text_align: CENTER, text: "Bang!", text_font: f_tile, text_color: 0xDDF7F4 } } ] }
+        - obj: { styles: st_tile, x: 214, y: 28, width: 98, height: 48, on_click: [ { script.execute: { id: game_tap, g: 5 } } ], widgets: [ { label: { align: CENTER, text_align: CENTER, text: "Reaction", text_font: f_tile, text_color: 0xDDF7F4 } } ] }
+        - obj: { styles: st_tile, x: 8, y: 80, width: 98, height: 48, on_click: [ { script.execute: { id: game_tap, g: 2 } } ], widgets: [ { label: { align: CENTER, text_align: CENTER, text: "Coin", text_font: f_tile, text_color: 0xDDF7F4 } } ] }
+        - obj: { styles: st_tile, x: 111, y: 80, width: 98, height: 48, on_click: [ { script.execute: { id: game_tap, g: 3 } } ], widgets: [ { label: { align: CENTER, text_align: CENTER, text: "Dice", text_font: f_tile, text_color: 0xDDF7F4 } } ] }
+        - obj: { styles: st_tile, x: 214, y: 80, width: 98, height: 48, on_click: [ { script.execute: { id: game_tap, g: 4 } } ], widgets: [ { label: { align: CENTER, text_align: CENTER, text: "Magic\n8-ball", text_font: f_tile, text_color: 0xDDF7F4 } } ] }
+        - obj: { styles: st_tile, x: 8, y: 132, width: 98, height: 48, on_click: [ { script.execute: { id: game_tap, g: 7 } } ], widgets: [ { label: { align: CENTER, text_align: CENTER, text: "Chameleon", text_font: f_tile, text_color: 0xDDF7F4 } } ] }
+        - obj: { styles: st_tile, x: 111, y: 132, width: 98, height: 48, on_click: [ { script.execute: { id: game_tap, g: 8 } } ], widgets: [ { label: { align: CENTER, text_align: CENTER, text: "Photo", text_font: f_tile, text_color: 0xDDF7F4 } } ] }
+        - obj: { styles: st_tile, x: 214, y: 132, width: 98, height: 48, on_click: [ { script.execute: { id: game_tap, g: 9 } } ], widgets: [ { label: { align: CENTER, text_align: CENTER, text: "Mirror", text_font: f_tile, text_color: 0xDDF7F4 } } ] }
+        - obj: { styles: st_tile, x: 8, y: 184, width: 98, height: 48, on_click: [ { script.execute: { id: game_tap, g: 10 } } ], widgets: [ { label: { align: CENTER, text_align: CENTER, text: "Desk guard", text_font: f_tile, text_color: 0xDDF7F4 } } ] }
+        - obj: { styles: st_tile, x: 111, y: 184, width: 98, height: 48, on_click: [ { script.execute: { id: game_tap, g: 11 } } ], widgets: [ { label: { align: CENTER, text_align: CENTER, text: "Follow me", text_font: f_tile, text_color: 0xDDF7F4 } } ] }
         - obj: { styles: st_tile, x: 214, y: 184, width: 98, height: 48, on_click: [ { script.execute: { id: show_screen, n: 0 } } ], widgets: [ { label: { align: CENTER, text_align: CENTER, text: "Face", text_font: f_tile, text_color: 0xDDF7F4 } } ] }
     - id: page_game
       bg_color: 0x000000
@@ -131,10 +132,7 @@ script:
           condition: { lambda: 'return g == 6;' }     # Bang!: it is played on the face
           then:
             - script.execute: { id: show_screen, n: 0 }
-            - lvgl.label.update: { id: face_hint, text: "Point a finger right at me. Then shout BOOM!" }
-            - lvgl.widget.show: face_hint
-            - delay: 6s
-            - lvgl.widget.hide: face_hint
+            - script.execute: { id: hint, txt: "Point a finger right at me. Then shout BOOM!", ms: 6000 }
       - if:
           condition: { lambda: 'return g == 7;' }     # Chameleon: played on the face
           then: [ { script.execute: chameleon_start } ]
@@ -152,10 +150,10 @@ script:
           then:
             - switch.toggle: sw_follow
             - script.execute: { id: show_screen, n: 0 }
-            - lvgl.label.update: { id: face_hint, text: !lambda 'return id(sw_follow).state ? std::string("Follow me: on. Move in front of me!") : std::string("Follow me: off");' }
-            - lvgl.widget.show: face_hint
-            - delay: 4s
-            - lvgl.widget.hide: face_hint
+            - script.execute:
+                id: hint
+                txt: !lambda 'return id(sw_follow).state ? std::string("Follow me: on. Move in front of me!") : std::string("Follow me: off");'
+                ms: 4000
       - if:
           condition: { lambda: 'return g >= 12;' }     # not built yet
           then:
@@ -167,7 +165,7 @@ script:
           then:
             - lambda: |-
                 id(g_game) = g; id(g_gph) = 0; id(g_gt0) = millis(); id(g_gin) = -1; id(g_gflag) = false;
-                id(g_rps_sy) = 0; id(g_rps_sm) = 0; id(g_game_led) = 0;
+                id(g_rps_sy) = 0; id(g_rps_sm) = 0; id(g_rps_miss) = 0; id(g_game_led) = 0;
                 lv_obj_t *I[3] = {id(gm_i0), id(gm_i1), id(gm_i2)};
                 for (auto *o : I) lv_image_set_scale(o, 150);           // the gloves at 0.6 in the buttons
                 lv_image_set_scale(id(gm_you), 300); lv_image_set_scale(id(gm_me), 300);
@@ -338,6 +336,24 @@ script:
                 data:
                   reason: !lambda 'return id(g_cam_last) == 2 ? std::string("photo") : std::string("guard");'
 
+  # a Games button: not the release of a swipe that started on it
+  - id: game_tap
+    parameters: { g: int }
+    then:
+      - if:
+          condition: { lambda: 'return millis() - id(g_swipe_ms) > 700;' }
+          then: [ { script.execute: { id: game_start, g: !lambda 'return g;' } } ]
+
+  # a line of help over the face for a few seconds (a new one replaces it)
+  - id: hint
+    parameters: { txt: string, ms: int }
+    mode: restart
+    then:
+      - lvgl.label.update: { id: face_hint, text: !lambda 'return txt;' }
+      - lvgl.widget.show: face_hint
+      - delay: !lambda 'return ms;'
+      - lvgl.widget.hide: face_hint
+
   - id: game_end
     then:
       - lambda: 'id(g_game) = 0; id(g_game_led) = 0;'
@@ -349,7 +365,7 @@ script:
     then:
       - lambda: |-
           if (id(g_game) == 0) return;
-          id(g_gin) = k; id(g_gin_pad) = pad; id(g_gin_ms) = millis(); id(g_page_ms) = millis();
+          id(g_gin) = k; id(g_gin_pad) = pad; id(g_gin_ms) = millis(); id(g_page_ms) = millis(); id(g_ia_ms) = millis();
 
 interval:
   - interval: 250ms
@@ -433,8 +449,11 @@ interval:
               case 2:                                            // "Shoot!" — your pick
                 txt(BIG, "Shoot!"); txt(SUB, ""); eyes(3); led(2);
                 vis(YOU, false); vis(ME, false); for (auto *o : B) vis(o, true);
-                if (in >= 0 && in <= 2) { id(g_gval) = in; setp(3); }
-                else if (t > 6) { txt(SUB, "Too slow!"); setp(1); }
+                if (in >= 0 && in <= 2) { id(g_gval) = in; id(g_rps_miss) = 0; setp(3); }
+                else if (t > 6) {
+                  if (++id(g_rps_miss) >= 2) { id(game_end).execute(); return; }   // nobody is playing
+                  txt(SUB, "Too slow!"); setp(1);
+                }
                 break;
               case 3: {                                          // reveal
                 int you = id(g_gval), me = id(g_rps_me), r = (you - me + 3) % 3;   // 0 tie, 1 you win, 2 I win

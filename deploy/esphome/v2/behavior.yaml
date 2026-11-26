@@ -95,7 +95,8 @@ sensor:
         - lambda: |-
             if (std::isnan(x)) return;
             if (id(g_face) == 22) {
-              if (x > id(n_bang_db).state && x > id(g_snd_base) + 15) id(face_force).execute(23);
+              // its own head move is noise in the mic: nothing counts for 1.5 s after one
+              if (millis() - id(g_move_ms) > 1500 && x > id(n_bang_db).state && x > id(g_snd_base) + 15) id(face_force).execute(23);
             } else {
               id(g_snd_base) += 0.02f * (x - id(g_snd_base));
             }
@@ -304,7 +305,7 @@ esphome:
                   id(g_near) = true; id(g_ia_ms) = now;
                   if (id(g_guard) && now > id(g_guard_ms)) id(guard_alert).execute();   // desk guard: someone came close
                   if (id(g_saver)) id(saver_off).execute();
-                  if (!id(g_sleep) && id(g_game) == 0 && id(g_away_ms) != 0 && now - id(g_away_ms) > 300000) id(face_set).execute(9);   // hello
+                  if (!id(g_sleep) && id(g_game) == 0 && !id(g_guard) && id(g_away_ms) != 0 && now - id(g_away_ms) > 300000) id(face_set).execute(9);   // hello
                 } else if (id(g_near) && v < ${prox_far}) { id(g_near) = false; id(g_away_ms) = now; }
               });
               if (n == "Ambient light") s->add_on_state_callback([](float v) {
