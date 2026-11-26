@@ -11,10 +11,12 @@ interval:
           const uint32_t now = millis();
           int st = id(g_face);
           float t = (now - id(g_face_t0)) / 1000.0f;
-          static const float DUR[22] = {6, 3, 4, 5, 3, 3, 6, 4, 4, 3, 2.6f, 3, 3, 3, 2.4f, 4, 2, 3, 6, 4, 5, 4};
-          static const bool LOOP[22] = {1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 1, 0, 1, 0, 1, 1, 0, 0};
+          static const float DUR[25] = {6, 3, 4, 5, 3, 3, 6, 4, 4, 3, 2.6f, 3, 3, 3, 2.4f, 4, 2, 3, 6, 4, 5, 4, 1.8f, 3.2f, 2.4f};
+          static const bool LOOP[25] = {1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 1, 0, 1, 0, 1, 1, 0, 0, 0, 0, 0};
+          if (st < 0 || st > 24) { st = 0; id(g_face) = 0; }
           if (id(g_face_hold)) {
-            float h0 = st == 15 ? 0.4f : 0.7f, h1 = st == 15 ? 3.4f : 1.85f;
+            float h0 = st == 15 ? 0.4f : st == 22 ? 0.35f : 0.7f, h1 = st == 15 ? 3.4f : st == 22 ? 1.35f : 1.85f;
+            if (st == 22 && t > 10) { id(g_face_hold) = false; id(g_face_t0) = now - 1350; t = 1.35f; }   // ten seconds of hands up is enough
             if (t > h1) t = h0 + fmodf(t - h0, h1 - h0);
           } else if (LOOP[st]) {
             t = fmodf(t, DUR[st]);
@@ -22,6 +24,7 @@ interval:
             if (t > DUR[20]) t = DUR[20];
           } else if (t >= DUR[st]) {
             int nx = id(g_face_next);
+            if (nx < 0 && st == 23) nx = 24;                     // shot, then back to life
             if (nx < 0) nx = id(g_sleep) ? 20 : id(g_saver) ? 19 : id(g_night) ? 6 : id(g_bored) ? 18 : 0;
             id(g_face) = nx; id(g_face_t0) = now; id(g_face_next) = -1; id(g_face_hold) = (nx == 13 || nx == 15);
             id(face_enter).execute();
@@ -85,7 +88,7 @@ interval:
             float cx[2] = {98, 222}, cy[2] = {116, 116}, w[2] = {66, 66}, h[2] = {86, 86}, r[2] = {24, 24};
             float lidD[2] = {0, 0}, lidA[2] = {0, 0}, cut[2] = {0, 0};
             float blink = 0, lookX = 0, lookY = 0, rot = 0, dim = 1;
-            int mode = 0;                          // 0 eyes, 1 spiral, 2 closed
+            int mode = 0;                          // 0 eyes, 1 spiral, 2 closed, 3 knocked out (X)
             int mk = M_NONE; float mx = 0, my = 188, ms = 1, mo = .5f;
             Hand hd[2];
             Ex ex[8]; int nex = 0;
@@ -255,6 +258,36 @@ interval:
               for (int i = 0; i < 3; i++) { float q = win(t, 1.8f + i * .35f, 3.2f + i * .35f); if (q > 0 && q < 1) P.add(ex(X_Z, 236 + q * 36 + i * 8, 90 - q * 60, 1, 1 - q)); }
               P.dim = t >= 4 ? 0 : 1 - win(t, 3.2f, 4);
             } break;
+            case 22: {  // hands up: wide eyes, both gloves up high and trembling, an "o"
+              float k = seq(t, {{0, 0}, {.3f, 1}, {1.35f, 1}, {1.8f, 0}});
+              for (int i = 0; i < 2; i++) { P.w[i] = lerpf(66, 80, k); P.h[i] = lerpf(86, 94, k); P.r[i] = lerpf(24, 40, k); P.cy[i] -= 4 * k; }
+              P.lookX = sinf(t * 55) * 1.5f * k;
+              if (k > .3f) mouth(M_O, 194, .8f);
+              float y = popY(t, 0, 1.35f, 76);
+              if (!std::isnan(y)) { float j = sinf(t * 40) * 2; P.hd[0] = hand(40, y + j, -12, -1, H_OPEN, 1); P.hd[1] = hand(280, y - j, 12, 1, H_OPEN, 1); }
+              Ex b = ex(X_BIG, 160, 28, 1, k); b.txt = "!"; P.add(b);
+            } break;
+            case 23: {  // shot: "Bang!", a violent jolt, knocked-out X eyes that sink, the gloves flung away
+              P.lookX = t < .5f ? sinf(t * 90) * 14 * (1 - t / .5f) : 0;
+              if (t >= .08f) P.mode = 3;
+              float fall = ease(win(t, .15f, 1));
+              for (int i = 0; i < 2; i++) P.cy[i] += 34 * fall;
+              if (t > .3f) mouth(M_WAVY, 200 + 20 * fall, .7f);
+              float y = t < .25f ? lerpf(110, 30, easeOut(win(t, 0, .25f))) : lerpf(30, 300, ease(win(t, .25f, .9f)));
+              if (y < 260) { P.hd[0] = hand(44, y, -40, -1, H_OPEN, 1); P.hd[1] = hand(276, y, 40, 1, H_OPEN, 1); }
+              Ex b = ex(X_BIG, 160, 28, 1, 1 - win(t, .5f, .9f)); b.txt = "Bang!"; P.add(b);
+              P.dim = 1 - .5f * win(t, 1.6f, 2.4f);
+            } break;
+            case 24: {  // back to life: the eyes open low, shake it off, rise, a smile
+              float c = ease(win(t, .2f, 1));
+              for (int i = 0; i < 2; i++) P.cy[i] += 34 * (1 - c);
+              P.blink = 1 - c;
+              P.dim = .5f + .5f * win(t, 0, .4f);
+              if (t > 1 && t < 1.6f) P.lookX = sinf((t - 1) * 40) * 8 * (1 - (t - 1) / .6f);
+              float hk = win(t, 1.6f, 2) * (1 - win(t, 2.2f, 2.4f)); P.cut[0] = P.cut[1] = .4f * hk;
+              if (t > 1.6f) mouth(M_SMILE, 188, .8f);
+              P.add(ex(X_SPARK, 52, 58, 9 * bump(t, 1.7f, 2.3f), 1));
+            } break;
             case 21: {  // waking up: two lines open into eyes, a stretch, a double blink
               if (t < .6f) { P.dim = 0; break; }
               float o = win(t, .6f, 1), op = win(t, 1.1f, 1.6f);
@@ -308,10 +341,11 @@ interval:
             cx = curE[i][0]; cy = curE[i][1]; w = curE[i][2]; hh = curE[i][3]; r = curE[i][4];
             bool eyes = P.mode == 0;
             vis(0 + i, EYE[i], eyes);
-            vis(10 + i, SPR[i], P.mode == 1);
+            vis(10 + i, SPR[i], P.mode == 1 || P.mode == 3);
             vis(12 + i, CLS[i], P.mode == 2);
             if (eyes) { box(0 + i, EYE[i], cx - w / 2, cy - hh / 2, w, hh); rad(0 + i, EYE[i], r); }
             if (P.mode == 1) img(10 + i, SPR[i], id(img_spiral)->get_lv_image_dsc(), cx, cy, 39, P.rot * side * 57.2958f, 1, 1);
+            if (P.mode == 3) img(10 + i, SPR[i], id(img_xeye)->get_lv_image_dsc(), cx, cy, 39, 0, 1, 1);
             if (P.mode == 2) box(12 + i, CLS[i], cx - 28, cy - 20 - 28, 56, 56);
             bool lid = eyes && (P.lidD[i] > .001f || fabsf(P.lidA[i]) > .01f);
             vis(2 + i, LID[i], lid);
@@ -479,6 +513,9 @@ light:
                 case 15: c = 0xFF4FA6; a = breathe(2.2f); break;                                   // petted
                 case 16: { float x = fmodf(t, 2); c = 0xFF8A1F; a = std::max(std::max(bump(x, 0, .25f), bump(x, .5f, .75f)), std::max(bump(x, 1, 1.25f), bump(x, 1.5f, 1.75f))); } break;   // timer
                 case 17: c = 0xFF3B3B; a = flash({.3f}, .4f); break;                               // error
+                case 22: c = 0xFFA81F; a = fmodf(t, .25f) < .12f ? 1 : .2f; break;                     // hands up: nervous amber
+                case 23: c = 0xFF3B3B; a = bump(t, 0, .35f) + .5f * bump(t, .4f, .8f); break;          // shot
+                case 24: c = 0x35F57A; a = bump(t, 1.6f, 2.3f); break;                                  // back to life
                 case 21: { if (t >= .6f && t <= 1.55f) { float pos = (t - .6f) / .8f * 13 - 1, dd = fabsf(i - pos); if (dd < 2) { c = 0x2FE6FF; a = 1 - dd / 2; } } } break;   // boot sweep
                 default: break;
               }

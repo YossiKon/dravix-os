@@ -71,17 +71,20 @@ select:
     icon: mdi:emoticon-outline
     optimistic: false
     options: [neutral, happy, love, sad, angry, surprised, sleepy, doubt, dizzy, greet, done,
-              wake, listening, thinking, speaking, petted, timer, error, bored, screensaver, sleep, boot]
+              wake, listening, thinking, speaking, petted, timer, error, bored, screensaver, sleep, boot,
+              "hands up", shot, revive]
     lambda: |-
-      static const char *const N[22] = {"neutral","happy","love","sad","angry","surprised","sleepy","doubt","dizzy","greet","done",
-        "wake","listening","thinking","speaking","petted","timer","error","bored","screensaver","sleep","boot"};
-      int s = id(g_face); return std::string(N[(s >= 0 && s < 22) ? s : 0]);
+      static const char *const N[25] = {"neutral","happy","love","sad","angry","surprised","sleepy","doubt","dizzy","greet","done",
+        "wake","listening","thinking","speaking","petted","timer","error","bored","screensaver","sleep","boot",
+        "hands up","shot","revive"};
+      int s = id(g_face); return std::string(N[(s >= 0 && s < 25) ? s : 0]);
     update_interval: 1s
     set_action:
       - lambda: |-
-          static const char *const N[22] = {"neutral","happy","love","sad","angry","surprised","sleepy","doubt","dizzy","greet","done",
-            "wake","listening","thinking","speaking","petted","timer","error","bored","screensaver","sleep","boot"};
-          for (int i = 0; i < 22; i++) if (x == N[i]) { id(face_force).execute(i); break; }
+          static const char *const N[25] = {"neutral","happy","love","sad","angry","surprised","sleepy","doubt","dizzy","greet","done",
+            "wake","listening","thinking","speaking","petted","timer","error","bored","screensaver","sleep","boot",
+            "hands up","shot","revive"};
+          for (int i = 0; i < 25; i++) if (x == N[i]) { id(face_force).execute(i); break; }
 
 api:
   actions:
@@ -104,7 +107,7 @@ font:
   - file: "gfonts://Rubik@700"
     id: f_face
     size: 34
-    glyphs: "!?Hi"
+    glyphs: "!?HiBang"
   - file: "gfonts://Rubik@600"
     id: f_small
     size: 22
@@ -125,6 +128,7 @@ image:
   - { platform: file, file: "${img_base}/bell.png",   id: img_bell,   type: RGB565, transparency: alpha_channel }
   - { platform: file, file: "${img_base}/bulb.png",   id: img_bulb,   type: RGB565, transparency: alpha_channel }
   - { platform: file, file: "${img_base}/spiral.png", id: img_spiral, type: RGB565, transparency: alpha_channel }
+  - { platform: file, file: "${img_base}/x_eye.png",  id: img_xeye,   type: RGB565, transparency: alpha_channel }
 
 light:
   - id: !extend stackchan_light_bar
@@ -201,10 +205,13 @@ lvgl:
         - label: { id: ex_z2,   text: "z", text_font: f_small, text_color: 0xF2FFFD, hidden: true }
         - label: { id: ex_z3,   text: "z", text_font: f_small, text_color: 0xF2FFFD, hidden: true }
         - label: { id: ex_clock, text: "00:00", text_font: f_small, text_color: 0xF2FFFD, hidden: true }
+        # a one-line hint the games show over the face (not drawn by the face renderer)
+        - label: { id: face_hint, align: BOTTOM_MID, y: -8, width: 300, text_align: CENTER, long_mode: WRAP, text: "", text_font: f_game, text_color: 0x9CC7C1, hidden: true }
 
 script:
   # ── the ONLY way into a face. Lower priority than what is showing = dropped, except "done"
   #    asked for during a voice turn, which plays when the turn ends.
+  # 22 hands up is held while a finger points at it; a BOOM (or a tap) makes it 23, shot, then 24
   - id: face_set
     parameters: { s: int }
     mode: queued
@@ -233,7 +240,7 @@ script:
     then:
       - lambda: |-
           id(g_face) = s; id(g_face_t0) = millis(); id(g_face_next) = -1;
-          id(g_face_hold) = (s == 13 || s == 15);
+          id(g_face_hold) = (s == 13 || s == 15 || s == 22);
       - script.execute: face_enter
   # the rest face for right now
   - id: face_rest
@@ -246,6 +253,7 @@ script:
     then:
       - lambda: |-
           if (id(g_face) == 15 && id(g_face_hold)) { id(g_face_hold) = false; id(g_face_t0) = millis() - 3400; }
+          if (id(g_face) == 22 && id(g_face_hold)) { id(g_face_hold) = false; id(g_face_t0) = millis() - 1350; }   // the hand went away: phew
   # the reply starts: thinking plays its light bulb, then speaking
   - id: face_speaking
     then:

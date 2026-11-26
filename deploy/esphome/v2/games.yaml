@@ -90,12 +90,22 @@ script:
     parameters: { g: int }
     then:
       - if:
-          condition: { lambda: 'return g >= 6;' }     # not built yet
+          condition: { lambda: 'return g == 6;' }     # Bang!: it is played on the face
+          then:
+            - script.execute: { id: show_screen, n: 0 }
+            - lvgl.label.update: { id: face_hint, text: "Point a finger right at me. Then shout BOOM!" }
+            - lvgl.widget.show: face_hint
+            - delay: 6s
+            - lvgl.widget.hide: face_hint
+      - if:
+          condition: { lambda: 'return g >= 7;' }     # not built yet
           then:
             - lvgl.label.update: { id: gms_title, text: "Games · coming soon" }
             - delay: 2s
             - lvgl.label.update: { id: gms_title, text: "Games" }
-          else:
+      - if:
+          condition: { lambda: 'return g >= 1 && g <= 5;' }
+          then:
             - lambda: |-
                 id(g_game) = g; id(g_gph) = 0; id(g_gt0) = millis(); id(g_gin) = -1; id(g_gflag) = false;
                 id(g_rps_sy) = 0; id(g_rps_sm) = 0; id(g_game_led) = 0;

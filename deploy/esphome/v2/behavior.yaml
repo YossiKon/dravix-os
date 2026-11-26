@@ -9,6 +9,7 @@ substitutions:
   lux_dark: "5"               # lux below this for a minute = the room is dark
   lux_bright: "30"            # lux above this = the light is back
   head_straight: "6"          # up/down servo angle that looks straight ahead (5..85)
+  prox_aim: "650"             # proximity counts of a finger right at the sensor: "aiming" (Bang!)
 
 globals:
   - { id: g_ia_ms,      type: uint32_t, restore_value: no, initial_value: "0" }      # last interaction
@@ -26,11 +27,16 @@ globals:
   - { id: g_shake_ms,   type: uint32_t, restore_value: no, initial_value: "0" }
   - { id: g_lift_ms,    type: uint32_t, restore_value: no, initial_value: "0" }      # off-gravity since (0 = resting)
   - { id: g_timer_ms,   type: uint32_t, restore_value: no, initial_value: "0" }      # timer started ringing
+  - { id: g_aim_ms,     type: uint32_t, restore_value: no, initial_value: "0" }      # a finger at the sensor since
+  - { id: g_aim_fired,  type: bool,     restore_value: no, initial_value: "false" }  # hands went up for this aim
+  - { id: g_far_ms,     type: uint32_t, restore_value: no, initial_value: "0" }      # the hand went away since
+  - { id: g_snd_base,   type: float,    restore_value: no, initial_value: "-60" }    # the room's usual peak level, dBFS
 
 number:
   - { platform: template, id: n_saver_min, name: "Screensaver after", icon: mdi:timer-sand, unit_of_measurement: "min", min_value: 1, max_value: 60, step: 1, optimistic: true, restore_value: true, initial_value: 5, entity_category: config }
   - { platform: template, id: n_night_from, name: "Night from", icon: mdi:weather-night, unit_of_measurement: "h", min_value: 0, max_value: 23, step: 1, optimistic: true, restore_value: true, initial_value: 23, entity_category: config }
   - { platform: template, id: n_night_until, name: "Night until", icon: mdi:weather-sunset-up, unit_of_measurement: "h", min_value: 0, max_value: 23, step: 1, optimistic: true, restore_value: true, initial_value: 7, entity_category: config }
+  - { platform: template, id: n_bang_db, name: "Bang loudness", icon: mdi:volume-high, unit_of_measurement: "dBFS", min_value: -40, max_value: -1, step: 1, optimistic: true, restore_value: true, initial_value: -15, entity_category: config }
   - { platform: template, id: n_bored_min, name: "Bored after", icon: mdi:sleep, unit_of_measurement: "min", min_value: 2, max_value: 60, step: 1, optimistic: true, restore_value: true, initial_value: 8, entity_category: config }
 
 switch:
@@ -76,6 +82,23 @@ text_sensor:
     update_interval: 2s
 
 sensor:
+  # BOOM: the peak level of the microphone the wake word already keeps open (passive = no second
+  # stream). Only matters while the hands are up; otherwise it learns the room's usual level.
+  - platform: sound_level
+    microphone: i2s_mic
+    passive: true
+    measurement_duration: 50ms
+    peak:
+      id: snd_peak
+      internal: true
+      on_value:
+        - lambda: |-
+            if (std::isnan(x)) return;
+            if (id(g_face) == 22) {
+              if (x > id(n_bang_db).state && x > id(g_snd_base) + 15) id(face_force).execute(23);
+            } else {
+              id(g_snd_base) += 0.02f * (x - id(g_snd_base));
+            }
   - platform: bmi270_bmm150
     i2c_id: bsp_bus
     address: 0x69
@@ -131,6 +154,10 @@ script:
           if (pads) id(g_ia_ms) = now;
           if (id(g_game) != 0) {                                 // a game: the pads are its buttons (front, middle, back)
             if (pads && !was) id(game_input).execute((pads & 1) ? 0 : (pads & 2) ? 1 : 2, true);
+            return;
+          }
+          if (id(g_face) == 22) {                                // hands up: a tap counts as the shot (no BOOM needed)
+            if (pads && !was) id(face_force).execute(23);
             return;
           }
           if (pads && !was) {                                    // a hand arrives
@@ -229,6 +256,9 @@ script:
             case 8:                   id(head_seq).execute(-10, 4, 10, 4); break;    // wobbles
             case 18:                  id(head_seq).execute(-14, 0, 14, 0); break;    // looks around
             case 21:                  id(head_seq).execute(0, 0, 0, 0); break;       // rises to the middle
+            case 22:                  id(head_seq).execute(0, 8, 0, 8); break;       // hands up: head up a little
+            case 23:                  id(head_seq).execute(0, 14, 0, 0); break;      // the hit throws the head back, then it drops
+            case 24:                  id(head_seq).execute(-6, 4, 6, 4); break;      // shakes it off
             case 0: case 3: case 6: case 20: id(head_seq).execute(0, 0, 0, 0); break; // settles straight
             default: break;
           }
@@ -257,6 +287,18 @@ esphome:
               if (n == "Proximity counts") s->add_on_state_callback([](float v) {
                 const uint32_t now = millis(); id(g_prox_ms) = now;
                 if (now < 15000 || std::isnan(v)) return;
+                // AIM: a finger right at the sensor for 0.6 s → hands up (once per aim; resting faces only)
+                int f = id(g_face);
+                bool restful = f == 0 || f == 6 || f == 18;
+                if (v > ${prox_aim}) {
+                  if (id(g_aim_ms) == 0) id(g_aim_ms) = now;
+                  if (!id(g_aim_fired) && now - id(g_aim_ms) > 600 && restful && id(g_game) == 0 && !id(g_sleep) && !id(g_saver) && !id(g_voice) && id(g_on_face)) {
+                    id(g_aim_fired) = true; id(face_set).execute(22);
+                  }
+                } else if (v < ${prox_far}) { id(g_aim_ms) = 0; id(g_aim_fired) = false; }
+                // the hand went away without a shot: phew
+                if (f == 22 && v < ${prox_near}) { if (id(g_far_ms) == 0) id(g_far_ms) = now; else if (now - id(g_far_ms) > 600) { id(g_far_ms) = 0; id(face_release).execute(); } }
+                else id(g_far_ms) = 0;
                 if (!id(g_near) && v > ${prox_near}) {
                   id(g_near) = true; id(g_ia_ms) = now;
                   if (id(g_saver)) id(saver_off).execute();

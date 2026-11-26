@@ -195,7 +195,18 @@ def make_spiral(size=78, R=30.0, w=9):
     finish(img, "spiral.png")
 
 
+def make_xeye(size=78, half=24, w=14):
+    """Two crossed rounded bars: the "knocked out" eye of the Bang game."""
+    img = canvas(size, size)
+    c = size / 2
+    for rot in (45, -45):
+        shape_only = pill_layer(2 * half + w, w, w / 2, AQUA, 0)
+        stamp(img, shape_only, c, c, rot)
+    finish(img, "x_eye.png")
+
+
 if __name__ == "__main__":
+    make_xeye()
     make_gloves()
     make_heart()
     make_spark()
