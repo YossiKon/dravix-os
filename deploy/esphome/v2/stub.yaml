@@ -21,7 +21,9 @@ packages:
     ref: v2
     refresh: 0s
     files:
+      - deploy/esphome/v2/hardware.yaml
       - deploy/esphome/v2/base.yaml
+      - deploy/esphome/v2/components.yaml
       - deploy/esphome/v2/face.yaml
       - deploy/esphome/v2/face_tick.yaml
       - deploy/esphome/v2/behavior.yaml

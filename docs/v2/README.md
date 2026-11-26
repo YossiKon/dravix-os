@@ -32,7 +32,9 @@ away. Everything on screen is in English.
 
 | File | Owns |
 |---|---|
-| `base.yaml` | M5Stack BSP package (pinned), our vendored servo driver, audio, wake word, Assist, diagnostics |
+| `hardware.yaml` | The M5Stack StackChan BSP, **vendored** (MIT, commit 238ba98): every M5Stack release declares its components as `github://m5stack/esphome-yaml/components`, which ESPHome 2026.11 rejects while loading a package. One marked change (`# dravix:`) plus BLE removed |
+| `components.yaml` | Every external component source in the git-url form all ESPHome versions accept (M5Stack's drivers + our servo/IMU) |
+| `base.yaml` | Audio, wake word, Assist, diagnostics, the privacy dot's inputs |
 | `face.yaml` | The face page (LVGL), the face state machine and the 30 fps render tick |
 | `behavior.yaml` | Touch pads, IMU, proximity, light, timers, screensaver and sleep |
 | `screens.yaml` | The two tile screens and the AC screen, entity ids from HA text fields |

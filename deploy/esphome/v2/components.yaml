@@ -1,0 +1,18 @@
+# ════════════════════════════════════════════════════════════════════════════════
+#  Dravix v2 · components — every external component source, in the form every ESPHome
+#  release accepts (git url + ref). base.yaml removes the BSP's own entry (see there).
+# ════════════════════════════════════════════════════════════════════════════════
+external_components:
+  - source:
+      type: git
+      url: https://github.com/m5stack/esphome-yaml.git
+      ref: 238ba9825e7874d5626709631dae6be92e861b17
+    components: [axp2101, aw88298, aw9523b, si12t, m5ioe1]
+    refresh: 1d
+  # our vendored, non-blocking servo driver + the IMU driver (see components/*/README.md)
+  - source:
+      type: git
+      url: https://github.com/YossiKon/dravix-os.git
+      ref: components-v2
+    components: [bmi270_bmm150, ftservo, scs9009]
+    refresh: 1d

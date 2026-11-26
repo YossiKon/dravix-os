@@ -111,20 +111,20 @@ font:
     glyphs: "z0123456789:"
 
 image:
-  - { file: "${img_base}/glove_open_r.png",  id: img_gl_open_r,  type: RGB565, transparency: alpha_channel }
-  - { file: "${img_base}/glove_open_l.png",  id: img_gl_open_l,  type: RGB565, transparency: alpha_channel }
-  - { file: "${img_base}/glove_fist_r.png",  id: img_gl_fist_r,  type: RGB565, transparency: alpha_channel }
-  - { file: "${img_base}/glove_fist_l.png",  id: img_gl_fist_l,  type: RGB565, transparency: alpha_channel }
-  - { file: "${img_base}/glove_thumb_r.png", id: img_gl_thumb_r, type: RGB565, transparency: alpha_channel }
-  - { file: "${img_base}/glove_thumb_l.png", id: img_gl_thumb_l, type: RGB565, transparency: alpha_channel }
-  - { file: "${img_base}/glove_point_r.png", id: img_gl_point_r, type: RGB565, transparency: alpha_channel }
-  - { file: "${img_base}/glove_point_l.png", id: img_gl_point_l, type: RGB565, transparency: alpha_channel }
-  - { file: "${img_base}/heart.png",  id: img_heart,  type: RGB565, transparency: alpha_channel }
-  - { file: "${img_base}/spark.png",  id: img_spark,  type: RGB565, transparency: alpha_channel }
-  - { file: "${img_base}/drop.png",   id: img_drop,   type: RGB565, transparency: alpha_channel }
-  - { file: "${img_base}/bell.png",   id: img_bell,   type: RGB565, transparency: alpha_channel }
-  - { file: "${img_base}/bulb.png",   id: img_bulb,   type: RGB565, transparency: alpha_channel }
-  - { file: "${img_base}/spiral.png", id: img_spiral, type: RGB565, transparency: alpha_channel }
+  - { platform: file, file: "${img_base}/glove_open_r.png",  id: img_gl_open_r,  type: RGB565, transparency: alpha_channel }
+  - { platform: file, file: "${img_base}/glove_open_l.png",  id: img_gl_open_l,  type: RGB565, transparency: alpha_channel }
+  - { platform: file, file: "${img_base}/glove_fist_r.png",  id: img_gl_fist_r,  type: RGB565, transparency: alpha_channel }
+  - { platform: file, file: "${img_base}/glove_fist_l.png",  id: img_gl_fist_l,  type: RGB565, transparency: alpha_channel }
+  - { platform: file, file: "${img_base}/glove_thumb_r.png", id: img_gl_thumb_r, type: RGB565, transparency: alpha_channel }
+  - { platform: file, file: "${img_base}/glove_thumb_l.png", id: img_gl_thumb_l, type: RGB565, transparency: alpha_channel }
+  - { platform: file, file: "${img_base}/glove_point_r.png", id: img_gl_point_r, type: RGB565, transparency: alpha_channel }
+  - { platform: file, file: "${img_base}/glove_point_l.png", id: img_gl_point_l, type: RGB565, transparency: alpha_channel }
+  - { platform: file, file: "${img_base}/heart.png",  id: img_heart,  type: RGB565, transparency: alpha_channel }
+  - { platform: file, file: "${img_base}/spark.png",  id: img_spark,  type: RGB565, transparency: alpha_channel }
+  - { platform: file, file: "${img_base}/drop.png",   id: img_drop,   type: RGB565, transparency: alpha_channel }
+  - { platform: file, file: "${img_base}/bell.png",   id: img_bell,   type: RGB565, transparency: alpha_channel }
+  - { platform: file, file: "${img_base}/bulb.png",   id: img_bulb,   type: RGB565, transparency: alpha_channel }
+  - { platform: file, file: "${img_base}/spiral.png", id: img_spiral, type: RGB565, transparency: alpha_channel }
 
 light:
   - id: !extend stackchan_light_bar

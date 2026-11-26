@@ -49,7 +49,9 @@ jobs:
             ssid: "ci-network"
             password: "ci-password"
           packages:
+            hardware: !include ../deploy/esphome/v2/hardware.yaml
             base: !include ../deploy/esphome/v2/base.yaml
+            components: !include ../deploy/esphome/v2/components.yaml
             face: !include ../deploy/esphome/v2/face.yaml
             face_tick: !include ../deploy/esphome/v2/face_tick.yaml
             behavior: !include ../deploy/esphome/v2/behavior.yaml
