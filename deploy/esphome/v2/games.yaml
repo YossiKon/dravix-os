@@ -282,7 +282,7 @@ script:
           if (!ok) { ESP_LOGW("dravix", "camera: could not decode the frame"); return; }
           if (big) {
             lv_obj_t *o = id(cam_view);
-            lv_image_cache_drop(&dsc);
+            // (no image cache in ESPHome's LVGL: the raw buffer is read on every redraw, so an invalidate is enough)
             lv_image_set_src(o, &dsc); lv_image_set_scale(o, 512);
             lv_obj_remove_flag(o, LV_OBJ_FLAG_HIDDEN); lv_obj_invalidate(o);
             lv_obj_move_foreground(id(priv_dot));               // the green dot stays on top
