@@ -91,7 +91,13 @@ sensor:
             if (std::isnan(ax) || std::isnan(ay) || std::isnan(az)) return;
             const uint32_t now = millis();
             if (now < 15000 || now - id(g_move_ms) < 1500) { id(g_lift_ms) = 0; return; }   // boot settling / our own head move
-            float g = sqrtf(ax * ax + ay * ay + az * az) / 9.80665f, dev = fabsf(g - 1.0f);
+            // the driver reports g (its scale is 8/32768 per bit), whatever its log line says; a slow
+            // baseline of "gravity" makes this independent of the unit, exactly as v1 did
+            float mag = sqrtf(ax * ax + ay * ay + az * az);
+            if (mag <= 0) return;
+            static float grav = 0; if (grav <= 0) grav = mag;
+            float dev = fabsf(mag - grav) / grav;
+            grav += 0.02f * (mag - grav);
             // a SHAKE = 3 jolts (> 0.45 g off gravity) within a second
             if (dev > .45f) {
               if (now - id(g_jolt_ms) > 1000) id(g_jolts) = 0;

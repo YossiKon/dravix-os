@@ -20,6 +20,10 @@ Compose deployment is an alternative, but the HA add-on is the primary path.) Se
   measured defect, no config workaround, every changed line marked `// dravix:`, a README with
   the upstream commit + re-sync procedure. To take a BSP update: copy upstream over the folder,
   re-apply the marked lines, bump the tag the firmware's `external_components` entry points at.
+  **v2 (branch `v2`, `deploy/esphome/v2/`) adds two more under the same conditions:** ESPHome
+  2026.11 rejects M5Stack's BSP package (`github://…/components` source form) and its `m5ioe1`
+  light (the addressable-light API changed), so v2 vendors the BSP file as `hardware.yaml` and
+  `components/m5ioe1` (tag `components-v3`), each change marked `dravix:`. See docs/v2/README.md.
 - **Discovery-first.** Don't hard-code HA entity ids. Auto-discovery (`core/dravix/discovery.py`,
   suffix-anchored) maps the robot's entities at startup; build against what's discovered.
 - **Everything is pluggable** behind interfaces: robot drivers (`core/dravix/dal/`), AI

@@ -36,7 +36,16 @@ interval:
               dot_last = dot;
             }
           }
-          if (!id(g_on_face)) return;
+          // the backlight: dimmed by the face (screensaver, falling asleep, waking up), full on the screens
+          static float last_b = -1;
+          auto backlight = [&](float b) {
+            if (fabsf(b - last_b) > .02f || (b < .01f) != (last_b < .01f)) {
+              if (b < .01f) { auto c = id(lcd_backlight).turn_off(); c.set_transition_length(0); c.perform(); }
+              else { auto c = id(lcd_backlight).turn_on(); c.set_brightness(b); c.set_transition_length(0); c.perform(); }
+              last_b = b;
+            }
+          };
+          if (!id(g_on_face)) { backlight(id(n_brightness).state / 100.0f); return; }
 
           // ── helpers (the Face Lab's maths) ───────────────────────────────────────────
           const float TAUF = 6.2831853f, PIF = 3.14159265f;
@@ -413,16 +422,7 @@ interval:
             vis(47, id(ex_big), big); vis(29, id(ex_clock), clock);
           }
 
-          // the backlight carries the dimming (screensaver, falling asleep, waking up)
-          {
-            static float last_b = -1;
-            float b = id(n_brightness).state / 100.0f * P.dim;
-            if (fabsf(b - last_b) > .02f || (b < .01f) != (last_b < .01f)) {
-              if (b < .01f) { auto c = id(lcd_backlight).turn_off(); c.set_transition_length(0); c.perform(); }
-              else { auto c = id(lcd_backlight).turn_on(); c.set_brightness(b); c.set_transition_length(0); c.perform(); }
-              last_b = b;
-            }
-          }
+          backlight(id(n_brightness).state / 100.0f * P.dim);
 
 # ── the LED bar follows the face, from the same clock (one writer: the face state)
 light:

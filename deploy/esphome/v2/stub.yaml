@@ -3,7 +3,8 @@
 #
 #  It pulls the firmware from GitHub at build time: updating = press Install.
 #  Moving an existing robot to v2: keep your own wifi and device_name, and replace only
-#  the `packages:` block. Going back to v1 = put your old `packages:` block back.
+#  the `packages:` block. Going back to v1 = put your old `packages:` block back, which builds
+#  only on ESPHome 2026.10 or older (2026.11 rejects M5Stack's v1 base; see docs/v2/README.md).
 # ════════════════════════════════════════════════════════════════════════════════
 
 wifi:

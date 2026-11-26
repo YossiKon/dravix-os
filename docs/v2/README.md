@@ -71,9 +71,12 @@ leaves them. A request below the current priority is dropped, never queued.
 | petted | a head pad is touched | held | while touched + 0.6 s | base (or love) |
 | timer | an Assist timer finished | held | until touched, max 60 s | base |
 | wake | wake word | voice, one-shot | 1.0 s | listening |
-| listening | Assist listening | voice, held | until speech ends; watchdog 20 s | thinking |
-| thinking | speech ended | voice, held | until the reply starts; watchdog 30 s | speaking |
-| speaking | reply playing | voice, held | until the audio really stops (`voice_settle`); watchdog 60 s | base |
+| listening | Assist listening | voice, held | until speech ends | thinking |
+| thinking | speech ended | voice, held | until the reply starts (light bulb, then speaking) | speaking |
+| speaking | reply playing | voice, held | until the audio really stops (`voice_settle`) | base |
+
+A turn that dies without an end event is released by the v1 voice watchdog (two 5 s checks with
+nothing running), so a voice face can never stay stuck.
 
 Each one-shot plays its Face Lab timeline once (intro, hold, outro back to the neutral pose);
 held states loop their middle section. On every change the renderer blends the eye geometry from
@@ -98,7 +101,12 @@ non-blocking servo driver (`components-v2`).
 
 ## Cutover
 
+0. Press **Validate** on the current config in the ESPHome add-on. The log's first lines name the
+   ESPHome version. On **2026.11 or newer**, v1 no longer builds ("Source is not a file system
+   path…" from M5Stack's base), so an Install-based way back to v1 does not exist there.
 1. Stop the Dravix add-on (it would be a second owner of the face).
 2. In the existing stub, keep `device_name` (same node = over-the-air Install works) and replace
-   the `packages:` block with the v2 one from `stub.yaml`.
-3. Install. Rollback = put the old `packages:` block back (`ref: v0.1.18`).
+   only the `packages:` block with the v2 one from `stub.yaml`.
+3. Install. Then in HA: Settings → Devices → ESPHome → the robot → Configure → allow the device to
+   perform Home Assistant actions (needed for the tiles and the AC).
+4. Rollback = put the old `packages:` block back (`ref: v0.1.18`) — only on ESPHome 2026.10 or older.

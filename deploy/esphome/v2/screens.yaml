@@ -22,6 +22,7 @@ globals:
   - { id: g_ac_cur,     type: float,    restore_value: no, initial_value: "NAN" }
   - { id: g_ac_target,  type: float,    restore_value: no, initial_value: "NAN" }
   - { id: g_scr_dirty,  type: bool,     restore_value: no, initial_value: "true" }
+  - { id: g_swipe_ms,   type: uint32_t, restore_value: no, initial_value: "0" }      # a page change (a swipe's release is not a tap)
 
 text:
   - { platform: template, id: t_tile1, name: "Tile 1", icon: mdi:numeric-1-box-outline, mode: text, max_length: 64, optimistic: true, restore_value: true, entity_category: config, on_value: [ { script.execute: tiles_changed } ] }
@@ -148,9 +149,8 @@ script:
   - id: tiles_changed
     mode: restart
     then:
-      - delay: 5s
+      - delay: 20s      # filling several fields in a row costs one restart
       - lambda: |-
-          if (millis() < 60000) return;
           text::Text *T[8] = {id(t_tile1), id(t_tile2), id(t_tile3), id(t_tile4), id(t_tile5), id(t_tile6), id(t_tile7), id(t_tile8)};
           bool diff = id(t_ac).state != id(g_ac_ent);
           for (int i = 0; i < 8; i++) if (T[i]->state != id(g_tile_ent)[i]) diff = true;
@@ -161,7 +161,8 @@ script:
     then:
       - lambda: |-
           id(g_page) = n; id(g_page_ms) = millis(); id(g_on_face) = (n == 0); id(g_scr_dirty) = true;
-          id(g_ia_ms) = millis();
+          id(g_ia_ms) = millis(); id(g_swipe_ms) = millis();
+          if (id(g_sleep) && n != 0) { id(g_sleep) = false; id(face_rest).execute(); }
           if (id(g_saver)) { id(g_saver) = false; id(face_rest).execute(); }
       - if:
           condition: { lambda: 'return n == 1;' }
@@ -181,7 +182,7 @@ script:
     then:
       - lambda: 'id(g_page_ms) = millis(); id(g_ia_ms) = millis();'
       - if:
-          condition: { lambda: 'return !id(g_tile_ent)[i].empty();' }
+          condition: { lambda: 'return !id(g_tile_ent)[i].empty() && millis() - id(g_swipe_ms) > 700;' }
           then:
             - homeassistant.action:
                 action: !lambda |-
@@ -201,7 +202,7 @@ script:
     then:
       - lambda: 'id(g_page_ms) = millis(); id(g_ia_ms) = millis();'
       - if:
-          condition: { lambda: 'return !id(g_ac_ent).empty();' }
+          condition: { lambda: 'return !id(g_ac_ent).empty() && millis() - id(g_swipe_ms) > 700;' }
           then:
             - if:
                 condition: { lambda: 'return what == 1 || what == 2;' }

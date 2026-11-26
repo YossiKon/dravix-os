@@ -328,7 +328,16 @@ voice_assistant:
             - not: { voice_assistant.is_running: }
         then: [ micro_wake_word.start ]
   on_client_disconnected:
-    - script.execute: { id: face_set, s: 17 }              # error: lost Home Assistant
+    # this robot's API link drops and comes back many times a day; only a lasting loss, while
+    # awake, is worth the error face (and never at night in the dark)
+    - delay: 30s
+    - if:
+        condition:
+          and:
+            - not: { api.connected: }
+            - lambda: 'return !id(g_sleep) && !id(g_saver);'
+        then:
+          - script.execute: { id: face_set, s: 17 }        # error: lost Home Assistant
 
 interval:
   # ── VOICE WATCHDOG: a turn that died without on_end/on_error must never freeze the robot
