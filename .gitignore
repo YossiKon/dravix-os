@@ -50,3 +50,6 @@ deploy/esphome/.esphome/
 # Local screenshots / mockups kept next to the repo, not part of it
 *.jpg
 *.jpeg
+
+# the v2 face images are firmware assets (downloaded by URL at compile time)
+!deploy/esphome/v2/img/*.png

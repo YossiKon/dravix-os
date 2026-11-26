@@ -1,6 +1,292 @@
 # ════════════════════════════════════════════════════════════════════════════════
-#  Dravix v2 · screens — Screen 1 and Screen 2 (4 tiles each) and the air conditioner.
-#  SLICE 1 PLACEHOLDER: the screens land in slice 3.
+#  Dravix v2 · screens — swipe from the face: Screen 1, Screen 2 (4 tiles each), the AC.
+#  You choose what is on every tile in Home Assistant (the robot's device page → the
+#  "Tile 1…8" and "Air conditioner" fields: type an entity id like light.desk_lamp). The
+#  robot restarts itself to follow the new entity (Home Assistant sends states only for the
+#  entities a device asked for when it connected). Taps need HA's "Allow the device to
+#  perform Home Assistant actions" (Settings → Devices → ESPHome → the robot → Configure).
 # ════════════════════════════════════════════════════════════════════════════════
 substitutions:
-  screens_module: "placeholder"
+  mdi_font: "https://github.com/Templarian/MaterialDesign-Webfont/raw/master/fonts/materialdesignicons-webfont.ttf"
+
+globals:
+  - { id: g_page,       type: int,      restore_value: no, initial_value: "0" }      # 0 face, 1 screen 1, 2 screen 2, 3 AC
+  - { id: g_page_ms,    type: uint32_t, restore_value: no, initial_value: "0" }      # last touch on a control screen
+  - { id: g_tile_state, type: "std::array<std::string, 8>", restore_value: no }
+  - { id: g_tile_name,  type: "std::array<std::string, 8>", restore_value: no }
+  - { id: g_tile_ent,   type: "std::array<std::string, 8>", restore_value: no }     # what we subscribed to at boot
+  - { id: g_ac_ent,     type: std::string, restore_value: no }
+  - { id: g_ac_mode,    type: std::string, restore_value: no }
+  - { id: g_ac_action,  type: std::string, restore_value: no }
+  - { id: g_ac_name,    type: std::string, restore_value: no }
+  - { id: g_ac_cur,     type: float,    restore_value: no, initial_value: "NAN" }
+  - { id: g_ac_target,  type: float,    restore_value: no, initial_value: "NAN" }
+  - { id: g_scr_dirty,  type: bool,     restore_value: no, initial_value: "true" }
+
+text:
+  - { platform: template, id: t_tile1, name: "Tile 1", icon: mdi:numeric-1-box-outline, mode: text, max_length: 64, optimistic: true, restore_value: true, entity_category: config, on_value: [ { script.execute: tiles_changed } ] }
+  - { platform: template, id: t_tile2, name: "Tile 2", icon: mdi:numeric-2-box-outline, mode: text, max_length: 64, optimistic: true, restore_value: true, entity_category: config, on_value: [ { script.execute: tiles_changed } ] }
+  - { platform: template, id: t_tile3, name: "Tile 3", icon: mdi:numeric-3-box-outline, mode: text, max_length: 64, optimistic: true, restore_value: true, entity_category: config, on_value: [ { script.execute: tiles_changed } ] }
+  - { platform: template, id: t_tile4, name: "Tile 4", icon: mdi:numeric-4-box-outline, mode: text, max_length: 64, optimistic: true, restore_value: true, entity_category: config, on_value: [ { script.execute: tiles_changed } ] }
+  - { platform: template, id: t_tile5, name: "Tile 5", icon: mdi:numeric-5-box-outline, mode: text, max_length: 64, optimistic: true, restore_value: true, entity_category: config, on_value: [ { script.execute: tiles_changed } ] }
+  - { platform: template, id: t_tile6, name: "Tile 6", icon: mdi:numeric-6-box-outline, mode: text, max_length: 64, optimistic: true, restore_value: true, entity_category: config, on_value: [ { script.execute: tiles_changed } ] }
+  - { platform: template, id: t_tile7, name: "Tile 7", icon: mdi:numeric-7-box-outline, mode: text, max_length: 64, optimistic: true, restore_value: true, entity_category: config, on_value: [ { script.execute: tiles_changed } ] }
+  - { platform: template, id: t_tile8, name: "Tile 8", icon: mdi:numeric-8-box-outline, mode: text, max_length: 64, optimistic: true, restore_value: true, entity_category: config, on_value: [ { script.execute: tiles_changed } ] }
+  - { platform: template, id: t_ac, name: "Air conditioner", icon: mdi:air-conditioner, mode: text, max_length: 64, optimistic: true, restore_value: true, entity_category: config, on_value: [ { script.execute: tiles_changed } ] }
+
+select:
+  # a way in that does not need the touchscreen
+  - platform: template
+    id: sel_screen
+    name: "Screen"
+    icon: mdi:view-carousel-outline
+    options: ["Face", "Screen 1", "Screen 2", "Air conditioner"]
+    lambda: |-
+      static const char *const N[4] = {"Face", "Screen 1", "Screen 2", "Air conditioner"};
+      int p = id(g_page); return std::string(N[(p >= 0 && p < 4) ? p : 0]);
+    update_interval: 2s
+    set_action:
+      - lambda: |-
+          static const char *const N[4] = {"Face", "Screen 1", "Screen 2", "Air conditioner"};
+          for (int i = 0; i < 4; i++) if (x == N[i]) { id(show_screen).execute(i); break; }
+
+esphome:
+  on_boot:
+    - priority: -100
+      then:
+        - lambda: |-
+            // ask Home Assistant for the chosen entities — before the API connects
+            text::Text *T[8] = {id(t_tile1), id(t_tile2), id(t_tile3), id(t_tile4), id(t_tile5), id(t_tile6), id(t_tile7), id(t_tile8)};
+            for (int i = 0; i < 8; i++) {
+              std::string e = T[i]->state; id(g_tile_ent)[i] = e;
+              if (e.empty()) continue;
+              api::global_api_server->subscribe_home_assistant_state(e, {}, std::function<void(StringRef)>([i](StringRef s) { id(g_tile_state)[i] = s.str(); id(g_scr_dirty) = true; }));
+              api::global_api_server->subscribe_home_assistant_state(e, std::string("friendly_name"), std::function<void(StringRef)>([i](StringRef s) { id(g_tile_name)[i] = s.str(); id(g_scr_dirty) = true; }));
+            }
+            std::string ac = id(t_ac).state; id(g_ac_ent) = ac;
+            if (!ac.empty()) {
+              api::global_api_server->subscribe_home_assistant_state(ac, {}, std::function<void(StringRef)>([](StringRef s) { id(g_ac_mode) = s.str(); id(g_scr_dirty) = true; }));
+              api::global_api_server->subscribe_home_assistant_state(ac, std::string("hvac_action"), std::function<void(StringRef)>([](StringRef s) { id(g_ac_action) = s.str(); id(g_scr_dirty) = true; }));
+              api::global_api_server->subscribe_home_assistant_state(ac, std::string("friendly_name"), std::function<void(StringRef)>([](StringRef s) { id(g_ac_name) = s.str(); id(g_scr_dirty) = true; }));
+              api::global_api_server->subscribe_home_assistant_state(ac, std::string("current_temperature"), std::function<void(StringRef)>([](StringRef s) { id(g_ac_cur) = atof(s.c_str()); id(g_scr_dirty) = true; }));
+              api::global_api_server->subscribe_home_assistant_state(ac, std::string("temperature"), std::function<void(StringRef)>([](StringRef s) { id(g_ac_target) = atof(s.c_str()); id(g_scr_dirty) = true; }));
+            }
+
+font:
+  - file: "gfonts://Rubik@600"
+    id: f_tile
+    size: 15
+    glyphsets: [GF_Latin_Core]
+  - file: "gfonts://Rubik@600"
+    id: f_temp
+    size: 64
+    glyphs: "0123456789.-+"
+  - file: ${mdi_font}
+    id: f_icon
+    size: 26
+    glyphs: ["\U000F0335", "\U000F0425", "\U000F0210", "\U000F00AB", "\U000F04CE", "\U000F040A", "\U000F050F", "\U000F0208", "\U000F0717"]
+
+lvgl:
+  style_definitions:
+    - id: st_tile
+      bg_color: 0x111A19
+      bg_opa: COVER
+      radius: 16
+      border_width: 0
+      pad_all: 0
+      shadow_width: 0
+    - id: st_chip
+      bg_color: 0x111A19
+      bg_opa: COVER
+      radius: 15
+      border_width: 0
+      pad_all: 0
+      shadow_width: 0
+  pages:
+    - id: page_s1
+      bg_color: 0x000000
+      scrollable: false
+      on_swipe_left: [ { script.execute: { id: show_screen, n: 2 } } ]
+      on_swipe_right: [ { script.execute: { id: show_screen, n: 0 } } ]
+      widgets:
+        - label: { id: s1_title, x: 12, y: 6, text: "Screen 1", text_font: f_tile, text_color: 0x7FA9A4 }
+        - obj: { id: tile0, styles: st_tile, x: 10,  y: 30,  width: 146, height: 92, on_click: [ { script.execute: { id: tile_tap, i: 0 } } ], widgets: [ { label: { id: tic0, x: 10, y: 8, text: "\U000F0717", text_font: f_icon, text_color: 0x5EF0E2 } }, { label: { id: tnm0, x: 10, y: 44, width: 128, long_mode: DOT, text: "Tile 1", text_font: f_tile, text_color: 0xDDF7F4 } }, { label: { id: tst0, x: 10, y: 64, width: 128, long_mode: DOT, text: "Set in HA", text_font: f_tile, text_color: 0x7FA9A4 } } ] }
+        - obj: { id: tile1, styles: st_tile, x: 164, y: 30,  width: 146, height: 92, on_click: [ { script.execute: { id: tile_tap, i: 1 } } ], widgets: [ { label: { id: tic1, x: 10, y: 8, text: "\U000F0717", text_font: f_icon, text_color: 0x5EF0E2 } }, { label: { id: tnm1, x: 10, y: 44, width: 128, long_mode: DOT, text: "Tile 2", text_font: f_tile, text_color: 0xDDF7F4 } }, { label: { id: tst1, x: 10, y: 64, width: 128, long_mode: DOT, text: "Set in HA", text_font: f_tile, text_color: 0x7FA9A4 } } ] }
+        - obj: { id: tile2, styles: st_tile, x: 10,  y: 128, width: 146, height: 92, on_click: [ { script.execute: { id: tile_tap, i: 2 } } ], widgets: [ { label: { id: tic2, x: 10, y: 8, text: "\U000F0717", text_font: f_icon, text_color: 0x5EF0E2 } }, { label: { id: tnm2, x: 10, y: 44, width: 128, long_mode: DOT, text: "Tile 3", text_font: f_tile, text_color: 0xDDF7F4 } }, { label: { id: tst2, x: 10, y: 64, width: 128, long_mode: DOT, text: "Set in HA", text_font: f_tile, text_color: 0x7FA9A4 } } ] }
+        - obj: { id: tile3, styles: st_tile, x: 164, y: 128, width: 146, height: 92, on_click: [ { script.execute: { id: tile_tap, i: 3 } } ], widgets: [ { label: { id: tic3, x: 10, y: 8, text: "\U000F0717", text_font: f_icon, text_color: 0x5EF0E2 } }, { label: { id: tnm3, x: 10, y: 44, width: 128, long_mode: DOT, text: "Tile 4", text_font: f_tile, text_color: 0xDDF7F4 } }, { label: { id: tst3, x: 10, y: 64, width: 128, long_mode: DOT, text: "Set in HA", text_font: f_tile, text_color: 0x7FA9A4 } } ] }
+    - id: page_s2
+      bg_color: 0x000000
+      scrollable: false
+      on_swipe_left: [ { script.execute: { id: show_screen, n: 3 } } ]
+      on_swipe_right: [ { script.execute: { id: show_screen, n: 1 } } ]
+      widgets:
+        - label: { id: s2_title, x: 12, y: 6, text: "Screen 2", text_font: f_tile, text_color: 0x7FA9A4 }
+        - obj: { id: tile4, styles: st_tile, x: 10,  y: 30,  width: 146, height: 92, on_click: [ { script.execute: { id: tile_tap, i: 4 } } ], widgets: [ { label: { id: tic4, x: 10, y: 8, text: "\U000F0717", text_font: f_icon, text_color: 0x5EF0E2 } }, { label: { id: tnm4, x: 10, y: 44, width: 128, long_mode: DOT, text: "Tile 5", text_font: f_tile, text_color: 0xDDF7F4 } }, { label: { id: tst4, x: 10, y: 64, width: 128, long_mode: DOT, text: "Set in HA", text_font: f_tile, text_color: 0x7FA9A4 } } ] }
+        - obj: { id: tile5, styles: st_tile, x: 164, y: 30,  width: 146, height: 92, on_click: [ { script.execute: { id: tile_tap, i: 5 } } ], widgets: [ { label: { id: tic5, x: 10, y: 8, text: "\U000F0717", text_font: f_icon, text_color: 0x5EF0E2 } }, { label: { id: tnm5, x: 10, y: 44, width: 128, long_mode: DOT, text: "Tile 6", text_font: f_tile, text_color: 0xDDF7F4 } }, { label: { id: tst5, x: 10, y: 64, width: 128, long_mode: DOT, text: "Set in HA", text_font: f_tile, text_color: 0x7FA9A4 } } ] }
+        - obj: { id: tile6, styles: st_tile, x: 10,  y: 128, width: 146, height: 92, on_click: [ { script.execute: { id: tile_tap, i: 6 } } ], widgets: [ { label: { id: tic6, x: 10, y: 8, text: "\U000F0717", text_font: f_icon, text_color: 0x5EF0E2 } }, { label: { id: tnm6, x: 10, y: 44, width: 128, long_mode: DOT, text: "Tile 7", text_font: f_tile, text_color: 0xDDF7F4 } }, { label: { id: tst6, x: 10, y: 64, width: 128, long_mode: DOT, text: "Set in HA", text_font: f_tile, text_color: 0x7FA9A4 } } ] }
+        - obj: { id: tile7, styles: st_tile, x: 164, y: 128, width: 146, height: 92, on_click: [ { script.execute: { id: tile_tap, i: 7 } } ], widgets: [ { label: { id: tic7, x: 10, y: 8, text: "\U000F0717", text_font: f_icon, text_color: 0x5EF0E2 } }, { label: { id: tnm7, x: 10, y: 44, width: 128, long_mode: DOT, text: "Tile 8", text_font: f_tile, text_color: 0xDDF7F4 } }, { label: { id: tst7, x: 10, y: 64, width: 128, long_mode: DOT, text: "Set in HA", text_font: f_tile, text_color: 0x7FA9A4 } } ] }
+    - id: page_ac
+      bg_color: 0x000000
+      scrollable: false
+      on_swipe_left: [ { script.execute: { id: show_screen, n: 0 } } ]
+      on_swipe_right: [ { script.execute: { id: show_screen, n: 2 } } ]
+      widgets:
+        - label: { id: ac_title, x: 12, y: 6, width: 240, long_mode: DOT, text: "Air conditioner", text_font: f_tile, text_color: 0x7FA9A4 }
+        - obj: { id: ac_pw, styles: st_chip, x: 278, y: 2, width: 34, height: 26, on_click: [ { script.execute: { id: ac_tap, what: 0 } } ], widgets: [ { label: { text: "ON", align: CENTER, text_font: f_tile, text_color: 0x5EF0E2, id: ac_pw_lbl } } ] }
+        - obj: { id: ac_minus, styles: st_chip, x: 22, y: 66, width: 52, height: 52, radius: 26, on_click: [ { script.execute: { id: ac_tap, what: 1 } } ], widgets: [ { label: { text: "-", align: CENTER, text_font: f_temp, text_color: 0x5EF0E2 } } ] }
+        - obj: { id: ac_plus,  styles: st_chip, x: 246, y: 66, width: 52, height: 52, radius: 26, on_click: [ { script.execute: { id: ac_tap, what: 2 } } ], widgets: [ { label: { text: "+", align: CENTER, text_font: f_temp, text_color: 0x5EF0E2 } } ] }
+        - label: { id: ac_temp, align: TOP_MID, y: 46, text: "--", text_font: f_temp, text_color: 0x5EF0E2 }
+        - label: { id: ac_sub, align: TOP_MID, y: 146, text: "Set the AC in HA", text_font: f_tile, text_color: 0x9CC7C1 }
+        - obj: { id: ac_m0, styles: st_chip, x: 8,   y: 200, width: 58, height: 30, on_click: [ { script.execute: { id: ac_tap, what: 10 } } ], widgets: [ { label: { id: ac_l0, text: "Cool", align: CENTER, text_font: f_tile, text_color: 0x9CC7C1 } } ] }
+        - obj: { id: ac_m1, styles: st_chip, x: 70,  y: 200, width: 58, height: 30, on_click: [ { script.execute: { id: ac_tap, what: 11 } } ], widgets: [ { label: { id: ac_l1, text: "Heat", align: CENTER, text_font: f_tile, text_color: 0x9CC7C1 } } ] }
+        - obj: { id: ac_m2, styles: st_chip, x: 132, y: 200, width: 58, height: 30, on_click: [ { script.execute: { id: ac_tap, what: 12 } } ], widgets: [ { label: { id: ac_l2, text: "Fan", align: CENTER, text_font: f_tile, text_color: 0x9CC7C1 } } ] }
+        - obj: { id: ac_m3, styles: st_chip, x: 194, y: 200, width: 58, height: 30, on_click: [ { script.execute: { id: ac_tap, what: 13 } } ], widgets: [ { label: { id: ac_l3, text: "Dry", align: CENTER, text_font: f_tile, text_color: 0x9CC7C1 } } ] }
+        - obj: { id: ac_m4, styles: st_chip, x: 256, y: 200, width: 58, height: 30, on_click: [ { script.execute: { id: ac_tap, what: 14 } } ], widgets: [ { label: { id: ac_l4, text: "Auto", align: CENTER, text_font: f_tile, text_color: 0x9CC7C1 } } ] }
+
+script:
+  # a tile or the AC field changed in HA → restart to follow it (not for the value restored at boot)
+  - id: tiles_changed
+    mode: restart
+    then:
+      - delay: 5s
+      - lambda: |-
+          if (millis() < 60000) return;
+          text::Text *T[8] = {id(t_tile1), id(t_tile2), id(t_tile3), id(t_tile4), id(t_tile5), id(t_tile6), id(t_tile7), id(t_tile8)};
+          bool diff = id(t_ac).state != id(g_ac_ent);
+          for (int i = 0; i < 8; i++) if (T[i]->state != id(g_tile_ent)[i]) diff = true;
+          if (diff) { ESP_LOGI("screens", "a tile changed in Home Assistant: restarting to follow it"); App.safe_reboot(); }
+
+  - id: show_screen
+    parameters: { n: int }
+    then:
+      - lambda: |-
+          id(g_page) = n; id(g_page_ms) = millis(); id(g_on_face) = (n == 0); id(g_scr_dirty) = true;
+          id(g_ia_ms) = millis();
+          if (id(g_saver)) { id(g_saver) = false; id(face_rest).execute(); }
+      - if:
+          condition: { lambda: 'return n == 1;' }
+          then: [ { lvgl.page.show: page_s1 } ]
+      - if:
+          condition: { lambda: 'return n == 2;' }
+          then: [ { lvgl.page.show: page_s2 } ]
+      - if:
+          condition: { lambda: 'return n == 3;' }
+          then: [ { lvgl.page.show: page_ac } ]
+      - if:
+          condition: { lambda: 'return n == 0;' }
+          then: [ { lvgl.page.show: page_face } ]
+
+  - id: tile_tap
+    parameters: { i: int }
+    then:
+      - lambda: 'id(g_page_ms) = millis(); id(g_ia_ms) = millis();'
+      - if:
+          condition: { lambda: 'return !id(g_tile_ent)[i].empty();' }
+          then:
+            - homeassistant.action:
+                action: !lambda |-
+                  const std::string &e = id(g_tile_ent)[i];
+                  std::string d = e.substr(0, e.find('.'));
+                  if (d == "scene") return std::string("scene.turn_on");
+                  if (d == "script") return std::string("script.turn_on");
+                  if (d == "button" || d == "input_button") return d + ".press";
+                  return std::string("homeassistant.toggle");
+                data:
+                  entity_id: !lambda 'return id(g_tile_ent)[i];'
+            - script.execute: { id: play_sfx, tune: "tap:d=32,o=6,b=200:g" }
+
+  # 0 power, 1 colder, 2 warmer, 10..14 cool/heat/fan/dry/auto
+  - id: ac_tap
+    parameters: { what: int }
+    then:
+      - lambda: 'id(g_page_ms) = millis(); id(g_ia_ms) = millis();'
+      - if:
+          condition: { lambda: 'return !id(g_ac_ent).empty();' }
+          then:
+            - if:
+                condition: { lambda: 'return what == 1 || what == 2;' }
+                then:
+                  - homeassistant.action:
+                      action: climate.set_temperature
+                      data:
+                        entity_id: !lambda 'return id(g_ac_ent);'
+                        temperature: !lambda |-
+                          float t = std::isnan(id(g_ac_target)) ? 24 : id(g_ac_target);
+                          t += (what == 2 ? 1 : -1); id(g_ac_target) = t; id(g_scr_dirty) = true;
+                          char b[8]; snprintf(b, sizeof b, "%.1f", t); return std::string(b);
+            - if:
+                condition: { lambda: 'return what >= 10;' }
+                then:
+                  - homeassistant.action:
+                      action: climate.set_hvac_mode
+                      data:
+                        entity_id: !lambda 'return id(g_ac_ent);'
+                        hvac_mode: !lambda |-
+                          static const char *const M[5] = {"cool", "heat", "fan_only", "dry", "auto"};
+                          return std::string(M[std::max(0, std::min(4, what - 10))]);
+            - if:
+                condition: { lambda: 'return what == 0;' }
+                then:
+                  - homeassistant.action:
+                      action: !lambda 'return id(g_ac_mode) == "off" ? std::string("climate.turn_on") : std::string("climate.turn_off");'
+                      data:
+                        entity_id: !lambda 'return id(g_ac_ent);'
+
+interval:
+  # draw the control screens when something changed; back to the face after 30 s untouched
+  - interval: 400ms
+    then:
+      - lambda: |-
+          int p = id(g_page);
+          if (p != 0 && millis() - id(g_page_ms) > 30000) { id(show_screen).execute(0); return; }
+          if (p == 0 || !id(g_scr_dirty)) return;
+          id(g_scr_dirty) = false;
+          auto icon = [](const std::string &e) -> const char * {
+            std::string d = e.substr(0, e.find('.'));
+            if (d == "light") return "\U000F0335";
+            if (d == "switch" || d == "input_boolean") return "\U000F0425";
+            if (d == "fan") return "\U000F0210";
+            if (d == "cover") return "\U000F00AB";
+            if (d == "scene") return "\U000F04CE";
+            if (d == "script" || d == "button" || d == "input_button") return "\U000F040A";
+            if (d == "climate") return "\U000F050F";
+            if (d == "sensor" || d == "binary_sensor") return "\U000F0208";
+            return "\U000F0717";
+          };
+          lv_obj_t *TL[8] = {id(tile0), id(tile1), id(tile2), id(tile3), id(tile4), id(tile5), id(tile6), id(tile7)};
+          lv_obj_t *IC[8] = {id(tic0), id(tic1), id(tic2), id(tic3), id(tic4), id(tic5), id(tic6), id(tic7)};
+          lv_obj_t *NM[8] = {id(tnm0), id(tnm1), id(tnm2), id(tnm3), id(tnm4), id(tnm5), id(tnm6), id(tnm7)};
+          lv_obj_t *SV[8] = {id(tst0), id(tst1), id(tst2), id(tst3), id(tst4), id(tst5), id(tst6), id(tst7)};
+          for (int i = 0; i < 8; i++) {
+            const std::string &e = id(g_tile_ent)[i], &s = id(g_tile_state)[i];
+            if (e.empty()) continue;
+            bool on = s == "on" || s == "open" || s == "playing" || s == "heat" || s == "cool";
+            std::string name = id(g_tile_name)[i].empty() ? e : id(g_tile_name)[i];
+            std::string st = s.empty() ? std::string("…") : s == "on" ? std::string("On") : s == "off" ? std::string("Off")
+                             : s == "unavailable" ? std::string("Unavailable") : s.substr(0, 1) == "2" && s.size() > 18 ? std::string("Tap to run") : s;
+            lv_label_set_text(IC[i], icon(e)); lv_label_set_text(NM[i], name.c_str()); lv_label_set_text(SV[i], st.c_str());
+            lv_obj_set_style_bg_color(TL[i], lv_color_hex(on ? 0x5EF0E2 : 0x111A19), 0);
+            lv_obj_set_style_text_color(IC[i], lv_color_hex(on ? 0x00332D : 0x5EF0E2), 0);
+            lv_obj_set_style_text_color(NM[i], lv_color_hex(on ? 0x00332D : 0xDDF7F4), 0);
+            lv_obj_set_style_text_color(SV[i], lv_color_hex(on ? 0x0B5148 : 0x7FA9A4), 0);
+          }
+          // the AC screen
+          if (!id(g_ac_ent).empty()) {
+            char b[40];
+            if (std::isnan(id(g_ac_target))) snprintf(b, sizeof b, "--"); else snprintf(b, sizeof b, "%.0f", id(g_ac_target));
+            lv_label_set_text(id(ac_temp), b);
+            const std::string &m = id(g_ac_mode), &a = id(g_ac_action);
+            std::string doing = m == "off" ? "Off" : a.empty() ? m : a;
+            if (!doing.empty()) doing[0] = toupper(doing[0]);
+            if (std::isnan(id(g_ac_cur))) snprintf(b, sizeof b, "%s", doing.c_str()); else snprintf(b, sizeof b, "Room %.1f  ·  %s", id(g_ac_cur), doing.c_str());
+            lv_label_set_text(id(ac_sub), b);
+            lv_label_set_text(id(ac_title), id(g_ac_name).empty() ? id(g_ac_ent).c_str() : id(g_ac_name).c_str());
+            lv_label_set_text(id(ac_pw_lbl), m == "off" ? "OFF" : "ON");
+            static const char *const M[5] = {"cool", "heat", "fan_only", "dry", "auto"};
+            lv_obj_t *CH[5] = {id(ac_m0), id(ac_m1), id(ac_m2), id(ac_m3), id(ac_m4)}, *CL[5] = {id(ac_l0), id(ac_l1), id(ac_l2), id(ac_l3), id(ac_l4)};
+            for (int i = 0; i < 5; i++) {
+              bool sel = m == M[i];
+              lv_obj_set_style_bg_color(CH[i], lv_color_hex(sel ? 0x5EF0E2 : 0x111A19), 0);
+              lv_obj_set_style_text_color(CL[i], lv_color_hex(sel ? 0x00332D : 0x9CC7C1), 0);
+            }
+          }

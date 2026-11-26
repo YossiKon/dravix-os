@@ -266,6 +266,8 @@ micro_wake_word:
         then:
           - globals.set: { id: g_voice, value: "true" }
           - globals.set: { id: g_saw_speech, value: "false" }
+          - lambda: 'id(g_sleep) = false; id(g_saver) = false; id(g_ia_ms) = millis();'   # the wake word wakes it up
+          - script.execute: { id: show_screen, n: 0 }
           - component.suspend: x_servo_sensor
           - component.suspend: y_servo_sensor
           - script.execute: { id: face_set, s: 11 }          # wake (option 3)
@@ -305,6 +307,10 @@ voice_assistant:
         else:
           - globals.set: { id: g_voice, value: "true" }
           - globals.set: { id: g_mic_open, value: "true" }
+          - lambda: 'id(g_sleep) = false; id(g_saver) = false; id(g_ia_ms) = millis();'
+          - if:
+              condition: { lambda: 'return id(g_page) != 0;' }
+              then: [ { script.execute: { id: show_screen, n: 0 } } ]
           - component.suspend: x_servo_sensor
           - component.suspend: y_servo_sensor
           - script.execute: { id: face_set, s: 12 }          # listening (option 3)
