@@ -7,12 +7,13 @@ external_components:
       type: git
       url: https://github.com/m5stack/esphome-yaml.git
       ref: 238ba9825e7874d5626709631dae6be92e861b17
-    components: [axp2101, aw88298, aw9523b, si12t, m5ioe1]
+    components: [axp2101, aw88298, aw9523b, si12t]
     refresh: 1d
-  # our vendored, non-blocking servo driver + the IMU driver (see components/*/README.md)
+  # our vendored copies: the non-blocking servo driver, the IMU driver, and m5ioe1 (the light bar,
+  # patched for ESPHome 2026.11's light API; see components/m5ioe1/README.dravix.md)
   - source:
       type: git
       url: https://github.com/YossiKon/dravix-os.git
-      ref: components-v2
-    components: [bmi270_bmm150, ftservo, scs9009]
+      ref: components-v3
+    components: [bmi270_bmm150, ftservo, scs9009, m5ioe1]
     refresh: 1d
