@@ -1,0 +1,22 @@
+# The Dravix add-on: one page in Home Assistant's sidebar for the Dravix robot. The robot itself
+# needs nothing from it (the firmware talks to Home Assistant directly); the page makes it easy.
+name: Dravix
+version: "2.0.0"
+slug: dravix_os
+description: Your Dravix desk robot in Home Assistant - its screens, modes, games and voice commands
+url: https://github.com/YossiKon/dravix-os
+# a ready image from GHCR (built by GitHub Actions), so nothing builds on your box
+image: ghcr.io/yossikon/dravix-os-{arch}
+arch:
+  - amd64
+  - aarch64
+init: false
+# talks to Home Assistant with the Supervisor's own token: nothing to paste
+homeassistant_api: true
+# the page lives in the sidebar (and works through remote access too); no port is opened
+ingress: true
+ingress_port: 8800
+panel_icon: mdi:robot-happy
+panel_title: Dravix
+options: {}
+schema: {}

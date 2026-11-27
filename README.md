@@ -5,7 +5,8 @@
 Dravix is firmware for the StackChan robot. Say "Okay Nabu" and it talks with you through
 Home Assistant Assist. It reacts when you pet it, shake it or walk up to the desk, plays games
 with you, and keeps your Home Assistant controls one swipe away from its face. It all runs on
-the robot and in your own Home Assistant: no add-on, no server, no cloud account.
+the robot and in your own Home Assistant: no server, no cloud account. An optional add-on gives
+it a simple page in Home Assistant's sidebar.
 
 <p align="center">
   <img src="docs/img/hero.gif" width="420" alt="Dravix on a StackChan robot: calm, happy, in love, listening with the green dot lit, thinking, speaking and done">
@@ -106,6 +107,7 @@ in each one, for example `light.desk_lamp`, `switch.coffee_machine`, `scene.movi
 change the robot restarts by itself, to follow the new entities.
 
 A tap toggles lights, switches, fans and input booleans, and runs scenes, scripts and buttons.
+Easier: [the Dravix add-on](#the-dravix-add-on-optional) lets you pick every tile from a list.
 
 ## Things to try
 
@@ -229,14 +231,20 @@ data:
 - **Private mode is software, done thoroughly:** the microphone is stopped and muted (it would only
   hear silence), and after the restart the camera is never started. Home Assistant can turn it off.
 
-## Coming from the old dravix-os add-on?
+## The Dravix add-on (optional)
 
-1. Home Assistant → Settings → Add-ons → **Dravix** → **Stop**, then **Uninstall**. In the
-   add-on store (⋮ → Repositories) remove the dravix-os repository.
-2. Keep your robot's file in ESPHome as it is (it already points at this repo) and press
-   **Install**.
+<p align="center"><img src="docs/img/addon.png" width="620" alt="The Dravix add-on page: the robot's state, its mode, private mode and its two screens of tiles"></p>
 
-The old project is kept on the [`v1` branch](https://github.com/YossiKon/dravix-os/tree/v1).
+One simple page in Home Assistant's sidebar: the robot's state and battery, its mode and private
+mode, every tile and the air conditioner picked from a list, games and faces at a tap, and the
+voice commands and the photo automation installed with one tap. The robot works without it.
+
+1. Settings → Add-ons → Add-on store → ⋮ → **Repositories** → add `https://github.com/YossiKon/dravix-os`.
+2. Install **Dravix**, start it, and turn on **Show in sidebar**.
+
+**Had the old dravix-os add-on?** Press **Update**: version 2.0 replaces it. Keep your robot's file
+in ESPHome as it is and press **Install** there. The old project is kept on the
+[`v1` branch](https://github.com/YossiKon/dravix-os/tree/v1).
 
 ## How it's made
 

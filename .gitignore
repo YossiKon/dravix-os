@@ -55,3 +55,4 @@ deploy/esphome/.esphome/
 !deploy/esphome/v2/img/*.png
 !docs/img/*.png
 !docs/img/faces/*.png
+!dravix_os/*.png

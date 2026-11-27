@@ -4,9 +4,10 @@
 **Dravix** is ESPHome firmware that turns the M5Stack **StackChan** (CoreS3) into a cute desk
 assistant for **Home Assistant**: an Assist voice satellite with an on-device wake word, an
 Emo-like animated face, two screens of the owner's HA controls plus an air-conditioner screen,
-reactions (touch, shake, lift, people, light) and games. **The firmware is the whole product**:
-no add-on, no server, no cloud. Users keep one small device file in the ESPHome add-on that
-pulls the firmware from this repo; updating = pressing Install. See [README.md](README.md) and
+reactions (touch, shake, lift, people, light) and games. **The firmware is the product**: no
+server, no cloud. Users keep one small device file in the ESPHome add-on that pulls the firmware
+from this repo; updating = pressing Install. An optional HA add-on (`dravix_os/`, slug kept from
+v1 so old installs just Update) is one ingress page that sets the robot up through HA's API. See [README.md](README.md) and
 [docs/firmware.md](docs/firmware.md).
 
 **History:** until 2026-11-27 this repo was the dravix-os add-on (Python service, React
@@ -24,7 +25,12 @@ dashboard, MCP server, plugins) with firmware v1 ("fw61"). All of it lives on th
   status bar, private mode, the battery). `img/` holds the PNG assets (`make_images.py` draws them).
 - `components/` — ESPHome components, served to builds through git **tags** (`components-v3`).
 - `docs/` — `index.html` (the GitHub Pages site), `img/` (README and site pictures),
-  `firmware.md` (internals), `ha-automations.yaml` (optional HA automations).
+  `firmware.md` (internals), `ha-automations.yaml` + `ha-voice.yaml` (HA automations).
+- `dravix_os/` — the add-on: `app/server.py` (aiohttp; finds the robot through the entity
+  registry by the ESPHome entity names; `DRAVIX_DEMO=1` serves fake data for working on the page),
+  `app/static/index.html` (the page), `Dockerfile`, `config.yaml` (bump `version` for every
+  change, or HA never pulls it). `.github/workflows/addon-image.yml` builds and pushes the GHCR
+  image on main and `dev-*` (build the image on a dev branch before main announces a version).
 
 ## Golden rules
 - **Don't fork/patch M5Stack's upstream firmware**; extend beside it. Upstream `m5stack/StackChan`

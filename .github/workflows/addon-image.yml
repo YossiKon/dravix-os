@@ -1,0 +1,78 @@
+# Builds the Dravix add-on image (dravix_os/) and pushes it to GHCR, so Home Assistant pulls a ready
+# image. Runs for main and for dev-* branches, so the image of a new version exists before main
+# (which Home Assistant reads) announces it.
+name: add-on image
+
+on:
+  push:
+    branches: [main, "dev-*"]
+    paths:
+      - "dravix_os/**"
+      - "docs/ha-voice.yaml"
+      - "docs/ha-automations.yaml"
+      - ".github/workflows/addon-image.yml"
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Read the add-on version
+        id: ver
+        run: |
+          v=$(sed -nE 's/^version:[[:space:]]*"?([^"]+)"?.*/\1/p' dravix_os/config.yaml | head -n1)
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+          echo "owner=${GITHUB_REPOSITORY_OWNER,,}" >> "$GITHUB_OUTPUT"
+          echo "Add-on version: $v"
+
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+
+      # the page must come up before anything is published
+      - name: Smoke test (amd64, demo mode)
+        run: |
+          docker build -f dravix_os/Dockerfile --build-arg DRAVIX_VERSION=${{ steps.ver.outputs.version }} -t dravix-test .
+          docker run -d --name dravix-test -e DRAVIX_DEMO=1 -p 8800:8800 dravix-test
+          for i in $(seq 1 30); do curl -fsS http://localhost:8800/api/robot > robot.json && break; sleep 1; done
+          cat robot.json; grep -q '"found": true' robot.json
+          curl -fsS http://localhost:8800/ | grep -q "Private mode"
+          docker exec dravix-test python -c "import yaml; [yaml.safe_load(open(f, encoding='utf-8')) for f in ('/app/templates/voice.yaml', '/app/templates/photos.yaml')]; print('templates ok')"
+          docker logs dravix-test | tail -5
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build & push amd64
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: dravix_os/Dockerfile
+          platforms: linux/amd64
+          push: true
+          build-args: |
+            DRAVIX_VERSION=${{ steps.ver.outputs.version }}
+          tags: |
+            ghcr.io/${{ steps.ver.outputs.owner }}/dravix-os-amd64:${{ steps.ver.outputs.version }}
+            ghcr.io/${{ steps.ver.outputs.owner }}/dravix-os-amd64:latest
+
+      - name: Build & push aarch64
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: dravix_os/Dockerfile
+          platforms: linux/arm64
+          push: true
+          build-args: |
+            DRAVIX_VERSION=${{ steps.ver.outputs.version }}
+          tags: |
+            ghcr.io/${{ steps.ver.outputs.owner }}/dravix-os-aarch64:${{ steps.ver.outputs.version }}
+            ghcr.io/${{ steps.ver.outputs.owner }}/dravix-os-aarch64:latest
