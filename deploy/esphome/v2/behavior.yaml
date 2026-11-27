@@ -34,12 +34,38 @@ globals:
 
 number:
   - { platform: template, id: n_saver_min, name: "Screensaver after", icon: mdi:timer-sand, unit_of_measurement: "min", min_value: 1, max_value: 60, step: 1, optimistic: true, restore_value: true, initial_value: 5, entity_category: config }
-  - { platform: template, id: n_night_from, name: "Night from", icon: mdi:weather-night, unit_of_measurement: "h", min_value: 0, max_value: 23, step: 1, optimistic: true, restore_value: true, initial_value: 23, entity_category: config }
-  - { platform: template, id: n_night_until, name: "Night until", icon: mdi:weather-sunset-up, unit_of_measurement: "h", min_value: 0, max_value: 23, step: 1, optimistic: true, restore_value: true, initial_value: 7, entity_category: config }
   - { platform: template, id: n_bang_db, name: "Bang loudness", icon: mdi:volume-high, unit_of_measurement: "dBFS", min_value: -40, max_value: -1, step: 1, optimistic: true, restore_value: true, initial_value: -15, entity_category: config }
   - { platform: template, id: n_bored_min, name: "Bored after", icon: mdi:sleep, unit_of_measurement: "min", min_value: 2, max_value: 60, step: 1, optimistic: true, restore_value: true, initial_value: 8, entity_category: config }
 
+# when it sleeps: Home Assistant shows these as time pickers
+datetime:
+  - platform: template
+    id: dt_sleep
+    name: "Sleep at"
+    type: time
+    icon: mdi:power-sleep
+    optimistic: true
+    restore_value: true
+    initial_value: "23:00:00"
+    entity_category: config
+  - platform: template
+    id: dt_wake
+    name: "Wake up at"
+    type: time
+    icon: mdi:weather-sunset-up
+    optimistic: true
+    restore_value: true
+    initial_value: "07:00:00"
+    entity_category: config
+
 switch:
+  - platform: template
+    id: sw_sleep_sched
+    name: "Sleep on schedule"
+    icon: mdi:calendar-clock
+    optimistic: true
+    restore_mode: RESTORE_DEFAULT_ON
+    entity_category: config
   - platform: template
     id: sw_sleep_dark
     name: "Sleep when the room is dark"
@@ -317,18 +343,25 @@ interval:
           if (id(g_voice) || id(va).is_running()) id(g_ia_ms) = now;               // a conversation is activity
           if (id(g_prox_ms) != 0 && now - id(g_prox_ms) > 120000) id(g_near) = false;   // the sensor goes quiet in the dark
           if (id(g_near)) id(g_ia_ms) = now;
+          // the night: from "Sleep at" to "Wake up at" (to the minute; equal times = no night)
           auto tm = id(ha_time).now();
           bool night = false;
           if (tm.is_valid()) {
-            int h = tm.hour, a = (int) id(n_night_from).state, b = (int) id(n_night_until).state;
-            night = a > b ? (h >= a || h < b) : (h >= a && h < b);
-            if (id(g_sleep) && !night && h == b && tm.minute < 5) id(wake_up).execute(3);   // good morning
+            int cur = tm.hour * 60 + tm.minute;
+            int a = id(dt_sleep).hour * 60 + id(dt_sleep).minute, b = id(dt_wake).hour * 60 + id(dt_wake).minute;
+            night = a == b ? false : a > b ? (cur >= a || cur < b) : (cur >= a && cur < b);
           }
+          // the schedule acts on the edges only: bedtime puts it to sleep, the morning wakes a sleep
+          // that started by itself; waking it up in the night keeps it awake (g_night is restored,
+          // so a restart in the night is not a new bedtime)
+          bool dusk = night && !id(g_night), dawn = !night && id(g_night);
+          if (dawn && id(g_sleep)) id(wake_up).execute(3);                                   // good morning
           uint32_t idle = now - id(g_ia_ms);
           bool bored = idle > (uint32_t) (id(n_bored_min).state * 60000);
           bool saver = idle > (uint32_t) (id(n_saver_min).state * 60000);
           bool changed = (night != id(g_night)) || (bored != id(g_bored));
           id(g_night) = night; id(g_bored) = bored;
+          if (dusk && !id(g_sleep) && id(sw_sleep_sched).state) { id(go_sleep).execute(); return; }   // bedtime
           if (!id(g_sleep) && id(sw_sleep_dark).state && night && id(g_dark_ms) != 0 && now - id(g_dark_ms) > 60000 && idle > 60000) {
             id(go_sleep).execute(); return;
           }

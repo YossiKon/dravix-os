@@ -156,10 +156,12 @@ and get them on your phone, add the automation in
 |---|---|
 | **Normal** | Everything. Now and then it glances to one side, and it perks up when it hears "Okay Nabu" |
 | **Busy** | Everything as usual, but the head doesn't move at all |
-| **Sleep** | A dim clock with the date and the battery. It doesn't react to touch, shaking or people. "Okay Nabu" still works, and a timer still rings |
+| **Sleep** | A sleeping face with the time, the date and the battery, dim. It doesn't react to touch, shaking or people. "Okay Nabu" still works, and a timer still rings |
 
-Switch modes from the menu (hold the face), from Home Assistant (**Mode**), or by voice. At night
-in a dark room it falls asleep by itself and wakes up in the morning.
+Switch modes from the menu (hold the face), from Home Assistant (**Mode**), or by voice. **You
+choose when it sleeps:** at **Sleep at** it falls asleep by itself and at **Wake up at** it wakes up
+(23:00 and 07:00 to begin with; **Sleep on schedule** turns this off). Wake it up in the night and
+it stays awake until the next bedtime.
 
 **Private mode** works with any mode: the microphone stops and only ever hears silence, and the
 robot restarts so the camera isn't even started. No wake word, no camera games; a small
@@ -184,8 +186,9 @@ The robot is an ordinary ESPHome device. Its page has:
 |---|---|
 | **Tile 1 … 8**, **Air conditioner** | What the screens control |
 | **Screen brightness**, **LED brightness**, **Reaction LEDs** | Light |
-| **Sleep when the room is dark** | Falls asleep by itself at night |
-| **Screensaver after**, **Bored after** (minutes), **Night from**, **Night until** (hours) | Timing |
+| **Sleep at**, **Wake up at**, **Sleep on schedule** | When it sleeps |
+| **Sleep when the room is dark** | In the night hours, a dark room puts it to sleep too |
+| **Screensaver after**, **Bored after** (minutes) | Timing |
 | **Bang loudness** | How loud "BOOM!" has to be |
 
 Sensors: **State**, **Last heard**, **Last reply**, **Last voice problem**, **Firmware**,

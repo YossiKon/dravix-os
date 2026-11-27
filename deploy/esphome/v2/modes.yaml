@@ -153,8 +153,13 @@ lvgl:
       scrollbar_mode: "OFF"
       on_long_press: [ { script.execute: menu_open } ]
       widgets:
-        - label: { id: ck_time, align: CENTER, y: -22, text: "--:--", text_font: f_clock, text_color: 0x5EF0E2 }
-        - label: { id: ck_date, align: CENTER, y: 40, text: "", text_font: f_date, text_color: 0x7FA9A4 }
+        # a sleeping face: closed eyes and a couple of z's
+        - obj: { id: ck_eye_l, styles: st_stroke, x: 98, y: 4, width: 50, height: 50, border_width: 7, border_side: BOTTOM, border_color: 0x3FB8AC, clickable: false }
+        - obj: { id: ck_eye_r, styles: st_stroke, x: 172, y: 4, width: 50, height: 50, border_width: 7, border_side: BOTTOM, border_color: 0x3FB8AC, clickable: false }
+        - label: { id: ck_z1, x: 232, y: 18, text: "z", text_font: f_small, text_color: 0x3FB8AC }
+        - label: { id: ck_z2, x: 250, y: 2, text: "z", text_font: f_small, text_color: 0x2A7F77 }
+        - label: { id: ck_time, align: CENTER, y: 4, text: "--:--", text_font: f_clock, text_color: 0x5EF0E2 }
+        - label: { id: ck_date, align: CENTER, y: 62, text: "", text_font: f_date, text_color: 0x7FA9A4 }
         - label: { id: ck_bat_i, align: BOTTOM_MID, x: -22, y: -12, text: "", text_font: f_mdi18, text_color: 0x7FA9A4 }
         - label: { id: ck_bat, align: BOTTOM_MID, x: 12, y: -13, text: "", text_font: f_bar, text_color: 0x7FA9A4 }
 

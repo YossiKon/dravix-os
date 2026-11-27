@@ -22,7 +22,7 @@ drop away.
 | File | Owns |
 |---|---|
 | `hardware.yaml` | The M5Stack StackChan BSP, **vendored** (MIT, commit 238ba98): M5Stack declares its components as `github://m5stack/esphome-yaml/components`, which ESPHome 2026.11 rejects while loading a package. Changes are marked `# dravix:` (BLE improv removed, a camera id, a faster proximity poll) |
-| `components.yaml` | Every external component source in the git-url form every ESPHome version accepts: M5Stack's drivers (pinned commit) and ours (`components-v3` tag) |
+| `components.yaml` | Every external component source in the git-url form every ESPHome version accepts: M5Stack's drivers (pinned commit) and ours (`components-v4` tag) |
 | `base.yaml` | Audio, the wake word, Assist, diagnostics, the green dot's inputs, camera frames for the games |
 | `face.yaml` | The face page (LVGL), the face state machine, the HA `show_face` action |
 | `face_tick.yaml` | The 30 fps render tick: every pose from the Face Lab, the 150 ms blend, the LED effect |
@@ -51,7 +51,7 @@ arriving leaves them. A request below the current priority is dropped, never que
 | sleepy | night hours, awake, idle | base | while true | — |
 | bored | nobody around for "Bored after" | base, yawns every ~60 s | while true | — |
 | screensaver | idle for "Screensaver after" (dim, still) | base mode | until any event | base |
-| sleep | Sleep mode: the menu, HA's Mode, a voice command, or night + a dark room | base mode → the clock page | until the mode changes (only an automatic sleep ends by itself: morning, light) | boot |
+| sleep | Sleep mode: the menu, HA's Mode, a voice command, "Sleep at" (schedule), or the night hours + a dark room | base mode → the sleep page (a sleeping face, the time, the date, the battery) | until the mode changes (only an automatic sleep ends by itself: "Wake up at", light) | boot |
 | boot | power on, waking from sleep | one-shot | 4.0 s | base |
 | happy | HA action, Chameleon | one-shot | 3.0 s | base |
 | love | pet ≥ 3 s, or a hug (2 pads) | one-shot | 4.0 s | base |

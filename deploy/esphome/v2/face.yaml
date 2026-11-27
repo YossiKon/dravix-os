@@ -23,7 +23,7 @@ globals:
   # rest modes, owned by behavior.yaml
   - { id: g_sleep,        type: bool,     restore_value: no, initial_value: "false" }
   - { id: g_saver,        type: bool,     restore_value: no, initial_value: "false" }
-  - { id: g_night,        type: bool,     restore_value: no, initial_value: "false" }
+  - { id: g_night,        type: bool,     restore_value: yes, initial_value: "false" }
   - { id: g_bored,        type: bool,     restore_value: no, initial_value: "false" }
 
 number:
