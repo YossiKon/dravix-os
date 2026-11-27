@@ -28,6 +28,9 @@ the robot and in your own Home Assistant: no add-on, no server, no cloud account
 - **Private by design.** A small green dot in the top-right corner whenever the microphone or
   the camera is on. "Microphone mute" turns listening off completely.
 - **Lights up.** The LED bar under the face shows what it feels, and stays dark at rest.
+- **Three modes.** Normal: it looks around now and then, and perks up when it hears its name.
+  Busy: everything as usual, but the head stays still. Sleep: just a clock, the date and the battery.
+- **Private mode.** No camera and no microphone at all, whatever asks for them.
 
 ## Faces
 
@@ -62,6 +65,9 @@ a wave, a thumbs-up or a cheer. The LED bar under the face joins in. Here are si
 
 Swipe left from the face: Screen 1 → Screen 2 → Air conditioner → Games → back to the face
 (swipe right to go the other way). After 30 seconds without a touch it comes back to its face.
+
+**Swipe down** on the face for a thin bar with the time, the date and the battery; **swipe up**
+to hide it. **Hold the face** for a moment to open the mode menu.
 
 ## Install
 
@@ -113,7 +119,9 @@ A tap toggles lights, switches, fans and input booleans, and runs scenes, script
 | Pick it up | Surprised |
 | Come back to the desk after 5 minutes away | Waves hello |
 | Leave it alone | Bored after a while, then a still, dimmed screensaver |
-| Turn off the lights at night | Goes to sleep, wakes up in the morning |
+| Turn off the lights at night | Falls asleep (a clock), wakes up in the morning |
+| Hold its face for a moment | The mode menu: Normal, Busy, Sleep, Private mode |
+| Swipe down on its face | The time, the date and the battery (swipe up to hide) |
 
 ## Games
 
@@ -132,9 +140,30 @@ Swipe to **Games** (right from the face, or left from the air conditioner) and t
 | Desk guard | Arms itself after 10 seconds. If someone comes close: "Who are you?!" and a photo. Touch its head to turn it off. |
 | Follow me | Its eyes follow movement in front of it. The green dot stays on while it runs. |
 
+**Say it:** "Okay Nabu, let's play rock paper scissors", "Okay Nabu, flip a coin", "Okay Nabu,
+busy mode"… in English or in Hebrew. Paste [`docs/ha-voice.yaml`](docs/ha-voice.yaml) into
+Home Assistant once (an automation), and it knows every game and mode.
+
 **Photos in Home Assistant (optional):** the robot only shows photos on its screen. To save them
 and get them on your phone, add the automation in
 [`docs/ha-automations.yaml`](docs/ha-automations.yaml).
+
+## Modes and private mode
+
+| Mode | |
+|---|---|
+| **Normal** | Everything. Now and then it glances to one side, and it perks up when it hears "Okay Nabu" |
+| **Busy** | Everything as usual, but the head doesn't move at all |
+| **Sleep** | A dim clock with the date and the battery. It doesn't react to touch, shaking or people. "Okay Nabu" still works, and a timer still rings |
+
+Switch modes from the menu (hold the face), from Home Assistant (**Mode**), or by voice. At night
+in a dark room it falls asleep by itself and wakes up in the morning.
+
+**Private mode** works with any mode: the microphone stops and only ever hears silence, and the
+robot restarts so the camera isn't even started. No wake word, no camera games; a small
+microphone-off and camera-off icon shows where the green dot would be. Turn it on from the menu,
+from Home Assistant (**Private mode**) or by voice ("Okay Nabu, private mode"). It turns off
+from the menu or from Home Assistant, and the robot restarts again.
 
 ## In Home Assistant
 
@@ -145,19 +174,21 @@ The robot is an ordinary ESPHome device. Its page has:
 | **Face** | Show any expression now |
 | **Screen** | Jump to the face, Screen 1, Screen 2, the air conditioner or Games |
 | **Microphone mute**, **Wake sound** | Listening off; the chime before it listens |
-| **Asleep** | Put it to sleep, or wake it up |
+| **Mode** | Normal, Busy (the head stays still) or Sleep (a clock) |
+| **Private mode** | No camera and no microphone (the robot restarts) |
 | **Follow me**, **Desk guard** | The two camera games that run in the background |
 
 | Configuration | |
 |---|---|
 | **Tile 1 … 8**, **Air conditioner** | What the screens control |
 | **Screen brightness**, **LED brightness**, **Reaction LEDs** | Light |
-| **Head moves**, **Sleep when the room is dark** | Behaviour |
+| **Sleep when the room is dark** | Falls asleep by itself at night |
 | **Screensaver after**, **Bored after** (minutes), **Night from**, **Night until** (hours) | Timing |
 | **Bang loudness** | How loud "BOOM!" has to be |
 
 Sensors: **State**, **Last heard**, **Last reply**, **Last voice problem**, **Firmware**,
-**ESPHome version**, **Touchscreen**, **Loop time**, **WiFi signal**, **Ambient light**.
+**ESPHome version**, **Touchscreen**, **Loop time**, **WiFi signal**, **Ambient light**, **Battery**,
+**Charging**.
 
 Automations can make it react. Replace `stackchan` with your robot's name:
 
@@ -170,7 +201,19 @@ data:
 ```yaml
 action: esphome.stackchan_play_game
 data:
-  game: rps            # rps, coin, dice, 8ball, reaction
+  game: rps            # coin, dice, 8ball, reaction, bang, chameleon, photo, mirror, guard, follow, games
+```
+
+```yaml
+action: esphome.stackchan_set_mode
+data:
+  mode: busy           # normal, busy, sleep
+```
+
+```yaml
+action: esphome.stackchan_private_mode
+data:
+  enabled: true
 ```
 
 ## Good to know
@@ -182,6 +225,8 @@ data:
 - **The camera games run on the robot.** They look at colour and movement, not at faces or hands.
   Bang! notices a pointing finger with the distance sensor.
 - **Head moves never overlap sound**, so the robot keeps still while you talk to it.
+- **Private mode is software, done thoroughly:** the microphone is stopped and muted (it would only
+  hear silence), and after the restart the camera is never started. Home Assistant can turn it off.
 
 ## Coming from the old dravix-os add-on?
 

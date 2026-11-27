@@ -374,20 +374,38 @@ footer a { color: var(--muted); }
           <figure><img src="img/screen-games.png" width="448" height="358" loading="lazy" alt="The Games screen on the robot"><figcaption>Swipe right from the face to get here</figcaption></figure>
         </aside>
       </div>
+      <p class="note">Or say it: “Okay Nabu, let's play rock paper scissors”, “flip a coin”, “take a photo”… in English or Hebrew, once <a href="https://github.com/YossiKon/dravix-os/blob/main/docs/ha-voice.yaml">the voice automation</a> is in Home Assistant.</p>
     </section>
   </div>
 
   <div class="ledbar pink" aria-hidden="true"><span><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span></div>
 
   <div class="wrap">
+    <section id="modes" aria-labelledby="h-modes">
+      <div class="sec-head reveal">
+        <div><p class="num">04 · Modes</p><h2 id="h-modes">Lively, busy or asleep.</h2></div>
+        <p>Hold its face for a moment to open the mode menu, or pick the Mode in Home Assistant, or just say it. Swipe down on the face for a thin bar with the time, the date and the battery.</p>
+      </div>
+      <div class="tiles-how reveal">
+        <div><b>Normal</b>Everything. Now and then it glances to one side, and it perks up when it hears “Okay Nabu”.</div>
+        <div><b>Busy</b>Everything as usual, but the head doesn't move at all. For calls and quiet work.</div>
+        <div><b>Sleep</b>A dim clock with the date and the battery. It doesn't react to anything, but “Okay Nabu” and timers still work.</div>
+      </div>
+    </section>
+  </div>
+
+  <div class="ledbar" aria-hidden="true"><span><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span></div>
+
+  <div class="wrap">
     <section id="privacy" aria-labelledby="h-privacy">
       <div class="privacy reveal">
         <div class="dark-screen" role="img" aria-label="The robot's screen with a small green dot in the top-right corner"><span class="dot"></span></div>
         <div>
-          <p class="num">04 · Private by design</p>
+          <p class="num">05 · Private by design</p>
           <h2 id="h-privacy">When it listens, you can see it.</h2>
           <ul>
             <li><b>A small green dot</b> in the top-right corner whenever the microphone or the camera is on.</li>
+            <li><b>Private mode</b> switches both off, whatever asks for them: the microphone only hears silence and the camera isn't even started. A small icon shows it's on.</li>
             <li><b>Microphone mute</b> turns listening off completely, wake word included.</li>
             <li><b>Your voice goes to your own Home Assistant</b>, to the Assist pipeline you chose (it can run fully local).</li>
             <li><b>The camera games run on the robot</b>, one frame at a time. Photos stay on its screen unless your Home Assistant saves them.</li>
@@ -402,7 +420,7 @@ footer a { color: var(--muted); }
   <div class="wrap">
     <section id="install" aria-labelledby="h-install">
       <div class="sec-head reveal">
-        <div><p class="num">05 · Install</p><h2 id="h-install">Five steps, then it's yours.</h2></div>
+        <div><p class="num">06 · Install</p><h2 id="h-install">Five steps, then it's yours.</h2></div>
         <p>You need an M5Stack StackChan (the CoreS3 kit), Home Assistant with the ESPHome add-on (2026.8 or newer), and an Assist voice assistant.</p>
       </div>
       <div class="install">
@@ -442,19 +460,19 @@ footer a { color: var(--muted); }
   <div class="wrap">
     <section id="home-assistant" aria-labelledby="h-ha">
       <div class="sec-head reveal">
-        <div><p class="num">06 · Home Assistant</p><h2 id="h-ha">An ordinary ESPHome device. A not&#8209;so&#8209;ordinary friend.</h2></div>
+        <div><p class="num">07 · Home Assistant</p><h2 id="h-ha">An ordinary ESPHome device. A not&#8209;so&#8209;ordinary friend.</h2></div>
         <p>No integration to install: the robot joins through ESPHome, with a voice satellite, controls, settings and sensors on its device page.</p>
       </div>
       <div class="ha reveal">
         <div>
           <h3>Controls</h3>
-          <ul class="chips"><li>Face</li><li>Screen</li><li>Microphone mute</li><li>Wake sound</li><li>Asleep</li><li>Follow me</li><li>Desk guard</li></ul>
+          <ul class="chips"><li>Face</li><li>Screen</li><li>Mode</li><li>Private mode</li><li>Microphone mute</li><li>Wake sound</li><li>Follow me</li><li>Desk guard</li></ul>
           <h3 style="margin-top:20px">Sensors</h3>
-          <ul class="chips"><li>State</li><li>Last heard</li><li>Last reply</li><li>Last voice problem</li><li>Ambient light</li><li>Firmware</li><li>WiFi signal</li></ul>
+          <ul class="chips"><li>State</li><li>Last heard</li><li>Last reply</li><li>Last voice problem</li><li>Ambient light</li><li>Battery</li><li>Charging</li><li>Firmware</li><li>WiFi signal</li></ul>
         </div>
         <div>
           <h3>Settings</h3>
-          <ul class="chips"><li>Tile 1 … 8</li><li>Air conditioner</li><li>Screen brightness</li><li>LED brightness</li><li>Reaction LEDs</li><li>Head moves</li><li>Sleep when the room is dark</li><li>Screensaver after</li><li>Bored after</li><li>Night from</li><li>Night until</li><li>Bang loudness</li></ul>
+          <ul class="chips"><li>Tile 1 … 8</li><li>Air conditioner</li><li>Screen brightness</li><li>LED brightness</li><li>Reaction LEDs</li><li>Sleep when the room is dark</li><li>Screensaver after</li><li>Bored after</li><li>Night from</li><li>Night until</li><li>Bang loudness</li></ul>
         </div>
         <div>
           <h3>Automations</h3>
@@ -464,23 +482,25 @@ data:
   face: happy
 # or sad, love, done, greet, surprised,
 #    angry, doubt, dizzy, error</pre>
-<pre>action: esphome.stackchan_play_game
+<pre>action: esphome.stackchan_set_mode
 data:
-  game: rps
-# or coin, dice, 8ball, reaction</pre>
+  mode: busy
+# or normal, sleep</pre>
         </div>
       </div>
     </section>
 
     <section aria-labelledby="h-know">
       <div class="sec-head reveal">
-        <div><p class="num">07 · Good to know</p><h2 id="h-know">Honest notes.</h2></div>
+        <div><p class="num">08 · Good to know</p><h2 id="h-know">Honest notes.</h2></div>
         <p>Dravix 2.0 is brand new (November 2026): it compiles on ESPHome 2026.8.2 and the latest release, and its first tests on a real robot are under way. Here is what it can and can't tell.</p>
       </div>
       <div class="know reveal">
         <div><b>“Done!” is shown when it can know</b>A timer was set, Home Assistant confirmed a tile tap, or an automation asked for it. Assist doesn't tell the robot whether it did something or only answered.</div>
         <div><b>It keeps still while it talks</b>Head moves never overlap sound: on this robot, a moving servo starves the microphone and the speaker.</div>
         <div><b>The camera games see colour and movement</b>Not faces or hands. Bang! notices a pointing finger with the distance sensor, and the “BOOM!” loudness is a setting.</div>
+        <div><b>Private mode restarts it</b>Turning it on or off restarts the robot, so the camera is either never started or started cleanly. Home Assistant can turn it off too.</div>
+        <div><b>Voice commands need one automation</b>Home Assistant decides what a sentence means. Paste <a href="https://github.com/YossiKon/dravix-os/blob/main/docs/ha-voice.yaml">docs/ha-voice.yaml</a> once and it knows every game and mode, in English and Hebrew.</div>
         <div><b>Coming from the dravix-os add-on?</b>Stop and uninstall it, and keep your robot's ESPHome file: it already points here. Press Install. The old project lives on the <a href="https://github.com/YossiKon/dravix-os/tree/v1">v1 branch</a>.</div>
       </div>
     </section>

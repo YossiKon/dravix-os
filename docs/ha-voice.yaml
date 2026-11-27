@@ -1,0 +1,140 @@
+# Dravix - voice commands for the games and the modes (English and Hebrew).
+#
+# Paste it in Home Assistant: Settings -> Automations & scenes -> Create automation ->
+# (three dots, top right) Edit in YAML -> replace everything -> Save.
+# If your robot is not called "stackchan" in ESPHome, change "stackchan" in the three actions below.
+#
+# Then say: "Okay Nabu, let's play rock paper scissors", "Okay Nabu, flip a coin",
+# "Okay Nabu, busy mode", "Okay Nabu, private mode"... The Hebrew sentences work when your voice
+# assistant's language is Hebrew. Home Assistant answers "Let's play!" and the robot starts.
+# (Why an automation: Home Assistant decides what a sentence means; the robot only hears it.)
+
+alias: Dravix - voice commands
+description: Games, modes and private mode by voice, on the Dravix robot
+mode: queued
+triggers:
+  - trigger: conversation
+    id: rps
+    command:
+      - "[let's] play rock paper scissors"
+      - "rock paper scissors"
+      - "[בוא|בואי] נשחק אבן נייר [ו]מספריים"
+      - "אבן נייר [ו]מספריים"
+  - trigger: conversation
+    id: coin
+    command:
+      - "(flip|toss) a coin"
+      - "heads or tails"
+      - "(הטל|תטיל|תטילי|זרוק|תזרוק|תזרקי) מטבע"
+      - "עץ או פלי"
+  - trigger: conversation
+    id: dice
+    command:
+      - "roll [a|the] (die|dice)"
+      - "(הטל|תטיל|תטילי|זרוק|תזרוק|תזרקי) (קובייה|קוביה)"
+  - trigger: conversation
+    id: 8ball
+    command:
+      - "[ask [the]] magic (8|eight) ball"
+      - "(8|eight) ball"
+      - "כדור [ה]קסם"
+  - trigger: conversation
+    id: reaction
+    command:
+      - "[let's play [the]] reaction game"
+      - "test my (reaction|reactions|reflexes)"
+      - "[בוא|בואי] נשחק [משחק] תגובה"
+      - "משחק [ה]תגובה"
+  - trigger: conversation
+    id: bang
+    command:
+      - "[let's] play bang"
+      - "bang game"
+      - "[בוא|בואי] נשחק (באנג|בנג)"
+      - "משחק [ה]יריות"
+  - trigger: conversation
+    id: chameleon
+    command:
+      - "[let's] play chameleon"
+      - "chameleon [game]"
+      - "[בוא|בואי] נשחק זיקית"
+      - "זיקית"
+  - trigger: conversation
+    id: photo
+    command:
+      - "take a (photo|picture|selfie)"
+      - "photo booth"
+      - "(תצלם|צלם|תצלמי|צלמי) [אותי|תמונה]"
+      - "סלפי"
+  - trigger: conversation
+    id: mirror
+    command:
+      - "mirror [mode]"
+      - "be a mirror"
+      - "מצב מראה"
+      - "(תהיה|תהיי) מראה"
+  - trigger: conversation
+    id: guard
+    command:
+      - "(guard|watch) my desk"
+      - "desk guard"
+      - "(שמור|תשמור|תשמרי) על השולחן"
+      - "שומר [ה]שולחן"
+  - trigger: conversation
+    id: follow
+    command:
+      - "follow me"
+      - "(עקוב|תעקוב|תעקבי) אחרי"
+  - trigger: conversation
+    id: games
+    command:
+      - "[let's] play a game"
+      - "[open] [the] games"
+      - "[בוא|בואי] נשחק"
+      - "משחקים"
+  - trigger: conversation
+    id: mode_normal
+    command:
+      - "normal mode"
+      - "מצב רגיל"
+  - trigger: conversation
+    id: mode_busy
+    command:
+      - "busy mode"
+      - "מצב עסוק"
+  - trigger: conversation
+    id: mode_sleep
+    command:
+      - "sleep mode"
+      - "go to sleep"
+      - "מצב שינה"
+      - "(לך|תלך|לכי|תלכי) לישון"
+  - trigger: conversation
+    id: private_on
+    command:
+      - "private mode"
+      - "privacy mode"
+      - "מצב פרטי"
+      - "מצב פרטיות"
+actions:
+  - variables:
+      hebrew: "{{ trigger.sentence is search('[א-ת]') }}"
+  - choose:
+      - conditions: "{{ trigger.id.startswith('mode_') }}"
+        sequence:
+          - action: esphome.stackchan_set_mode
+            data:
+              mode: "{{ trigger.id[5:] }}"
+          - set_conversation_response: "{{ 'בסדר' if hebrew else 'OK' }}"
+      - conditions: "{{ trigger.id == 'private_on' }}"
+        sequence:
+          # the robot turns its microphone off and restarts, so this answer may be cut short
+          - set_conversation_response: "{{ 'מצב פרטי' if hebrew else 'Private mode' }}"
+          - action: esphome.stackchan_private_mode
+            data:
+              enabled: true
+    default:
+      - action: esphome.stackchan_play_game
+        data:
+          game: "{{ trigger.id }}"
+      - set_conversation_response: "{{ 'בוא נשחק!' if hebrew else \"Let's play!\" }}"
