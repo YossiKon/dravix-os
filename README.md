@@ -188,6 +188,7 @@ The robot is an ordinary ESPHome device. Its page has:
 | **Screen brightness**, **LED brightness**, **Reaction LEDs** | Light |
 | **Sleep at**, **Wake up at**, **Sleep on schedule** | When it sleeps |
 | **Sleep when the room is dark** | In the night hours, a dark room puts it to sleep too |
+| **Head level** | Where "straight" is: if its head looks down (or up) at rest, change it until it looks straight; the head moves as you change it |
 | **Screensaver after**, **Bored after** (minutes) | Timing |
 | **Bang loudness** | How loud "BOOM!" has to be |
 
