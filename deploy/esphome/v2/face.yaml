@@ -1,7 +1,7 @@
 # ════════════════════════════════════════════════════════════════════════════════
 #  Dravix v2 · face — "Pebble": aqua eyes on black, a line mouth when it helps, gloves for
 #  gestures. ONE state variable (g_face), ONE writer (face_set / face_force), ONE renderer
-#  (face_tick.yaml). Nothing else touches these widgets. States: docs/v2/README.md.
+#  (face_tick.yaml). Nothing else touches these widgets. States: docs/firmware.md.
 #   0 neutral  1 happy  2 love  3 sad  4 angry  5 surprised  6 sleepy  7 doubt  8 dizzy
 #   9 greet   10 done  11 wake  12 listening  13 thinking  14 speaking  15 petted  16 timer
 #  17 error   18 bored  19 screensaver  20 sleep  21 boot

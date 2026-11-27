@@ -1,15 +1,15 @@
-# Compiles the v2 firmware (deploy/esphome/v2) on GitHub's runners, so a broken lambda is caught
-# here instead of after a 15-minute Install on the robot owner's Home Assistant box.
-# Runs only for the v2 branch (and by hand); it never builds or publishes the add-on.
-name: firmware-v2
+# Compiles the firmware exactly as a robot's device file pulls it (deploy/esphome/stackchan-dravix.yaml
+# and its modules) on GitHub's runners, so a broken lambda is caught here instead of after a
+# 15-minute Install on the owner's Home Assistant box.
+name: firmware
 
 on:
   push:
-    branches: [v2, v2-games]
+    branches: [main]
     paths:
-      - "deploy/esphome/v2/**"
+      - "deploy/esphome/**"
       - "components/**"
-      - ".github/workflows/firmware-v2.yml"
+      - ".github/workflows/firmware.yml"
   workflow_dispatch:
 
 jobs:
@@ -41,7 +41,7 @@ jobs:
           if [ "${{ matrix.esphome }}" = "latest" ]; then pip install esphome; else pip install "esphome==${{ matrix.esphome }}"; fi
           esphome version
 
-      - name: Write a CI stub that uses this checkout's modules
+      - name: Write a CI device file that uses this checkout's firmware entry
         run: |
           mkdir -p ci
           cat > ci/dravix-ci.yaml <<'EOF'
@@ -49,14 +49,7 @@ jobs:
             ssid: "ci-network"
             password: "ci-password"
           packages:
-            hardware: !include ../deploy/esphome/v2/hardware.yaml
-            base: !include ../deploy/esphome/v2/base.yaml
-            components: !include ../deploy/esphome/v2/components.yaml
-            face: !include ../deploy/esphome/v2/face.yaml
-            face_tick: !include ../deploy/esphome/v2/face_tick.yaml
-            behavior: !include ../deploy/esphome/v2/behavior.yaml
-            screens: !include ../deploy/esphome/v2/screens.yaml
-            games: !include ../deploy/esphome/v2/games.yaml
+            dravix: !include ../deploy/esphome/stackchan-dravix.yaml
           EOF
 
       - name: Validate

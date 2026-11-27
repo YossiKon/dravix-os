@@ -2,7 +2,7 @@
 #  Dravix v2 · base — hardware, audio, wake word, Assist, diagnostics
 #  hardware.yaml (the vendored M5Stack BSP) brings the hardware; this adds the proven v1
 #  voice plumbing, diagnostics and the green privacy dot's inputs. The face lives in face.yaml.
-#  See docs/v2/README.md.
+#  See docs/firmware.md.
 # ════════════════════════════════════════════════════════════════════════════════
 substitutions:
   fw_version: "2.0.0"
@@ -14,7 +14,7 @@ substitutions:
   speaker_ceiling: "1.0"          # 1.0 = 0 dB (full); 0.9 = -9.6 dB spares the speaker
   wake_sound_file: "https://github.com/esphome/home-assistant-voice-pe/raw/dev/sounds/wake_word_triggered.flac"
   brownout_detector: "n"          # "n": servo start + Wi-Fi TX false-fires it on this board
-  img_base: "https://raw.githubusercontent.com/YossiKon/dravix-os/v2-games/deploy/esphome/v2/img"   # MERGE NOTE: back to /v2/ when merging
+  img_base: "https://raw.githubusercontent.com/YossiKon/dravix-os/img-v1/deploy/esphome/v2/img"   # a tag: a new or changed image = a new img-vN tag
 
 esphome:
   name: ${device_name}
