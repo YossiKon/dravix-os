@@ -136,7 +136,7 @@ h1 em { font-style: normal; color: var(--aqua); }
 /* ── sections ──────────────────────────────────────── */
 section { padding: 36px 0 28px; }
 .sec-head { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); gap: 40px; align-items: end; margin-bottom: 36px; }
-.num { font-family: var(--f-mono); font-size: 12px; letter-spacing: .14em; color: var(--aqua); text-transform: uppercase; margin: 0 0 14px; }
+.num, .sec-head .num { font-family: var(--f-mono); font-size: 12px; letter-spacing: .14em; color: var(--aqua); text-transform: uppercase; margin: 0 0 14px; }
 h2 { font-family: var(--f-display); font-weight: 700; font-size: clamp(28px, 3.6vw, 44px); line-height: 1.08; letter-spacing: -.02em; margin: 0; text-wrap: balance; }
 .sec-head p { margin: 0; color: var(--muted); font-size: 17.5px; }
 @media (max-width: 860px) { .sec-head { grid-template-columns: 1fr; gap: 16px; } }
@@ -153,6 +153,18 @@ h2 { font-family: var(--f-display); font-weight: 700; font-size: clamp(28px, 3.6
 .face span { display: block; font-family: var(--f-mono); font-size: 11px; line-height: 1.5; color: var(--faint); margin-top: 3px; }
 @media (max-width: 520px) { .faces { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; } .face { padding: 6px 6px 12px; } .face b { font-size: 14px; } .face span { font-size: 10px; }
   .facts { display: grid; grid-template-columns: repeat(2, 1fr); gap: 18px; } }
+
+/* six faces and a mystery card: the rest are Easter eggs */
+.faces.six { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.face.mystery { grid-column: span 2; display: grid; grid-template-columns: minmax(0, .9fr) minmax(0, 1.1fr); gap: 20px; align-items: center; padding: 14px 20px 14px 14px; border-style: dashed; border-color: rgba(94, 240, 226, .35); }
+.mystery .q { aspect-ratio: 4 / 3; background: #000; border-radius: 14px; border: 8px solid #E2E6E5; box-shadow: inset 0 -3px 0 #C2C9C7; display: grid; place-items: center; }
+.mystery .q span { font-family: var(--f-display); font-weight: 700; font-size: clamp(44px, 6vw, 76px); line-height: 1; color: var(--aqua); margin: 0; animation: wobble 4s ease-in-out infinite; }
+@keyframes wobble { 0%, 100% { transform: rotate(-7deg); } 50% { transform: rotate(7deg) translateY(-4px); } }
+.mystery .big { font-family: var(--f-display); font-weight: 700; font-size: 40px; line-height: 1; margin-bottom: 10px; }
+.mystery p { margin: 0 0 10px; color: var(--muted); font-size: 15px; line-height: 1.55; }
+.mystery em { font-style: normal; font-family: var(--f-mono); font-size: 11.5px; color: var(--aqua); }
+@media (max-width: 860px) { .faces.six { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 520px) { .face.mystery { grid-template-columns: 1fr; padding: 12px; } }
 
 /* screens: swipe through them */
 .swipe { display: flex; align-items: center; gap: 10px; overflow-x: auto; scroll-snap-type: x mandatory; padding: 6px 2px 18px; scrollbar-width: thin; scrollbar-color: #24302E transparent; }
@@ -279,10 +291,10 @@ footer a { color: var(--muted); }
         <div class="frame">
           <picture>
             <source srcset="img/faces/neutral.png" media="(prefers-reduced-motion: reduce)">
-            <img src="img/hero.gif" width="400" height="323" fetchpriority="high" alt="Dravix on a StackChan robot: calm, happy, in love, listening with the green dot lit, thinking, speaking, done, and surprised">
+            <img src="img/hero.gif" width="400" height="323" fetchpriority="high" alt="Dravix on a StackChan robot: calm, happy, in love, listening with the green dot lit, thinking, speaking and done">
           </picture>
         </div>
-        <figcaption>neutral → happy → love → listening → thinking → speaking → done → surprised</figcaption>
+        <figcaption>neutral → happy → love → listening → thinking → speaking → done</figcaption>
       </figure>
     </section>
   </div>
@@ -293,37 +305,21 @@ footer a { color: var(--muted); }
     <section id="faces" aria-labelledby="h-faces">
       <div class="sec-head reveal">
         <div><p class="num">01 · Faces</p><h2 id="h-faces">22 faces, one personality.</h2></div>
-        <p>Rounded aqua eyes on black, a thin mouth when it needs one, and little gloved hands that pop up for a wave, a thumbs-up or a cheer. The LED bar under the face joins in.</p>
+        <p>Rounded aqua eyes on black, a thin mouth when it needs one, and little gloved hands that pop up for a wave, a thumbs-up or a cheer. The LED bar under the face joins in. Here are six. The rest are for you to find.</p>
       </div>
-      <p class="note reveal" style="margin:-14px 0 22px">Rendered from the Face Lab, where the faces were designed; the robot draws the same poses.</p>
-      <p class="group-label reveal">It feels</p>
-      <div class="faces reveal">
-        <figure class="face"><picture><source srcset="img/faces/neutral.png" media="(prefers-reduced-motion: reduce)"><img src="img/faces/neutral.gif" width="224" height="181" loading="lazy" decoding="async" alt="Neutral: at rest: it looks around and blinks"></picture><figcaption><b>Neutral</b><span>at rest: it looks around and blinks</span></figcaption></figure>
+      <div class="faces six reveal">
         <figure class="face"><picture><source srcset="img/faces/happy.png" media="(prefers-reduced-motion: reduce)"><img src="img/faces/happy.gif" width="224" height="181" loading="lazy" decoding="async" alt="Happy: good news, a compliment"></picture><figcaption><b>Happy</b><span>good news, a compliment</span></figcaption></figure>
         <figure class="face"><picture><source srcset="img/faces/love.png" media="(prefers-reduced-motion: reduce)"><img src="img/faces/love.gif" width="224" height="181" loading="lazy" decoding="async" alt="Love: a long pet, or a hug"></picture><figcaption><b>Love</b><span>a long pet, or a hug</span></figcaption></figure>
-        <figure class="face"><picture><source srcset="img/faces/sad.png" media="(prefers-reduced-motion: reduce)"><img src="img/faces/sad.gif" width="224" height="181" loading="lazy" decoding="async" alt="Sad: when an automation says so"></picture><figcaption><b>Sad</b><span>when an automation says so</span></figcaption></figure>
-        <figure class="face"><picture><source srcset="img/faces/angry.png" media="(prefers-reduced-motion: reduce)"><img src="img/faces/angry.gif" width="224" height="181" loading="lazy" decoding="async" alt="Grumpy: shaken one time too many"></picture><figcaption><b>Grumpy</b><span>shaken one time too many</span></figcaption></figure>
-        <figure class="face"><picture><source srcset="img/faces/surprised.png" media="(prefers-reduced-motion: reduce)"><img src="img/faces/surprised.gif" width="224" height="181" loading="lazy" decoding="async" alt="Surprised: picked up"></picture><figcaption><b>Surprised</b><span>picked up</span></figcaption></figure>
-        <figure class="face"><picture><source srcset="img/faces/sleepy.png" media="(prefers-reduced-motion: reduce)"><img src="img/faces/sleepy.gif" width="224" height="181" loading="lazy" decoding="async" alt="Sleepy: late at night"></picture><figcaption><b>Sleepy</b><span>late at night</span></figcaption></figure>
-        <figure class="face"><picture><source srcset="img/faces/doubt.png" media="(prefers-reduced-motion: reduce)"><img src="img/faces/doubt.gif" width="224" height="181" loading="lazy" decoding="async" alt="Confused: it didn&#x27;t catch that"></picture><figcaption><b>Confused</b><span>it didn&#x27;t catch that</span></figcaption></figure>
-        <figure class="face"><picture><source srcset="img/faces/dizzy.png" media="(prefers-reduced-motion: reduce)"><img src="img/faces/dizzy.gif" width="224" height="181" loading="lazy" decoding="async" alt="Dizzy: right after a shake"></picture><figcaption><b>Dizzy</b><span>right after a shake</span></figcaption></figure>
-        <figure class="face"><picture><source srcset="img/faces/bored.png" media="(prefers-reduced-motion: reduce)"><img src="img/faces/bored.gif" width="224" height="181" loading="lazy" decoding="async" alt="Bored: nobody around for a while"></picture><figcaption><b>Bored</b><span>nobody around for a while</span></figcaption></figure>
-      </div>
-      <p class="group-label reveal">It does</p>
-      <div class="faces reveal">
         <figure class="face"><picture><source srcset="img/faces/greet.png" media="(prefers-reduced-motion: reduce)"><img src="img/faces/greet.gif" width="224" height="181" loading="lazy" decoding="async" alt="Hello: you came back to the desk"></picture><figcaption><b>Hello</b><span>you came back to the desk</span></figcaption></figure>
-        <figure class="face"><picture><source srcset="img/faces/done.png" media="(prefers-reduced-motion: reduce)"><img src="img/faces/done.gif" width="224" height="181" loading="lazy" decoding="async" alt="Done!: a timer set, a tile tapped"></picture><figcaption><b>Done!</b><span>a timer set, a tile tapped</span></figcaption></figure>
-        <figure class="face"><picture><source srcset="img/faces/wake.png" media="(prefers-reduced-motion: reduce)"><img src="img/faces/wake.gif" width="224" height="181" loading="lazy" decoding="async" alt="Heard “Okay Nabu”: the wake word, after a chime"></picture><figcaption><b>Heard “Okay Nabu”</b><span>the wake word, after a chime</span></figcaption></figure>
         <figure class="face"><picture><source srcset="img/faces/listening.png" media="(prefers-reduced-motion: reduce)"><img src="img/faces/listening.gif" width="224" height="181" loading="lazy" decoding="async" alt="Listening: you talk; the green dot is on"></picture><figcaption><b>Listening</b><span>you talk; the green dot is on</span></figcaption></figure>
         <figure class="face"><picture><source srcset="img/faces/thinking.png" media="(prefers-reduced-motion: reduce)"><img src="img/faces/thinking.gif" width="224" height="181" loading="lazy" decoding="async" alt="Thinking: Assist is on it"></picture><figcaption><b>Thinking</b><span>Assist is on it</span></figcaption></figure>
-        <figure class="face"><picture><source srcset="img/faces/speaking.png" media="(prefers-reduced-motion: reduce)"><img src="img/faces/speaking.gif" width="224" height="181" loading="lazy" decoding="async" alt="Speaking: the answer"></picture><figcaption><b>Speaking</b><span>the answer</span></figcaption></figure>
-        <figure class="face"><picture><source srcset="img/faces/petted.png" media="(prefers-reduced-motion: reduce)"><img src="img/faces/petted.gif" width="224" height="181" loading="lazy" decoding="async" alt="Petted: a hand on its head"></picture><figcaption><b>Petted</b><span>a hand on its head</span></figcaption></figure>
-        <figure class="face"><picture><source srcset="img/faces/timer.png" media="(prefers-reduced-motion: reduce)"><img src="img/faces/timer.gif" width="224" height="181" loading="lazy" decoding="async" alt="Timer ringing: touch it to stop"></picture><figcaption><b>Timer ringing</b><span>touch it to stop</span></figcaption></figure>
-        <figure class="face"><picture><source srcset="img/faces/error.png" media="(prefers-reduced-motion: reduce)"><img src="img/faces/error.gif" width="224" height="181" loading="lazy" decoding="async" alt="Something went wrong: Assist failed, or HA is gone"></picture><figcaption><b>Something went wrong</b><span>Assist failed, or HA is gone</span></figcaption></figure>
-        <figure class="face"><picture><source srcset="img/faces/screensaver.png" media="(prefers-reduced-motion: reduce)"><img src="img/faces/screensaver.gif" width="224" height="181" loading="lazy" decoding="async" alt="Screensaver: dim and still"></picture><figcaption><b>Screensaver</b><span>dim and still</span></figcaption></figure>
-        <figure class="face"><picture><source srcset="img/faces/sleep.png" media="(prefers-reduced-motion: reduce)"><img src="img/faces/sleep.gif" width="224" height="181" loading="lazy" decoding="async" alt="Falling asleep: night, lights off"></picture><figcaption><b>Falling asleep</b><span>night, lights off</span></figcaption></figure>
-        <figure class="face"><picture><source srcset="img/faces/boot.png" media="(prefers-reduced-motion: reduce)"><img src="img/faces/boot.gif" width="224" height="181" loading="lazy" decoding="async" alt="Waking up: power on, or the morning"></picture><figcaption><b>Waking up</b><span>power on, or the morning</span></figcaption></figure>
+        <figure class="face"><picture><source srcset="img/faces/done.png" media="(prefers-reduced-motion: reduce)"><img src="img/faces/done.gif" width="224" height="181" loading="lazy" decoding="async" alt="Done!: a timer set, a tile tapped"></picture><figcaption><b>Done!</b><span>a timer set, a tile tapped</span></figcaption></figure>
+        <div class="face mystery">
+          <div class="q" aria-hidden="true"><span>?</span></div>
+          <div><b class="big">+16</b><p>Pet it, shake it, pick it up, leave it alone, keep it up late, point a finger at it: it has a face for that, and a few secret ones too.</p><em>Find them on your robot.</em></div>
+        </div>
       </div>
+      <p class="note">Pictures rendered from the Face Lab, where the faces were designed; the robot draws the same poses.</p>
     </section>
   </div>
 

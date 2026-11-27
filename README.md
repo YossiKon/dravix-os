@@ -8,7 +8,7 @@ with you, and keeps your Home Assistant controls one swipe away from its face. I
 the robot and in your own Home Assistant: no add-on, no server, no cloud account.
 
 <p align="center">
-  <img src="docs/img/hero.gif" width="420" alt="Dravix on a StackChan robot: calm, happy, in love, listening with the green dot lit, thinking, speaking, done and surprised">
+  <img src="docs/img/hero.gif" width="420" alt="Dravix on a StackChan robot: calm, happy, in love, listening with the green dot lit, thinking, speaking and done">
 </p>
 
 ## What it does
@@ -32,52 +32,24 @@ the robot and in your own Home Assistant: no add-on, no server, no cloud account
 ## Faces
 
 Rounded aqua eyes on black, a thin mouth when it needs one, and little gloved hands that pop up for
-a wave, a thumbs-up or a cheer. The LED bar under the face joins in. (Pictures rendered from the
-Face Lab, where the faces were designed; the robot draws the same poses.)
-
-**It feels**
+a wave, a thumbs-up or a cheer. The LED bar under the face joins in. Here are six of them:
 
 <table>
 <tr>
-<td align="center" width="25%"><img src="docs/img/faces/neutral.gif" width="200" alt="Neutral"><br><b>Neutral</b><br><sub>at rest: it looks around and blinks</sub></td>
-<td align="center" width="25%"><img src="docs/img/faces/happy.gif" width="200" alt="Happy"><br><b>Happy</b><br><sub>good news, a compliment</sub></td>
-<td align="center" width="25%"><img src="docs/img/faces/love.gif" width="200" alt="Love"><br><b>Love</b><br><sub>a long pet, or a hug</sub></td>
-<td align="center" width="25%"><img src="docs/img/faces/sad.gif" width="200" alt="Sad"><br><b>Sad</b><br><sub>when an automation says so</sub></td>
+<td align="center" width="33%"><img src="docs/img/faces/happy.gif" width="240" alt="Happy"><br><b>Happy</b><br><sub>good news, a compliment</sub></td>
+<td align="center" width="33%"><img src="docs/img/faces/love.gif" width="240" alt="Love"><br><b>Love</b><br><sub>a long pet, or a hug</sub></td>
+<td align="center" width="33%"><img src="docs/img/faces/greet.gif" width="240" alt="Hello"><br><b>Hello</b><br><sub>you came back to the desk</sub></td>
 </tr>
 <tr>
-<td align="center" width="25%"><img src="docs/img/faces/angry.gif" width="200" alt="Grumpy"><br><b>Grumpy</b><br><sub>shaken one time too many</sub></td>
-<td align="center" width="25%"><img src="docs/img/faces/surprised.gif" width="200" alt="Surprised"><br><b>Surprised</b><br><sub>picked up</sub></td>
-<td align="center" width="25%"><img src="docs/img/faces/sleepy.gif" width="200" alt="Sleepy"><br><b>Sleepy</b><br><sub>late at night</sub></td>
-<td align="center" width="25%"><img src="docs/img/faces/doubt.gif" width="200" alt="Confused"><br><b>Confused</b><br><sub>it didn&#x27;t catch that</sub></td>
-</tr>
-<tr>
-<td align="center" width="25%"><img src="docs/img/faces/dizzy.gif" width="200" alt="Dizzy"><br><b>Dizzy</b><br><sub>right after a shake</sub></td>
-<td align="center" width="25%"><img src="docs/img/faces/bored.gif" width="200" alt="Bored"><br><b>Bored</b><br><sub>nobody around for a while</sub></td>
+<td align="center" width="33%"><img src="docs/img/faces/listening.gif" width="240" alt="Listening"><br><b>Listening</b><br><sub>you talk; the green dot is on</sub></td>
+<td align="center" width="33%"><img src="docs/img/faces/thinking.gif" width="240" alt="Thinking"><br><b>Thinking</b><br><sub>Assist is on it</sub></td>
+<td align="center" width="33%"><img src="docs/img/faces/done.gif" width="240" alt="Done!"><br><b>Done!</b><br><sub>a timer set, a tile tapped</sub></td>
 </tr>
 </table>
 
-**It does**
+**…and 16 more it keeps to itself.** Pet it, shake it, pick it up, leave it alone, keep it up late, point a finger at it: it has a face for that, and a few secret ones too. Find them on your robot.
 
-<table>
-<tr>
-<td align="center" width="25%"><img src="docs/img/faces/greet.gif" width="200" alt="Hello"><br><b>Hello</b><br><sub>you came back to the desk</sub></td>
-<td align="center" width="25%"><img src="docs/img/faces/done.gif" width="200" alt="Done!"><br><b>Done!</b><br><sub>a timer set, a tile tapped</sub></td>
-<td align="center" width="25%"><img src="docs/img/faces/wake.gif" width="200" alt="Heard “Okay Nabu”"><br><b>Heard “Okay Nabu”</b><br><sub>the wake word, after a chime</sub></td>
-<td align="center" width="25%"><img src="docs/img/faces/listening.gif" width="200" alt="Listening"><br><b>Listening</b><br><sub>you talk; the green dot is on</sub></td>
-</tr>
-<tr>
-<td align="center" width="25%"><img src="docs/img/faces/thinking.gif" width="200" alt="Thinking"><br><b>Thinking</b><br><sub>Assist is on it</sub></td>
-<td align="center" width="25%"><img src="docs/img/faces/speaking.gif" width="200" alt="Speaking"><br><b>Speaking</b><br><sub>the answer</sub></td>
-<td align="center" width="25%"><img src="docs/img/faces/petted.gif" width="200" alt="Petted"><br><b>Petted</b><br><sub>a hand on its head</sub></td>
-<td align="center" width="25%"><img src="docs/img/faces/timer.gif" width="200" alt="Timer ringing"><br><b>Timer ringing</b><br><sub>touch it to stop</sub></td>
-</tr>
-<tr>
-<td align="center" width="25%"><img src="docs/img/faces/error.gif" width="200" alt="Something went wrong"><br><b>Something went wrong</b><br><sub>Assist failed, or HA is gone</sub></td>
-<td align="center" width="25%"><img src="docs/img/faces/screensaver.gif" width="200" alt="Screensaver"><br><b>Screensaver</b><br><sub>dim and still</sub></td>
-<td align="center" width="25%"><img src="docs/img/faces/sleep.gif" width="200" alt="Falling asleep"><br><b>Falling asleep</b><br><sub>night, lights off</sub></td>
-<td align="center" width="25%"><img src="docs/img/faces/boot.gif" width="200" alt="Waking up"><br><b>Waking up</b><br><sub>power on, or the morning</sub></td>
-</tr>
-</table>
+<sub>Pictures rendered from the Face Lab, where the faces were designed; the robot draws the same poses.</sub>
 
 ## Screens
 
