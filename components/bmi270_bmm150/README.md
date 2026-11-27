@@ -13,3 +13,7 @@ API does). Call sites are marked with `// dravix:` comments.
 Why vendored rather than referenced: upstream targets an older ESPHome and no longer
 compiles against the pinned toolchain; keeping the patched copy in-repo makes robot
 builds reproducible.
+
+**2026-11-27 (tag `components-v4`):** `write_register_()` logged the I2C error code (an int) with
+`%s`. Harmless while the bus works, but on the first failed write (a stuck bus) the logger read the
+code as a string pointer and the robot crashed in a boot loop. It is printed with `%d` now.

@@ -23,7 +23,7 @@ dashboard, MCP server, plugins) with firmware v1 ("fw61"). All of it lives on th
   LED effect), `behavior` (pads, IMU, proximity, light, night), `screens` (tiles + AC),
   `games` (Games screen, camera games), `modes` (Normal / Busy / Sleep, the menu, the clock, the
   status bar, private mode, the battery). `img/` holds the PNG assets (`make_images.py` draws them).
-- `components/` — ESPHome components, served to builds through git **tags** (`components-v3`).
+- `components/` — ESPHome components, served to builds through git **tags** (`components-v4`).
 - `docs/` — `index.html` (the GitHub Pages site), `img/` (README and site pictures),
   `firmware.md` (internals), `ha-automations.yaml` + `ha-voice.yaml` (HA automations).
 - `dravix_os/` — the add-on: `app/server.py` (aiohttp; finds the robot through the entity
@@ -63,6 +63,9 @@ dashboard, MCP server, plugins) with firmware v1 ("fw61"). All of it lives on th
 - **Render budget:** no full-screen gradients, watch the widget count (CoreS3 LVGL starves).
 
 ## Checks
+- **Read compiler warnings in our own components.** A `-Wformat` warning in `bmi270_bmm150.cpp`
+  (an int printed with `%s`) was filtered out of the CI annotations as noise for weeks; it was the
+  boot-loop crash the first time the robot's I2C bus got stuck.
 - `esphome config` validates YAML only; C++ lambdas fail at compile time. CI
   (`.github/workflows/firmware.yml`) compiles main on ESPHome 2026.8.2 and the latest release.
   Job logs need a login, so errors are surfaced as annotations
