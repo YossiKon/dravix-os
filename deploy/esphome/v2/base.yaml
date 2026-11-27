@@ -135,11 +135,21 @@ sensor:
     name: "WiFi signal"
     update_interval: 60s
     entity_category: diagnostic
+  # how long since the last start: a robot that keeps restarting shows it here at a glance
+  - platform: uptime
+    name: "Uptime"
+    update_interval: 60s
+    entity_category: diagnostic
 
 text_sensor:
   - platform: version
     name: "ESPHome version"
     hide_timestamp: true
+  # why it last started: a crash (panic), a watchdog, a brownout (power), or a normal restart
+  - platform: debug
+    reset_reason:
+      name: "Reset reason"
+      entity_category: diagnostic
   - platform: template
     name: "Firmware"
     entity_category: diagnostic
