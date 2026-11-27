@@ -36,7 +36,7 @@ number:
   - { platform: template, id: n_saver_min, name: "Screensaver after", icon: mdi:timer-sand, unit_of_measurement: "min", min_value: 1, max_value: 60, step: 1, optimistic: true, restore_value: true, initial_value: 5, entity_category: config }
   - { platform: template, id: n_bang_db, name: "Bang loudness", icon: mdi:volume-high, unit_of_measurement: "dBFS", min_value: -40, max_value: -1, step: 1, optimistic: true, restore_value: true, initial_value: -15, entity_category: config }
   # where "straight" is for the head (servo Y degrees); change it in HA until the head looks straight
-  - { platform: template, id: n_head_level, name: "Head level", icon: mdi:arrow-up-down, min_value: 0, max_value: 60, step: 1, optimistic: true, restore_value: true, initial_value: "${head_straight}", entity_category: config, on_value: [ { if: { condition: { lambda: 'return millis() > 20000;' }, then: [ { script.execute: head_home } ] } } ] }   # not the restore at boot
+  - { platform: template, id: n_head_level, name: "Head level", icon: mdi:arrow-up-down, min_value: 0, max_value: 90, step: 1, optimistic: true, restore_value: true, initial_value: "${head_straight}", entity_category: config, on_value: [ { if: { condition: { lambda: 'return millis() > 20000;' }, then: [ { script.execute: head_home } ] } } ] }   # not the restore at boot
   - { platform: template, id: n_bored_min, name: "Bored after", icon: mdi:sleep, unit_of_measurement: "min", min_value: 2, max_value: 60, step: 1, optimistic: true, restore_value: true, initial_value: 8, entity_category: config }
 
 # when it sleeps: Home Assistant shows these as time pickers
@@ -261,7 +261,7 @@ script:
             - number.set: { id: servo_x_angle, value: !lambda 'return std::max(-60.0f, std::min(60.0f, yaw));' }
             - number.set:
                 id: servo_y_angle
-                value: !lambda 'float p = id(n_head_level).state + pitch; return p < 0.0f ? 0.0f : (p > 85.0f ? 85.0f : p);'
+                value: !lambda 'float p = id(n_head_level).state + pitch; return p < 0.0f ? 0.0f : (p > 90.0f ? 90.0f : p);'
 
   - id: head_gesture
     parameters: { f: int }
