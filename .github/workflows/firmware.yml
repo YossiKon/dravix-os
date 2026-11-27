@@ -70,10 +70,11 @@ jobs:
         if: always()
         run: |
           ELF=$(find ci/.esphome/build -name firmware.elf | head -1)
-          A2L=$(find ~/.platformio/packages -name "xtensa-esp32s3-elf-addr2line*" -type f | head -1)
-          echo "::warning::elf=$ELF addr2line=$A2L esphome=$(esphome version)"
+          A2L=$(find "$HOME" /opt /usr/local -type f \( -name "xtensa-esp32s3-elf-addr2line" -o -name "xtensa-esp-elf-addr2line" \) 2>/dev/null | head -1)
+          echo "::warning::$(esphome version) elf=$ELF a2l=$A2L"
           [ -n "$ELF" ] && [ -n "$A2L" ] || exit 0
-          "$A2L" -pfiaC -e "$ELF" 0x400556C0 0x4213E63E 0x42135B85 0x42135BC5 0x42036396 0x42036551 0x4200F079 0x4202C1C1 0x4202C5F4 0x4202C749 0x4200E63E 0x4200E710 0x4200E1E0 0x42027AB5 0x4200D193 | while IFS= read -r l; do echo "::warning::$l"; done
+          "$A2L" -pfiaC -e "$ELF" 0x400556C0 0x4213E63E 0x42135B85 0x42135BC5 0x42036396 0x42036551 0x4200F079 0x4202C1C1 0x4202C5F4 0x4202C749 0x4200E63E 0x4200E710 0x4200E1E0 0x42027AB5 0x4200D193 > decoded.txt 2>&1 || true
+          n=0; while IFS= read -r l; do n=$((n+1)); echo "::warning title=bt$n::$l"; done < decoded.txt
 
       # job logs need a GitHub login to read; annotations don't, so the errors go there too
       - name: Compile errors as annotations
