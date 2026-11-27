@@ -93,7 +93,7 @@ text_sensor:
       if (f == 13) return std::string("thinking");
       if (f == 14) return std::string("speaking");
       return std::string("awake");
-    update_interval: 2s
+    update_interval: never          # published on change (modes.yaml)
 
 sensor:
   # BOOM: the peak level of the microphone the wake word already keeps open (passive = no second

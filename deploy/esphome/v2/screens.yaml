@@ -45,7 +45,7 @@ select:
     lambda: |-
       static const char *const N[5] = {"Face", "Screen 1", "Screen 2", "Air conditioner", "Games"};
       int p = id(g_page); return std::string(N[(p >= 0 && p < 5) ? p : (p == 5 ? 4 : 0)]);
-    update_interval: 2s
+    update_interval: never          # published on change (modes.yaml)
     set_action:
       - lambda: |-
           static const char *const N[5] = {"Face", "Screen 1", "Screen 2", "Air conditioner", "Games"};
@@ -150,11 +150,19 @@ script:
     mode: restart
     then:
       - delay: 20s      # filling several fields in a row costs one restart
-      - lambda: |-
-          text::Text *T[8] = {id(t_tile1), id(t_tile2), id(t_tile3), id(t_tile4), id(t_tile5), id(t_tile6), id(t_tile7), id(t_tile8)};
-          bool diff = id(t_ac).state != id(g_ac_ent);
-          for (int i = 0; i < 8; i++) if (T[i]->state != id(g_tile_ent)[i]) diff = true;
-          if (diff) { ESP_LOGI("screens", "a tile changed in Home Assistant: restarting to follow it"); App.safe_reboot(); }
+      - if:
+          condition:
+            lambda: |-
+              text::Text *T[8] = {id(t_tile1), id(t_tile2), id(t_tile3), id(t_tile4), id(t_tile5), id(t_tile6), id(t_tile7), id(t_tile8)};
+              bool diff = id(t_ac).state != id(g_ac_ent);
+              for (int i = 0; i < 8; i++) if (T[i]->state != id(g_tile_ent)[i]) diff = true;
+              return diff;
+          then:
+            - logger.log: "a tile changed in Home Assistant: restarting to follow it"
+            - lambda: 'id(g_restart_why) = 1;'
+            - script.execute: { id: hint, txt: "A tile changed. Restarting to follow it...", ms: 3000 }
+            - delay: 2500ms
+            - lambda: 'global_preferences->sync(); App.safe_reboot();'
 
   - id: show_screen
     parameters: { n: int }

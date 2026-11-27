@@ -39,6 +39,8 @@ logger:
   level: DEBUG
   logs:
     ltr_als_ps: ERROR          # "Sensors blacked out" hundreds of times a night in the dark
+    bmi270_bmm150: INFO        # one "Got accel=…" line per reading, ten a second
+    cal: INFO                  # one line per touch point
     lvgl: INFO
 
 api:

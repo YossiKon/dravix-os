@@ -78,7 +78,7 @@ select:
         "wake","listening","thinking","speaking","petted","timer","error","bored","screensaver","sleep","boot",
         "hands up","shot","revive"};
       int s = id(g_face); return std::string(N[(s >= 0 && s < 25) ? s : 0]);
-    update_interval: 1s
+    update_interval: never          # published on change (modes.yaml), not every second
     set_action:
       - lambda: |-
           static const char *const N[25] = {"neutral","happy","love","sad","angry","surprised","sleepy","doubt","dizzy","greet","done",
