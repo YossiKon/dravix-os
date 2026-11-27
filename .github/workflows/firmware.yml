@@ -51,6 +51,9 @@ jobs:
           packages:
             dravix: !include ../deploy/esphome/stackchan-dravix.yaml
           EOF
+          printf 'wifi_ssid: "ci-network"
+wifi_password: "ci-password"
+' > ci/secrets.yaml
 
       - name: Validate
         run: |

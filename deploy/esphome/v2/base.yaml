@@ -48,6 +48,10 @@ api:
 # the hardware (the vendored M5Stack BSP) is hardware.yaml; the component sources are components.yaml
 
 wifi:
+  # the same two ESPHome secrets the v1 firmware read, so a device file without its own wifi:
+  # block still joins the network (a wifi: block in the device file wins over these)
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
   power_save_mode: none        # LIGHT power save = wake-word and API lag on this board
 
 display:

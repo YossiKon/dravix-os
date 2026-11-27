@@ -32,7 +32,8 @@ the robot and in your own Home Assistant: no add-on, no server, no cloud account
 ## Faces
 
 Rounded aqua eyes on black, a thin mouth when it needs one, and little gloved hands that pop up for
-a wave, a thumbs-up or a cheer. The LED bar under the face joins in.
+a wave, a thumbs-up or a cheer. The LED bar under the face joins in. (Pictures rendered from the
+Face Lab, where the faces were designed; the robot draws the same poses.)
 
 **It feels**
 
@@ -202,8 +203,8 @@ data:
 
 ## Good to know
 
-- **New:** this is Dravix 2.0 (November 2026). Every change is compiled on ESPHome 2026.8.2 and
-  on the latest release before it reaches `main`.
+- **Status:** Dravix 2.0 is brand new (November 2026). Every change to `main` is compiled on
+  ESPHome 2026.8.2 and on the latest release; its first tests on a real robot are under way.
 - **"Done!"** shows when a timer is set, when Home Assistant confirms a tile tap, or when an
   automation asks for it: Assist doesn't tell the robot whether it did something or only answered.
 - **The camera games run on the robot.** They look at colour and movement, not at faces or hands.
