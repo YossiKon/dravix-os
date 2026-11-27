@@ -224,7 +224,8 @@ data:
   automation asks for it: Assist doesn't tell the robot whether it did something or only answered.
 - **The camera games run on the robot.** They look at colour and movement, not at faces or hands.
   Bang! notices a pointing finger with the distance sensor.
-- **Head moves never overlap sound**, so the robot keeps still while you talk to it.
+- **It keeps still while it listens and talks.** The only head move in a conversation is the
+  little perk-up when it hears "Okay Nabu" (Normal mode), before it starts listening.
 - **Private mode is software, done thoroughly:** the microphone is stopped and muted (it would only
   hear silence), and after the restart the camera is never started. Home Assistant can turn it off.
 

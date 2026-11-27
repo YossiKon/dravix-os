@@ -81,8 +81,7 @@ api:
             int g = s == "rps" ? 1 : s == "coin" ? 2 : s == "dice" ? 3 : s == "8ball" ? 4 : s == "reaction" ? 5 : s == "bang" ? 6
                   : s == "chameleon" ? 7 : s == "photo" ? 8 : s == "mirror" ? 9 : s == "guard" ? 10 : s == "follow" ? 11 : 0;
             if (g == 0 && s != "games") return;
-            if (id(g_sleep)) id(mode_set).execute(id(g_mode_before) == 2 ? 0 : id(g_mode_before), false);   // asked to play: it wakes up
-            if (g) id(game_start).execute(g); else id(show_screen).execute(4);
+            id(run_game).execute(g ? g : -1);          // wakes it from Sleep; waits for the end of a voice turn
 
 lvgl:
   top_layer:

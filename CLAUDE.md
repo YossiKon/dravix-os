@@ -19,8 +19,9 @@ dashboard, MCP server, plugins) with firmware v1 ("fw61"). All of it lives on th
   `!include`s the modules. **Never move or rename it**: every robot points at this exact path.
 - `deploy/esphome/v2/` — the modules: `hardware` (vendored BSP), `components` (driver sources),
   `base` (voice, audio, diagnostics), `face` + `face_tick` (face state machine, 30 fps render,
-  LED effect), `behavior` (pads, IMU, proximity, light, night, sleep), `screens` (tiles + AC),
-  `games` (Games screen, camera games). `img/` holds the PNG assets (`make_images.py` draws them).
+  LED effect), `behavior` (pads, IMU, proximity, light, night), `screens` (tiles + AC),
+  `games` (Games screen, camera games), `modes` (Normal / Busy / Sleep, the menu, the clock, the
+  status bar, private mode, the battery). `img/` holds the PNG assets (`make_images.py` draws them).
 - `components/` — ESPHome components, served to builds through git **tags** (`components-v3`).
 - `docs/` — `index.html` (the GitHub Pages site), `img/` (README and site pictures),
   `firmware.md` (internals), `ha-automations.yaml` (optional HA automations).
@@ -40,8 +41,15 @@ dashboard, MCP server, plugins) with firmware v1 ("fw61"). All of it lives on th
 - **One owner per thing.** The face: `g_face` / `face_set` / the render tick — nothing else
   touches the face widgets. Sound: everything goes through `play_sfx` (mic and speaker share one
   I2S bus and the wake word holds it 24/7; never `rtttl.play` directly).
-- **No servo writes during a voice turn or while the speaker plays** (servo traffic starved the
-  mic and overflowed the speaker buffer — measured on the robot).
+- **No servo writes while it listens or speaks** (servo traffic starved the mic and overflowed the
+  speaker buffer — measured with the old blocking driver). The one move in a voice turn is the
+  Normal-mode perk-up at the wake word, before the session opens (it overlaps the chime).
+- **Modes** live in `modes.yaml`: `mode_set` is the only writer of `g_mode` (0 Normal, 1 Busy,
+  2 Sleep = the clock page); `head_to` moves only in Normal (or via `head_home`). Anything HA asks
+  for during a voice turn waits in `g_pend_*` and runs from `voice_done` (`pending_run`).
+- **Private mode** = `g_private` (restored global): the camera is marked failed at boot (priority
+  600, before its setup), every microphone start checks it, toggling restarts the robot. Its
+  switch keeps `restore_mode: DISABLED` (a restoring template switch replays its action at boot).
 - **English only** on the robot and in the README, site and docs (the owner chats in Hebrew;
   answer in Hebrew).
 - **Assets are pinned by tag:** images come from `img-vN` (`img_base` in `base.yaml`),

@@ -232,6 +232,7 @@ script:
       - if:
           condition: { lambda: 'return !id(sw_mic_mute).state && !id(g_private);' }
           then: [ micro_wake_word.start ]
+      - script.execute: pending_run                         # a game or a mode asked for during the turn
 
 micro_wake_word:
   id: mww
@@ -261,7 +262,9 @@ micro_wake_word:
               # Normal mode: it perks up. One head move before the chime, none while it listens;
               # the end of the turn straightens it (face_rest → head_for_face)
               condition: { lambda: 'return id(g_mode) == 0;' }
-              then: [ { script.execute: { id: head_to, yaw: 0, pitch: 12 } } ]
+              then:
+                - lambda: 'id(g_perk) = true;'
+                - script.execute: { id: head_to, yaw: 0, pitch: 12 }
           - if:
               condition: { switch.is_on: sw_wake_sound }
               then:

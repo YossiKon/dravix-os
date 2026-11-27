@@ -29,6 +29,7 @@ drop away.
 | `behavior.yaml` | Touch pads, IMU (shake, lift), proximity (hello, Bang! aim, desk guard), light, night, screensaver, sleep, timers, head moves |
 | `screens.yaml` | Screen 1 and Screen 2 (4 tiles each) and the air conditioner, entity ids from HA text fields |
 | `games.yaml` | The Games screen, the game stage and its 50 ms tick, the camera games, the HA `play_game` action |
+| `modes.yaml` | Normal / Busy / Sleep (`mode_set`), the mode menu, the clock page, the status bar, the battery, idle glances, private mode, the `set_mode` and `private_mode` actions |
 
 Images are PNGs in `deploy/esphome/v2/img/` (drawn by `make_images.py`). Builds fetch them from
 the **`img-v1` tag**, so a pinned robot never sees an image change under it; a new or changed
@@ -50,7 +51,7 @@ arriving leaves them. A request below the current priority is dropped, never que
 | sleepy | night hours, awake, idle | base | while true | — |
 | bored | nobody around for "Bored after" | base, yawns every ~60 s | while true | — |
 | screensaver | idle for "Screensaver after" (dim, still) | base mode | until any event | base |
-| sleep | night + dark room ("Sleep when the room is dark"), or the "Asleep" switch | base mode, black | until a touch, the wake word, the morning or light | boot |
+| sleep | Sleep mode: the menu, HA's Mode, a voice command, or night + a dark room | base mode → the clock page | until the mode changes (only an automatic sleep ends by itself: morning, light) | boot |
 | boot | power on, waking from sleep | one-shot | 4.0 s | base |
 | happy | HA action, Chameleon | one-shot | 3.0 s | base |
 | love | pet ≥ 3 s, or a hug (2 pads) | one-shot | 4.0 s | base |
@@ -77,6 +78,20 @@ face can never stay stuck. Each one-shot plays its timeline once (intro, hold, o
 neutral pose); held states loop their middle section. On every change the renderer blends the
 eye geometry from the last drawn pose over 150 ms, so nothing pops.
 
+## Modes and private mode
+
+`g_mode` (restored) is 0 Normal, 1 Busy, 2 Sleep, and `mode_set` is its only writer. Normal adds a
+glance to one side every 25–70 s on the resting face and the perk-up at the wake word; Busy gates
+`head_to`; Sleep shows the dim clock page (`ui_tick` brings it back after a voice turn or a timer)
+and ignores the pads, the IMU, people and light. Whatever Home Assistant asks for during a voice
+turn (HA's voice commands arrive at the intent stage, before the reply) waits in `g_pend_*` and
+runs from `voice_done`.
+
+Private mode (`g_private`, restored): the microphone stops and its mute state hands out silence,
+every way the microphone starts checks the flag (including a session HA starts), and toggling
+restarts the robot; on a boot in private mode `on_boot` (priority 600, after the restored globals,
+before the camera's setup) marks the camera failed, so it is never started.
+
 ## Games
 
 While a game runs (`g_game ≠ 0`) the head pads are game buttons, and shake, lift, hello and
@@ -98,8 +113,9 @@ saves the picture and sends it to a phone.
   robot's `show_face` action.
 - **Speaking LEDs and mouth** follow a rhythm while the reply plays; nothing in the speaker path
   exposes the real output level.
-- **Head moves never overlap sound**: servo writes are dropped during a voice turn and while the
-  speaker plays.
+- **The head keeps still while it listens and talks**: servo writes are dropped during a voice
+  turn and while the speaker plays. The one exception is the Normal-mode perk-up at the wake word,
+  sent before the session opens (it overlaps the chime).
 - **Bang!** listens for a loud sound 15 dB over the room ("Bang loudness" sets the floor). Its
   own head move is ignored for 1.5 s.
 - The camera games look at colour and movement only: no face or hand recognition.
