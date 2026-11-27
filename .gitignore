@@ -53,3 +53,5 @@ deploy/esphome/.esphome/
 
 # the v2 face images are firmware assets (downloaded by URL at compile time)
 !deploy/esphome/v2/img/*.png
+!docs/img/*.png
+!docs/img/faces/*.png

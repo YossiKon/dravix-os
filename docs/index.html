@@ -3,718 +3,504 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>dravix-os — StackChan companion OS for Home Assistant (ESPHome · M5Stack CoreS3)</title>
-
-<!-- ── SEO ─────────────────────────────────────────────────────────────── -->
-<meta name="description" content="dravix-os turns the M5Stack StackChan desk robot into a living, local-first companion — a Home Assistant add-on with custom ESPHome firmware: a drawn animated pet face, voice, petting, a games arcade, a real Tamagotchi-style life, and deep smart-home control. No cloud.">
-<meta name="keywords" content="StackChan, dravix, dravix-os, Home Assistant, Home Assistant add-on, ESPHome, M5Stack, M5Stack CoreS3, ESP32-S3, companion robot, desk robot, pet robot, voice assistant, local-first, smart home, Assist, Frigate, robot firmware">
-<meta name="author" content="Yossi Koncha">
+<title>Dravix — a cute desk assistant for Home Assistant, on the M5Stack StackChan</title>
+<meta name="description" content="Dravix is ESPHome firmware that turns the M5Stack StackChan into an Emo-like desk assistant for Home Assistant: Assist voice with an on-device wake word, 22 animated faces, your controls one swipe away, games, and a green dot whenever the mic or camera is on. No add-on, no server, no cloud.">
+<meta name="keywords" content="StackChan, Dravix, Home Assistant, ESPHome, M5Stack, CoreS3, ESP32-S3, desk robot, desk assistant, Assist, voice assistant, wake word, Okay Nabu, smart home, firmware">
 <meta name="robots" content="index, follow">
-<meta name="theme-color" content="#05080b">
+<meta name="theme-color" content="#0B1110">
 <link rel="canonical" href="https://yossikon.github.io/dravix-os/">
 
-<!-- Open Graph -->
 <meta property="og:type" content="website">
-<meta property="og:site_name" content="dravix-os">
-<meta property="og:title" content="dravix-os — your StackChan, fully local">
-<meta property="og:description" content="A local-first companion OS for the M5Stack StackChan — a Home Assistant add-on with custom ESPHome firmware, an animated pet face, voice, a games arcade, and a real robot life.">
+<meta property="og:site_name" content="Dravix">
+<meta property="og:title" content="Dravix — a desk buddy that lives in your Home Assistant">
+<meta property="og:description" content="ESPHome firmware for the M5Stack StackChan: Assist voice, 22 animated faces, your Home Assistant controls one swipe away, and games. All local.">
 <meta property="og:url" content="https://yossikon.github.io/dravix-os/">
-<meta property="og:image" content="https://raw.githubusercontent.com/YossiKon/dravix-os/main/docs/dravix-robot.svg">
-<meta property="og:image:alt" content="dravix-os — the StackChan pet face on its screen">
-
-<!-- Twitter -->
+<meta property="og:image" content="https://raw.githubusercontent.com/YossiKon/dravix-os/main/docs/img/faces/happy.png">
+<meta property="og:image:alt" content="The Dravix face on a StackChan robot, smiling">
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="dravix-os — your StackChan, fully local">
-<meta name="twitter:description" content="Turn the M5Stack StackChan into a living, local-first desk companion. Home Assistant add-on + custom ESPHome firmware. Pet face, voice, games, a real robot life.">
-<meta name="twitter:image" content="https://raw.githubusercontent.com/YossiKon/dravix-os/main/docs/dravix-robot.svg">
+<meta name="twitter:title" content="Dravix — a desk buddy that lives in your Home Assistant">
+<meta name="twitter:description" content="ESPHome firmware for the M5Stack StackChan: Assist voice, 22 animated faces, your controls one swipe away, and games. All local.">
+<meta name="twitter:image" content="https://raw.githubusercontent.com/YossiKon/dravix-os/main/docs/img/faces/happy.png">
 
-<!-- favicon: the little teal face -->
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%2305080b'/%3E%3Crect x='7' y='9' width='7' height='9' rx='3' fill='%2333E6C8'/%3E%3Crect x='18' y='9' width='7' height='9' rx='3' fill='%2333E6C8'/%3E%3Cpath d='M12 22q4 4 8 0' stroke='%2333E6C8' stroke-width='2.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230B1110'/%3E%3Crect x='6.5' y='9' width='7.5' height='12' rx='3.5' fill='%235EF0E2'/%3E%3Crect x='18' y='9' width='7.5' height='12' rx='3.5' fill='%235EF0E2'/%3E%3Ccircle cx='27' cy='5' r='2.2' fill='%2330D158'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Martian+Mono:wght@400;500&family=Rubik:wght@400;500;600&family=Unbounded:wght@500;700&display=swap">
 
-<!-- structured data -->
 <script type="application/ld+json">
 {
   "@context": "https://schema.org",
   "@type": "SoftwareApplication",
-  "name": "dravix-os",
-  "alternateName": "dravix StackChan companion OS",
-  "applicationCategory": "HomeAutomationApplication",
-  "operatingSystem": "Home Assistant OS, Linux, Docker",
-  "description": "A local-first companion OS for the M5Stack StackChan desk robot, delivered as a Home Assistant add-on with custom dravix ESPHome firmware: an animated pet face, voice via Home Assistant Assist, petting, a games arcade, a Tamagotchi-style life, and deep smart-home integration.",
+  "name": "Dravix",
+  "applicationCategory": "Home automation firmware",
+  "operatingSystem": "ESPHome (M5Stack StackChan, ESP32-S3 CoreS3)",
+  "description": "ESPHome firmware that turns the M5Stack StackChan into a cute desk assistant for Home Assistant: Assist voice with an on-device wake word, 22 animated faces, two screens of Home Assistant controls plus an air-conditioner screen, games, and a privacy dot.",
   "url": "https://yossikon.github.io/dravix-os/",
   "codeRepository": "https://github.com/YossiKon/dravix-os",
-  "author": { "@type": "Person", "name": "Yossi Koncha" },
-  "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
-  "keywords": "StackChan, Home Assistant, ESPHome, M5Stack CoreS3, companion robot, desk robot, local-first"
+  "license": "https://opensource.org/licenses/MIT",
+  "softwareVersion": "2.0.0",
+  "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" }
 }
 </script>
 
-<!-- distinctive type: friendly display + technical body/mono -->
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-<script>document.documentElement.classList.add('js');</script>
-
 <style>
-  :root{
-    --bg:#05080b; --bg2:#0b1119; --panel:#0e141c; --panel2:#111a24;
-    --line:#1c2634; --line2:#243244;
-    --teal:#33E6C8; --teal-dim:#1f9d8a; --green:#5dffa0; --pink:#FF9EB5; --amber:#f2c14e;
-    --text:#e8edf2; --mute:#8b96a4; --faint:#5c6774;
-    --display:'Bricolage Grotesque', ui-sans-serif, system-ui, sans-serif;
-    --body:'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif;
-    --mono:'IBM Plex Mono', ui-monospace, monospace;
-    --maxw:1140px;
-    --glow:0 0 40px rgba(51,230,200,.18);
-  }
-  *{box-sizing:border-box}
-  html{scroll-behavior:smooth; -webkit-text-size-adjust:100%}
-  body{
-    margin:0; background:var(--bg); color:var(--text);
-    font-family:var(--body); font-size:17px; line-height:1.65;
-    -webkit-font-smoothing:antialiased; overflow-x:hidden;
-  }
-  /* layered atmosphere: teal halo + grid + scanlines */
-  body::before{
-    content:""; position:fixed; inset:0; z-index:-2; pointer-events:none;
-    background:
-      radial-gradient(70% 55% at 50% -6%, rgba(51,230,200,.16), transparent 60%),
-      radial-gradient(50% 40% at 90% 10%, rgba(255,158,181,.07), transparent 60%),
-      linear-gradient(180deg,var(--bg2),var(--bg) 60%);
-  }
-  body::after{
-    content:""; position:fixed; inset:0; z-index:-1; pointer-events:none; opacity:.5;
-    background-image:
-      linear-gradient(rgba(51,230,200,.045) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(51,230,200,.045) 1px, transparent 1px);
-    background-size:52px 52px;
-    -webkit-mask-image:radial-gradient(circle at 50% 8%, #000, transparent 78%);
-            mask-image:radial-gradient(circle at 50% 8%, #000, transparent 78%);
-  }
-  a{color:var(--teal); text-decoration:none}
-  a:hover{text-decoration:underline; text-underline-offset:3px}
-  .wrap{max-width:var(--maxw); margin:0 auto; padding:0 22px}
-  h1,h2,h3{font-family:var(--display); font-weight:700; line-height:1.06; letter-spacing:-.02em; margin:0}
-  section{padding:84px 0; position:relative}
-  .eyebrow{font-family:var(--mono); font-size:12.5px; letter-spacing:.28em; text-transform:uppercase; color:var(--teal-dim)}
-  .lead{color:var(--mute); font-size:19px; max-width:62ch}
+:root {
+  --bg: #0B1110;
+  --card: #121918;          /* exactly the background baked into every picture */
+  --card-2: #172120;
+  --ink: #E8F6F3;
+  --muted: #8DB0AA;
+  --faint: #5C7873;
+  --aqua: #5EF0E2;
+  --aqua-ink: #00332D;      /* the text colour of a tile that is on */
+  --pink: #FF79B0;
+  --green: #30D158;
+  --line: rgba(94, 240, 226, .14);
+  --f-display: "Unbounded", "Rubik", system-ui, sans-serif;
+  --f-body: "Rubik", system-ui, sans-serif;
+  --f-mono: "Martian Mono", ui-monospace, monospace;
+  --r: 16px;                /* the radius of a tile on the robot */
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0; color: var(--ink); font-family: var(--f-body); font-size: 17px; line-height: 1.6;
+  background:
+    radial-gradient(900px 520px at 78% 8%, rgba(94, 240, 226, .10), transparent 62%),
+    radial-gradient(700px 420px at 8% 46%, rgba(255, 121, 176, .05), transparent 60%),
+    var(--bg);
+  -webkit-font-smoothing: antialiased;
+}
+body::before {   /* a little grain, like a night photo */
+  content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 0; opacity: .07; mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+a { color: var(--aqua); text-decoration-thickness: 1px; text-underline-offset: 3px; }
+a:hover { text-decoration-thickness: 2px; }
+img { display: block; max-width: 100%; height: auto; }
+code, pre { font-family: var(--f-mono); }
+:focus-visible { outline: 2px solid var(--aqua); outline-offset: 3px; border-radius: 6px; }
 
-  /* ── nav ── */
-  nav{position:sticky; top:0; z-index:50; backdrop-filter:blur(11px);
-      background:rgba(5,8,11,.72); border-bottom:1px solid var(--line)}
-  .nav-in{display:flex; align-items:center; gap:22px; height:62px}
-  .brand{display:flex; align-items:center; gap:10px; font-family:var(--display); font-weight:800; font-size:20px; letter-spacing:-.02em; color:var(--text)}
-  .brand:hover{text-decoration:none}
-  .brand svg{width:30px; height:30px; filter:drop-shadow(0 0 6px rgba(51,230,200,.5))}
-  .nav-links{display:flex; gap:22px; margin-left:auto; font-size:14.5px}
-  .nav-links a{color:var(--mute); font-weight:500}
-  .nav-links a:hover{color:var(--teal); text-decoration:none}
-  .nav-cta{display:inline-flex; align-items:center; gap:7px; padding:8px 15px; border-radius:9px;
-           background:var(--teal); color:#04120f; font-weight:700; font-size:14px}
-  .nav-cta:hover{text-decoration:none; box-shadow:var(--glow)}
-  .burger{display:none; margin-left:auto; background:none; border:1px solid var(--line2); color:var(--text); border-radius:8px; padding:7px 10px; cursor:pointer}
+.wrap { position: relative; z-index: 1; width: min(1160px, 100% - 40px); margin-inline: auto; }
+/* grid items may shrink below their longest line (code blocks scroll inside instead) */
+.hero > *, .sec-head > *, .install > *, .games > *, .ha > *, .privacy > *, .know > *, .tiles-how > * { min-width: 0; }
 
-  /* ── hero ── */
-  .hero{padding:64px 0 52px; display:grid; grid-template-columns:1.05fr .95fr; gap:46px; align-items:center}
-  .hero h1{font-size:clamp(40px,6vw,68px); font-weight:800}
-  .hero h1 .tint{color:var(--teal)}
-  .hero p.lead{margin:20px 0 0}
-  .badges{display:flex; flex-wrap:wrap; gap:9px; margin-top:26px}
-  .badge{font-family:var(--mono); font-size:12px; color:var(--mute); border:1px solid var(--line2);
-         background:rgba(255,255,255,.02); padding:6px 11px; border-radius:999px}
-  .badge b{color:var(--teal); font-weight:600}
-  .cta-row{display:flex; flex-wrap:wrap; gap:13px; margin-top:30px}
-  .btn{display:inline-flex; align-items:center; gap:9px; padding:13px 22px; border-radius:11px; font-weight:700; font-size:15.5px; transition:transform .15s, box-shadow .2s, background .2s}
-  .btn-primary{background:var(--teal); color:#04120f}
-  .btn-primary:hover{text-decoration:none; transform:translateY(-2px); box-shadow:var(--glow)}
-  .btn-ghost{background:transparent; color:var(--text); border:1px solid var(--line2)}
-  .btn-ghost:hover{text-decoration:none; border-color:var(--teal); color:var(--teal)}
-  .hero-art{position:relative}
-  .hero-art .screen{width:100%; height:auto; border-radius:22px; display:block;
-      box-shadow:0 40px 90px -30px rgba(0,0,0,.85), 0 0 0 1px var(--line); filter:drop-shadow(0 0 30px rgba(51,230,200,.12))}
-  .blink{transform-box:fill-box; transform-origin:center; animation:blink 5.4s infinite}
-  .blink.r{animation-delay:.06s}
-  @keyframes blink{0%,93%,100%{transform:scaleY(1)} 96%{transform:scaleY(.08)}}
-  .float{animation:float 7s ease-in-out infinite}
-  @keyframes float{0%,100%{transform:translateY(0)} 50%{transform:translateY(-12px)}}
+/* ── top bar ───────────────────────────────────────── */
+.top { position: sticky; top: 0; z-index: 10; backdrop-filter: blur(12px); background: rgba(11, 17, 16, .72); border-bottom: 1px solid var(--line); }
+.top .wrap { display: flex; align-items: center; justify-content: space-between; gap: 20px; height: 64px; }
+.brand { display: flex; align-items: center; gap: 12px; color: var(--ink); text-decoration: none; font-family: var(--f-display); font-weight: 700; font-size: 20px; letter-spacing: -.01em; }
+.brand .eyes { display: flex; gap: 5px; padding: 7px 8px; background: #000; border-radius: 9px; position: relative; }
+.brand .eyes i { width: 9px; height: 14px; border-radius: 4px; background: var(--aqua); animation: blink 6s infinite; transform-origin: 50% 50%; }
+.brand .eyes::after { content: ""; position: absolute; top: 3px; right: 3px; width: 4px; height: 4px; border-radius: 50%; background: var(--green); }
+@keyframes blink { 0%, 46%, 50%, 100% { transform: scaleY(1); } 48% { transform: scaleY(.1); } }
+.top nav { display: flex; gap: 22px; font-size: 15px; }
+.top nav a { color: var(--muted); text-decoration: none; }
+.top nav a:hover { color: var(--ink); }
+.top nav .gh { color: var(--aqua); }
+@media (max-width: 860px) { .top nav a:not(.gh) { display: none; } }
 
-  /* ── how it works ── */
-  .flow{display:grid; grid-template-columns:1fr auto 1fr auto 1fr; gap:16px; align-items:stretch; margin-top:34px}
-  .node{background:linear-gradient(180deg,var(--panel),var(--bg2)); border:1px solid var(--line); border-radius:16px; padding:22px}
-  .node h3{font-size:17px; margin-bottom:6px}
-  .node .tag{font-family:var(--mono); font-size:11px; letter-spacing:.18em; text-transform:uppercase; color:var(--teal-dim); display:block; margin-bottom:12px}
-  .node p{margin:0; color:var(--mute); font-size:14.5px}
-  .arrow{align-self:center; color:var(--teal); font-size:26px; font-family:var(--mono)}
+/* ── hero ──────────────────────────────────────────── */
+.hero { display: grid; grid-template-columns: 1.05fr .95fr; gap: 48px; align-items: center; padding: 72px 0 40px; }
+.kicker { font-family: var(--f-mono); font-size: 12px; letter-spacing: .14em; text-transform: uppercase; color: var(--aqua); margin: 0 0 22px; }
+h1 { font-family: var(--f-display); font-weight: 700; font-size: clamp(38px, 5.4vw, 66px); line-height: 1.04; letter-spacing: -.025em; margin: 0 0 24px; text-wrap: balance; }
+h1 em { font-style: normal; color: var(--aqua); }
+.lede { font-size: 19px; color: var(--muted); margin: 0 0 32px; max-width: 34em; }
+.lede b { color: var(--ink); font-weight: 500; }
+.cta { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 40px; }
+.btn { display: inline-flex; align-items: center; gap: 10px; padding: 14px 22px; border-radius: var(--r); font-weight: 600; font-size: 16px; text-decoration: none; border: 1px solid var(--line); color: var(--ink); background: var(--card); transition: transform .2s, border-color .2s, background .2s; }
+.btn:hover { transform: translateY(-2px); border-color: rgba(94, 240, 226, .45); }
+.btn.primary { background: var(--aqua); color: var(--aqua-ink); border-color: var(--aqua); }
+.btn.primary:hover { background: #7FF5EA; }
+.facts { display: flex; flex-wrap: wrap; gap: 28px; list-style: none; padding: 0; margin: 0; }
+.facts li { font-size: 14px; color: var(--muted); }
+.facts b { display: block; font-family: var(--f-display); font-size: 30px; line-height: 1.1; color: var(--ink); font-weight: 700; }
+.hero-robot { position: relative; margin: 0; justify-self: center; width: min(470px, 100%); }
+.hero-robot::before { content: ""; position: absolute; inset: 12% 8% 18%; border-radius: 50%; background: radial-gradient(closest-side, rgba(94, 240, 226, .34), transparent); filter: blur(30px); animation: breathe 5s ease-in-out infinite; }
+@keyframes breathe { 0%, 100% { opacity: .55; transform: scale(.96); } 50% { opacity: 1; transform: scale(1.04); } }
+.hero-robot .frame { position: relative; padding: 14px; background: var(--card); border-radius: 28px; border: 1px solid var(--line); box-shadow: 0 30px 80px rgba(0, 0, 0, .55); }
+.hero-robot img { border-radius: 18px; width: 100%; }
+.hero-robot figcaption { position: relative; margin-top: 14px; text-align: center; font-family: var(--f-mono); font-size: 11.5px; color: var(--faint); }
+@media (max-width: 900px) { .hero { grid-template-columns: 1fr; padding-top: 44px; } .hero-robot { order: -1; } }
 
-  /* ── section headers ── */
-  .sec-head{max-width:64ch; margin-bottom:14px}
-  .sec-head h2{font-size:clamp(28px,3.6vw,40px); margin-top:10px}
-  .sec-head p{color:var(--mute); margin:14px 0 0}
-  .subhead{font-family:var(--mono); font-size:12px; letter-spacing:.2em; text-transform:uppercase; color:var(--faint); margin:38px 0 16px}
+/* ── the LED bar, as a divider ─────────────────────── */
+.ledbar { display: flex; justify-content: center; padding: 34px 0; }
+.ledbar span { display: flex; gap: 14px; padding: 10px 18px; border-radius: 999px; background: #1A2322; box-shadow: inset 0 -3px 0 #0F1716; }
+.ledbar i { width: 8px; height: 8px; border-radius: 50%; background: #2A3533; animation: led 3.6s ease-in-out infinite; }
+.ledbar i:nth-child(1) { animation-delay: 0s; } .ledbar i:nth-child(2) { animation-delay: .12s; } .ledbar i:nth-child(3) { animation-delay: .24s; }
+.ledbar i:nth-child(4) { animation-delay: .36s; } .ledbar i:nth-child(5) { animation-delay: .48s; } .ledbar i:nth-child(6) { animation-delay: .6s; }
+.ledbar i:nth-child(7) { animation-delay: .72s; } .ledbar i:nth-child(8) { animation-delay: .84s; } .ledbar i:nth-child(9) { animation-delay: .96s; }
+.ledbar i:nth-child(10) { animation-delay: 1.08s; } .ledbar i:nth-child(11) { animation-delay: 1.2s; } .ledbar i:nth-child(12) { animation-delay: 1.32s; }
+.ledbar.pink i { --c: var(--pink); }
+@keyframes led { 0%, 30%, 100% { background: #2A3533; box-shadow: none; } 12% { background: var(--c, var(--aqua)); box-shadow: 0 0 12px var(--c, var(--aqua)); } }
 
-  /* ── feature grid ── */
-  .grid{display:grid; grid-template-columns:repeat(3,1fr); gap:15px}
-  .card{background:linear-gradient(180deg,rgba(17,26,36,.85),rgba(11,17,25,.6)); border:1px solid var(--line);
-        border-radius:15px; padding:20px 20px 22px; transition:transform .18s, border-color .18s, box-shadow .18s}
-  .card:hover{transform:translateY(-4px); border-color:var(--teal-dim); box-shadow:0 18px 40px -24px rgba(0,0,0,.9)}
-  .card .ic{font-size:24px; line-height:1; display:block; margin-bottom:12px; filter:drop-shadow(0 0 10px rgba(51,230,200,.25))}
-  .card h3{font-size:16.5px; font-family:var(--body); font-weight:700; letter-spacing:0}
-  .card p{margin:7px 0 0; color:var(--mute); font-size:14px; line-height:1.55}
+/* ── sections ──────────────────────────────────────── */
+section { padding: 36px 0 28px; }
+.sec-head { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); gap: 40px; align-items: end; margin-bottom: 36px; }
+.num { font-family: var(--f-mono); font-size: 12px; letter-spacing: .14em; color: var(--aqua); text-transform: uppercase; margin: 0 0 14px; }
+h2 { font-family: var(--f-display); font-weight: 700; font-size: clamp(28px, 3.6vw, 44px); line-height: 1.08; letter-spacing: -.02em; margin: 0; text-wrap: balance; }
+.sec-head p { margin: 0; color: var(--muted); font-size: 17.5px; }
+@media (max-width: 860px) { .sec-head { grid-template-columns: 1fr; gap: 16px; } }
 
-  /* ── controls list ── */
-  .ctrls{display:grid; grid-template-columns:1fr 1fr; gap:11px 26px; margin-top:8px}
-  .ctrl{display:grid; grid-template-columns:auto 1fr; gap:14px; align-items:start; padding:13px 0; border-bottom:1px solid var(--line)}
-  .ctrl .k{font-family:var(--mono); font-size:13px; color:var(--teal); white-space:normal; min-width:0}
-  .ctrl .v{color:var(--mute); font-size:14.5px}
+/* faces: a catalogue */
+.group-label { display: flex; align-items: center; gap: 14px; font-family: var(--f-mono); font-size: 12px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); margin: 8px 0 18px; }
+.group-label::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+.faces { display: grid; grid-template-columns: repeat(auto-fill, minmax(196px, 1fr)); gap: 14px; margin-bottom: 40px; }
+.face { margin: 0; background: var(--card); border: 1px solid var(--line); border-radius: var(--r); padding: 8px 8px 14px; transition: transform .25s, border-color .25s, box-shadow .25s; }
+.face:hover { transform: translateY(-4px); border-color: rgba(94, 240, 226, .5); box-shadow: 0 16px 40px rgba(0, 0, 0, .45), 0 0 0 1px rgba(94, 240, 226, .15); }
+.face img { width: 100%; border-radius: 10px; }
+.face figcaption { padding: 10px 6px 0; }
+.face b { display: block; font-weight: 600; font-size: 15.5px; }
+.face span { display: block; font-family: var(--f-mono); font-size: 11px; line-height: 1.5; color: var(--faint); margin-top: 3px; }
+@media (max-width: 520px) { .faces { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; } .face { padding: 6px 6px 12px; } .face b { font-size: 14px; } .face span { font-size: 10px; }
+  .facts { display: grid; grid-template-columns: repeat(2, 1fr); gap: 18px; } }
 
-  /* ── behaviors ── */
-  .two{display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-top:8px}
-  .panel{background:linear-gradient(180deg,var(--panel),var(--bg2)); border:1px solid var(--line); border-radius:16px; padding:24px}
-  .panel h3{font-size:19px; margin-bottom:6px}
-  .panel p{color:var(--mute); font-size:14.5px}
-  .needs{display:flex; flex-direction:column; gap:13px; margin:18px 0 4px}
-  .need{display:grid; grid-template-columns:96px 1fr; align-items:center; gap:12px; font-size:13.5px}
-  .need .lbl{font-family:var(--mono); color:var(--text)}
-  .meter{height:8px; border-radius:6px; background:#0a1017; overflow:hidden; border:1px solid var(--line)}
-  .meter i{display:block; height:100%; border-radius:6px}
-  .chips{display:flex; flex-wrap:wrap; gap:8px; margin-top:6px}
-  .chip{font-family:var(--mono); font-size:12.5px; color:var(--mute); border:1px solid var(--line2); border-radius:8px; padding:6px 10px; background:rgba(255,255,255,.02)}
-  .chip.on{color:var(--teal); border-color:var(--teal-dim)}
+/* screens: swipe through them */
+.swipe { display: flex; align-items: center; gap: 10px; overflow-x: auto; scroll-snap-type: x mandatory; padding: 6px 2px 18px; scrollbar-width: thin; scrollbar-color: #24302E transparent; }
+.swipe figure { flex: 0 0 auto; width: min(300px, 78vw); margin: 0; scroll-snap-align: center; background: var(--card); border: 1px solid var(--line); border-radius: 22px; padding: 10px 10px 14px; }
+.swipe figure img { border-radius: 14px; }
+.swipe figcaption { text-align: center; margin-top: 10px; font-weight: 600; font-size: 15px; }
+.swipe figcaption small { display: block; font-family: var(--f-mono); font-weight: 400; font-size: 11px; color: var(--faint); margin-top: 2px; }
+.swipe .arrow { flex: 0 0 auto; font-family: var(--f-mono); color: var(--aqua); opacity: .7; font-size: 20px; }
+@media (min-width: 1000px) { .swipe { overflow: visible; } .swipe figure { flex: 1 1 0; width: auto; min-width: 0; } }
+.note { font-family: var(--f-mono); font-size: 12px; color: var(--faint); margin: 6px 0 0; }
+.tiles-how { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-top: 26px; }
+.tiles-how div { background: var(--card); border: 1px solid var(--line); border-radius: var(--r); padding: 18px 20px; color: var(--muted); font-size: 15.5px; }
+.tiles-how b { display: block; color: var(--ink); font-weight: 600; margin-bottom: 4px; }
+.tiles-how code { color: var(--aqua); font-size: 13px; }
+@media (max-width: 860px) { .tiles-how { grid-template-columns: 1fr; } }
 
-  /* ── games marquee ── */
-  .games{display:flex; flex-wrap:wrap; gap:10px; margin-top:8px}
-  .game{font-family:var(--display); font-weight:700; font-size:16px; letter-spacing:-.01em; color:var(--text);
-        border:1px solid var(--line2); border-radius:11px; padding:11px 16px; background:linear-gradient(180deg,var(--panel),var(--bg2))}
-  .game:hover{border-color:var(--teal); color:var(--teal)}
+/* games */
+.games { display: grid; grid-template-columns: 1fr 340px; gap: 28px; align-items: start; }
+.game-list { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; list-style: none; margin: 0; padding: 0; counter-reset: g; }
+.game-list li { counter-increment: g; background: var(--card); border: 1px solid var(--line); border-radius: var(--r); padding: 16px 18px 16px 56px; position: relative; color: var(--muted); font-size: 15px; line-height: 1.5; }
+.game-list li::before { content: counter(g, decimal-leading-zero); position: absolute; left: 18px; top: 17px; font-family: var(--f-mono); font-size: 12px; color: var(--aqua); }
+.game-list b { display: block; color: var(--ink); font-weight: 600; font-size: 16px; margin-bottom: 2px; }
+.game-list .cam b::after { content: "camera"; margin-left: 8px; font-family: var(--f-mono); font-weight: 400; font-size: 10px; letter-spacing: .06em; text-transform: uppercase; color: var(--pink); border: 1px solid rgba(255, 121, 176, .4); border-radius: 999px; padding: 1px 7px; vertical-align: 2px; }
+.games aside { position: sticky; top: 90px; }
+.games aside figure { margin: 0; background: var(--card); border: 1px solid var(--line); border-radius: 22px; padding: 10px 10px 14px; }
+.games aside img { border-radius: 14px; }
+.games aside figcaption { font-family: var(--f-mono); font-size: 11.5px; color: var(--faint); text-align: center; margin-top: 10px; }
+@media (max-width: 960px) { .games { grid-template-columns: 1fr; } .games aside { position: static; max-width: 360px; } .game-list { grid-template-columns: 1fr; } }
 
-  /* ── install timeline ── */
-  .steps{position:relative; margin-top:14px; padding-left:6px}
-  .step{display:grid; grid-template-columns:auto 1fr; gap:20px; padding:0 0 26px; position:relative}
-  .step:not(:last-child)::before{content:""; position:absolute; left:19px; top:42px; bottom:-4px; width:2px; background:linear-gradient(var(--teal-dim),transparent)}
-  .step .n{width:40px; height:40px; border-radius:11px; display:grid; place-items:center; font-family:var(--mono); font-weight:600;
-           color:var(--teal); background:var(--panel); border:1px solid var(--teal-dim); box-shadow:var(--glow); z-index:1}
-  .step h3{font-size:18px; margin-bottom:5px}
-  .step p{color:var(--mute); font-size:14.5px; margin:0}
-  .need-row{display:flex; flex-wrap:wrap; gap:10px; margin:2px 0 30px}
-  .need-pill{font-size:13.5px; color:var(--text); background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:9px 13px}
-  .need-pill b{color:var(--teal); font-weight:600; font-family:var(--mono); font-size:12px}
+/* privacy: one black screen, one green dot */
+.privacy { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; align-items: center; }
+.dark-screen { position: relative; aspect-ratio: 4 / 3; background: #000; border-radius: 22px; border: 10px solid #E2E6E5; box-shadow: inset 0 0 0 1px #000, 0 30px 70px rgba(0, 0, 0, .5); }
+.dark-screen::before, .dark-screen::after { content: ""; position: absolute; top: 34%; width: 15%; height: 30%; border-radius: 14px; background: var(--aqua); animation: blink 7s infinite; }
+.dark-screen::before { left: 27%; } .dark-screen::after { right: 27%; }
+.dark-screen .dot { position: absolute; top: 6%; right: 5%; width: 4.2%; aspect-ratio: 1; border-radius: 50%; background: var(--green); box-shadow: 0 0 14px var(--green); animation: pulse 2.4s ease-in-out infinite; }
+@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .55; } }
+.privacy ul { list-style: none; padding: 0; margin: 22px 0 0; display: grid; gap: 14px; }
+.privacy li { padding-left: 30px; position: relative; color: var(--muted); }
+.privacy li::before { content: ""; position: absolute; left: 4px; top: 9px; width: 10px; height: 10px; border-radius: 50%; background: var(--green); box-shadow: 0 0 10px rgba(48, 209, 88, .7); }
+.privacy li b { color: var(--ink); font-weight: 500; }
+@media (max-width: 860px) { .privacy { grid-template-columns: 1fr; } .dark-screen { max-width: 420px; } }
 
-  .callout{margin-top:26px; border:1px solid var(--line2); border-left:3px solid var(--amber); background:rgba(242,193,78,.05);
-           border-radius:0 12px 12px 0; padding:16px 20px; color:var(--mute); font-size:14.5px}
-  .callout b{color:var(--amber)}
+/* install */
+.install { display: grid; grid-template-columns: 1fr 1fr; gap: 34px; align-items: start; }
+.steps { list-style: none; margin: 0; padding: 0; counter-reset: s; display: grid; gap: 14px; }
+.steps li { counter-increment: s; position: relative; padding: 18px 20px 18px 78px; background: var(--card); border: 1px solid var(--line); border-radius: var(--r); color: var(--muted); font-size: 15.5px; }
+.steps li::before { content: counter(s); position: absolute; left: 20px; top: 12px; font-family: var(--f-display); font-weight: 700; font-size: 34px; line-height: 1.2; color: transparent; -webkit-text-stroke: 1.5px var(--aqua); }
+.steps b { display: block; color: var(--ink); font-weight: 600; font-size: 16.5px; margin-bottom: 3px; }
+.steps code, .tiles-how code, .ha code { font-size: 13px; background: rgba(94, 240, 226, .08); color: var(--aqua); padding: 1px 6px; border-radius: 6px; }
+.needs { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 18px; padding: 0; list-style: none; }
+.needs li { font-size: 14px; padding: 6px 12px; border: 1px solid var(--line); border-radius: 999px; color: var(--muted); }
+.code { position: sticky; top: 90px; background: var(--card); border: 1px solid var(--line); border-radius: 20px; overflow: hidden; }
+.code header { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; border-bottom: 1px solid var(--line); font-family: var(--f-mono); font-size: 12px; color: var(--muted); }
+.code header span:last-child { color: var(--faint); }
+.code pre { margin: 0; padding: 18px 20px 22px; font-size: 13px; line-height: 1.75; overflow-x: auto; color: #CFE9E4; }
+.code .k { color: var(--aqua); } .code .s { color: #FFC98A; } .code .c { color: var(--faint); } .code .t { color: var(--pink); }
+.update { margin-top: 18px; padding: 16px 18px; border-radius: var(--r); background: linear-gradient(135deg, rgba(94, 240, 226, .12), rgba(94, 240, 226, .03)); border: 1px solid rgba(94, 240, 226, .3); color: var(--ink); font-size: 15.5px; }
+@media (max-width: 960px) { .install { grid-template-columns: 1fr; } .code { position: static; } }
 
-  /* ── install: illustrated step cards ── */
-  .install-grid{display:grid; grid-template-columns:repeat(3,1fr); gap:15px; margin-top:6px}
-  .istep{background:linear-gradient(180deg,var(--panel),var(--bg2)); border:1px solid var(--line); border-radius:15px; overflow:hidden; transition:transform .18s, border-color .18s, box-shadow .18s}
-  .istep:hover{transform:translateY(-4px); border-color:var(--teal-dim); box-shadow:0 18px 40px -24px rgba(0,0,0,.9)}
-  .istep-art{display:block; width:100%; height:auto; background:radial-gradient(120% 100% at 50% 0%, rgba(51,230,200,.07), transparent 70%); border-bottom:1px solid var(--line)}
-  .istep-body{padding:16px 18px 20px}
-  .istep-n{font-family:var(--mono); font-size:11px; letter-spacing:.18em; text-transform:uppercase; color:var(--teal-dim); display:block; margin-bottom:6px}
-  .istep-body h3{font-size:16.5px; font-family:var(--body); font-weight:700; letter-spacing:0}
-  .istep-body p{margin:7px 0 0; color:var(--mute); font-size:13.5px; line-height:1.55}
-  .istep-body code{font-family:var(--mono); font-size:12px; color:#aab7c5; background:rgba(255,255,255,.03); padding:1px 5px; border-radius:5px}
+/* Home Assistant */
+.ha { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+.ha > div { background: var(--card); border: 1px solid var(--line); border-radius: var(--r); padding: 20px 22px; }
+.ha h3 { font-family: var(--f-mono); font-weight: 500; font-size: 12px; letter-spacing: .12em; text-transform: uppercase; color: var(--aqua); margin: 0 0 14px; }
+.chips { display: flex; flex-wrap: wrap; gap: 7px; list-style: none; padding: 0; margin: 0; }
+.chips li { font-size: 13.5px; padding: 5px 11px; border-radius: 10px; background: var(--card-2); color: var(--ink); border: 1px solid rgba(255, 255, 255, .04); }
+.ha pre { margin: 12px 0 0; padding: 14px 16px; border-radius: 12px; background: #0D1312; font-size: 12.5px; line-height: 1.7; color: #CFE9E4; overflow-x: auto; }
+.ha p { margin: 0; color: var(--muted); font-size: 15px; }
+@media (max-width: 960px) { .ha { grid-template-columns: 1fr; } }
 
-  /* ── shots ── */
-  .shots{display:grid; grid-template-columns:repeat(3,1fr); gap:15px; margin-top:8px}
-  .shot{border:1px solid var(--line); border-radius:14px; overflow:hidden; background:var(--panel)}
-  .shot svg{width:100%; display:block; height:auto; background:#070b10}
-  .shot span{display:block; padding:11px 14px; font-size:13px; color:var(--mute); font-family:var(--mono)}
+/* good to know + old add-on */
+.know { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; }
+.know div { padding: 20px 22px; border-radius: var(--r); border: 1px dashed rgba(94, 240, 226, .22); color: var(--muted); font-size: 15.5px; }
+.know b { display: block; color: var(--ink); font-weight: 600; margin-bottom: 4px; }
+@media (max-width: 860px) { .know { grid-template-columns: 1fr; } }
 
-  /* ── docs links ── */
-  .links{display:grid; grid-template-columns:repeat(2,1fr); gap:11px}
-  .link{display:flex; align-items:center; gap:13px; padding:15px 17px; border:1px solid var(--line); border-radius:12px;
-        background:linear-gradient(180deg,var(--panel),var(--bg2)); transition:border-color .16s, transform .16s}
-  .link:hover{border-color:var(--teal-dim); transform:translateX(3px); text-decoration:none}
-  .link .ic{font-size:19px}
-  .link b{color:var(--text); font-weight:600; font-size:15px; display:block}
-  .link small{color:var(--faint); font-family:var(--mono); font-size:11.5px}
-  .link .go{margin-left:auto; color:var(--teal-dim)}
+footer { position: relative; z-index: 1; margin-top: 40px; border-top: 1px solid var(--line); padding: 36px 0 48px; color: var(--faint); font-size: 14px; }
+footer .wrap { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 18px; }
+footer a { color: var(--muted); }
 
-  /* ── footer ── */
-  footer{border-top:1px solid var(--line); padding:46px 0 60px; color:var(--mute); font-size:14px}
-  .foot-in{display:flex; flex-wrap:wrap; gap:18px; align-items:center; justify-content:space-between}
-  .foot-links{display:flex; flex-wrap:wrap; gap:20px}
-  .foot-links a{color:var(--mute)}
-  .foot-links a:hover{color:var(--teal); text-decoration:none}
+/* page load: a short, staggered wake-up */
+.rise { animation: rise .8s cubic-bezier(.2, .7, .2, 1) both; }
+.d1 { animation-delay: .05s; } .d2 { animation-delay: .15s; } .d3 { animation-delay: .25s; } .d4 { animation-delay: .35s; } .d5 { animation-delay: .5s; }
+@keyframes rise { from { opacity: 0; transform: translateY(18px); } to { opacity: 1; transform: none; } }
+.js .reveal { opacity: 0; transform: translateY(22px); transition: opacity .7s ease, transform .7s cubic-bezier(.2, .7, .2, 1); }
+.js .reveal.in { opacity: 1; transform: none; }
 
-  /* reveal — hidden ONLY when JS is active (no-JS / crawlers see everything); .in re-shows */
-  html.js .reveal{opacity:0; transform:translateY(22px); transition:opacity .7s ease, transform .7s cubic-bezier(.2,.7,.2,1)}
-  html.js .reveal.in{opacity:1; transform:none}
-
-  @media (max-width:900px){
-    .hero{grid-template-columns:1fr; gap:30px}
-    .hero-art{order:-1; max-width:460px}
-    .grid,.install-grid{grid-template-columns:repeat(2,1fr)}
-    .flow{grid-template-columns:1fr; }
-    .arrow{transform:rotate(90deg); justify-self:center}
-    .two,.ctrls,.links,.shots{grid-template-columns:1fr}
-    .nav-links{display:none}
-    .nav-links.open{display:flex; position:absolute; top:62px; left:0; right:0; flex-direction:column; gap:0;
-        background:rgba(5,8,11,.97); border-bottom:1px solid var(--line); padding:8px 22px 16px}
-    .nav-links.open a{padding:11px 0; border-bottom:1px solid var(--line)}
-    .burger{display:block}
-    .nav-cta{display:none}
-  }
-  @media (max-width:540px){ .grid,.install-grid{grid-template-columns:1fr} body{font-size:16px} }
-  @media (prefers-reduced-motion:reduce){ *{animation:none!important} html.js .reveal{opacity:1!important; transform:none!important} }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+  .js .reveal { opacity: 1; transform: none; }
+}
 </style>
 </head>
 <body>
 
-<!-- ── NAV ── -->
-<nav>
-  <div class="wrap nav-in">
-    <a class="brand" href="#top">
-      <svg viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="7" fill="#0e141c"/><rect x="7" y="9" width="7" height="9" rx="3" fill="#33E6C8"/><rect x="18" y="9" width="7" height="9" rx="3" fill="#33E6C8"/><path d="M12 22q4 4 8 0" stroke="#33E6C8" stroke-width="2.5" fill="none" stroke-linecap="round"/></svg>
-      dravix-os
-    </a>
-    <button class="burger" aria-label="Menu" onclick="document.getElementById('nl').classList.toggle('open')">☰</button>
-    <div class="nav-links" id="nl">
-      <a href="#how">How it works</a>
-      <a href="#features">Features</a>
-      <a href="#controls">Controls</a>
-      <a href="#life">Life</a>
-      <a href="#install">Install</a>
-      <a href="#docs">Docs</a>
-    </div>
-    <a class="nav-cta" href="https://github.com/YossiKon/dravix-os" target="_blank" rel="noopener">
-      <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8a8 8 0 0 0 5.47 7.59c.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82a7.4 7.4 0 0 1 4 0c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8 8 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>
-      GitHub
-    </a>
-  </div>
-</nav>
-
-<span id="top"></span>
-
-<!-- ── HERO ── -->
-<header class="wrap hero">
-  <div>
-    <span class="eyebrow">M5Stack StackChan · Home Assistant · ESPHome</span>
-    <h1 style="margin-top:16px">Your StackChan,<br><span class="tint">fully alive</span> &amp; fully local.</h1>
-    <p class="lead">dravix-os turns the M5Stack StackChan desk robot into a little creature you completely own — a drawn animated pet face, voice, petting, a games arcade and a <em>real life</em>. It ships as a <b style="color:var(--text)">Home Assistant add-on</b> with custom <b style="color:var(--text)">ESPHome firmware</b>. Nothing phones home.</p>
-    <div class="cta-row">
-      <a class="btn btn-primary" href="#install">Get started →</a>
-      <a class="btn btn-ghost" href="https://github.com/YossiKon/dravix-os" target="_blank" rel="noopener">View on GitHub</a>
-    </div>
-    <div class="badges">
-      <span class="badge"><b>Local-first</b> · no cloud</span>
-      <span class="badge">Home Assistant <b>add-on</b></span>
-      <span class="badge">custom <b>ESPHome</b> firmware</span>
-      <span class="badge">M5Stack <b>CoreS3</b></span>
-      <span class="badge">EN · <b>עברית</b></span>
-    </div>
-  </div>
-  <div class="hero-art">
-    <svg class="screen float" viewBox="0 0 900 440" role="img" aria-label="dravix-os — the StackChan pet face on its CoreS3 screen">
-      <defs>
-        <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#0b1119"/><stop offset="1" stop-color="#05080b"/></linearGradient>
-        <radialGradient id="halo" cx="50%" cy="46%" r="52%"><stop offset="0" stop-color="#33E6C8" stop-opacity="0.20"/><stop offset="1" stop-color="#33E6C8" stop-opacity="0"/></radialGradient>
-        <filter id="glow" x="-40%" y="-40%" width="180%" height="180%"><feGaussianBlur stdDeviation="7" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
-      </defs>
-      <rect width="900" height="440" fill="url(#bg)"/>
-      <rect width="900" height="440" fill="url(#halo)"/>
-      <g transform="translate(250,52)">
-        <rect x="-10" y="-10" width="420" height="340" rx="32" fill="#0e141c" stroke="#1c2634" stroke-width="2"/>
-        <rect width="400" height="320" rx="24" fill="#05080b" stroke="#33E6C8" stroke-width="3"/>
-        <g opacity="0.85">
-          <rect x="18" y="18" width="4" height="7" rx="1" fill="#33E6C8"/><rect x="25" y="14" width="4" height="11" rx="1" fill="#33E6C8"/>
-          <rect x="32" y="10" width="4" height="15" rx="1" fill="#33E6C8"/><rect x="39" y="6" width="4" height="19" rx="1" fill="#33E6C8"/>
-          <text x="200" y="23" font-family="IBM Plex Mono, monospace" font-size="16" fill="#8b96a4" text-anchor="middle">20:20</text>
-          <rect x="330" y="9" width="34" height="16" rx="3" fill="none" stroke="#5dffa0" stroke-width="2"/><rect x="333" y="12" width="22" height="10" rx="1" fill="#5dffa0"/><rect x="365" y="13" width="3" height="8" rx="1" fill="#5dffa0"/>
-        </g>
-        <g filter="url(#glow)">
-          <rect class="blink" x="99" y="104" width="86" height="86" rx="30" fill="#33E6C8"/>
-          <rect class="blink r" x="215" y="104" width="86" height="86" rx="30" fill="#33E6C8"/>
-        </g>
-        <ellipse cx="142" cy="214" rx="20" ry="8" fill="#FF9EB5"/><ellipse cx="258" cy="214" rx="20" ry="8" fill="#FF9EB5"/>
-        <path d="M168 226 q32 26 64 0" fill="none" stroke="#33E6C8" stroke-width="9" stroke-linecap="round"/>
-      </g>
-      <text x="450" y="414" font-family="Bricolage Grotesque, sans-serif" font-size="26" font-weight="700" fill="#e8edf2" text-anchor="middle">dravix-os<tspan fill="#33E6C8"> · </tspan><tspan font-weight="400" fill="#8b96a4" font-size="18">your StackChan, fully local</tspan></text>
-    </svg>
+<header class="top">
+  <div class="wrap">
+    <a class="brand" href="#top" aria-label="Dravix home"><span class="eyes" aria-hidden="true"><i></i><i></i></span>Dravix</a>
+    <nav aria-label="Sections">
+      <a href="#faces">Faces</a><a href="#screens">Screens</a><a href="#games">Games</a><a href="#install">Install</a><a href="#home-assistant">Home Assistant</a>
+      <a class="gh" href="https://github.com/YossiKon/dravix-os">GitHub ↗</a>
+    </nav>
   </div>
 </header>
 
-<!-- ── HOW IT WORKS ── -->
-<section id="how">
-  <div class="wrap reveal">
-    <div class="sec-head">
-      <span class="eyebrow">The shape of it</span>
-      <h2>A body, a brain, and no cloud in between.</h2>
-      <p>The robot joins Home Assistant over the ESPHome native API. The dravix add-on runs inside HA and drives the robot through those entities — everything on your own hardware.</p>
-    </div>
-    <div class="flow">
-      <div class="node"><span class="tag">the body</span><h3>🤖 StackChan · CoreS3</h3><p>Custom dravix ESPHome firmware: drawn pet face, head servos, mic, speaker, touch, camera, LEDs, battery.</p></div>
-      <div class="arrow">⇄</div>
-      <div class="node"><span class="tag">the host</span><h3>🏠 Home Assistant</h3><p>The robot appears as ordinary entities + Assist. Your always-on box; the single source of truth.</p></div>
-      <div class="arrow">⇄</div>
-      <div class="node"><span class="tag">the brain</span><h3>🧠 dravix-os add-on</h3><p>Dashboard, modes, a persistent personality, a pluggable AI brain, and an MCP server.</p></div>
-    </div>
-  </div>
-</section>
-
-<!-- ── FEATURES ── -->
-<section id="features">
+<main id="top">
   <div class="wrap">
-    <div class="sec-head reveal">
-      <span class="eyebrow">Feature map</span>
-      <h2>Everything it can do.</h2>
-      <p>Two halves of one creature: what runs <em>on the robot</em> (the dravix ESPHome firmware) and what runs <em>in the add-on</em> (the service + dashboard).</p>
-    </div>
-
-    <p class="subhead reveal">On the robot — the firmware</p>
-    <div class="grid reveal">
-      <div class="card"><span class="ic">🐣</span><h3>Drawn pet face</h3><p>Two big eyes that blink, look around, squint when happy and widen when listening — plus cheeks and an animated mouth. Every expression has its own LED colour and head pose.</p></div>
-      <div class="card"><span class="ic">🎭</span><h3>7 on-device modes</h3><p><code>awake · morning · focus · quiet · night · busy · sleep</code> — each reshapes the face, LEDs, volume and autonomous behaviour.</p></div>
-      <div class="card"><span class="ic">🗣️</span><h3>Voice + speech bubble</h3><p>On-device wake word “Okay, Nabu” hands off to HA Assist (STT/LLM/TTS); replies pop into a comic bubble with a tail to the mouth.</p></div>
-      <div class="card"><span class="ic">🎩</span><h3>Themes &amp; accessories</h3><p>Dress-up: 7 face backdrops and 22 accessories — glasses, top hat, crown, cat ears, boxing gloves… opt-in, never auto-applied.</p></div>
-      <div class="card"><span class="ic">🌬️</span><h3>Breathing &amp; body language</h3><p>The face rises and settles on a slow sine while idle and sways while talking, with sparse, natural idle glances.</p></div>
-      <div class="card"><span class="ic">💗</span><h3>Vitals &amp; a real life</h3><p>Energy, food, fun and calm as live bars. It drifts, and it looks after itself when a need bottoms out.</p></div>
-      <div class="card"><span class="ic">🔒</span><h3>Privacy mode</h3><p>Kills the mic on-device and blocks the camera, with a red PRIVACY badge you can see across the room.</p></div>
-      <div class="card"><span class="ic">🔋</span><h3>Real battery gauge</h3><p>Level + charging straight from the AXP2101 fuel gauge, a time-left estimate, and sleep-breathing LEDs on the charger.</p></div>
-      <div class="card"><span class="ic">📡</span><h3>IR blaster + receiver</h3><p>Controls your AC as a ready climate entity — and glances over, curious, when anyone uses a TV/AC remote.</p></div>
-      <div class="card"><span class="ic">🗂️</span><h3>3 interactive cards</h3><p>Pick any HA entities; up to four tappable rows per card toggle lights, press buttons, run scripts &amp; scenes right on the robot.</p></div>
-      <div class="card"><span class="ic">🌐</span><h3>Dashboard page</h3><p>A live screenshot of any Home Assistant dashboard on its own swipe page, refreshed every 15 seconds.</p></div>
-    </div>
-
-    <p class="subhead reveal">In the add-on — the service &amp; dashboard</p>
-    <div class="grid reveal">
-      <div class="card"><span class="ic">🪞</span><h3>Live face mirror</h3><p>The robot's face, state and speech mirrored in the browser — bilingual (English · עברית RTL), mobile-friendly.</p></div>
-      <div class="card"><span class="ic">💬</span><h3>Chat with memory</h3><p>Talk to the robot by text; it remembers facts you tell it and answers to its own name.</p></div>
-      <div class="card"><span class="ic">🛡️</span><h3>Security guard mode</h3><p>Arm it and the robot becomes a guard camera: periodic snapshots, a slow head patrol, live teleop and a browsable gallery.</p></div>
-      <div class="card"><span class="ic">💗</span><h3>Life &amp; wellness</h3><p>Needs bars with feed/rest/play/calm, plus wellness nudges for <em>you</em> — 20-20-20 eye breaks, stand up, hydrate.</p></div>
-      <div class="card"><span class="ic">🧠</span><h3>Pluggable AI brain</h3><p>HA Assist by default; switch to Claude, OpenAI or Ollama. Emotion tags in replies drive the face automatically.</p></div>
-      <div class="card"><span class="ic">🤖</span><h3>MCP server</h3><p>Its own MCP server lets any AI agent (Claude Desktop/Code) drive the robot, modes and your whole home.</p></div>
-      <div class="card"><span class="ic">🔌</span><h3>Auto-wired entities</h3><p>Discovery finds every robot entity at startup — face, servos, mode, speaker, LEDs, camera, sensors. Nothing to map.</p></div>
-      <div class="card"><span class="ic">💾</span><h3>Backup &amp; restore</h3><p>Download or upload all your config — personas, routines, memories, schedule, voices — as one JSON file.</p></div>
-    </div>
-  </div>
-</section>
-
-<!-- ── CONTROLS ── -->
-<section id="controls">
-  <div class="wrap">
-    <div class="sec-head reveal">
-      <span class="eyebrow">Everyday use</span>
-      <h2>Touch it, talk to it, swipe it.</h2>
-      <p>No app required to live with it — the whole cheat sheet, right on the robot.</p>
-    </div>
-    <div class="ctrls reveal">
-      <div class="ctrl"><span class="k">“Okay, Nabu”</span><span class="v">Wakes and listens (big eyes, yellow LEDs) → answers via HA Assist</span></div>
-      <div class="ctrl"><span class="k">Tap the face</span><span class="v">Starts a voice conversation — tap again to stop</span></div>
-      <div class="ctrl"><span class="k">Long-press 1.2s</span><span class="v">Goes to sleep instantly</span></div>
-      <div class="ctrl"><span class="k">Pet the head</span><span class="v">Pink LEDs, nuzzles up into your hand, happy wiggle</span></div>
-      <div class="ctrl"><span class="k">Tickle the back</span><span class="v">Green flash + a giggly double-wiggle</span></div>
-      <div class="ctrl"><span class="k">Walk up close</span><span class="v">Notices you and greets — perks up and nods hello</span></div>
-      <div class="ctrl"><span class="k">Wave 👋</span><span class="v">Wakes, waves back with its head, warm flash</span></div>
-      <div class="ctrl"><span class="k">Boop 👉</span><span class="v">A finger at the nose sensor → love-eyes + a nod</span></div>
-      <div class="ctrl"><span class="k">Turn its head</span><span class="v">Startled wide eyes (x_x)… then it decides it liked it</span></div>
-      <div class="ctrl"><span class="k">Plug in power</span><span class="v">“Nom, electricity!” — happy face + green flash</span></div>
-      <div class="ctrl"><span class="k">Swipe ⬇</span><span class="v">Two-stage status bar: Wi-Fi · clock · battery → sliders + LOCAL</span></div>
-      <div class="ctrl"><span class="k">Swipe ⬅ ➡</span><span class="v">Face → cards → Games → Vitals → Climate → Dashboard</span></div>
-    </div>
-  </div>
-</section>
-
-<!-- ── LIFE / BEHAVIORS ── -->
-<section id="life">
-  <div class="wrap">
-    <div class="sec-head reveal">
-      <span class="eyebrow">A robot with a life</span>
-      <h2>It has needs, moods, and a mind of its own.</h2>
-      <p>Inspired by EMO and Vector: a persistent temperament that drifts over time, reacts to being talked to and petted, and survives restarts.</p>
-    </div>
-    <div class="two reveal">
-      <div class="panel">
-        <h3>Tamagotchi-style needs</h3>
-        <p>Four needs, 0–100, on the robot's own VITALS screen and the dashboard. They drift down; you top them up — and petting and talking feed them too.</p>
-        <div class="needs">
-          <div class="need"><span class="lbl">⚡ energy</span><div class="meter"><i style="width:72%; background:linear-gradient(90deg,#5dffa0,#33E6C8)"></i></div></div>
-          <div class="need"><span class="lbl">🍎 food</span><div class="meter"><i style="width:58%; background:linear-gradient(90deg,#ffb648,#f2c14e)"></i></div></div>
-          <div class="need"><span class="lbl">😄 fun</span><div class="meter"><i style="width:84%; background:linear-gradient(90deg,#33E6C8,#7ad4ff)"></i></div></div>
-          <div class="need"><span class="lbl">🧘 calm</span><div class="meter"><i style="width:66%; background:linear-gradient(90deg,#FF9EB5,#c78bff)"></i></div></div>
+    <section class="hero" aria-labelledby="h-hero">
+      <div>
+        <p class="kicker rise d1">ESPHome firmware · M5Stack StackChan · Home Assistant</p>
+        <h1 id="h-hero" class="rise d2">A desk buddy that lives in your <em>Home Assistant</em>.</h1>
+        <p class="lede rise d3">Say <b>“Okay Nabu”</b> and it talks with you through Assist. Pet it, shake it or walk up to the desk and it reacts. Your lights, switches and air conditioner are <b>one swipe away</b> from its face. Everything runs on the robot and in your own Home Assistant: <b>no add-on, no server, no cloud account</b>.</p>
+        <div class="cta rise d4">
+          <a class="btn primary" href="#install">Install it →</a>
+          <a class="btn" href="https://github.com/YossiKon/dravix-os">View on GitHub</a>
         </div>
-        <p style="margin-top:14px"><b style="color:var(--text)">It looks after itself</b> — sleeps when tired, feeds itself, cheers itself up. And a hard do-not-disturb rule keeps it fully silent in <code>focus · quiet · night · busy · sleep</code>.</p>
+        <ul class="facts rise d5">
+          <li><b>22</b>faces</li>
+          <li><b>8</b>tiles + an AC</li>
+          <li><b>11</b>games</li>
+          <li><b>0</b>cloud accounts</li>
+        </ul>
       </div>
-      <div class="panel">
-        <h3>Plugin modes</h3>
-        <p>Beyond the on-device modes, dravix runs orchestration behaviours that combine the robot, the AI router and Home Assistant. Foreground modes are exclusive; ambient ones run alongside.</p>
-        <div class="chips" style="margin-top:16px">
-          <span class="chip on">focus</span><span class="chip on">pomodoro</span><span class="chip on">companion</span>
-          <span class="chip on">guard</span><span class="chip on">dnd</span><span class="chip on">dance</span>
-          <span class="chip on">frigate_watch</span><span class="chip on">follow</span><span class="chip on">security</span>
-          <span class="chip">welcome</span><span class="chip">surprises</span><span class="chip">ambient_idle</span><span class="chip">daynight</span>
+      <figure class="hero-robot rise d3">
+        <div class="frame">
+          <picture>
+            <source srcset="img/faces/neutral.png" media="(prefers-reduced-motion: reduce)">
+            <img src="img/hero.gif" width="400" height="323" fetchpriority="high" alt="Dravix on a StackChan robot: calm, happy, in love, listening with the green dot lit, thinking, speaking, done, and surprised">
+          </picture>
         </div>
-        <p style="margin-top:16px">Add your own by dropping a <code>plugins/&lt;name&gt;/plugin.yaml</code> + a <code>Mode</code> subclass — managed live from the dashboard.</p>
-      </div>
-    </div>
-
+        <figcaption>neutral → happy → love → listening → thinking → speaking → done → surprised</figcaption>
+      </figure>
+    </section>
   </div>
-</section>
 
-<!-- ── SCREENSHOTS ── -->
-<section id="dashboard">
+  <div class="ledbar" aria-hidden="true"><span><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span></div>
+
   <div class="wrap">
-    <div class="sec-head reveal">
-      <span class="eyebrow">The dashboard</span>
-      <h2>A control panel that speaks your language.</h2>
-      <p>Eight tabs — Home, Agent, Screens, Life, Climate, Controls, Diagnostics, Settings — English by default, Hebrew (RTL) built in.</p>
-    </div>
-    <div class="shots reveal">
-      <div class="shot">
-        <svg class="shot-svg" viewBox="0 0 300 188" role="img" aria-label="Dashboard Home tab: the face mirror, modes and chat">
-          <rect x="6" y="6" width="288" height="176" rx="12" fill="#05080b" stroke="#1c2634" stroke-width="1.5"/>
-          <path d="M6 30h288" stroke="#1c2634" stroke-width="1.2"/>
-          <circle cx="18" cy="18" r="2.5" fill="#5c6774"/><circle cx="27" cy="18" r="2.5" fill="#5c6774"/><circle cx="36" cy="18" r="2.5" fill="#5c6774"/>
-          <rect x="52" y="14" width="176" height="8" rx="4" fill="#0e141c"/>
-          <rect x="120" y="44" width="24" height="28" rx="9" fill="#33E6C8"/><rect x="156" y="44" width="24" height="28" rx="9" fill="#33E6C8"/>
-          <ellipse cx="129" cy="78" rx="7" ry="3" fill="#FF9EB5"/><ellipse cx="171" cy="78" rx="7" ry="3" fill="#FF9EB5"/>
-          <path d="M126 82q24 14 48 0" fill="none" stroke="#33E6C8" stroke-width="4" stroke-linecap="round"/>
-          <rect x="40" y="104" width="46" height="16" rx="8" fill="#33E6C8"/>
-          <rect x="94" y="104" width="46" height="16" rx="8" fill="none" stroke="#243244"/>
-          <rect x="148" y="104" width="46" height="16" rx="8" fill="none" stroke="#243244"/>
-          <rect x="202" y="104" width="46" height="16" rx="8" fill="none" stroke="#243244"/>
-          <rect x="40" y="132" width="150" height="14" rx="7" fill="#0e141c"/>
-          <rect x="110" y="152" width="150" height="14" rx="7" fill="rgba(51,230,200,.14)"/>
-        </svg>
-        <span>Home · face, modes, chat, games</span>
+    <section id="faces" aria-labelledby="h-faces">
+      <div class="sec-head reveal">
+        <div><p class="num">01 · Faces</p><h2 id="h-faces">22 faces, one personality.</h2></div>
+        <p>Rounded aqua eyes on black, a thin mouth when it needs one, and little gloved hands that pop up for a wave, a thumbs-up or a cheer. The LED bar under the face joins in.</p>
       </div>
-      <div class="shot">
-        <svg class="shot-svg" viewBox="0 0 300 188" role="img" aria-label="Dashboard Screens editor: choose each card's entities, with row toggles">
-          <rect x="6" y="6" width="288" height="176" rx="12" fill="#05080b" stroke="#1c2634" stroke-width="1.5"/>
-          <path d="M6 30h288" stroke="#1c2634" stroke-width="1.2"/>
-          <circle cx="18" cy="18" r="2.5" fill="#5c6774"/><circle cx="27" cy="18" r="2.5" fill="#5c6774"/><circle cx="36" cy="18" r="2.5" fill="#5c6774"/>
-          <text x="52" y="22" font-family="IBM Plex Mono, monospace" font-size="9" fill="#5c6774">Screens</text>
-          <rect x="26" y="44" width="248" height="26" rx="7" fill="#0e141c"/><rect x="38" y="54" width="94" height="6" rx="3" fill="#5c6774"/>
-          <rect x="236" y="50" width="28" height="15" rx="7.5" fill="#33E6C8"/><circle cx="256" cy="57.5" r="5.5" fill="#04120f"/>
-          <rect x="26" y="78" width="248" height="26" rx="7" fill="#0e141c"/><rect x="38" y="88" width="112" height="6" rx="3" fill="#5c6774"/>
-          <rect x="236" y="84" width="28" height="15" rx="7.5" fill="#33E6C8"/><circle cx="256" cy="91.5" r="5.5" fill="#04120f"/>
-          <rect x="26" y="112" width="248" height="26" rx="7" fill="#0e141c"/><rect x="38" y="122" width="70" height="6" rx="3" fill="#5c6774"/>
-          <rect x="236" y="118" width="28" height="15" rx="7.5" fill="#1c2634"/><circle cx="243.5" cy="125.5" r="5.5" fill="#5c6774"/>
-          <rect x="26" y="146" width="248" height="26" rx="7" fill="#0e141c"/><rect x="38" y="156" width="100" height="6" rx="3" fill="#5c6774"/>
-          <rect x="236" y="152" width="28" height="15" rx="7.5" fill="#33E6C8"/><circle cx="256" cy="159.5" r="5.5" fill="#04120f"/>
-        </svg>
-        <span>Screens · choose each card's entities</span>
+      <p class="group-label reveal">It feels</p>
+      <div class="faces reveal">
+        <figure class="face"><picture><source srcset="img/faces/neutral.png" media="(prefers-reduced-motion: reduce)"><img src="img/faces/neutral.gif" width="224" height="181" loading="lazy" decoding="async" alt="Neutral: at rest: it looks around and blinks"></picture><figcaption><b>Neutral</b><span>at rest: it looks around and blinks</span></figcaption></figure>
+        <figure class="face"><picture><source srcset="img/faces/happy.png" media="(prefers-reduced-motion: reduce)"><img src="img/faces/happy.gif" width="224" height="181" loading="lazy" decoding="async" alt="Happy: good news, a compliment"></picture><figcaption><b>Happy</b><span>good news, a compliment</span></figcaption></figure>
+        <figure class="face"><picture><source srcset="img/faces/love.png" media="(prefers-reduced-motion: reduce)"><img src="img/faces/love.gif" width="224" height="181" loading="lazy" decoding="async" alt="Love: a long pet, or a hug"></picture><figcaption><b>Love</b><span>a long pet, or a hug</span></figcaption></figure>
+        <figure class="face"><picture><source srcset="img/faces/sad.png" media="(prefers-reduced-motion: reduce)"><img src="img/faces/sad.gif" width="224" height="181" loading="lazy" decoding="async" alt="Sad: when an automation says so"></picture><figcaption><b>Sad</b><span>when an automation says so</span></figcaption></figure>
+        <figure class="face"><picture><source srcset="img/faces/angry.png" media="(prefers-reduced-motion: reduce)"><img src="img/faces/angry.gif" width="224" height="181" loading="lazy" decoding="async" alt="Grumpy: shaken one time too many"></picture><figcaption><b>Grumpy</b><span>shaken one time too many</span></figcaption></figure>
+        <figure class="face"><picture><source srcset="img/faces/surprised.png" media="(prefers-reduced-motion: reduce)"><img src="img/faces/surprised.gif" width="224" height="181" loading="lazy" decoding="async" alt="Surprised: picked up"></picture><figcaption><b>Surprised</b><span>picked up</span></figcaption></figure>
+        <figure class="face"><picture><source srcset="img/faces/sleepy.png" media="(prefers-reduced-motion: reduce)"><img src="img/faces/sleepy.gif" width="224" height="181" loading="lazy" decoding="async" alt="Sleepy: late at night"></picture><figcaption><b>Sleepy</b><span>late at night</span></figcaption></figure>
+        <figure class="face"><picture><source srcset="img/faces/doubt.png" media="(prefers-reduced-motion: reduce)"><img src="img/faces/doubt.gif" width="224" height="181" loading="lazy" decoding="async" alt="Confused: it didn&#x27;t catch that"></picture><figcaption><b>Confused</b><span>it didn&#x27;t catch that</span></figcaption></figure>
+        <figure class="face"><picture><source srcset="img/faces/dizzy.png" media="(prefers-reduced-motion: reduce)"><img src="img/faces/dizzy.gif" width="224" height="181" loading="lazy" decoding="async" alt="Dizzy: right after a shake"></picture><figcaption><b>Dizzy</b><span>right after a shake</span></figcaption></figure>
+        <figure class="face"><picture><source srcset="img/faces/bored.png" media="(prefers-reduced-motion: reduce)"><img src="img/faces/bored.gif" width="224" height="181" loading="lazy" decoding="async" alt="Bored: nobody around for a while"></picture><figcaption><b>Bored</b><span>nobody around for a while</span></figcaption></figure>
       </div>
-      <div class="shot">
-        <svg class="shot-svg" viewBox="0 0 300 188" role="img" aria-label="Dashboard Settings: connected status and auto-wired entities">
-          <rect x="6" y="6" width="288" height="176" rx="12" fill="#05080b" stroke="#1c2634" stroke-width="1.5"/>
-          <path d="M6 30h288" stroke="#1c2634" stroke-width="1.2"/>
-          <circle cx="18" cy="18" r="2.5" fill="#5c6774"/><circle cx="27" cy="18" r="2.5" fill="#5c6774"/><circle cx="36" cy="18" r="2.5" fill="#5c6774"/>
-          <text x="52" y="22" font-family="IBM Plex Mono, monospace" font-size="9" fill="#5c6774">Settings</text>
-          <circle cx="34" cy="48" r="5" fill="#5dffa0"/><rect x="46" y="45" width="66" height="6" rx="3" fill="#8b96a4"/>
-          <rect x="26" y="64" width="248" height="72" rx="8" fill="#0e141c"/>
-          <g font-family="IBM Plex Mono, monospace" font-size="8.5" fill="#33E6C8">
-            <text x="40" y="82">select.dravix_face</text><text x="40" y="98">number.dravix_servo_x</text>
-            <text x="40" y="114">light.dravix_light_bar</text><text x="40" y="130">camera.dravix_camera</text>
-          </g>
-          <rect x="46" y="150" width="84" height="6" rx="3" fill="#8b96a4"/>
-          <rect x="236" y="147" width="28" height="15" rx="7.5" fill="#33E6C8"/><circle cx="256" cy="154.5" r="5.5" fill="#04120f"/>
-        </svg>
-        <span>Settings · auto-wired entities</span>
+      <p class="group-label reveal">It does</p>
+      <div class="faces reveal">
+        <figure class="face"><picture><source srcset="img/faces/greet.png" media="(prefers-reduced-motion: reduce)"><img src="img/faces/greet.gif" width="224" height="181" loading="lazy" decoding="async" alt="Hello: you came back to the desk"></picture><figcaption><b>Hello</b><span>you came back to the desk</span></figcaption></figure>
+        <figure class="face"><picture><source srcset="img/faces/done.png" media="(prefers-reduced-motion: reduce)"><img src="img/faces/done.gif" width="224" height="181" loading="lazy" decoding="async" alt="Done!: a timer set, a tile tapped"></picture><figcaption><b>Done!</b><span>a timer set, a tile tapped</span></figcaption></figure>
+        <figure class="face"><picture><source srcset="img/faces/wake.png" media="(prefers-reduced-motion: reduce)"><img src="img/faces/wake.gif" width="224" height="181" loading="lazy" decoding="async" alt="Heard “Okay Nabu”: the wake word, after a chime"></picture><figcaption><b>Heard “Okay Nabu”</b><span>the wake word, after a chime</span></figcaption></figure>
+        <figure class="face"><picture><source srcset="img/faces/listening.png" media="(prefers-reduced-motion: reduce)"><img src="img/faces/listening.gif" width="224" height="181" loading="lazy" decoding="async" alt="Listening: you talk; the green dot is on"></picture><figcaption><b>Listening</b><span>you talk; the green dot is on</span></figcaption></figure>
+        <figure class="face"><picture><source srcset="img/faces/thinking.png" media="(prefers-reduced-motion: reduce)"><img src="img/faces/thinking.gif" width="224" height="181" loading="lazy" decoding="async" alt="Thinking: Assist is on it"></picture><figcaption><b>Thinking</b><span>Assist is on it</span></figcaption></figure>
+        <figure class="face"><picture><source srcset="img/faces/speaking.png" media="(prefers-reduced-motion: reduce)"><img src="img/faces/speaking.gif" width="224" height="181" loading="lazy" decoding="async" alt="Speaking: the answer"></picture><figcaption><b>Speaking</b><span>the answer</span></figcaption></figure>
+        <figure class="face"><picture><source srcset="img/faces/petted.png" media="(prefers-reduced-motion: reduce)"><img src="img/faces/petted.gif" width="224" height="181" loading="lazy" decoding="async" alt="Petted: a hand on its head"></picture><figcaption><b>Petted</b><span>a hand on its head</span></figcaption></figure>
+        <figure class="face"><picture><source srcset="img/faces/timer.png" media="(prefers-reduced-motion: reduce)"><img src="img/faces/timer.gif" width="224" height="181" loading="lazy" decoding="async" alt="Timer ringing: touch it to stop"></picture><figcaption><b>Timer ringing</b><span>touch it to stop</span></figcaption></figure>
+        <figure class="face"><picture><source srcset="img/faces/error.png" media="(prefers-reduced-motion: reduce)"><img src="img/faces/error.gif" width="224" height="181" loading="lazy" decoding="async" alt="Something went wrong: Assist failed, or HA is gone"></picture><figcaption><b>Something went wrong</b><span>Assist failed, or HA is gone</span></figcaption></figure>
+        <figure class="face"><picture><source srcset="img/faces/screensaver.png" media="(prefers-reduced-motion: reduce)"><img src="img/faces/screensaver.gif" width="224" height="181" loading="lazy" decoding="async" alt="Screensaver: dim and still"></picture><figcaption><b>Screensaver</b><span>dim and still</span></figcaption></figure>
+        <figure class="face"><picture><source srcset="img/faces/sleep.png" media="(prefers-reduced-motion: reduce)"><img src="img/faces/sleep.gif" width="224" height="181" loading="lazy" decoding="async" alt="Falling asleep: night, lights off"></picture><figcaption><b>Falling asleep</b><span>night, lights off</span></figcaption></figure>
+        <figure class="face"><picture><source srcset="img/faces/boot.png" media="(prefers-reduced-motion: reduce)"><img src="img/faces/boot.gif" width="224" height="181" loading="lazy" decoding="async" alt="Waking up: power on, or the morning"></picture><figcaption><b>Waking up</b><span>power on, or the morning</span></figcaption></figure>
       </div>
-    </div>
+    </section>
   </div>
-</section>
 
-<!-- ── INSTALL ── -->
-<section id="install">
+  <div class="ledbar pink" aria-hidden="true"><span><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span></div>
+
   <div class="wrap">
-    <div class="sec-head reveal">
-      <span class="eyebrow">From a stock robot to alive</span>
-      <h2>Set it up in six steps.</h2>
-      <p>No prior ESPHome experience needed. Updates are one press afterwards.</p>
-    </div>
-
-    <div class="need-row reveal">
-      <span class="need-pill"><b>need</b> · M5Stack StackChan (CoreS3)</span>
-      <span class="need-pill"><b>need</b> · Home Assistant on an always-on box</span>
-      <span class="need-pill"><b>need</b> · the ESPHome Device Builder add-on</span>
-      <span class="need-pill"><b>need</b> · a USB-C cable (first flash only)</span>
-    </div>
-
-    <div class="install-grid reveal">
-
-      <!-- Step 0 -->
-      <div class="istep">
-        <svg class="istep-art" viewBox="0 0 360 170" role="img" aria-label="Illustration: back up the original firmware to a file">
-          <rect x="44" y="52" width="92" height="72" rx="10" fill="#0e141c" stroke="#33E6C8" stroke-width="2.5"/>
-          <rect x="62" y="70" width="56" height="36" rx="5" fill="none" stroke="#243244" stroke-width="2"/>
-          <g stroke="#5c6774" stroke-width="3" stroke-linecap="round"><path d="M44 66h-10M44 88h-10M44 110h-10"/><path d="M136 66h10M136 88h10M136 110h10"/></g>
-          <text x="90" y="93" font-family="IBM Plex Mono, monospace" font-size="12" fill="#8b96a4" text-anchor="middle">MCU</text>
-          <path d="M150 88h38" fill="none" stroke="#33E6C8" stroke-width="2.5"/>
-          <path d="M182 82l8 6-8 6" fill="none" stroke="#33E6C8" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
-          <path d="M212 46h48l24 24v54a6 6 0 0 1-6 6h-66a6 6 0 0 1-6-6V52a6 6 0 0 1 6-6z" fill="#0e141c" stroke="#33E6C8" stroke-width="2.5"/>
-          <path d="M260 46v24h24" fill="none" stroke="#33E6C8" stroke-width="2.5"/>
-          <text x="247" y="114" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="#8b96a4" text-anchor="middle">backup.bin</text>
-          <path d="M304 40l15 5v13c0 9-7 15-15 18-8-3-15-9-15-18V45z" fill="rgba(93,255,160,.12)" stroke="#5dffa0" stroke-width="2"/>
-          <path d="M297 58l5 5 10-11" fill="none" stroke="#5dffa0" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
-        </svg>
-        <div class="istep-body"><span class="istep-n">Step 0</span><h3>Back up the original firmware</h3><p>A byte-for-byte snapshot of the robot as it left the factory — you can always go back. One <code>esptool read_flash</code> command. Do not skip.</p></div>
+    <section id="screens" aria-labelledby="h-screens">
+      <div class="sec-head reveal">
+        <div><p class="num">02 · Screens</p><h2 id="h-screens">Your controls, one swipe away.</h2></div>
+        <p>Swipe left from the face: Screen 1, Screen 2, the air conditioner, Games, and back to the face. After 30 seconds it comes back to its face by itself.</p>
       </div>
-
-      <!-- Step 1 -->
-      <div class="istep">
-        <svg class="istep-art" viewBox="0 0 360 170" role="img" aria-label="Illustration: create the tiny ESPHome YAML config and edit the Wi-Fi lines">
-          <rect x="46" y="30" width="268" height="112" rx="10" fill="#05080b" stroke="#33E6C8" stroke-width="2.5"/>
-          <path d="M46 52h268" stroke="#1c2634" stroke-width="2"/>
-          <circle cx="63" cy="41" r="3.5" fill="#ff6b6b"/><circle cx="77" cy="41" r="3.5" fill="#f2c14e"/><circle cx="91" cy="41" r="3.5" fill="#5dffa0"/>
-          <text x="302" y="45" font-family="IBM Plex Mono, monospace" font-size="10" fill="#5c6774" text-anchor="end">.yaml</text>
-          <g font-family="IBM Plex Mono, monospace" font-size="11">
-            <text x="62" y="72" fill="#8b96a4">packages:</text>
-            <rect x="57" y="79" width="246" height="17" rx="4" fill="rgba(51,230,200,.10)"/>
-            <text x="62" y="91" fill="#33E6C8">ssid: "<tspan fill="#FF9EB5">MyWiFi</tspan>"</text>
-            <rect x="57" y="99" width="246" height="17" rx="4" fill="rgba(51,230,200,.10)"/>
-            <text x="62" y="111" fill="#33E6C8">password: "<tspan fill="#FF9EB5">••••••</tspan>"</text>
-            <text x="62" y="131" fill="#8b96a4">wake_word: okay_nabu</text>
-          </g>
-          <g transform="translate(286,120)" stroke="#33E6C8" stroke-width="2" fill="none" stroke-linecap="round"><path d="M0 8a14 14 0 0 1 20 0"/><path d="M4 12a8 8 0 0 1 12 0"/></g>
-          <circle cx="296" cy="136" r="1.6" fill="#33E6C8"/>
-        </svg>
-        <div class="istep-body"><span class="istep-n">Step 1</span><h3>Create the tiny ESPHome config</h3><p>In ESPHome Device Builder, make a new device and paste the ~60-line <a href="https://github.com/YossiKon/dravix-os/blob/main/deploy/esphome/stackchan-from-git.yaml" target="_blank" rel="noopener">git stub</a>. Edit the two Wi-Fi lines — it pulls the real firmware from the repo on every build.</p></div>
+      <div class="swipe reveal" aria-label="The screens, in swipe order">
+        <figure><img src="img/faces/neutral.png" width="448" height="362" loading="lazy" alt="The face screen"><figcaption>Face<small>where it lives</small></figcaption></figure>
+        <span class="arrow" aria-hidden="true">→</span>
+        <figure><img src="img/screen-tiles.png" width="448" height="358" loading="lazy" alt="Screen 1: four tiles, the desk lamp tile lit because it is on"><figcaption>Screen 1 · Screen 2<small>4 tiles each</small></figcaption></figure>
+        <span class="arrow" aria-hidden="true">→</span>
+        <figure><img src="img/screen-ac.png" width="448" height="358" loading="lazy" alt="The air conditioner screen: 23 degrees, room 25.4, cooling, with plus, minus and mode buttons"><figcaption>Air conditioner<small>temperature, mode, on / off</small></figcaption></figure>
+        <span class="arrow" aria-hidden="true">→</span>
+        <figure><img src="img/screen-games.png" width="448" height="358" loading="lazy" alt="The Games screen: twelve buttons"><figcaption>Games<small>11 games + back to the face</small></figcaption></figure>
       </div>
-
-      <!-- Step 2 -->
-      <div class="istep">
-        <svg class="istep-art" viewBox="0 0 360 170" role="img" aria-label="Illustration: first flash over USB-C from a computer to the robot">
-          <rect x="34" y="48" width="92" height="60" rx="6" fill="#0e141c" stroke="#33E6C8" stroke-width="2.5"/>
-          <rect x="46" y="58" width="68" height="40" rx="3" fill="#05080b" stroke="#1c2634" stroke-width="1.5"/>
-          <path d="M26 108h108l6 12H20z" fill="#0e141c" stroke="#33E6C8" stroke-width="2.5" stroke-linejoin="round"/>
-          <path d="M140 94c26 0 20-18 46-18" fill="none" stroke="#5c6774" stroke-width="3"/>
-          <rect x="196" y="50" width="122" height="94" rx="14" fill="#0e141c" stroke="#33E6C8" stroke-width="2.5"/>
-          <rect x="206" y="60" width="102" height="74" rx="9" fill="#05080b" stroke="#33E6C8" stroke-width="1.5"/>
-          <rect x="228" y="82" width="18" height="21" rx="6" fill="#33E6C8"/><rect x="268" y="82" width="18" height="21" rx="6" fill="#33E6C8"/>
-          <path d="M240 116q17 12 34 0" fill="none" stroke="#33E6C8" stroke-width="4" stroke-linecap="round"/>
-          <rect x="34" y="132" width="118" height="9" rx="4.5" fill="#0a1017" stroke="#1c2634" stroke-width="1"/>
-          <rect x="35" y="133" width="72" height="7" rx="3.5" fill="#33E6C8"/>
-          <path d="M170 126l-9 13h6l-3 11 12-15h-6z" fill="#f2c14e"/>
-        </svg>
-        <div class="istep-body"><span class="istep-n">Step 2</span><h3>First flash over USB-C</h3><p>Plug in → <code>Install → Plug into this computer</code>. The first build compiles a wake-word model, so it takes a while. Every future update is wireless.</p></div>
+      <p class="note">Screens rendered from the firmware's layout; the tile names are examples.</p>
+      <div class="tiles-how reveal">
+        <div><b>You choose every tile</b>In Home Assistant, on the robot's page: <code>Tile 1</code> … <code>Tile 8</code> and <code>Air conditioner</code>. Type an entity id like <code>light.desk_lamp</code>.</div>
+        <div><b>A tap does the obvious</b>Lights, switches, fans and input booleans toggle. Scenes, scripts and buttons run. A tile that is on lights up.</div>
+        <div><b>It follows along</b>Each tile shows the entity's live state. About 20 seconds after you change a tile, the robot restarts itself to follow the new one.</div>
       </div>
-
-      <!-- Step 3 -->
-      <div class="istep">
-        <svg class="istep-art" viewBox="0 0 360 170" role="img" aria-label="Illustration: adopt the device in Home Assistant and rename it to Dravix">
-          <path d="M50 92l42-34 42 34" fill="none" stroke="#33E6C8" stroke-width="2.5" stroke-linejoin="round"/>
-          <rect x="62" y="90" width="60" height="42" rx="4" fill="#0e141c" stroke="#33E6C8" stroke-width="2.5"/>
-          <circle cx="92" cy="111" r="8" fill="none" stroke="#33E6C8" stroke-width="2"/>
-          <path d="M92 104v7l4 4" stroke="#33E6C8" stroke-width="2" fill="none" stroke-linecap="round"/>
-          <text x="92" y="152" font-family="IBM Plex Mono, monospace" font-size="10" fill="#8b96a4" text-anchor="middle">Home Assistant</text>
-          <rect x="168" y="54" width="150" height="64" rx="10" fill="#0e141c" stroke="#1c2634" stroke-width="2"/>
-          <text x="184" y="82" font-family="IBM Plex Mono, monospace" font-size="12" fill="#8b96a4">stackchan</text>
-          <path d="M184 94h58" stroke="#33E6C8" stroke-width="2" fill="none"/>
-          <path d="M238 88l8 6-8 6" fill="none" stroke="#33E6C8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-          <text x="256" y="99" font-family="IBM Plex Mono, monospace" font-size="12" fill="#33E6C8">Dravix</text>
-          <g transform="translate(300,58) rotate(45)"><rect x="-3" y="0" width="6" height="15" rx="1.5" fill="#f2c14e"/><path d="M-3 15h6l-3 5z" fill="#f2c14e"/></g>
-        </svg>
-        <div class="istep-body"><span class="istep-n">Step 3</span><h3>Adopt it in Home Assistant</h3><p>HA discovers the ESPHome device automatically. Recommended: rename it to <code>Dravix</code> so the entity ids match the firmware's default prefix.</p></div>
-      </div>
-
-      <!-- Step 4 -->
-      <div class="istep">
-        <svg class="istep-art" viewBox="0 0 360 170" role="img" aria-label="Illustration: install the dravix-os add-on from the add-on store">
-          <rect x="92" y="32" width="176" height="106" rx="12" fill="#0e141c" stroke="#33E6C8" stroke-width="2.5"/>
-          <path d="M92 66h176" stroke="#1c2634" stroke-width="2"/>
-          <rect x="110" y="45" width="9" height="12" rx="3.5" fill="#33E6C8"/><rect x="124" y="45" width="9" height="12" rx="3.5" fill="#33E6C8"/>
-          <path d="M112 60q9 6 18 0" fill="none" stroke="#33E6C8" stroke-width="2" stroke-linecap="round"/>
-          <text x="146" y="57" font-family="Bricolage Grotesque, sans-serif" font-weight="700" font-size="15" fill="#e8edf2">dravix-os</text>
-          <text x="110" y="90" font-family="IBM Plex Mono, monospace" font-size="10" fill="#8b96a4">Home Assistant add-on</text>
-          <rect x="110" y="100" width="92" height="26" rx="8" fill="#33E6C8"/>
-          <text x="156" y="117" font-family="IBM Plex Sans, sans-serif" font-weight="700" font-size="12.5" fill="#04120f" text-anchor="middle">Install</text>
-          <path d="M196 120v22l6-7 4 8 4-2-4-8 8-1z" fill="#e8edf2" stroke="#05080b" stroke-width="1.2" stroke-linejoin="round"/>
-        </svg>
-        <div class="istep-body"><span class="istep-n">Step 4</span><h3>Install the dravix-os add-on</h3><p>Add-on Store → ⋮ → Repositories → add <code>github.com/YossiKon/dravix-os</code> → install → Start. It authenticates itself and auto-discovers every robot entity.</p></div>
-      </div>
-
-      <!-- Step 5 -->
-      <div class="istep">
-        <svg class="istep-art" viewBox="0 0 360 170" role="img" aria-label="Illustration: open the dashboard and say hi to the robot">
-          <rect x="66" y="34" width="222" height="106" rx="10" fill="#05080b" stroke="#33E6C8" stroke-width="2.5"/>
-          <path d="M66 56h222" stroke="#1c2634" stroke-width="2"/>
-          <circle cx="80" cy="45" r="3" fill="#5c6774"/><circle cx="90" cy="45" r="3" fill="#5c6774"/>
-          <rect x="104" y="40" width="172" height="10" rx="5" fill="#0e141c"/>
-          <rect x="148" y="74" width="26" height="30" rx="10" fill="#33E6C8"/><rect x="186" y="74" width="26" height="30" rx="10" fill="#33E6C8"/>
-          <ellipse cx="161" cy="112" rx="9" ry="4" fill="#FF9EB5"/><ellipse cx="199" cy="112" rx="9" ry="4" fill="#FF9EB5"/>
-          <path d="M156 117q24 16 48 0" fill="none" stroke="#33E6C8" stroke-width="5" stroke-linecap="round"/>
-          <rect x="250" y="40" width="54" height="30" rx="9" fill="#0e141c" stroke="#33E6C8" stroke-width="2"/>
-          <path d="M264 70l-3 11 13-11z" fill="#0e141c" stroke="#33E6C8" stroke-width="2"/>
-          <text x="277" y="60" font-family="Bricolage Grotesque, sans-serif" font-weight="700" font-size="15" fill="#33E6C8" text-anchor="middle">hi!</text>
-          <path d="M305 104c-4-6-15-3-15 5 0 7 9 11 15 16 6-5 15-9 15-16 0-8-11-11-15-5z" fill="#FF9EB5"/>
-        </svg>
-        <div class="istep-body"><span class="istep-n">Step 5</span><h3>Open the dashboard and say hi</h3><p>Click Open Web UI (or <code>http://&lt;home-assistant&gt;:8800</code>). Pet the robot's head — it will like that.</p></div>
-      </div>
-
-    </div>
-
-    <div class="callout reveal">
-      <b>Updating &amp; rollback.</b> Firmware update = press <em>Install</em> in ESPHome again (the tiny file always pulls the latest). The add-on updates itself in Home Assistant. Roll back firmware by pinning <code>ref: v&lt;version&gt;</code> from <a href="https://github.com/YossiKon/dravix-os/releases" target="_blank" rel="noopener">Releases</a>, or restore your Step-0 backup to go fully factory.
-    </div>
-    <p class="reveal" style="margin-top:22px; color:var(--mute)">No robot yet? Everything runs against a built-in <b style="color:var(--text)">mock</b> driver — explore the whole dashboard fully offline.</p>
+    </section>
   </div>
-</section>
 
-<!-- ── DOCS ── -->
-<section id="docs">
+  <div class="ledbar" aria-hidden="true"><span><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span></div>
+
   <div class="wrap">
-    <div class="sec-head reveal">
-      <span class="eyebrow">Go deeper</span>
-      <h2>Docs &amp; links.</h2>
-      <p>Every guide lives in the repo. Read the design, the flashing steps, the camera pipeline and more.</p>
-    </div>
-    <div class="links reveal">
-      <a class="link" href="https://github.com/YossiKon/dravix-os/blob/main/docs/architecture.md" target="_blank" rel="noopener"><span class="ic">🏗️</span><span><b>Architecture</b><small>docs/architecture.md</small></span><span class="go">→</span></a>
-      <a class="link" href="https://github.com/YossiKon/dravix-os/blob/main/docs/esphome-local-control.md" target="_blank" rel="noopener"><span class="ic">⚡</span><span><b>Flash &amp; local control</b><small>docs/esphome-local-control.md</small></span><span class="go">→</span></a>
-      <a class="link" href="https://github.com/YossiKon/dravix-os/blob/main/docs/home-assistant.md" target="_blank" rel="noopener"><span class="ic">🏠</span><span><b>Home Assistant recipes</b><small>docs/home-assistant.md</small></span><span class="go">→</span></a>
-      <a class="link" href="https://github.com/YossiKon/dravix-os/blob/main/docs/frigate.md" target="_blank" rel="noopener"><span class="ic">📷</span><span><b>Cameras &amp; Frigate</b><small>docs/frigate.md</small></span><span class="go">→</span></a>
-      <a class="link" href="https://github.com/YossiKon/dravix-os/blob/main/docs/personality.md" target="_blank" rel="noopener"><span class="ic">🎭</span><span><b>Personality</b><small>docs/personality.md</small></span><span class="go">→</span></a>
-      <a class="link" href="https://github.com/YossiKon/dravix-os/blob/main/docs/plugins.md" target="_blank" rel="noopener"><span class="ic">🧩</span><span><b>Plugin modes</b><small>docs/plugins.md</small></span><span class="go">→</span></a>
-      <a class="link" href="https://github.com/YossiKon/dravix-os/blob/main/docs/dashboard-page.md" target="_blank" rel="noopener"><span class="ic">🌐</span><span><b>Dashboard page</b><small>docs/dashboard-page.md</small></span><span class="go">→</span></a>
-      <a class="link" href="https://github.com/YossiKon/dravix-os/blob/main/docs/local-only.md" target="_blank" rel="noopener"><span class="ic">🔒</span><span><b>Local-only mode</b><small>docs/local-only.md</small></span><span class="go">→</span></a>
-    </div>
-
-    <p class="subhead reveal">Built on</p>
-    <div class="links reveal">
-      <a class="link" href="https://www.home-assistant.io/" target="_blank" rel="noopener"><span class="ic">🏠</span><span><b>Home Assistant</b><small>home-assistant.io</small></span><span class="go">↗</span></a>
-      <a class="link" href="https://esphome.io/" target="_blank" rel="noopener"><span class="ic">⚙️</span><span><b>ESPHome</b><small>esphome.io</small></span><span class="go">↗</span></a>
-      <a class="link" href="https://docs.m5stack.com/en/app/stack_chan" target="_blank" rel="noopener"><span class="ic">🤖</span><span><b>M5Stack StackChan</b><small>docs.m5stack.com</small></span><span class="go">↗</span></a>
-      <a class="link" href="https://frigate.video/" target="_blank" rel="noopener"><span class="ic">📹</span><span><b>Frigate NVR</b><small>frigate.video</small></span><span class="go">↗</span></a>
-    </div>
+    <section id="games" aria-labelledby="h-games">
+      <div class="sec-head reveal">
+        <div><p class="num">03 · Games</p><h2 id="h-games">It plays with you.</h2></div>
+        <p>Everything happens on the robot: the screen, the head pads, the distance sensor, the microphone and the camera. Nothing goes to the cloud, and nothing needs a phone.</p>
+      </div>
+      <div class="games">
+        <ol class="game-list reveal">
+          <li><b>Rock paper scissors</b>First to 2 wins. On “Shoot!”, tap rock, paper or scissors on the screen or a pad on its head.</li>
+          <li><b>Bang!</b>Point a finger right at it from close up: hands up! Then shout “BOOM!” (or tap its head). It falls, and comes back to life.</li>
+          <li><b>Reaction</b>Wait for “Now!”, then tap as fast as you can. It remembers your best time.</li>
+          <li><b>Coin &amp; Dice</b>Tap to flip or roll.</li>
+          <li><b>Magic 8-ball</b>Think of a yes-or-no question, then tap.</li>
+          <li class="cam"><b>Chameleon</b>Hold something colourful in front of it: its eyes take that colour for a minute.</li>
+          <li class="cam"><b>Photo</b>3, 2, 1, flash, and the photo is on its screen. Home Assistant can save it and send it to your phone.</li>
+          <li class="cam"><b>Mirror</b>What its camera sees, live, for 20 seconds. Tap to take a photo.</li>
+          <li class="cam"><b>Desk guard</b>Arms itself after 10 seconds. Someone comes close: “Who are you?!” and a photo. Touch its head to turn it off.</li>
+          <li class="cam"><b>Follow me</b>Its eyes follow movement in front of it. The green dot stays on while it runs.</li>
+        </ol>
+        <aside class="reveal">
+          <figure><img src="img/screen-games.png" width="448" height="358" loading="lazy" alt="The Games screen on the robot"><figcaption>Swipe right from the face to get here</figcaption></figure>
+        </aside>
+      </div>
+    </section>
   </div>
-</section>
 
-<!-- ── FOOTER ── -->
+  <div class="ledbar pink" aria-hidden="true"><span><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span></div>
+
+  <div class="wrap">
+    <section id="privacy" aria-labelledby="h-privacy">
+      <div class="privacy reveal">
+        <div class="dark-screen" role="img" aria-label="The robot's screen with a small green dot in the top-right corner"><span class="dot"></span></div>
+        <div>
+          <p class="num">04 · Private by design</p>
+          <h2 id="h-privacy">When it listens, you can see it.</h2>
+          <ul>
+            <li><b>A small green dot</b> in the top-right corner whenever the microphone or the camera is on.</li>
+            <li><b>Microphone mute</b> turns listening off completely, wake word included.</li>
+            <li><b>Your voice goes to your own Home Assistant</b>, to the Assist pipeline you chose (it can run fully local).</li>
+            <li><b>The camera games run on the robot</b>, one frame at a time. Photos stay on its screen unless your Home Assistant saves them.</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <div class="ledbar" aria-hidden="true"><span><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span></div>
+
+  <div class="wrap">
+    <section id="install" aria-labelledby="h-install">
+      <div class="sec-head reveal">
+        <div><p class="num">05 · Install</p><h2 id="h-install">Five steps, then it's yours.</h2></div>
+        <p>You need an M5Stack StackChan (the CoreS3 kit), Home Assistant with the ESPHome add-on (2026.8 or newer), and an Assist voice assistant.</p>
+      </div>
+      <div class="install">
+        <ol class="steps reveal">
+          <li><b>Add your Wi-Fi to ESPHome</b>ESPHome → Secrets (top right): <code>wifi_ssid</code> and <code>wifi_password</code>.</li>
+          <li><b>Create the robot</b>ESPHome → + New device → name it <code>stackchan</code>. Click Edit, replace everything with the file on the right, and Save.</li>
+          <li><b>Install</b>The first time, connect the robot with USB-C: Install → Plug into this computer (or flash the download at <a href="https://web.esphome.io">web.esphome.io</a>). After that, Install works over Wi-Fi.</li>
+          <li><b>Add it to Home Assistant</b>It shows up as discovered: Configure. Then ESPHome → the robot → Configure → turn on <em>Allow the device to perform Home Assistant actions</em>.</li>
+          <li><b>Pick its voice</b>On the robot's device page, choose the Assistant it should use. Say “Okay Nabu”.</li>
+        </ol>
+        <div class="reveal">
+          <div class="code">
+            <header><span>stackchan.yaml</span><span>in the ESPHome add-on</span></header>
+<pre><span class="k">wifi</span>:
+  <span class="k">ssid</span>: <span class="t">!secret</span> wifi_ssid
+  <span class="k">password</span>: <span class="t">!secret</span> wifi_password
+
+<span class="k">substitutions</span>:
+  <span class="k">device_name</span>: <span class="s">"stackchan"</span>
+  <span class="k">friendly_name</span>: <span class="s">"Dravix"</span>
+
+<span class="k">packages</span>:
+  <span class="k">dravix</span>:
+    <span class="k">url</span>: https://github.com/YossiKon/dravix-os
+    <span class="k">ref</span>: main
+    <span class="k">refresh</span>: 0s      <span class="c"># look at GitHub on every Install</span>
+    <span class="k">files</span>: [deploy/esphome/stackchan-dravix.yaml]</pre>
+          </div>
+          <p class="update"><b>Updating is pressing Install.</b> The file pulls the newest firmware from GitHub on every build. Every change is compiled on ESPHome 2026.8.2 and on the latest release first.</p>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <div class="ledbar pink" aria-hidden="true"><span><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span></div>
+
+  <div class="wrap">
+    <section id="home-assistant" aria-labelledby="h-ha">
+      <div class="sec-head reveal">
+        <div><p class="num">06 · Home Assistant</p><h2 id="h-ha">An ordinary ESPHome device. A not&#8209;so&#8209;ordinary friend.</h2></div>
+        <p>No integration to install: the robot joins through ESPHome, with a voice satellite, controls, settings and sensors on its device page.</p>
+      </div>
+      <div class="ha reveal">
+        <div>
+          <h3>Controls</h3>
+          <ul class="chips"><li>Face</li><li>Screen</li><li>Microphone mute</li><li>Wake sound</li><li>Asleep</li><li>Follow me</li><li>Desk guard</li></ul>
+          <h3 style="margin-top:20px">Sensors</h3>
+          <ul class="chips"><li>State</li><li>Last heard</li><li>Last reply</li><li>Last voice problem</li><li>Ambient light</li><li>Firmware</li><li>WiFi signal</li></ul>
+        </div>
+        <div>
+          <h3>Settings</h3>
+          <ul class="chips"><li>Tile 1 … 8</li><li>Air conditioner</li><li>Screen brightness</li><li>LED brightness</li><li>Reaction LEDs</li><li>Head moves</li><li>Sleep when the room is dark</li><li>Screensaver after</li><li>Bored after</li><li>Night from</li><li>Night until</li><li>Bang loudness</li></ul>
+        </div>
+        <div>
+          <h3>Automations</h3>
+          <p>Make it react to anything in your home. Use your robot's name in place of <code>stackchan</code>.</p>
+<pre>action: esphome.stackchan_show_face
+data:
+  face: happy
+# or sad, love, done, greet, surprised,
+#    angry, doubt, dizzy, error</pre>
+<pre>action: esphome.stackchan_play_game
+data:
+  game: rps
+# or coin, dice, 8ball, reaction</pre>
+        </div>
+      </div>
+    </section>
+
+    <section aria-labelledby="h-know">
+      <div class="sec-head reveal">
+        <div><p class="num">07 · Good to know</p><h2 id="h-know">Honest notes.</h2></div>
+        <p>What it can and can't tell, so nothing surprises you.</p>
+      </div>
+      <div class="know reveal">
+        <div><b>“Done!” is shown when it can know</b>A timer was set, Home Assistant confirmed a tile tap, or an automation asked for it. Assist doesn't tell the robot whether it did something or only answered.</div>
+        <div><b>It keeps still while it talks</b>Head moves never overlap sound: on this robot, a moving servo starves the microphone and the speaker.</div>
+        <div><b>The camera games see colour and movement</b>Not faces or hands. Bang! notices a pointing finger with the distance sensor, and the “BOOM!” loudness is a setting.</div>
+        <div><b>Coming from the dravix-os add-on?</b>Stop and uninstall it, and keep your robot's ESPHome file: it already points here. Press Install. The old project lives on the <a href="https://github.com/YossiKon/dravix-os/tree/v1">v1 branch</a>.</div>
+      </div>
+    </section>
+  </div>
+</main>
+
 <footer>
-  <div class="wrap foot-in">
-    <div>
-      <a class="brand" href="#top" style="font-size:18px"><svg viewBox="0 0 32 32" aria-hidden="true" style="width:26px;height:26px"><rect width="32" height="32" rx="7" fill="#0e141c"/><rect x="7" y="9" width="7" height="9" rx="3" fill="#33E6C8"/><rect x="18" y="9" width="7" height="9" rx="3" fill="#33E6C8"/><path d="M12 22q4 4 8 0" stroke="#33E6C8" stroke-width="2.5" fill="none" stroke-linecap="round"/></svg> dravix-os</a>
-      <p style="margin:10px 0 0; max-width:44ch; font-size:13.5px">A local-first companion OS for the M5Stack StackChan. Everything runs on your own hardware — nothing phones home.</p>
-    </div>
-    <div class="foot-links">
-      <a href="https://github.com/YossiKon/dravix-os" target="_blank" rel="noopener">GitHub</a>
-      <a href="https://github.com/YossiKon/dravix-os/releases" target="_blank" rel="noopener">Releases</a>
-      <a href="#install">Install</a>
-      <a href="#features">Features</a>
-      <a href="#docs">Docs</a>
-    </div>
-  </div>
-  <div class="wrap" style="margin-top:26px; color:var(--faint); font-size:12.5px; font-family:var(--mono)">
-    © <span id="yr">2026</span> dravix-os · built with Home Assistant, ESPHome &amp; a StackChan.
+  <div class="wrap">
+    <span>Dravix · open source under the <a href="https://github.com/YossiKon/dravix-os/blob/main/LICENSE">MIT license</a> · <a href="https://github.com/YossiKon/dravix-os">github.com/YossiKon/dravix-os</a></span>
+    <span>Built on <a href="https://esphome.io">ESPHome</a>, <a href="https://www.home-assistant.io">Home Assistant</a> and <a href="https://github.com/m5stack/esphome-yaml">M5Stack's StackChan support</a></span>
   </div>
 </footer>
 
 <script>
-  document.getElementById('yr').textContent = new Date().getFullYear();
-  // scroll reveal
-  var reveals = document.querySelectorAll('.reveal');
-  if(!('IntersectionObserver' in window)){
-    reveals.forEach(function(el){ el.classList.add('in'); });
-  } else {
-    var io = new IntersectionObserver(function(es){
-      es.forEach(function(e){ if(e.isIntersecting){ e.target.classList.add('in'); io.unobserve(e.target); } });
-    }, {threshold:.12, rootMargin:'0px 0px -8% 0px'});
-    reveals.forEach(function(el){ io.observe(el); });
-  }
-  // close mobile menu on link tap
-  document.querySelectorAll('#nl a').forEach(function(a){ a.addEventListener('click', function(){ document.getElementById('nl').classList.remove('open'); }); });
+  document.documentElement.classList.add('js');
+  const io = new IntersectionObserver(es => es.forEach(e => { if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); } }), { rootMargin: '0px 0px -8% 0px' });
+  document.querySelectorAll('.reveal').forEach(el => io.observe(el));
 </script>
 </body>
 </html>
