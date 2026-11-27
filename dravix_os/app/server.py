@@ -38,6 +38,8 @@ NAMES = {
     "Firmware": "firmware", "ESPHome version": "esphome", "Camera": "camera",
     "Air conditioner": "ac", "Screen brightness": "brightness", "LED brightness": "led_brightness",
     "Touchscreen": "touchscreen", "Loop time": "loop_time",
+    "Sleep at": "sleep_at", "Wake up at": "wake_at", "Sleep on schedule": "sleep_sched",
+    "Sleep when the room is dark": "sleep_dark",
     **{f"Tile {i}": f"tile{i}" for i in range(1, 9)},
 }
 TILE_DOMAINS = ("light", "switch", "fan", "cover", "scene", "script", "button", "input_boolean",
@@ -152,7 +154,7 @@ def demo_robot():
                   "wake_sound": "on", "follow": "off", "guard": "off", "battery": "87", "charging": "on",
                   "state": "awake", "heard": "turn on the desk lamp", "reply": "Turned on the light",
                   "voice_problem": "", "firmware": "2.0.0", "esphome": "2026.11.1", "touchscreen": "OK",
-                  "loop_time": "16"},
+                  "loop_time": "16", "sleep_at": "23:00:00", "wake_at": "07:00:00", "sleep_sched": "on"},
         "tiles": [{"slot": i, "entity_id": e, "name": n, "state": s} for i, (e, n, s) in enumerate([
             ("light.desk_lamp", "Desk lamp", "on"), ("light.ceiling", "Ceiling light", "off"),
             ("switch.coffee_machine", "Coffee machine", "off"), ("scene.movie_time", "Movie time", "scening"),
@@ -252,9 +254,16 @@ async def api_do(request):
             if body.get("face") not in FACES or not robot.node:
                 raise HAError("unknown face, or the robot's actions are not allowed yet")
             await robot.call("esphome", f"{robot.node}_show_face", {"face": body["face"]})
+        elif what == "schedule":
+            for key in ("sleep_at", "wake_at"):
+                value = (body.get(key) or "").strip()
+                if value:
+                    if len(value) == 5:
+                        value += ":00"
+                    await robot.call("time", "set_value", {"entity_id": e[key], "time": value})
         elif what in ("switch_on", "switch_off"):
             key = body.get("key")
-            if key not in ("mic_mute", "wake_sound", "follow", "guard"):
+            if key not in ("mic_mute", "wake_sound", "follow", "guard", "sleep_sched", "sleep_dark"):
                 raise HAError("unknown switch")
             await robot.call("switch", "turn_on" if what == "switch_on" else "turn_off", {"entity_id": e[key]})
         else:

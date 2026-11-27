@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.0.1
+
+- the sleep schedule: when it falls asleep and wakes up, and Sleep on schedule (firmware with
+  "Sleep at" / "Wake up at")
+
 ## 2.0.0
 
 A new add-on for Dravix 2.0. The robot now talks to Home Assistant by itself, so the add-on is just

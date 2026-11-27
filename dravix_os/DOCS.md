@@ -6,6 +6,7 @@ One page in Home Assistant's sidebar for your Dravix desk robot.
 
 - **Mode**: Normal (it moves around), Busy (the head stays still) or Sleep (just a clock).
 - **Private mode**: no camera and no microphone. Tap it twice to confirm; the robot restarts.
+- **Sleep schedule**: when it falls asleep and when it wakes up, and whether it follows the schedule.
 - **Screens**: tap a tile and pick a light, a switch, a fan, a scene, a script… from a list. Tiles
   1–4 are Screen 1 on the robot, 5–8 are Screen 2. Pick the air conditioner the same way. The robot
   restarts by itself about 20 seconds later to follow the new tile.

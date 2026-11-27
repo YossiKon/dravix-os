@@ -1,7 +1,7 @@
 # The Dravix add-on: one page in Home Assistant's sidebar for the Dravix robot. The robot itself
 # needs nothing from it (the firmware talks to Home Assistant directly); the page makes it easy.
 name: Dravix
-version: "2.0.0"
+version: "2.0.1"
 slug: dravix_os
 description: Your Dravix desk robot in Home Assistant - its screens, modes, games and voice commands
 url: https://github.com/YossiKon/dravix-os
