@@ -51,9 +51,9 @@ jobs:
           packages:
             dravix: !include ../deploy/esphome/stackchan-dravix.yaml
           EOF
-          printf 'wifi_ssid: "ci-network"
-wifi_password: "ci-password"
-' > ci/secrets.yaml
+          # the two secrets every ESPHome add-on has (the firmware's wifi: block reads them)
+          echo 'wifi_ssid: "ci-network"' > ci/secrets.yaml
+          echo 'wifi_password: "ci-password"' >> ci/secrets.yaml
 
       - name: Validate
         run: |
