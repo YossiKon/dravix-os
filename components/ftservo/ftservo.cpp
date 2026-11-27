@@ -62,6 +62,7 @@ void FTServo::move_angle(int angle) {
 // dravix: the default keeps the stock (blocking) behaviour for backends that are not
 // Components; SCS9009Servo overrides it with a scheduled timeout.
 void FTServo::release_torque_after(uint32_t ms) {
+  if (this->keep_torque_) return;  // dravix: this servo holds
   delay(ms);
   this->write_torque_enable(false);
 }

@@ -10,22 +10,21 @@ void SCS9009Servo::setup() {
   // dravix: the one line that proves THIS driver (not the BSP's) is compiled in
   ESP_LOGI(TAG, "dravix non-blocking servo driver (vendored + patched) for servo %d", this->addr_);
 
-  // servo may take serval seconds to respond
-  if ( this->parent_->ping(this->addr_) == -1 ) {
-    this->status_set_warning(LOG_STR("Initial ping with servo failed, will try in 5 seconds"));
+  // dravix: ready as soon as it answers; otherwise ask again every 5 s and never give up. The stock
+  // driver marked the servo failed after one retry: a software restart (a tile change, private
+  // mode) that caught the servo mid-packet or before its power was back left the head ignoring
+  // every move until a power cycle (2026-11-27).
+  if ( this->parent_->ping(this->addr_) != -1 ) {
+    this->servo_ready_ = true;
+    return;
   }
-
-  // second ping (async ping)
+  this->status_set_warning(LOG_STR("Initial ping with servo failed, asking again every 5 s"));
   this->set_interval("ping_check", 5000, [this]() {
-    int res = this->parent_->ping(this->addr_);
-    if ( res != -1 ) {
+    if ( this->parent_->ping(this->addr_) != -1 ) {
       this->servo_ready_ = true; // mark servo ready
-      ESP_LOGD(TAG, "Servo %d is ready", this->addr_);
+      ESP_LOGI(TAG, "Servo %d is ready", this->addr_);
       this->status_clear_warning();
       this->cancel_interval("ping_check");
-    } else {
-      this->cancel_interval("ping_check");
-      this->mark_failed(LOG_STR("Communication with servo timeout (after 5s)"));
     }
   });
 
@@ -85,6 +84,10 @@ void SCS9009Servo::move(int position, uint16_t time, uint16_t speed) {
 // free (microphone audio, the speaker, the API all live there). A second move before the
 // first has settled simply pushes the release back (same timeout name = replaced).
 void SCS9009Servo::release_torque_after(uint32_t ms) {
+  if (this->keep_torque_) {            // dravix: this servo holds (the head's tilt)
+    this->cancel_timeout("ft_torque_off");
+    return;
+  }
   this->set_timeout("ft_torque_off", ms, [this]() { this->write_torque_enable(false); });
 }
 

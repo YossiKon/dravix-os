@@ -14,6 +14,6 @@ external_components:
   - source:
       type: git
       url: https://github.com/YossiKon/dravix-os.git
-      ref: components-v4
+      ref: components-v5
     components: [bmi270_bmm150, ftservo, scs9009, m5ioe1]
     refresh: 1d

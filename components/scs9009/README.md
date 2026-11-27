@@ -22,3 +22,7 @@ What changed (every line is marked `// dravix:`):
 
 Re-sync procedure when taking a BSP update: copy the upstream folder over this one, re-apply
 the `// dravix:` lines (a `git diff` against the previous vendored copy shows them all).
+
+**2026-11-27 (tag `components-v5`):** the head's tilt servo can keep its torque after a move
+(`set_keep_torque(true)`; let go, the head falls under its own weight), and a servo that doesn't
+answer at boot is asked again every 5 s instead of being marked failed after one retry.

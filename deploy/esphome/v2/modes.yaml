@@ -19,6 +19,7 @@ globals:
   - { id: g_pend_kind,   type: int,      restore_value: no,  initial_value: "0" }      # waits for the voice turn: 1 game, 2 mode, 3 private
   - { id: g_pend_val,    type: int,      restore_value: no,  initial_value: "0" }
   - { id: g_perk,        type: bool,     restore_value: no,  initial_value: "false" }  # the head perked up for this turn
+  - { id: g_priv_arm_ms, type: uint32_t, restore_value: no,  initial_value: "0" }      # the menu's private row was tapped once at
   - { id: g_restart_why, type: int,      restore_value: yes, initial_value: "0" }      # a restart Dravix asked for: 1 tile, 2/3 private on/off
   - { id: g_mute_before, type: bool,     restore_value: yes, initial_value: "false" }  # Microphone mute before private mode
 
@@ -304,12 +305,20 @@ script:
   - id: menu_close
     then:
       - lambda: |-
-          id(g_menu_ms) = 0;
+          id(g_menu_ms) = 0; id(g_priv_arm_ms) = 0;
           lv_obj_add_flag(id(menu_bg), LV_OBJ_FLAG_HIDDEN);
           lv_obj_add_flag(id(menu), LV_OBJ_FLAG_HIDDEN);
   - id: menu_private
     then:
-      - script.execute: { id: private_set, enable: !lambda 'return !id(g_private);' }
+      - if:
+          condition: { lambda: 'return id(g_priv_arm_ms) != 0 && millis() - id(g_priv_arm_ms) < 4000;' }
+          then:
+            - lambda: 'id(g_priv_arm_ms) = 0;'
+            - script.execute: { id: private_set, enable: !lambda 'return !id(g_private);' }
+          else:                                   # the first tap only asks (it restarts the robot)
+            - lambda: |-
+                id(g_priv_arm_ms) = millis(); id(g_menu_ms) = millis();
+                lv_label_set_text(id(mm_ps), id(g_private) ? "tap again to turn it off" : "tap again: it restarts");
   - id: menu_pick
     parameters: { m: int }
     then:
@@ -416,6 +425,7 @@ esphome:
             static const char *const NAME[3] = {"Normal", "Busy", "Sleep"};
             id(sel_mode).publish_state(NAME[m]);
             lv_obj_move_foreground(id(priv_dot));
+            id(y_servo).set_keep_torque(true);   // the tilt holds the head up (the stock driver let it fall after every move)
             static const char *const WHY[4] = {"-", "a tile changed", "private mode on", "private mode off"};
             int w = id(g_restart_why);
             id(st_restart).publish_state(WHY[(w >= 0 && w < 4) ? w : 0]);

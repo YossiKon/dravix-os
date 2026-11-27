@@ -76,6 +76,11 @@ SUB_NUMBER(time)
   // blocking behaviour so any other backend is unaffected.
   virtual void release_torque_after(uint32_t ms);
 
+  // dravix: a servo that must hold its position after a move (the head's tilt: let go, the head
+  // falls under its own weight). The stock driver always let go.
+  void set_keep_torque(bool keep) { this->keep_torque_ = keep; }
+  bool get_keep_torque() const { return this->keep_torque_; }
+
   
   bool is_moving() const { return this->state_ == State::MOVING; }
   bool is_idle() const { return this->state_ == State::IDLE; }
@@ -84,6 +89,7 @@ SUB_NUMBER(time)
   void add_error_callback(std::function<void(const LogString *)> &&error_callback);
 
  protected:
+  bool keep_torque_{false};  // dravix: see set_keep_torque
   State state_{State::IDLE};
 
   CallbackManager<void()> move_callbacks_ {};
