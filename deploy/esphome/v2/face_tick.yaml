@@ -33,7 +33,7 @@ interval:
           // the privacy dot follows the real signals, on every page
           {
             static int dot_last = -1;
-            bool dot = id(g_mic_open) || id(g_cam_stream) || (id(g_cam_snap_ms) != 0 && now - id(g_cam_snap_ms) < 2000);
+            bool dot = !id(g_private) && (id(g_mic_open) || id(g_cam_stream) || (id(g_cam_snap_ms) != 0 && now - id(g_cam_snap_ms) < 2000));
             if ((int) dot != dot_last) {
               if (dot) lv_obj_remove_flag(id(priv_dot), LV_OBJ_FLAG_HIDDEN); else lv_obj_add_flag(id(priv_dot), LV_OBJ_FLAG_HIDDEN);
               dot_last = dot;

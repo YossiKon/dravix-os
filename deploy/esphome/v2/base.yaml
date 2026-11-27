@@ -106,7 +106,10 @@ switch:
       - voice_assistant.stop
       - micro_wake_word.stop
     on_turn_off:
-      - micro_wake_word.start
+      - if:
+          condition: { lambda: 'return !id(g_private);' }
+          then: [ micro_wake_word.start ]
+          else: [ { switch.turn_on: sw_mic_mute } ]     # private mode: the microphone stays off
   - platform: template
     id: sw_wake_sound
     name: "Wake sound"
@@ -191,7 +194,7 @@ script:
                 condition:
                   all:
                     - switch.is_off: sw_mic_mute
-                    - lambda: 'return id(g_sfx_rearm) && !id(g_voice) && !id(va).is_running();'
+                    - lambda: 'return id(g_sfx_rearm) && !id(g_voice) && !id(va).is_running() && !id(g_private);'
                 then: [ micro_wake_word.start ]
 
   # ── THE END OF A VOICE TURN, FOR REAL. on_end fires when HA hands over the reply's URL —
@@ -227,7 +230,7 @@ script:
       - component.resume: { id: y_servo_sensor, update_interval: 1s }
       - script.execute: face_voice_end
       - if:
-          condition: { switch.is_off: sw_mic_mute }
+          condition: { lambda: 'return !id(sw_mic_mute).state && !id(g_private);' }
           then: [ micro_wake_word.start ]
 
 micro_wake_word:
@@ -245,7 +248,7 @@ micro_wake_word:
         condition:
           all:
             - switch.is_off: sw_mic_mute
-            - lambda: 'return !id(g_voice);'
+            - lambda: 'return !id(g_voice) && !id(g_private);'
         then:
           - globals.set: { id: g_voice, value: "true" }
           - globals.set: { id: g_saw_speech, value: "false" }
@@ -290,7 +293,7 @@ voice_assistant:
   volume_multiplier: 2.0
   on_listening:
     - if:
-        condition: { switch.is_on: sw_mic_mute }
+        condition: { lambda: 'return id(sw_mic_mute).state || id(g_private);' }   # a session HA starts, too
         then: [ voice_assistant.stop ]
         else:
           - globals.set: { id: g_voice, value: "true" }
@@ -340,6 +343,7 @@ voice_assistant:
           all:
             - switch.is_off: sw_mic_mute
             - not: { voice_assistant.is_running: }
+            - lambda: 'return !id(g_private);'
         then: [ micro_wake_word.start ]
   on_client_disconnected:
     # this robot's API link drops and comes back many times a day; only a lasting loss, while

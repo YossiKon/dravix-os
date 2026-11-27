@@ -65,7 +65,7 @@ switch:
     name: "Desk guard"
     icon: mdi:shield-account-outline
     lambda: 'return id(g_guard);'
-    turn_on_action: [ { script.execute: guard_arm } ]
+    turn_on_action: [ { script.execute: { id: game_start, g: 10 } } ]
     turn_off_action: [ { script.execute: { id: guard_disarm, welcome: false } } ]
 
 api:
@@ -130,7 +130,24 @@ lvgl:
         - obj: { id: gm_x, styles: st_tile, x: 272, y: 6, width: 42, height: 30, on_click: [ { script.execute: game_end } ], widgets: [ { label: { text: "X", align: CENTER, text_font: f_game, text_color: 0x7FA9A4 } } ] }
 
 script:
+  # every game starts here: in private mode the camera games refuse, and Bang! is played with a tap
   - id: game_start
+    parameters: { g: int }
+    then:
+      - if:
+          condition: { lambda: 'return id(g_private) && g >= 7 && g <= 11;' }
+          then:
+            - script.execute: { id: show_screen, n: 0 }
+            - script.execute: { id: hint, txt: "Private mode: my camera is off.", ms: 4000 }
+          else:
+            - script.execute: { id: game_start_go, g: !lambda 'return g;' }
+            - if:
+                condition: { lambda: 'return id(g_private) && g == 6;' }
+                then:
+                  - delay: 100ms
+                  - script.execute: { id: hint, txt: "Point a finger at me, then tap my head. No BOOM in private mode.", ms: 6000 }
+
+  - id: game_start_go
     parameters: { g: int }
     then:
       - if:
@@ -388,7 +405,7 @@ interval:
     then:
       - lambda: |-
           // FOLLOW ME: a frame every 0.7 s, only with someone near, on the resting face, no voice turn
-          if (!id(sw_follow).state || !id(g_near) || !id(g_on_face) || id(g_voice) || id(g_sleep) || id(g_saver) || id(g_cam_purpose) != 0) return;
+          if (id(g_private) || !id(sw_follow).state || !id(g_near) || !id(g_on_face) || id(g_voice) || id(g_sleep) || id(g_saver) || id(g_cam_purpose) != 0) return;
           int f = id(g_face); if (f != 0 && f != 18) return;
           id(g_cam_purpose) = 5; id(cam).request_image(esphome::camera::IDLE);
   - interval: 50ms
