@@ -70,14 +70,19 @@ switch:
 
 api:
   actions:
-    # start a game from Home Assistant: game = rps | coin | dice | 8ball | reaction
+    # start a game from Home Assistant (and its voice commands): game = rps | coin | dice | 8ball |
+    # reaction | bang | chameleon | photo | mirror | guard | follow, or games (the Games screen)
     - action: play_game
       variables:
         game: string
       then:
         - lambda: |-
-            int g = game == "rps" ? 1 : game == "coin" ? 2 : game == "dice" ? 3 : game == "8ball" ? 4 : game == "reaction" ? 5 : 0;
-            if (g) id(game_start).execute(g);
+            std::string s = game; for (auto &c : s) c = tolower(c);
+            int g = s == "rps" ? 1 : s == "coin" ? 2 : s == "dice" ? 3 : s == "8ball" ? 4 : s == "reaction" ? 5 : s == "bang" ? 6
+                  : s == "chameleon" ? 7 : s == "photo" ? 8 : s == "mirror" ? 9 : s == "guard" ? 10 : s == "follow" ? 11 : 0;
+            if (g == 0 && s != "games") return;
+            if (id(g_sleep)) id(mode_set).execute(id(g_mode_before) == 2 ? 0 : id(g_mode_before), false);   // asked to play: it wakes up
+            if (g) id(game_start).execute(g); else id(show_screen).execute(4);
 
 lvgl:
   top_layer:

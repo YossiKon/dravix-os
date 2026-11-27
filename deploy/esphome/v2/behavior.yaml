@@ -41,26 +41,12 @@ number:
 
 switch:
   - platform: template
-    id: sw_head
-    name: "Head moves"
-    icon: mdi:robot-outline
-    optimistic: true
-    restore_mode: RESTORE_DEFAULT_ON
-    entity_category: config
-  - platform: template
     id: sw_sleep_dark
     name: "Sleep when the room is dark"
     icon: mdi:lightbulb-night-outline
     optimistic: true
     restore_mode: RESTORE_DEFAULT_ON
     entity_category: config
-  - platform: template
-    id: sw_asleep
-    name: "Asleep"
-    icon: mdi:power-sleep
-    lambda: 'return id(g_sleep);'
-    turn_on_action: [ { script.execute: go_sleep } ]
-    turn_off_action: [ { script.execute: { id: wake_up, why: 0 } } ]
 
 text_sensor:
   # the three head pads, polled here at 10 Hz (the BSP's own copies poll once a second)
@@ -114,7 +100,7 @@ sensor:
             float ax = id(imu_ax).state, ay = id(imu_ay).state, az = x;
             if (std::isnan(ax) || std::isnan(ay) || std::isnan(az)) return;
             const uint32_t now = millis();
-            if (now < 15000 || now - id(g_move_ms) < 1500 || id(g_game) != 0) { id(g_lift_ms) = 0; return; }   // boot settling / our own head move / a game
+            if (now < 15000 || now - id(g_move_ms) < 1500 || id(g_game) != 0 || id(g_sleep)) { id(g_lift_ms) = 0; return; }   // boot settling / our own head move / a game / Sleep mode
             // the driver reports g (its scale is 8/32768 per bit), whatever its log line says; a slow
             // baseline of "gravity" makes this independent of the unit, exactly as v1 did
             float mag = sqrtf(ax * ax + ay * ay + az * az);
@@ -163,7 +149,7 @@ script:
             return;
           }
           if (pads && !was) {                                    // a hand arrives
-            if (id(g_sleep)) { id(wake_up).execute(1); return; }
+            if (id(g_sleep)) { if (id(g_face) == 16) id(timer_stop).execute(); return; }   // Sleep mode doesn't react (a touch only stops a timer)
             if (id(g_saver)) { id(saver_off).execute(); }
             if (id(g_face) == 16) { id(timer_stop).execute(); return; }
             id(g_pet_ms) = now; id(g_pet_loved) = false;
@@ -180,20 +166,22 @@ script:
       - lambda: 'id(g_saver) = false; id(g_ia_ms) = millis();'
       - script.execute: face_rest
 
+  # night + a dark room: Sleep mode by itself (it ends by itself in the morning, or when the light comes back)
   - id: go_sleep
     then:
-      - lambda: 'id(g_sleep) = true; id(g_saver) = false;'
-      - script.execute: { id: face_force, s: 20 }      # falling asleep, then black
+      - script.execute: { id: mode_set, m: 2, automatic: true }
 
-  # why: 0 = Home Assistant, 1 = a touch, 2 = the wake word, 3 = morning, 4 = the light
+  # why: 3 = the morning, 4 = the light. Only a sleep that started by itself ends by itself.
   - id: wake_up
     parameters: { why: int }
     then:
       - if:
-          condition: { lambda: 'return id(g_sleep);' }
+          condition: { lambda: 'return id(g_sleep) && id(g_sleep_auto);' }
           then:
-            - lambda: 'id(g_sleep) = false; id(g_saver) = false; id(g_ia_ms) = millis(); id(g_dark_ms) = 0;'
-            - script.execute: { id: face_force, s: 21 }  # waking up
+            - script.execute:
+                id: mode_set
+                m: !lambda 'return id(g_mode_before) == 2 ? 0 : id(g_mode_before);'
+                automatic: false
 
   # ── timer ringing: three rings every few seconds until a touch, or a minute
   - id: timer_ring
@@ -222,8 +210,8 @@ script:
       - if:
           condition:
             lambda: |-
-              return id(sw_head).state && !id(g_voice) && !id(i2s_speaker).is_running()
-                     && !id(g_saver) && (!id(g_sleep) || id(g_face) == 20);
+              return id(g_mode) == 0 && !id(g_voice) && !id(i2s_speaker).is_running()
+                     && !id(g_saver) && !id(g_sleep);           // Normal mode only (Busy and Sleep keep it still)
           then:
             - lambda: |-
                 int f = id(g_face);
@@ -237,11 +225,15 @@ script:
   - id: head_to
     parameters: { yaw: float, pitch: float }
     then:
-      - lambda: 'id(g_move_ms) = millis();'
-      - number.set: { id: servo_x_angle, value: !lambda 'return std::max(-60.0f, std::min(60.0f, yaw));' }
-      - number.set:
-          id: servo_y_angle
-          value: !lambda 'float p = ${head_straight} + pitch; return p < 5.0f ? 5.0f : (p > 85.0f ? 85.0f : p);'
+      - if:
+          # Busy and Sleep keep the head still; only a mode change straightens it (head_home)
+          condition: { lambda: 'return id(g_mode) == 0 || id(g_head_force);' }
+          then:
+            - lambda: 'id(g_move_ms) = millis();'
+            - number.set: { id: servo_x_angle, value: !lambda 'return std::max(-60.0f, std::min(60.0f, yaw));' }
+            - number.set:
+                id: servo_y_angle
+                value: !lambda 'float p = ${head_straight} + pitch; return p < 5.0f ? 5.0f : (p > 85.0f ? 85.0f : p);'
 
   - id: head_gesture
     parameters: { f: int }

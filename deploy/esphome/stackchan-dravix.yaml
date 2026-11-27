@@ -15,3 +15,4 @@ packages:
   behavior: !include v2/behavior.yaml        # touch, shake, lift, people, light, night, sleep
   screens: !include v2/screens.yaml          # Screen 1, Screen 2 and the air conditioner
   games: !include v2/games.yaml              # the Games screen and the camera games
+  modes: !include v2/modes.yaml              # Normal / Busy / Sleep, the menu, the clock, the status bar

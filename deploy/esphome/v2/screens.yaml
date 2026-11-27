@@ -164,7 +164,7 @@ script:
           id(g_cam_live_until) = 0;                                                 // …and any page change ends the mirror
           id(g_page) = n; id(g_page_ms) = millis(); id(g_on_face) = (n == 0); id(g_scr_dirty) = true;
           id(g_ia_ms) = millis(); id(g_swipe_ms) = millis();
-          if (id(g_sleep) && n != 0) { id(g_sleep) = false; id(face_rest).execute(); }
+          // (Sleep mode is a mode now: a page change doesn't end it; the clock comes back by itself)
           if (id(g_saver)) { id(g_saver) = false; id(face_rest).execute(); }
       - if:
           condition: { lambda: 'return n == 1;' }
@@ -175,6 +175,9 @@ script:
       - if:
           condition: { lambda: 'return n == 3;' }
           then: [ { lvgl.page.show: page_ac } ]
+      - if:
+          condition: { lambda: 'return n == 6;' }     # the clock (Sleep mode)
+          then: [ { lvgl.page.show: page_clock } ]
       - if:
           condition: { lambda: 'return n == 0;' }
           then: [ { lvgl.page.show: page_face } ]
@@ -247,7 +250,7 @@ interval:
     then:
       - lambda: |-
           int p = id(g_page);
-          if (p != 0 && millis() - id(g_page_ms) > 30000) { id(show_screen).execute(0); return; }
+          if (p != 0 && p != 6 && millis() - id(g_page_ms) > 30000) { id(show_screen).execute(0); return; }
           if (p == 0 || !id(g_scr_dirty)) return;
           id(g_scr_dirty) = false;
           auto icon = [](const std::string &e) -> const char * {

@@ -167,25 +167,28 @@ lvgl:
       scrollbar_mode: "OFF"
       on_swipe_left: [ { script.execute: { id: show_screen, n: 1 } } ]
       on_swipe_right: [ { script.execute: { id: show_screen, n: 4 } } ]
+      on_swipe_down: [ { lambda: 'id(g_bar) = true;' }, { script.execute: ui_tick } ]     # the status bar
+      on_swipe_up: [ { lambda: 'id(g_bar) = false;' }, { script.execute: ui_tick } ]
+      on_long_press: [ { script.execute: menu_open } ]                                    # the mode menu
       widgets:
-        - obj: { id: eye_l, styles: st_shape, x: 65, y: 73, width: 66, height: 86, radius: 24, bg_color: 0x5EF0E2 }
-        - obj: { id: eye_r, styles: st_shape, x: 189, y: 73, width: 66, height: 86, radius: 24, bg_color: 0x5EF0E2 }
-        - obj: { id: lid_l, styles: st_shape, width: 132, height: 196, bg_color: 0x000000, hidden: true }
-        - obj: { id: lid_r, styles: st_shape, width: 132, height: 196, bg_color: 0x000000, hidden: true }
-        - obj: { id: cut_l, styles: st_shape, width: 126, height: 126, radius: 63, bg_color: 0x000000, hidden: true }
-        - obj: { id: cut_r, styles: st_shape, width: 126, height: 126, radius: 63, bg_color: 0x000000, hidden: true }
-        - obj: { id: cls_l, styles: st_stroke, width: 56, height: 56, border_width: 9, border_side: BOTTOM, hidden: true }
-        - obj: { id: cls_r, styles: st_stroke, width: 56, height: 56, border_width: 9, border_side: BOTTOM, hidden: true }
+        - obj: { id: eye_l, clickable: false, styles: st_shape, x: 65, y: 73, width: 66, height: 86, radius: 24, bg_color: 0x5EF0E2 }
+        - obj: { id: eye_r, clickable: false, styles: st_shape, x: 189, y: 73, width: 66, height: 86, radius: 24, bg_color: 0x5EF0E2 }
+        - obj: { id: lid_l, clickable: false, styles: st_shape, width: 132, height: 196, bg_color: 0x000000, hidden: true }
+        - obj: { id: lid_r, clickable: false, styles: st_shape, width: 132, height: 196, bg_color: 0x000000, hidden: true }
+        - obj: { id: cut_l, clickable: false, styles: st_shape, width: 126, height: 126, radius: 63, bg_color: 0x000000, hidden: true }
+        - obj: { id: cut_r, clickable: false, styles: st_shape, width: 126, height: 126, radius: 63, bg_color: 0x000000, hidden: true }
+        - obj: { id: cls_l, clickable: false, styles: st_stroke, width: 56, height: 56, border_width: 9, border_side: BOTTOM, hidden: true }
+        - obj: { id: cls_r, clickable: false, styles: st_stroke, width: 56, height: 56, border_width: 9, border_side: BOTTOM, hidden: true }
         - image: { id: spr_l, src: img_spiral, hidden: true }
         - image: { id: spr_r, src: img_spiral, hidden: true }
         # the mouth (line style): one of these at a time
-        - obj: { id: m_arc,  styles: st_stroke, width: 32, height: 32, border_side: BOTTOM, hidden: true }
-        - obj: { id: m_bar,  styles: st_shape, width: 34, height: 6, radius: 3, bg_color: 0x5EF0E2, hidden: true }
-        - obj: { id: m_ring, styles: st_stroke, width: 21, height: 25, border_width: 5, hidden: true }
-        - obj: { id: m_w1,   styles: st_stroke, width: 16, height: 16, border_width: 5, border_side: BOTTOM, hidden: true }
-        - obj: { id: m_w2,   styles: st_stroke, width: 16, height: 16, border_width: 5, border_side: BOTTOM, hidden: true }
-        - obj: { id: m_wv1,  styles: st_stroke, width: 20, height: 20, border_width: 5, border_side: TOP, hidden: true }
-        - obj: { id: m_wv2,  styles: st_stroke, width: 20, height: 20, border_width: 5, border_side: TOP, hidden: true }
+        - obj: { id: m_arc, clickable: false,  styles: st_stroke, width: 32, height: 32, border_side: BOTTOM, hidden: true }
+        - obj: { id: m_bar, clickable: false,  styles: st_shape, width: 34, height: 6, radius: 3, bg_color: 0x5EF0E2, hidden: true }
+        - obj: { id: m_ring, clickable: false, styles: st_stroke, width: 21, height: 25, border_width: 5, hidden: true }
+        - obj: { id: m_w1, clickable: false,   styles: st_stroke, width: 16, height: 16, border_width: 5, border_side: BOTTOM, hidden: true }
+        - obj: { id: m_w2, clickable: false,   styles: st_stroke, width: 16, height: 16, border_width: 5, border_side: BOTTOM, hidden: true }
+        - obj: { id: m_wv1, clickable: false,  styles: st_stroke, width: 20, height: 20, border_width: 5, border_side: TOP, hidden: true }
+        - obj: { id: m_wv2, clickable: false,  styles: st_stroke, width: 20, height: 20, border_width: 5, border_side: TOP, hidden: true }
         # the gloves
         - image: { id: hand_l, src: img_gl_open_l, hidden: true }
         - image: { id: hand_r, src: img_gl_open_r, hidden: true }
@@ -197,9 +200,9 @@ lvgl:
         - image: { id: ex_drop,   src: img_drop,  hidden: true }
         - image: { id: ex_bell,   src: img_bell,  hidden: true }
         - image: { id: ex_bulb,   src: img_bulb,  hidden: true }
-        - obj: { id: ex_wave1, styles: st_stroke, width: 20, height: 20, border_width: 5, border_side: RIGHT, hidden: true }
-        - obj: { id: ex_wave2, styles: st_stroke, width: 40, height: 40, border_width: 5, border_side: RIGHT, hidden: true }
-        - obj: { id: ex_wave3, styles: st_stroke, width: 60, height: 60, border_width: 5, border_side: RIGHT, hidden: true }
+        - obj: { id: ex_wave1, clickable: false, styles: st_stroke, width: 20, height: 20, border_width: 5, border_side: RIGHT, hidden: true }
+        - obj: { id: ex_wave2, clickable: false, styles: st_stroke, width: 40, height: 40, border_width: 5, border_side: RIGHT, hidden: true }
+        - obj: { id: ex_wave3, clickable: false, styles: st_stroke, width: 60, height: 60, border_width: 5, border_side: RIGHT, hidden: true }
         - label: { id: ex_big,  text: "!", text_font: f_face,  text_color: 0xF2FFFD, hidden: true }
         - label: { id: ex_z1,   text: "z", text_font: f_small, text_color: 0xF2FFFD, hidden: true }
         - label: { id: ex_z2,   text: "z", text_font: f_small, text_color: 0xF2FFFD, hidden: true }

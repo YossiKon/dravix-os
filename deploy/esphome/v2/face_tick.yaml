@@ -48,7 +48,11 @@ interval:
               last_b = b;
             }
           };
-          if (!id(g_on_face)) { backlight(id(n_brightness).state / 100.0f); return; }
+          if (!id(g_on_face)) {                                // the clock (Sleep mode) is dim
+            float b = id(n_brightness).state / 100.0f;
+            backlight(id(g_page) == 6 ? std::max(0.03f, b * 0.25f) : b);
+            return;
+          }
 
           // ── helpers (the Face Lab's maths) ───────────────────────────────────────────
           const float TAUF = 6.2831853f, PIF = 3.14159265f;

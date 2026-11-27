@@ -1,0 +1,275 @@
+# ════════════════════════════════════════════════════════════════════════════════
+#  Dravix · modes
+#  Normal (it moves around: idle glances, the head perks up when it hears its name),
+#  Busy (everything as usual, the head stays still), Sleep (just a clock, the date and the
+#  battery; it doesn't react). Hold the face (or the clock) to open the mode menu; Home
+#  Assistant has the "Mode" select. Also: the status bar (swipe down on the face, swipe up
+#  hides it) and the battery.
+# ════════════════════════════════════════════════════════════════════════════════
+globals:
+  - { id: g_mode,        type: int,      restore_value: yes, initial_value: "0" }      # 0 normal, 1 busy, 2 sleep
+  - { id: g_mode_before, type: int,      restore_value: yes, initial_value: "0" }      # the mode an automatic sleep returns to
+  - { id: g_sleep_auto,  type: bool,     restore_value: yes, initial_value: "false" }  # it fell asleep by itself (night + dark)
+  - { id: g_sleep_ms,    type: uint32_t, restore_value: no,  initial_value: "0" }      # fell asleep at
+  - { id: g_bar,         type: bool,     restore_value: yes, initial_value: "false" }  # the status bar on the face
+  - { id: g_menu_ms,     type: uint32_t, restore_value: no,  initial_value: "0" }      # the mode menu opened at (0 = closed)
+  - { id: g_glance_at,   type: uint32_t, restore_value: no,  initial_value: "45000" }  # the next idle glance
+  - { id: g_head_force,  type: bool,     restore_value: no,  initial_value: "false" }  # a mode change may move the head once
+
+select:
+  - platform: template
+    id: sel_mode
+    name: "Mode"
+    icon: mdi:robot-outline
+    options: ["Normal", "Busy", "Sleep"]
+    optimistic: true
+    initial_option: "Normal"
+    set_action:
+      - script.execute:
+          id: mode_set
+          m: !lambda 'return x == "Busy" ? 1 : x == "Sleep" ? 2 : 0;'
+          automatic: false
+
+# the battery (the power chip under the screen); hidden on the robot when no battery is fitted
+sensor:
+  - platform: axp2101
+    axp2101_id: axp2101_pmu
+    id: pmu_sensor
+    name: "Power"
+    internal: true
+    update_interval: 30s
+    battery_level: { id: bat_level, name: "Battery" }
+    battery_voltage: { id: bat_volt, name: "Battery voltage" }
+    battery_charging: { id: bat_chg, name: "Charging" }
+
+font:
+  - file: "gfonts://Rubik@500"
+    id: f_bar
+    size: 14
+    glyphs: " 0123456789:%,.+-ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
+  - file: "gfonts://Rubik@600"
+    id: f_clock
+    size: 80
+    glyphs: "0123456789:-"
+  - file: "gfonts://Rubik@500"
+    id: f_date
+    size: 22
+    glyphs: " 0123456789,ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
+  - file: ${mdi_font}
+    id: f_mdi18
+    size: 18
+    # battery 0…100 %, charging; microphone-off, camera-off (private mode)
+    glyphs: ["\U000F008E", "\U000F007A", "\U000F007B", "\U000F007C", "\U000F007D", "\U000F007E", "\U000F007F",
+             "\U000F0080", "\U000F0081", "\U000F0082", "\U000F0079", "\U000F0084", "\U000F036D", "\U000F05DF"]
+
+api:
+  actions:
+    # Home Assistant (and its voice commands) can switch the mode: mode = normal | busy | sleep
+    - action: set_mode
+      variables:
+        mode: string
+      then:
+        - script.execute:
+            id: mode_set
+            m: !lambda 'std::string s = mode; for (auto &c : s) c = tolower(c); return s == "busy" ? 1 : s == "sleep" ? 2 : 0;'
+            automatic: false
+
+lvgl:
+  top_layer:
+    widgets:
+      # the status bar: swipe down on the face to show it, swipe up to hide it
+      - obj:
+          id: topbar
+          x: 0
+          y: 0
+          width: 320
+          height: 22
+          bg_color: 0x000000
+          bg_opa: COVER
+          border_width: 0
+          radius: 0
+          pad_all: 0
+          scrollable: false
+          clickable: false
+          hidden: true
+          widgets:
+            - label: { id: tb_time, x: 8, y: 3, text: "--:--", text_font: f_bar, text_color: 0xDDF7F4 }
+            - label: { id: tb_date, x: 56, y: 3, text: "", text_font: f_bar, text_color: 0x7FA9A4 }
+            - label: { id: tb_bat_i, x: 236, y: 1, text: "", text_font: f_mdi18, text_color: 0x7FA9A4 }
+            - label: { id: tb_bat, x: 256, y: 3, text: "", text_font: f_bar, text_color: 0x7FA9A4 }
+      # PRIVATE_ICON
+      # the mode menu (hold the face or the clock): a backdrop that closes it, then the panel
+      - obj: { id: menu_bg, x: 0, y: 0, width: 320, height: 240, bg_color: 0x000000, bg_opa: COVER, border_width: 0, radius: 0, pad_all: 0, scrollable: false, hidden: true, on_click: [ { script.execute: menu_close } ] }
+      - obj:
+          id: menu
+          align: CENTER
+          width: 296
+          height: 136
+          bg_color: 0x0E1615
+          bg_opa: COVER
+          radius: 18
+          border_width: 1
+          border_color: 0x24403C
+          pad_all: 0
+          shadow_width: 0
+          scrollable: false
+          hidden: true
+          widgets:
+            - label: { x: 16, y: 10, text: "Mode", text_font: f_bar, text_color: 0x7FA9A4 }
+            - obj: { id: mm_b0, styles: st_tile, x: 10, y: 36, width: 88, height: 88, on_click: [ { script.execute: { id: menu_pick, m: 0 } } ], widgets: [ { label: { id: mm_t0, align: CENTER, y: -10, text: "Normal", text_font: f_game, text_color: 0xDDF7F4 } }, { label: { id: mm_s0, align: CENTER, y: 14, text: "moves", text_font: f_bar, text_color: 0x7FA9A4 } } ] }
+            - obj: { id: mm_b1, styles: st_tile, x: 104, y: 36, width: 88, height: 88, on_click: [ { script.execute: { id: menu_pick, m: 1 } } ], widgets: [ { label: { id: mm_t1, align: CENTER, y: -10, text: "Busy", text_font: f_game, text_color: 0xDDF7F4 } }, { label: { id: mm_s1, align: CENTER, y: 14, text: "head still", text_font: f_bar, text_color: 0x7FA9A4 } } ] }
+            - obj: { id: mm_b2, styles: st_tile, x: 198, y: 36, width: 88, height: 88, on_click: [ { script.execute: { id: menu_pick, m: 2 } } ], widgets: [ { label: { id: mm_t2, align: CENTER, y: -10, text: "Sleep", text_font: f_game, text_color: 0xDDF7F4 } }, { label: { id: mm_s2, align: CENTER, y: 14, text: "a clock", text_font: f_bar, text_color: 0x7FA9A4 } } ] }
+            # MENU_PRIVATE_ROW
+  pages:
+    # Sleep mode: the time, the date and the battery. Nothing else happens here.
+    - id: page_clock
+      bg_color: 0x000000
+      bg_opa: COVER
+      scrollable: false
+      scrollbar_mode: "OFF"
+      on_long_press: [ { script.execute: menu_open } ]
+      widgets:
+        - label: { id: ck_time, align: CENTER, y: -22, text: "--:--", text_font: f_clock, text_color: 0x5EF0E2 }
+        - label: { id: ck_date, align: CENTER, y: 40, text: "", text_font: f_date, text_color: 0x7FA9A4 }
+        - label: { id: ck_bat_i, align: BOTTOM_MID, x: -22, y: -12, text: "", text_font: f_mdi18, text_color: 0x7FA9A4 }
+        - label: { id: ck_bat, align: BOTTOM_MID, x: 12, y: -13, text: "", text_font: f_bar, text_color: 0x7FA9A4 }
+
+script:
+  # ── the one way the mode changes (the menu, the HA select, HA's voice commands, night + dark)
+  - id: mode_set
+    parameters: { m: int, automatic: bool }
+    then:
+      - lambda: |-
+          int nm = (m < 0 || m > 2) ? 0 : m, old = id(g_mode);
+          if (nm == old) return;
+          if (nm == 2) { id(g_mode_before) = old; id(g_sleep_auto) = automatic; } else id(g_sleep_auto) = false;
+          id(g_mode) = nm; id(g_sleep) = (nm == 2);
+          id(g_saver) = false; id(g_ia_ms) = millis(); id(g_dark_ms) = 0;
+          static const char *const NAME[3] = {"Normal", "Busy", "Sleep"};
+          id(sel_mode).publish_state(NAME[nm]);
+          if (nm == 2) {
+            id(g_game) = 0; id(g_game_led) = 0; id(g_guard) = false; id(g_sleep_ms) = millis();
+            if (id(g_page) != 0) id(show_screen).execute(0);
+            id(face_force).execute(20);                                  // falling asleep, then the clock
+          } else {
+            if (old == 2) { id(show_screen).execute(0); id(face_force).execute(21); }   // waking up
+            id(hint).execute(std::string(nm == 1 ? "Busy mode: my head stays still." : "Normal mode."), 2500);
+          }
+          id(head_home).execute();                                       // a new mode starts with the head straight
+
+  # the head goes straight, whatever the mode (only a mode change does this)
+  - id: head_home
+    then:
+      - lambda: 'id(g_head_force) = true;'
+      - script.execute: { id: head_to, yaw: 0, pitch: 0 }
+      - lambda: 'id(g_head_force) = false;'
+
+  # Normal mode, nothing going on: a glance to one side, then back
+  - id: head_glance
+    parameters: { yaw: float, pitch: float }
+    mode: restart
+    then:
+      - script.execute: { id: head_to, yaw: !lambda 'return yaw;', pitch: !lambda 'return pitch;' }
+      - delay: !lambda 'return 1300 + random_uint32() % 1500;'
+      - if:
+          condition: { lambda: 'return id(g_mode) == 0 && id(g_face) == 0 && !id(g_voice) && !id(i2s_speaker).is_running();' }
+          then: [ { script.execute: { id: head_to, yaw: 0, pitch: 0 } } ]
+
+  # ── the mode menu
+  - id: menu_open
+    then:
+      - if:
+          condition: { lambda: 'return !id(g_voice) && id(g_menu_ms) == 0;' }
+          then:
+            - lambda: |-
+                id(g_menu_ms) = millis();
+                lv_obj_t *B[3] = {id(mm_b0), id(mm_b1), id(mm_b2)}, *T[3] = {id(mm_t0), id(mm_t1), id(mm_t2)}, *S[3] = {id(mm_s0), id(mm_s1), id(mm_s2)};
+                for (int i = 0; i < 3; i++) {
+                  bool on = id(g_mode) == i;
+                  lv_obj_set_style_bg_color(B[i], lv_color_hex(on ? 0x5EF0E2 : 0x111A19), 0);
+                  lv_obj_set_style_text_color(T[i], lv_color_hex(on ? 0x00332D : 0xDDF7F4), 0);
+                  lv_obj_set_style_text_color(S[i], lv_color_hex(on ? 0x0B5148 : 0x7FA9A4), 0);
+                }
+                // MENU_PRIVATE_REFRESH
+                lv_obj_remove_flag(id(menu_bg), LV_OBJ_FLAG_HIDDEN);
+                lv_obj_remove_flag(id(menu), LV_OBJ_FLAG_HIDDEN);
+                lv_obj_move_foreground(id(priv_dot));                  // the green dot stays on top of everything
+  - id: menu_close
+    then:
+      - lambda: |-
+          id(g_menu_ms) = 0;
+          lv_obj_add_flag(id(menu_bg), LV_OBJ_FLAG_HIDDEN);
+          lv_obj_add_flag(id(menu), LV_OBJ_FLAG_HIDDEN);
+  - id: menu_pick
+    parameters: { m: int }
+    then:
+      - script.execute: menu_close
+      - script.execute: { id: mode_set, m: !lambda 'return m;', automatic: false }
+
+  # ── once a second (and right after a swipe): the bar, the clock, the battery, the menu's timeout,
+  #    sleep living on the clock page, and the idle glances
+  - id: ui_tick
+    then:
+      - lambda: |-
+          const uint32_t now = millis();
+          if (id(g_menu_ms) != 0 && (now - id(g_menu_ms) > 8000 || id(g_voice))) id(menu_close).execute();
+          // Sleep lives on the clock page, unless something is happening on the face (a voice turn, a timer)
+          if (id(g_sleep)) {
+            if (id(g_page) != 6 && !id(g_voice) && id(g_face) != 16 && id(g_menu_ms) == 0
+                && now - id(g_sleep_ms) > 5500 && now - id(g_page_ms) > 5500) id(show_screen).execute(6);
+          } else if (id(g_page) == 6) id(show_screen).execute(0);
+
+          auto tm = id(ha_time).now();
+          auto set = [](lv_obj_t *o, const std::string &t) { if (t != lv_label_get_text(o)) lv_label_set_text(o, t.c_str()); };
+          auto battery = [&](lv_obj_t *ico, lv_obj_t *txt) {
+            float lvl = id(bat_level).state, volt = id(bat_volt).state;
+            if (std::isnan(lvl) || std::isnan(volt) || volt < 3.0f) { set(ico, ""); set(txt, ""); return; }   // no battery fitted
+            static const char *const I[11] = {"\U000F008E", "\U000F007A", "\U000F007B", "\U000F007C", "\U000F007D", "\U000F007E",
+                                              "\U000F007F", "\U000F0080", "\U000F0081", "\U000F0082", "\U000F0079"};
+            float p = std::max(0.0f, std::min(100.0f, lvl));
+            bool chg = id(bat_chg).state;
+            set(ico, chg ? "\U000F0084" : I[(int) roundf(p / 10.0f)]);
+            char b[8]; snprintf(b, sizeof b, "%d%%", (int) roundf(p)); set(txt, b);
+            lv_obj_set_style_text_color(ico, lv_color_hex(chg ? 0x30D158 : (p < 15 ? 0xFF6B6B : 0x7FA9A4)), 0);
+          };
+          bool bar = id(g_bar) && id(g_on_face) && !id(g_sleep) && id(g_menu_ms) == 0;
+          if (bar == lv_obj_has_flag(id(topbar), LV_OBJ_FLAG_HIDDEN)) {
+            if (bar) lv_obj_remove_flag(id(topbar), LV_OBJ_FLAG_HIDDEN); else lv_obj_add_flag(id(topbar), LV_OBJ_FLAG_HIDDEN);
+          }
+          if (bar) {
+            if (tm.is_valid()) { set(id(tb_time), tm.strftime("%H:%M")); set(id(tb_date), tm.strftime("%a %d %b")); }
+            battery(id(tb_bat_i), id(tb_bat));
+          }
+          if (id(g_page) == 6) {
+            if (tm.is_valid()) { set(id(ck_time), tm.strftime("%H:%M")); set(id(ck_date), tm.strftime("%A, %d %B")); }
+            battery(id(ck_bat_i), id(ck_bat));
+          }
+          // PRIVATE_TICK
+
+          // Normal mode: now and then a glance to one side, only on the resting face with nobody busy with it
+          bool calm = id(g_mode) == 0 && id(g_face) == 0 && id(g_on_face) && !id(g_voice) && !id(i2s_speaker).is_running()
+                      && !id(g_saver) && !id(g_sleep) && id(g_game) == 0 && !id(sw_follow).state && !id(g_guard) && id(g_menu_ms) == 0;
+          if (!calm) {
+            if ((int32_t) (id(g_glance_at) - now) < 15000) id(g_glance_at) = now + 15000 + random_uint32() % 30000;
+          } else if (now - id(g_move_ms) > 8000 && (int32_t) (now - id(g_glance_at)) >= 0) {
+            id(g_glance_at) = now + 25000 + random_uint32() % 45000;
+            float yaw = ((random_uint32() & 1) ? 1.0f : -1.0f) * (8.0f + (float) (random_uint32() % 10));
+            float pitch = (float) (random_uint32() % 8) - 2.0f;
+            id(head_glance).execute(yaw, pitch);
+          }
+
+interval:
+  - interval: 1s
+    then: [ script.execute: ui_tick ]
+
+esphome:
+  on_boot:
+    - priority: -100
+      then:
+        - lambda: |-
+            int m = id(g_mode); if (m < 0 || m > 2) { m = 0; id(g_mode) = 0; }
+            id(g_sleep) = (m == 2);
+            if (id(g_sleep)) id(g_sleep_ms) = millis() - 10000;          // asleep before the restart: straight to the clock
+            static const char *const NAME[3] = {"Normal", "Busy", "Sleep"};
+            id(sel_mode).publish_state(NAME[m]);
+            lv_obj_move_foreground(id(priv_dot));
