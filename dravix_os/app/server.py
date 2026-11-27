@@ -53,6 +53,17 @@ class HAError(Exception):
     pass
 
 
+def friendly(err) -> str:
+    """Home Assistant's errors, in words a person can act on."""
+    text = str(err)
+    if "Not connected to" in text:
+        return "The robot isn't connected to Home Assistant right now. Is it on, and on Wi-Fi?"
+    if "not found" in text.lower() and "esphome" in text:
+        return ("Home Assistant doesn't know the robot's actions yet: ESPHome → the robot → Configure → "
+                "allow the device to perform Home Assistant actions.")
+    return text
+
+
 class Robot:
     """What we know about the robot; rediscovered at most once a minute."""
 
@@ -271,7 +282,7 @@ async def api_do(request):
     except KeyError as err:
         return web.json_response({"ok": False, "error": f"the robot has no {err} entity (update its firmware?)"}, status=400)
     except Exception as err:
-        return web.json_response({"ok": False, "error": str(err)}, status=400)
+        return web.json_response({"ok": False, "error": friendly(err)}, status=400)
     return web.json_response({"ok": True})
 
 
